@@ -7,23 +7,23 @@
 package com.salesforce.apollo.choam.support;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.CapacityBatchingQueue;
+import com.salesforce.apollo.utils.BatchingQueue;
 
 /**
  * 
@@ -40,108 +40,120 @@ import com.salesforce.apollo.utils.CapacityBatchingQueue;
  */
 public class TxDataSource implements DataSource {
 
-    private enum Mode {
-        CLOSED, DRAIN, UNIT, VALIDATIONS;
-    }
-
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
-    private final Duration                           batchInterval;
-    private volatile Thread                          blockingThread;
-    private final Member                             member;
-    private final ChoamMetrics                       metrics;
-    private final AtomicReference<Mode>              mode        = new AtomicReference<>(Mode.UNIT);
-    private final CapacityBatchingQueue<Transaction> processing;
-    private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
+    private final Duration                   batchInterval;
+    private volatile Thread                  blockingThread;
+    private AtomicBoolean                    draining     = new AtomicBoolean();
+    private final ExponentialBackoffPolicy   drainPolicy;
+    private final Member                     member;
+    private final ChoamMetrics               metrics;
+    private final BatchingQueue<Transaction> processing;
+    private final BlockingQueue<Reassemble>  reassemblies = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Validate>    validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
-                        Duration batchInterval, int maxBatchCount) {
+                        Duration batchInterval, int maxBatchCount, ExponentialBackoffPolicy drainPolicy) {
         this.member = member;
         this.batchInterval = batchInterval;
-        processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
-                                                            maxBatchCount, maxBatchByteSize,
-                                                            tx -> tx.toByteString().size(), 5);
+        this.drainPolicy = drainPolicy;
+        processing = new BatchingQueue<Transaction>(maxElements, maxBatchCount, tx -> tx.toByteString().size(),
+                                                    maxBatchByteSize);
         this.metrics = metrics;
     }
 
     public void close() {
-        mode.set(Mode.CLOSED);
         final var current = blockingThread;
         if (current != null) {
             current.interrupt();
         }
         blockingThread = null;
-        if (metrics != null) {
-            metrics.dropped(processing.size(), validations.size());
-        }
-        log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size(),
-                  member);
+        log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
+                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
-        log.trace("Setting data source mode to DRAIN on: {}", member);
-        mode.set(Mode.DRAIN);
+        draining.set(true);
+        if (metrics != null) {
+            metrics.dropped(processing.size(), validations.size());
+        }
+        log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
+                  processing.taken(), member);
     }
 
     @Override
     public ByteString getData() {
         var builder = UnitData.newBuilder();
-        switch (mode.get()) {
-        case CLOSED:
-            return ByteString.EMPTY;
-        case DRAIN:
-        case UNIT:
-            log.trace("Requesting unit data on: {}", member);
-            Queue<Transaction> batch;
-            try {
-                batch = processing.blockingTakeWithTimeout(batchInterval, true);
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            }
-            if (batch != null) {
-                builder.addAllTransactions(batch);
-            }
-            break;
-        case VALIDATIONS:
-            log.trace("Requesting validations only on: {}", member);
-            mode.set(Mode.CLOSED);
-            blockingThread = Thread.currentThread();
-            try {
-                Validate validation = validations.take();
-                if (validation != null) {
-                    builder.addValidations(validation);
-                } else {
-                    System.out.println("No waiting validations on: " + member.getId());
+        log.trace("Requesting unit data on: {}", member);
+        blockingThread = Thread.currentThread();
+        try {
+            var r = new ArrayList<Reassemble>();
+            var v = new ArrayList<Validate>();
+
+            if (draining.get()) {
+                var target = Instant.now().plus(drainPolicy.nextBackoff().dividedBy(2));
+                while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0 &&
+                       builder.getValidationsCount() == 0) {
+                    // rinse and repeat
+                    r = new ArrayList<Reassemble>();
+                    reassemblies.drainTo(r);
+                    builder.addAllReassemblies(r);
+
+                    v = new ArrayList<Validate>();
+                    validations.drainTo(v);
+                    builder.addAllValidations(v);
+
+                    if (builder.getReassembliesCount() != 0 || builder.getValidationsCount() != 0) {
+                        break;
+                    }
+
+                    // sleep waiting for input
+                    try {
+                        Thread.sleep(drainPolicy.getInitialBackoff().toMillis());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return ByteString.EMPTY;
+                    }
                 }
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            } finally {
-                blockingThread = null;
+            } else {
+                try {
+                    var batch = processing.take(batchInterval);
+                    if (batch != null) {
+                        builder.addAllTransactions(batch);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return ByteString.EMPTY;
+                }
             }
-            break;
-        default:
-            break;
-        }
 
-        var vdx = new ArrayList<Validate>();
-        validations.drainTo(vdx);
-        builder.addAllValidations(vdx);
+            // One more time into ye breech
+            r = new ArrayList<Reassemble>();
+            reassemblies.drainTo(r);
+            builder.addAllReassemblies(r);
 
-        final var data = builder.build();
-        final var bs = data.toByteString();
-        if (metrics != null) {
-            metrics.publishedBatch(data.getTransactionsCount(), bs.size(), data.getValidationsCount());
+            v = new ArrayList<Validate>();
+            validations.drainTo(v);
+            builder.addAllValidations(v);
+
+            ByteString bs = builder.build().toByteString();
+            if (metrics != null) {
+                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount());
+            }
+            log.trace("Unit data: {} txns, {} validations, {} reassemblies totalling: {} bytes  on: {}",
+                      builder.getTransactionsCount(), builder.getValidationsCount(), builder.getReassembliesCount(),
+                      bs.size(), member.getId());
+            return bs;
+        } finally {
+            blockingThread = null;
         }
-        log.trace("Unit data: {} txns, {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
-                  data.getValidationsCount(), bs.size(), member);
-        return bs;
     }
 
-    public int getProcessing() {
-        return processing.size();
+    public int getRemainingReassemblies() {
+        return reassemblies.size();
     }
 
-    public int getRemaining() {
+    public int getRemainingTransactions() {
         return processing.size();
     }
 
@@ -149,25 +161,19 @@ public class TxDataSource implements DataSource {
         return validations.size();
     }
 
+    public void offer(Reassemble reassembly) {
+        reassemblies.offer(reassembly);
+    }
+
     public boolean offer(Transaction txn) {
-        switch (mode.get()) {
-        case UNIT:
+        if (!draining.get()) {
             return processing.offer(txn);
-        default:
+        } else {
             return false;
         }
     }
 
     public void offer(Validate generateValidation) {
         validations.offer(generateValidation);
-    }
-
-    public void start(Duration batchInterval, ScheduledExecutorService scheduler) {
-        processing.start(batchInterval, scheduler);
-    }
-
-    public void validationsOnly() {
-        log.trace("Setting data source mode to VALIDATIONS on: {}", member);
-        mode.set(Mode.VALIDATIONS);
     }
 }

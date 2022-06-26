@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Unit;
@@ -18,14 +21,23 @@ import com.salesforce.apollo.ethereal.Unit;
  * @author hal.hildebrand
  *
  */
-public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
+public record TimingRound(Unit currentTU, int level, Unit lastTU) {
+
+    private static final Logger log = LoggerFactory.getLogger(TimingRound.class);
+
+    @Override
+    public String toString() {
+        return String.format("TimingRound [current: %s, level: %s, lastTU: %s]", currentTU.shortString(), level,
+                             lastTU == null ? null : lastTU.shortString());
+    }
+
     /**
      * returns all units ordered in this timing round.
      * 
      * @param digestAlgorithm
      **/
-    public List<Unit> orderedUnits(DigestAlgorithm digestAlgorithm) {
-        var layers = getAntichainLayers(currentTU, lastTUs);
+    public List<Unit> orderedUnits(DigestAlgorithm digestAlgorithm, String logLabel) {
+        var layers = getAntichainLayers(logLabel);
         var sortedUnits = mergeLayers(layers, digestAlgorithm);
         return sortedUnits;
     }
@@ -37,15 +49,12 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
      * every unit on level tu.Level()+k must be above a timing unit tu, otherwise
      * some unit would decide 0 for it.
      */
-    private boolean checkIfAlreadyOrdered(Unit u, List<Unit> prevTUs) {
-        var prevTU = prevTUs.get(prevTUs.size() - 1);
-        if (prevTU == null || u.level() > prevTU.level()) {
+    private boolean checkIfAlreadyOrdered(Unit u) {
+        if (lastTU == null || u.level() > lastTU.level()) {
             return false;
         }
-        for (var it = prevTUs.size() - 1; it >= 0; it--) {
-            if (prevTUs.get(it).above(u)) {
-                return true;
-            }
+        if (lastTU != null && lastTU.above(u)) {
+            return true;
         }
         return false;
     }
@@ -55,25 +64,32 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
      * timing round divided into layers. 0-th layer is formed by minimal units in
      * this timing round. 1-st layer is formed by minimal units when the 0th layer
      * is removed. etc.
+     *
+     * @param logLabel
      */
-    private List<List<Unit>> getAntichainLayers(Unit tu, List<Unit> prevTUs) {
+    private List<List<Unit>> getAntichainLayers(String logLabel) {
         var unitToLayer = new HashMap<Digest, Integer>();
         var seenUnits = new HashMap<Digest, Boolean>();
         var result = new ArrayList<List<Unit>>();
-        traverse(tu, prevTUs, unitToLayer, seenUnits, result);
+        traverse(currentTU, unitToLayer, seenUnits, result, logLabel);
         return result;
     }
 
-    private void traverse(Unit u, List<Unit> prevTUs, HashMap<Digest, Integer> unitToLayer,
-                          HashMap<Digest, Boolean> seenUnits, ArrayList<List<Unit>> result) {
+    private void traverse(Unit u, HashMap<Digest, Integer> unitToLayer, HashMap<Digest, Boolean> seenUnits,
+                          ArrayList<List<Unit>> result, String logLabel) {
         seenUnits.put(u.hash(), true);
+        log.trace("Traversing: {} parents: {} on: {}", u.shortString(), u.parents(), logLabel);
         var minLayerBelow = -1;
         for (var uParent : u.parents()) {
-            if ((uParent == null) || checkIfAlreadyOrdered(uParent, prevTUs)) {
+            if ((uParent == null) || checkIfAlreadyOrdered(uParent)) {
+                if (uParent != null) {
+                    log.trace("Traversing: {}, already ordered parent: {} on: {}", u.shortString(),
+                              uParent.shortString(), logLabel);
+                }
                 continue;
             }
             if (!seenUnits.getOrDefault(uParent.hash(), false)) {
-                traverse(uParent, prevTUs, unitToLayer, seenUnits, result);
+                traverse(uParent, unitToLayer, seenUnits, result, logLabel);
             }
             if (unitToLayer.get(uParent.hash()) > minLayerBelow) {
                 minLayerBelow = unitToLayer.get(uParent.hash());
@@ -85,8 +101,10 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
             var l = new ArrayList<Unit>();
             l.add(u);
             result.add(l);
+            log.trace("Traversed and added: {}, added layer: {} on: {}", u.shortString(), uLayer, logLabel);
         } else {
             result.get(uLayer).add(u);
+            log.trace("Traversed added: {} to layer: {} on: {}", u.shortString(), uLayer, logLabel);
         }
     }
 

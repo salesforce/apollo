@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -68,11 +69,11 @@ public class Session {
                                transaction.getContent().asReadOnlyByteBuffer());
     }
 
+    private final Limiter<Void>                                limiter;
     private AtomicInteger                                      nonce     = new AtomicInteger();
     private final Parameters                                   params;
     private final Function<SubmittedTransaction, SubmitResult> service;
     private final Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
-    private final Limiter<Void>                                limiter;
 
     public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
         this.params = params;
@@ -114,30 +115,40 @@ public class Session {
             throw new InvalidTransaction();
         }
         var hash = CHOAM.hashOf(txn, params.digestAlgorithm());
+        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+
         var result = new CompletableFuture<T>();
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
-        var stxn = new SubmittedTransaction(hash, txn, result);
+
+        var stxn = new SubmittedTransaction(hash, txn, result, timer);
         submitted.put(stxn.hash(), stxn);
 
-        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
-        boolean success = false;
-        for (var i = 0; i < 20; i++) {
-            if (stxn.onCompletion().isDone() || submit(stxn)) {
-                success = true;
+        var backoff = params.submitPolicy().build();
+        boolean submitted = false;
+        var target = Instant.now().plus(timeout);
+        int i = 0;
+        while (Instant.now().isBefore(target)) {
+            log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
+            if (submit(stxn)) {
+                submitted = true;
                 break;
             }
             try {
-                Thread.sleep(100);
+                final var delay = backoff.nextBackoff();
+                log.debug("Failed submitting: {} retry: {} delay: {}ms on: {}", stxn.hash(), i, delay.toMillis(),
+                          params.member().getId());
+                Thread.sleep(delay.toMillis());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             if (params.metrics() != null) {
                 params.metrics().transactionSubmitRetry();
             }
+            i++;
         }
-        if (!success) {
+        if (!submitted) {
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedBufferFull();
             }
@@ -145,6 +156,9 @@ public class Session {
             return result;
         }
         var futureTimeout = scheduler.schedule(() -> {
+            if (result.isDone()) {
+                return;
+            }
             log.debug("Timeout of txn: {} on: {}", hash, params.member().getId());
             final var to = new TimeoutException("Transaction timeout");
             result.completeExceptionally(to);
@@ -183,7 +197,7 @@ public class Session {
     private boolean submit(SubmittedTransaction stx) {
         var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
-            log.info("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
+            log.debug("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedFail();
             }

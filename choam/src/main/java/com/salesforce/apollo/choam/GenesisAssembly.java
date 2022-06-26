@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -32,7 +33,6 @@ import com.salesfoce.apollo.choam.proto.Validations;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Terminal;
-import com.salesforce.apollo.choam.fsm.BrickLayer;
 import com.salesforce.apollo.choam.fsm.Genesis;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -79,7 +79,8 @@ public class GenesisAssembly implements Genesis {
     private final ViewContext           view;
     private final Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
 
-    public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember) {
+    public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
+                           ThreadPoolExecutor consumer) {
         view = vc;
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
@@ -96,7 +97,7 @@ public class GenesisAssembly implements Genesis {
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();
-        fsm.setName("View Recon" + params().member().getId());
+        fsm.setName("Genesis" + params().member().getId());
 
         Config.Builder config = params().producer().ethereal().clone();
 
@@ -111,10 +112,10 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch));
+                                  epoch -> transitions.nextEpoch(epoch), consumer);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().exec(),
-                                      params().metrics() == null ? null : params().metrics().getReconfigureMetrics());
+                                      params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
@@ -226,7 +227,7 @@ public class GenesisAssembly implements Genesis {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Stopping view assembly: {} on: {}", view.context().getId(), params().member().getId());
+        log.trace("Stopping genesis assembly: {} on: {}", view.context().getId(), params().member().getId());
         coordinator.stop();
         controller.stop();
         final var cur = blockingThread;

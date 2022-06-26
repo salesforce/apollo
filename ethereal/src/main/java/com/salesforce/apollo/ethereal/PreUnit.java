@@ -39,7 +39,7 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit pu) {
+            if (obj instanceof Unit pu) {
                 return hash().equals(pu.hash());
             }
             return false;
@@ -76,11 +76,6 @@ public interface PreUnit {
         }
 
         @Override
-        public byte[] randomSourceData() {
-            return p.randomSourceData();
-        }
-
-        @Override
         public Crown view() {
             return p.view();
         }
@@ -88,6 +83,7 @@ public interface PreUnit {
         @Override
         public Unit from(Unit[] parents, double bias) {
             freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
+            assert u.height() == u.level;
             u.computeFloor();
             return u;
         }
@@ -132,8 +128,7 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "freeUnit[" + creator() + ":" + level() + (height() != level() ? "(" + height() + ")" : "") + ":"
-            + epoch() + "]";
+            return "fu[" + shortString() + "]";
         }
 
         @Override
@@ -163,7 +158,7 @@ public interface PreUnit {
     }
 
     public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
-                          byte[] rsData, JohnHancock signature, byte[] salt)
+                          JohnHancock signature, byte[] salt)
                          implements PreUnit {
 
         @Override
@@ -176,15 +171,10 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit u) {
+            if (obj instanceof Unit u) {
                 return hash.equals(u.hash());
             }
             return false;
-        }
-
-        @Override
-        public byte[] randomSourceData() {
-            return rsData;
         }
 
         @Override
@@ -195,9 +185,6 @@ public interface PreUnit {
                                        .setCrown(crown.toCrown_s());
             if (data != null) {
                 builder.setData(data);
-            }
-            if (rsData != null) {
-                builder.setRsData(ByteString.copyFrom(rsData));
             }
             return builder.build();
         }
@@ -227,7 +214,7 @@ public interface PreUnit {
             if (creator >= verifiers.length) {
                 return false;
             }
-            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, rsData, salt));
+            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, salt));
         }
     }
 
@@ -240,15 +227,14 @@ public interface PreUnit {
 
     public static PreUnit from(PreUnit_s pu, DigestAlgorithm algo) {
         var decoded = decode(pu.getId());
-        byte[] rsData = pu.getRsData().size() > 0 ? pu.getRsData().toByteArray() : null;
 
         final var signature = JohnHancock.from(pu.getSignature());
         return new preUnit(decoded.creator, decoded.epoch, decoded.height, signature.toDigest(algo),
-                           Crown.from(pu.getCrown()), pu.getData(), rsData, signature, pu.getSalt().toByteArray());
+                           Crown.from(pu.getCrown()), pu.getData(), signature, pu.getSalt().toByteArray());
     }
 
-    public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
-        pus.sort(new Comparator<PreUnit>() {
+    public static Comparator<PreUnit> topologicalComparator() {
+        return new Comparator<PreUnit>() {
             @Override
             public int compare(PreUnit pu1, PreUnit pu2) {
                 var comp = Integer.compare(pu1.epoch(), pu2.epoch());
@@ -259,9 +245,13 @@ public interface PreUnit {
                 if (comp < 0 || comp > 0) {
                     return comp;
                 }
-                return Short.compare(pu1.creator(), pu2.creator());
+                return Integer.compare(pu1.creator(), pu2.creator());
             }
-        });
+        };
+    }
+
+    public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
+        pus.sort(topologicalComparator());
         return pus;
     }
 
@@ -272,7 +262,7 @@ public interface PreUnit {
         return new DecodedId(height, creator, (int) (id >> 16));
     }
 
-    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
+    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] salt) {
         var buffers = new ArrayList<ByteBuffer>();
         ByteBuffer idBuff = ByteBuffer.allocate(8);
         idBuff.putLong(id);
@@ -281,9 +271,6 @@ public interface PreUnit {
         buffers.add(idBuff);
         if (data != null) {
             buffers.addAll(data.asReadOnlyByteBufferList());
-        }
-        if (rsData != null) {
-            buffers.add(ByteBuffer.wrap(rsData));
         }
 
         for (int h : crown.heights()) {
@@ -304,24 +291,24 @@ public interface PreUnit {
         return result;
     }
 
-    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, ByteString data, byte[] rsBytes,
-                            DigestAlgorithm algo, Signer signer) {
+    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, ByteString data, DigestAlgorithm algo,
+                            Signer signer) {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
         var salt = new byte[algo.digestLength()];
         Entropy.nextSecureBytes(salt);
-        var signature = sign(signer, id, crown, data, rsBytes, salt);
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, rsBytes,
-                                         signature, salt),
+        var signature = sign(signer, id, crown, data, salt);
+        var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, signature,
+                                         salt),
                              parents, level, new HashMap<>());
         u.computeFloor();
         return u;
 
     }
 
-    static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
-        return signer.sign(PreUnit.forSigning(id, crown, data, rsData, salt));
+    static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] salt) {
+        return signer.sign(PreUnit.forSigning(id, crown, data, salt));
     }
 
     short creator();
@@ -333,10 +320,6 @@ public interface PreUnit {
     }
 
     int epoch();
-//
-//    default boolean equals(PreUnit v) {
-//        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
-//    } 
 
     default Unit from(Unit[] parents, double bias) {
         freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
@@ -355,8 +338,6 @@ public interface PreUnit {
     default String nickName() {
         return hash().toString();
     }
-
-    byte[] randomSourceData();
 
     default int round(Config conf) {
         return height() + (conf.epochLength() * epoch());

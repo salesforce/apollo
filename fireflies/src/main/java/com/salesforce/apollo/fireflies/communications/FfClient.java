@@ -14,7 +14,6 @@ import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -62,64 +61,34 @@ public class FfClient implements Fireflies {
 
     @Override
     public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests, Node from) {
-        Context timer = null;
+        SayWhat sw = SayWhat.newBuilder()
+                            .setContext(context.toDigeste())
+                            .setFrom(from.getIdentity().identity())
+                            .setNote(note)
+                            .setRing(ring)
+                            .setGossip(digests)
+                            .build();
+        ListenableFuture<Gossip> result = client.gossip(sw);
         if (metrics != null) {
-            timer = metrics.outboundGossipTimer().time();
+            var serializedSize = sw.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundGossip().mark(serializedSize);
         }
-        try {
-            SayWhat sw = SayWhat.newBuilder()
-                                .setContext(context.toDigeste())
-                                .setFrom(from.getIdentity().identity())
-                                .setNote(note)
-                                .setRing(ring)
-                                .setGossip(digests)
-                                .build();
-            ListenableFuture<Gossip> result = client.gossip(sw);
+        result.addListener(() -> {
             if (metrics != null) {
-                var serializedSize = sw.getSerializedSize();
-                metrics.outboundBandwidth().mark(serializedSize);
-                metrics.outboundGossip().mark(serializedSize);
-            }
-            result.addListener(() -> {
-                if (metrics != null) {
-                    Gossip gossip;
-                    try {
-                        gossip = result.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        // ignored
-                        return;
-                    }
-                    var serializedSize = gossip.getSerializedSize();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gossipResponse().mark(serializedSize);
+                Gossip gossip;
+                try {
+                    gossip = result.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    // ignored
+                    return;
                 }
-            }, r -> r.run());
-            return result;
-        } catch (Throwable e) {
-            throw new IllegalStateException("Unexpected exception in communication", e);
-        } finally {
-            if (timer != null) {
-                timer.stop();
+                var serializedSize = gossip.getSerializedSize();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.gossipResponse().mark(serializedSize);
             }
-        }
-    }
-
-    @Override
-    public int ping(Digest context, int ping) {
-        Context timer = null;
-        if (metrics != null) {
-            timer = metrics.outboundPingRate().time();
-        }
-        try {
-            client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
-        } catch (Throwable e) {
-            throw new IllegalStateException("Unexpected exception in communication", e);
-        } finally {
-            if (timer != null) {
-                timer.stop();
-            }
-        }
-        return 0;
+        }, r -> r.run());
+        return result;
     }
 
     public void release() {
@@ -145,8 +114,6 @@ public class FfClient implements Fireflies {
                 metrics.outboundBandwidth().mark(serializedSize);
                 metrics.outboundUpdate().mark(serializedSize);
             }
-        } catch (Throwable e) {
-            throw new IllegalStateException("Unexpected exception in communication", e);
         } finally {
             if (timer != null) {
                 timer.stop();

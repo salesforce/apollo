@@ -31,10 +31,12 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -113,19 +115,21 @@ public class Bootstrapper {
     }
 
     private void anchor(AtomicReference<ULong> start, ULong end) {
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
-                           params.exec()).iterate(randomCut(params.digestAlgorithm()),
-                                                  (link, ring) -> anchor(link, start, end),
-                                                  (tally, futureSailor, link, ring) -> completeAnchor(futureSailor,
-                                                                                                      start, end, link),
-                                                  t -> scheduleAnchorCompletion(start, end));
+        final var randomCut = randomCut(params.digestAlgorithm());
+        log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+                           params.scheduler()).iterate(randomCut, (link, ring) -> anchor(link, start, end),
+                                                       (tally, futureSailor,
+                                                        destination) -> completeAnchor(futureSailor, start, end,
+                                                                                       destination),
+                                                       t -> scheduleAnchorCompletion(start, end));
     }
 
     private ListenableFuture<Blocks> anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member().getId());
         long seed = Entropy.nextBitsStreamLong();
-        BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+        BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks() * 2,
                                                                         params.combine().falsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
@@ -174,7 +178,7 @@ public class Bootstrapper {
     }
 
     private boolean completeAnchor(Optional<ListenableFuture<Blocks>> futureSailor, AtomicReference<ULong> start,
-                                   ULong end, Terminal link) {
+                                   ULong end, Destination<Member, Terminal> destination) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
             log.trace("Anchor synchronized isDone: {} anchor sync: {} on: {}", sync.isDone(),
                       anchorSynchronized.isDone(), params.member().getId());
@@ -185,18 +189,21 @@ public class Bootstrapper {
         }
         try {
             Blocks blocks = futureSailor.get().get();
-            log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end,
-                      link.getMember().getId(), params.member().getId());
+            log.debug("Anchor chain completion reply ({} to {}) blocks: {} from: {} on: {}", start.get(), end,
+                      blocks.getBlocksCount(), destination.member().getId(), params.member().getId());
             blocks.getBlocksList()
                   .stream()
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                        link.getMember().getId(), params.member().getId()))
+                  .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
+                                        destination.member().getId(), params.member().getId()))
                   .forEach(cb -> store.put(cb));
         } catch (InterruptedException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            Thread.currentThread().interrupt();
+            return false;
         } catch (ExecutionException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            log.debug("Error anchoring from: {} on: {}", destination.member().getId(), params.member().getId(),
+                      e.getCause());
+            return true;
         }
         if (store.firstGap(start.get(), end).equals(end)) {
             validateAnchor();
@@ -209,13 +216,14 @@ public class Bootstrapper {
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
                            params.exec()).iterate(randomCut(params.digestAlgorithm()),
                                                   (link, ring) -> completeViewChain(link, start, end),
-                                                  (tally, futureSailor, link,
-                                                   ring) -> completeViewChain(futureSailor, start, end, link),
+                                                  (tally, futureSailor, destination) -> completeViewChain(futureSailor,
+                                                                                                          start, end,
+                                                                                                          destination),
                                                   t -> scheduleViewChainCompletion(start, end));
     }
 
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicReference<ULong> start,
-                                      ULong end, Terminal link) {
+                                      ULong end, Destination<Member, Terminal> destination) {
         if (sync.isDone() || viewChainSynchronized.isDone()) {
             log.trace("View chain synchronized isDone: {} sync: {} on: {}", sync.isDone(),
                       viewChainSynchronized.isDone(), params.member().getId());
@@ -228,21 +236,21 @@ public class Bootstrapper {
         try {
             Blocks blocks = futureSailor.get().get();
             log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end,
-                      link.getMember().getId(), params.member().getId());
+                      destination.member().getId(), params.member().getId());
             blocks.getBlocksList()
                   .stream()
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
                   .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                        link.getMember().getId(), params.member().getId()))
+                                        destination.member().getId(), params.member().getId()))
                   .forEach(cb -> store.put(cb));
         } catch (InterruptedException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            log.debug("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
         } catch (ExecutionException e) {
-            log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            log.debug("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
         }
         if (store.completeFrom(start.get())) {
             validateViewChain();
-            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, link.getMember().getId(),
+            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, destination.member().getId(),
                       params.member().getId());
             return false;
         }
@@ -253,7 +261,7 @@ public class Bootstrapper {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member().getId());
         long seed = Entropy.nextBitsStreamLong();
-        ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+        ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks() * 2,
                                                                       params.combine().falsePositiveRate());
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
@@ -410,8 +418,8 @@ public class Bootstrapper {
         final var randomCut = randomCut(params.digestAlgorithm());
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
                            params.scheduler()).iterate(randomCut, (link, ring) -> synchronize(s, link),
-                                                       (tally, futureSailor, link, ring) -> synchronize(futureSailor,
-                                                                                                        votes, link),
+                                                       (tally, futureSailor,
+                                                        destination) -> synchronize(futureSailor, votes, destination),
                                                        t -> computeGenesis(votes));
     }
 
@@ -474,15 +482,16 @@ public class Bootstrapper {
     }
 
     private boolean synchronize(Optional<ListenableFuture<Initial>> futureSailor, HashMap<Digest, Initial> votes,
-                                Terminal link) {
+                                Destination<Member, Terminal> destination) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),
-                      established == null ? null : established.hash, link.getMember().getId(), params.member().getId());
+                      established == null ? null : established.hash, destination.member().getId(),
+                      params.member().getId());
             return false;
         }
         if (futureSailor.isEmpty()) {
-            log.trace("Empty synchronization response from: {} on: {}", link == null ? null : link.getMember().getId(),
+            log.trace("Empty synchronization response from: {} on: {}", destination.member().getId(),
                       params.member().getId());
             return true;
         }
@@ -492,18 +501,18 @@ public class Bootstrapper {
                 HashedCertifiedBlock gen = new HashedCertifiedBlock(params.digestAlgorithm(), vote.getGenesis());
                 if (!gen.height().equals(ULong.valueOf(0))) {
                     log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash,
-                              link.getMember().getId(), params.member().getId());
+                              destination.member().getId(), params.member().getId());
                 }
-                votes.put(link.getMember().getId(), vote);
+                votes.put(destination.member().getId(), vote);
                 log.debug("Synchronization vote: {} count: {} from: {} recorded on: {}", gen.hash, votes.size(),
-                          link.getMember().getId(), params.member().getId());
+                          destination.member().getId(), params.member().getId());
             }
         } catch (InterruptedException e) {
-            log.warn("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            log.warn("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
         } catch (ExecutionException e) {
-            log.warn("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
+            log.warn("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
         }
-        log.trace("Continuing, processed sync response from: {} on: {}", link.getMember().getId(),
+        log.trace("Continuing, processed sync response from: {} on: {}", destination.member().getId(),
                   params.member().getId());
         return true;
     }

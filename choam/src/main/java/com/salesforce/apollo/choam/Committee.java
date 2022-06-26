@@ -40,10 +40,11 @@ import com.salesforce.apollo.membership.Member;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getViewList()
+        return reconfigure.getJoinsList()
                           .stream()
-                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
-                                                    e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
+                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
+                                                    e -> new DefaultVerifier(publicKey(e.getMember()
+                                                                                        .getConsensusKey()))));
     }
 
     /**
@@ -54,13 +55,7 @@ public interface Committee {
         Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
                                                     baseContext.getProbabilityByzantine(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
-        successors.forEach(e -> {
-            if (baseContext.isActive(e)) {
-                newView.activate(e);
-            } else {
-                newView.offline(e);
-            }
-        });
+        successors.forEach(e -> newView.activate(e));
         return newView;
     }
 
@@ -68,9 +63,6 @@ public interface Committee {
         Set<Member> successors = new HashSet<>();
         baseContext.successors(hash, m -> {
             if (successors.size() == baseContext.getRingCount()) {
-                return false;
-            }
-            if (baseContext.isOffline(m.getId())) {
                 return false;
             }
             return successors.add(m);

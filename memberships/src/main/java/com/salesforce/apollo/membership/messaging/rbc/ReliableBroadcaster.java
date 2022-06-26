@@ -43,6 +43,7 @@ import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -79,7 +80,7 @@ public class ReliableBroadcaster {
             private int             bufferSize         = 1500;
             private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.0125;
+            private double          falsePositiveRate  = 0.00125;
             private int             maxMessages        = 500;
 
             public Parameters build() {
@@ -374,7 +375,7 @@ public class ReliableBroadcaster {
 
     }
 
-    private record state(Digest hash, AgedMessage.Builder msg, Digest from) {};
+    private record state(Digest hash, AgedMessage.Builder msg, Digest from) {}
 
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
@@ -383,12 +384,12 @@ public class ReliableBroadcaster {
     private final CommonCommunications<ReliableBroadcast, Service> comm;
     private final Context<Member>                                  context;
     private final Executor                                         exec;
-    private final RingCommunications<ReliableBroadcast>            gossiper;
+    private final RingCommunications<Member, ReliableBroadcast>    gossiper;
     private final SigningMember                                    member;
+    private final RbcMetrics                                       metrics;
     private final Parameters                                       params;
     private final Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
     private final AtomicBoolean                                    started         = new AtomicBoolean();
-    private final RbcMetrics                                       metrics;
 
     public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters, Executor exec,
                                Router communications, RbcMetrics metrics) {
@@ -466,18 +467,17 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamInt((int) Math.max(1,
-                                                                                             duration.toMillis() * 2)));
-        log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member);
+        var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
+        log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Stopping Reliable Broadcaster[{}] for {}", context.getId(), member);
+        log.info("Stopping Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         buffer.clear();
         gossiper.reset();
         comm.deregister(context.getId());
@@ -487,12 +487,12 @@ public class ReliableBroadcaster {
         if (newMsgs.isEmpty()) {
             return;
         }
-        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), context.getId(), member);
+        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), context.getId(), member.getId());
         channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(context.getId(), newMsgs);
             } catch (Throwable e) {
-                log.warn("Error in message handler on: {}", member, e);
+                log.warn("Error in message handler on: {}", member.getId(), e);
             }
         });
     }
@@ -509,14 +509,15 @@ public class ReliableBroadcaster {
                                          .setDigests(buffer.forReconcilliation().toBff())
                                          .build());
         } catch (Throwable e) {
-            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member, link.getMember(), ring,
-                      e);
+            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member.getId(),
+                      link.getMember().getId(), ring, e);
             return null;
         }
     }
 
-    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link, int ring,
-                        Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
+    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor,
+                        Destination<Member, ReliableBroadcast> destination, Duration duration,
+                        ScheduledExecutorService scheduler, Timer.Context timer) {
         try {
             if (futureSailor.isEmpty()) {
                 if (timer != null) {
@@ -528,19 +529,20 @@ public class ReliableBroadcaster {
             try {
                 gossip = futureSailor.get().get();
             } catch (InterruptedException e) {
-                log.debug("error gossiping with {}", link.getMember(), e);
+                Thread.currentThread().interrupt();
                 return;
             } catch (ExecutionException e) {
-                log.debug("error gossiping with {}", link.getMember(), e.getCause());
+                log.debug("error gossiping with {} on: {}", destination.member(), member.getId(), e.getCause());
                 return;
             }
             buffer.receive(gossip.getUpdatesList());
-            link.update(ReconcileContext.newBuilder()
-                                        .setRing(ring)
-                                        .setContext(context.getId().toDigeste())
-                                        .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
-                                                                        link.getMember().getId()))
-                                        .build());
+            destination.link()
+                       .update(ReconcileContext.newBuilder()
+                                               .setRing(destination.ring())
+                                               .setContext(context.getId().toDigeste())
+                                               .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
+                                                                               destination.member().getId()))
+                                               .build());
         } finally {
             if (timer != null) {
                 timer.stop();
@@ -557,7 +559,7 @@ public class ReliableBroadcaster {
                     try {
                         l.accept(gossipRound);
                     } catch (Throwable e) {
-                        log.error("error sending round() to listener: " + l, e);
+                        log.error("error sending round() to listener on: {}", member.getId(), e);
                     }
                 });
             }
@@ -572,8 +574,8 @@ public class ReliableBroadcaster {
         exec.execute(() -> {
             var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
             gossiper.execute((link, ring) -> gossipRound(link, ring),
-                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
+                             (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler,
+                                                                   timer));
         });
     }
 }

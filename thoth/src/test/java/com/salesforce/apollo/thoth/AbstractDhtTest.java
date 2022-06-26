@@ -34,6 +34,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
@@ -53,11 +54,12 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 public class AbstractDhtTest {
     protected static final ProtobufEventFactory factory = new ProtobufEventFactory();
 
-    protected static final double                                         PBYZ    = 0.33;
-    protected final Map<Digest, KerlDHT>                                  dhts    = new HashMap<>();
-    protected Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    protected int                                                         majority;
-    protected final Map<Digest, LocalRouter>                              routers = new HashMap<>();
+    protected static final double                                                PBYZ    = 0.33;
+    protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
+    protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    protected int                                                                majority;
+    protected final Map<SigningMember, LocalRouter>                              routers = new HashMap<>();
+    protected Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {
         super();
@@ -75,16 +77,16 @@ public class AbstractDhtTest {
     public void before() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, getCardinality())
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                              .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();
         Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         majority = context.majority();
-        identities.values().forEach(ident -> instantiate(ident, context, prefix));
+        identities.keySet().forEach(member -> instantiate(member, context, prefix));
 
         System.out.println();
         System.out.println();
@@ -110,9 +112,7 @@ public class AbstractDhtTest {
         return event;
     }
 
-    protected void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
-                               String prefix) {
-        SigningMember member = new ControlledIdentifierMember(identifier);
+    protected void instantiate(SigningMember member, Context<Member> context, String prefix) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
 //        System.out.println("URL: " + url);
@@ -121,8 +121,8 @@ public class AbstractDhtTest {
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
                                              Executors.newFixedThreadPool(4), null);
         router.setMember(member);
-        routers.put(member.getId(), router);
-        dhts.put(member.getId(),
+        routers.put(member, router);
+        dhts.put(member,
                  new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
                              Executors.newFixedThreadPool(4), Duration.ofSeconds(2),
                              Executors.newSingleThreadScheduledExecutor(), 0.125, null));

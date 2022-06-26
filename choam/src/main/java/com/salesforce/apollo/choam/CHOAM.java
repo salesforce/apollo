@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -73,7 +74,7 @@ import com.salesforce.apollo.choam.comm.TxnSubmission;
 import com.salesforce.apollo.choam.comm.TxnSubmitClient;
 import com.salesforce.apollo.choam.comm.TxnSubmitServer;
 import com.salesforce.apollo.choam.fsm.Combine;
-import com.salesforce.apollo.choam.fsm.Merchantile;
+import com.salesforce.apollo.choam.fsm.Combine.Merchantile;
 import com.salesforce.apollo.choam.support.Bootstrapper;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.CheckpointState;
@@ -90,6 +91,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
@@ -372,15 +374,13 @@ public class CHOAM {
                   new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                                            : viewChange.block.getReconfigure().getId()));
             var context = Committee.viewFor(viewId, params.context());
-            context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
-            validators.keySet().forEach(m -> context.activate(m));
             log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm);
+            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, consumer);
             producer.start();
         }
 
@@ -425,7 +425,7 @@ public class CHOAM {
                           params.member().getId());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                assembly = new GenesisAssembly(vc, comm, next.get().member);
+                assembly = new GenesisAssembly(vc, comm, next.get().member, consumer);
                 nextViewId.set(params.genesisViewId());
             } else {
                 assembly = null;
@@ -596,31 +596,39 @@ public class CHOAM {
         return JohnHancock.from(transaction.getSignature()).toDigest(digestAlgorithm);
     }
 
-    public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
+    public static String print(Join join, DigestAlgorithm da) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("J[view: ")
+               .append(Digest.from(join.getView()))
+               .append(" member: ")
+               .append(ViewContext.print(join.getMember(), da))
+               .append("certifications: ")
+               .append(join.getEndorsementsList().stream().map(c -> ViewContext.print(c, da)).toList())
+               .append("]");
+        return builder.toString();
+    }
+
+    public static Reconfigure reconfigure(Digest nextViewId, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params, int checkpointTarget) {
-        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(id.toDigeste());
+        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(nextViewId.toDigeste());
 
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
 
-        remapped.keySet()
-                .stream()
-                .sorted()
-                .map(d -> remapped.get(d))
-                .peek(m -> builder.addJoins(joins.get(m)))
-                .forEach(m -> builder.addView(joins.get(m).getMember()));
+        remapped.keySet().stream().sorted().map(d -> remapped.get(d)).forEach(m -> builder.addJoins(joins.get(m)));
 
         var reconfigure = builder.build();
         return reconfigure;
     }
 
-    public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
-                                    HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint) {
+    public static Block reconfigure(Digest nextViewId, Map<Member, Join> joins, HashedBlock head,
+                                    Context<Member> context, HashedBlock lastViewChange, Parameters params,
+                                    HashedBlock lastCheckpoint) {
         final Block lvc = lastViewChange.block;
         int lastTarget = lvc.hasGenesis() ? lvc.getGenesis().getInitialView().getCheckpointTarget()
                                           : lvc.getReconfigure().getCheckpointTarget();
         int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
-        var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
+        var reconfigure = reconfigure(nextViewId, joins, context, params, checkpointTarget);
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -655,6 +663,7 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
+    private final ThreadPoolExecutor                                    consumer;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final ExecutorService                                       executions;
     private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -720,18 +729,25 @@ public class CHOAM {
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
                                             params.context().timeToLive());
-        combine.register(i -> roundScheduler.tick(i));
+        combine.register(i -> roundScheduler.tick());
         session = new Session(params, service());
+        consumer = Ethereal.consumer("CHOAM" + params.member().getId() + params.context().getId());
     }
 
     public boolean active() {
         final var c = current.get();
+        HashedCertifiedBlock h = head.get();
         return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c != null &&
-               c instanceof Administration;
+               c instanceof Administration && h != null && h.height().compareTo(ULong.valueOf(1)) >= 0;
     }
 
     public Context<Member> context() {
         return params.context();
+    }
+
+    public ULong currentHeight() {
+        final var c = head.get();
+        return c == null ? null : c.height();
     }
 
     public Combine.Transitions getCurrentState() {
@@ -785,6 +801,14 @@ public class CHOAM {
         c.accept(next);
         log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
                  params.member().getId());
+    }
+
+    private void cancelBootstrap() {
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap.set(null);
+        }
     }
 
     private void cancelSynchronization() {
@@ -862,8 +886,6 @@ public class CHOAM {
         while (next != null) {
             final HashedCertifiedBlock h = head.get();
             if (h.height() != null && next.height().compareTo(h.height()) <= 0) {
-//                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
-//                          next.height(), h.height(), params.member().getId());
                 pending.poll();
             } else if (isNext(next)) {
                 if (current.get().validate(next)) {
@@ -969,7 +991,6 @@ public class CHOAM {
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
-
                 params.processor()
                       .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
                                stxn == null ? null : stxn.onCompletion());
@@ -1135,7 +1156,7 @@ public class CHOAM {
         log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
                  validators.entrySet()
                            .stream()
-                           .map(e -> String.format("id: %s key: %s", e.getKey(),
+                           .map(e -> String.format("id: %s key: %s", e.getKey().getId(),
                                                    params.digestAlgorithm().digest(e.toString())))
                            .toList(),
                  params.member().getId());
@@ -1159,14 +1180,6 @@ public class CHOAM {
                 transitions.fail();
             }
         }));
-    }
-
-    private void cancelBootstrap() {
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap.set(null);
-        }
     }
 
     private void restore() throws IllegalStateException {
@@ -1209,7 +1222,7 @@ public class CHOAM {
 
     private Function<SubmittedTransaction, SubmitResult> service() {
         return stx -> {
-//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member()); 
+//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
             final var c = current.get();
             if (c == null) {
                 return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();

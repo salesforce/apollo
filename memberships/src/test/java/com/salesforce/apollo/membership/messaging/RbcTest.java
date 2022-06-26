@@ -102,13 +102,13 @@ public class RbcTest {
     }
 
     private static final Parameters.Builder parameters = Parameters.newBuilder()
-                                                                   .setMaxMessages(100)
-                                                                   .setFalsePositiveRate(0.0125)
-                                                                   .setBufferSize(500);
+                                                                   .setMaxMessages(1000)
+                                                                   .setFalsePositiveRate(0.00125)
+                                                                   .setBufferSize(5000);
 
     private final List<Router>        communications = new ArrayList<>();
-    private final AtomicInteger       totalReceived  = new AtomicInteger(0);
     private List<ReliableBroadcaster> messengers;
+    private final AtomicInteger       totalReceived  = new AtomicInteger(0);
 
     @AfterEach
     public void after() {
@@ -160,7 +160,7 @@ public class RbcTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = 30;
+        int rounds = Boolean.getBoolean("large_tests") ? 100 : 10;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch round = new CountDownLatch(messengers.size());
             for (Receiver receiver : receivers.values()) {
@@ -176,7 +176,7 @@ public class RbcTest {
                 buf.flip();
                 view.publish(ByteString.copyFrom(buf), true);
             });
-            boolean success = round.await(20, TimeUnit.SECONDS);
+            boolean success = round.await(60, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
             current.incrementAndGet();

@@ -34,11 +34,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final Counter         droppedTransactions;
     private final Counter         droppedValidations;
     private final Meter           failedTransactions;
+    private final EtherealMetrics genesisMetrics;
     private final EtherealMetrics producerMetrics;
     private final Histogram       publishedBytes;
     private final Meter           publishedTransactions;
     private final Meter           publishedValidations;
-    private final EtherealMetrics reconfigureMetrics;
     private final MetricRegistry  registry;
     private final Timer           transactionLatency;
     private final Meter           transactionSubmitFailed;
@@ -52,7 +52,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         this.registry = registry;
         combineMetrics = new RbcMetricsImpl(context, "combine", registry);
         producerMetrics = new EtherealMetricsImpl(context, "producer", registry);
-        reconfigureMetrics = new EtherealMetricsImpl(context, "reconfigure", registry);
+        genesisMetrics = new EtherealMetricsImpl(context, "genesis", registry);
 
         droppedTransactions = registry.counter(name(context.shortString(), "transactions.dropped"));
         droppedValidations = registry.counter(name(context.shortString(), "validations.dropped"));
@@ -81,6 +81,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
+    public EtherealMetrics getGensisMetrics() {
+        return genesisMetrics;
+    }
+
+    @Override
     public com.netflix.concurrency.limits.MetricRegistry getMetricRegistry(String prefix) {
         return new LimitsRegistry(prefix, registry);
     }
@@ -88,11 +93,6 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     @Override
     public EtherealMetrics getProducerMetrics() {
         return producerMetrics;
-    }
-
-    @Override
-    public EtherealMetrics getReconfigureMetrics() {
-        return reconfigureMetrics;
     }
 
     @Override

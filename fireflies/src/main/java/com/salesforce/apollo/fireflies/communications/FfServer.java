@@ -15,7 +15,6 @@ import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.RoutableService;
@@ -34,10 +33,10 @@ import io.grpc.stub.StreamObserver;
 public class FfServer extends FirefliesImplBase {
     private final static Logger log = LoggerFactory.getLogger(FfServer.class);
 
+    private final Executor                 exec;
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
-    private final Executor                 exec;
 
     public FfServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
                     FireflyMetrics metrics) {
@@ -71,22 +70,6 @@ public class FfServer extends FirefliesImplBase {
             }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
-        }), log));
-    }
-
-    @Override
-    public void ping(Ping request, StreamObserver<Empty> responseObserver) {
-        final var from = Digest.from(request.getContext());
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, from, s -> {
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-            if (metrics != null) {
-                metrics.inboundPingRate().mark();
-            }
         }), log));
     }
 

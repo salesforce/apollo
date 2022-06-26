@@ -7,8 +7,8 @@
 package com.salesforce.apollo.choam.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -35,7 +35,8 @@ public class TxDataSourceTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier().get()), 100, null,
-                                           1024, Duration.ofMillis(100), 100);
+                                           1024, Duration.ofMillis(100), 100,
+                                           ExponentialBackoffPolicy.newBuilder().build());
         Transaction tx = Transaction.newBuilder()
                                     .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();
@@ -43,34 +44,42 @@ public class TxDataSourceTest {
         while (ds.offer(tx)) {
             count++;
         }
-        assertEquals(155, count);
-        assertEquals(5, ds.getProcessing());
+        assertEquals(2400, count);
+        assertEquals(2400, ds.getRemainingTransactions());
 
         var data = ds.getData();
         assertNotNull(data);
-        assertEquals(1144, data.size());
+        assertEquals(1056, data.size());
 
-        assertTrue(ds.offer(tx));
-
-        data = ds.getData();
-        assertNotNull(data);
-        assertEquals(1144, data.size());
+        assertFalse(ds.offer(tx));
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1144, data.size());
+        assertEquals(1056, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1144, data.size());
+        assertEquals(1056, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1144, data.size());
+        assertEquals(1056, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1100, data.size());
+        assertEquals(1056, data.size());
+
+        data = ds.getData();
+        assertNotNull(data);
+        assertEquals(1056, data.size());
+
+        for (int i = 0; i < 94; i++) {
+            data = ds.getData();
+            assertNotNull(data);
+            assertEquals(1056, data.size());
+        }
+
+        assertEquals(0, ds.getRemainingTransactions());
 
         data = ds.getData();
         assertNotNull(data);

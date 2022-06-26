@@ -25,7 +25,6 @@ import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DagFactory;
 import com.salesforce.apollo.ethereal.DagReader;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.linear.CRPTest.RandomSourceMock;
 
 /**
  * @author hal.hildebrand
@@ -39,10 +38,9 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/empty.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d, rs, cnf);
-        assertNull(ordering.nextRound());
+        var cnf = Config.newBuilder().build();
+        var ordering = new Extender(d, cnf);
+        assertNull(ordering.nextRound(null));
     }
 
     @Test
@@ -51,10 +49,9 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d, rs, cnf);
-        assertNull(ordering.nextRound());
+        var cnf = Config.newBuilder().build();
+        var ordering = new Extender(d, cnf);
+        assertNull(ordering.nextRound(null));
     }
 
     @Test
@@ -63,14 +60,15 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
-        var ordering = new Extender(d, rs, cnf);
+        var cnf = Config.newBuilder().setnProc(d.nProc()).build();
+        var ordering = new Extender(d, cnf);
 
+        TimingRound current = null;
         for (int level = 0; level < 8; level++) {
-            assertNotNull(ordering.nextRound(), "failed at level:  " + level);
+            current = ordering.nextRound(current);
+            assertNotNull(current, "failed at level:  " + level);
         }
-        assertNull(ordering.nextRound());
+        assertEquals(current, ordering.nextRound(current));
     }
 
     @Test
@@ -79,28 +77,28 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
-        var ordering = new Extender(d, rs, cnf);
+        var cnf = Config.newBuilder().setnProc(d.nProc()).build();
+        var ordering = new Extender(d, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();
+        TimingRound current = null;
         for (int level = 0; level < 8; level++) {
-            TimingRound timingRound = ordering.nextRound();
-            assertNotNull(timingRound, "failed at level:  " + level);
-            var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT);
+            current = ordering.nextRound(current);
+            assertNotNull(current, "failed at level:  " + level);
+            var thisRound = current.orderedUnits(DigestAlgorithm.DEFAULT, "");
             assertNotNull(thisRound);
             timingRounds.add(thisRound);
         }
-        assertNull(ordering.nextRound());
+        assertEquals(current, ordering.nextRound(current));
 
         // each level choose timing unit on this level
-        for (int level = 0; level < 7; level++) {
+        for (int level = 0; level < 8; level++) {
             var tu = timingRounds.get(level).get(timingRounds.get(level).size() - 1);
             assertEquals(level, tu.level());
         }
         // should sort units in order consistent with the dag order
         var orderedUnits = new ArrayList<Unit>();
-        for (int level = 0; level < 7; level++) {
+        for (int level = 0; level < 8; level++) {
             orderedUnits.addAll(timingRounds.get(level));
         }
         for (int i = 0; i < orderedUnits.size(); i++) {
@@ -111,7 +109,7 @@ public class ExtenderTest {
         // should on each level choose units that are below current timing unit but not
         // below previous timing units
         var timingUnits = new ArrayList<Unit>();
-        for (int level = 0; level < 7; level++) {
+        for (int level = 0; level < 8; level++) {
             var tu = timingRounds.get(level).get(timingRounds.get(level).size() - 1);
             for (var u : timingRounds.get(level)) {
                 for (var ptu : timingUnits) {

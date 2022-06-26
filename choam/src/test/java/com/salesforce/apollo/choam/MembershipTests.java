@@ -14,11 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -47,7 +45,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
- *
+ * 
  */
 public class MembershipTests {
     static {
@@ -63,21 +61,19 @@ public class MembershipTests {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    private Map<Digest, AtomicInteger> blocks;
-    private Map<Digest, CHOAM>         choams;
-    private List<SigningMember>        members;
-    private Map<Digest, Router>        routers;
+    private Map<Digest, CHOAM>  choams;
+    private List<SigningMember> members;
+    private Map<Digest, Router> routers;
 
     @AfterEach
     public void after() throws Exception {
         shutdown();
         members = null;
-        blocks = null;
     }
 
     @Test
     public void genesisBootstrap() throws Exception {
-        SigningMember testSubject = initialize(2000, 11);
+        SigningMember testSubject = initialize(2000, 5);
         System.out.println("Test subject: " + testSubject.getId() + " membership: "
         + members.stream().map(e -> e.getId()).toList());
         routers.entrySet()
@@ -89,34 +85,58 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(30);
+        final Duration timeout = Duration.ofSeconds(6);
         final var scheduler = Executors.newScheduledThreadPool(1);
 
         var txneer = choams.get(members.get(0).getId());
 
         System.out.println("Transactioneer: " + txneer.getId());
 
-        assertTrue(Utils.waitForCondition(12_000, 1_000, () -> txneer.active()),
-                   "Transactioneer did not become active: " + txneer.getId());
+        boolean actived = Utils.waitForCondition(12_000, 1_000,
+                                                 () -> choams.entrySet()
+                                                             .stream()
+                                                             .filter(e -> !testSubject.getId().equals(e.getKey()))
+                                                             .map(e -> e.getValue())
+                                                             .filter(c -> !c.active())
+                                                             .count() == 0);
+        assertTrue(actived,
+                   "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
+                   + " inactive: "
+                   + choams.entrySet()
+                           .stream()
+                           .filter(e -> !testSubject.getId().equals(e.getKey()))
+                           .map(e -> e.getValue())
+                           .filter(c -> !c.active())
+                           .map(c -> c.getId())
+                           .toList());
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
                                                 scheduler, countdown, Executors.newSingleThreadExecutor());
 
         transactioneer.start();
-        assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");
+        assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
 
-        var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
+        var target = choams.values()
+                           .stream()
+                           .map(l -> l.currentHeight())
+                           .filter(h -> h != null)
+                           .mapToInt(u -> u.intValue())
+                           .max()
+                           .getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> blocks.get(testSubject.getId()).get() >= target),
-                   "Expecting: " + target + " completed: " + blocks.get(testSubject.getId()).get());
+        final var targetMet = Utils.waitForCondition(30_000, 1_000, () -> {
+            final var currentHeight = choams.get(testSubject.getId()).currentHeight();
+            return currentHeight != null && currentHeight.intValue() >= target;
+        });
+        assertTrue(targetMet,
+                   "Expecting: " + target + " completed: " + choams.get(testSubject.getId()).currentHeight());
 
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
-        blocks = new ConcurrentHashMap<>();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
@@ -127,12 +147,14 @@ public class MembershipTests {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(20))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(10))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(checkpointBlockSize);
-        params.getProducer().ethereal().setEpochLength(10);
+        params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
+        params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
+
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -152,13 +174,10 @@ public class MembershipTests {
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var recording = new AtomicInteger();
-            blocks.put(m.getId(), recording);
 
             final TransactionExecutor processor = new TransactionExecutor() {
                 @Override
                 public void endBlock(ULong height, Digest hash) {
-                    recording.incrementAndGet();
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -170,9 +189,7 @@ public class MembershipTests {
                 }
             };
             params.getProducer().ethereal().setSigner(m);
-            if (m.equals(testSubject)) {
-                params.setSynchronizationCycles(20);
-            } else {
+            if (!m.equals(testSubject)) {
                 params.setSynchronizationCycles(1);
             }
             return new CHOAM(params.build(RuntimeParameters.newBuilder()

@@ -19,7 +19,7 @@ import com.salesforce.apollo.ethereal.Adder.State;
  * @author hal.hildebrand
  *
  */
-public class Waiting {
+public class Waiting implements Comparable<Waiting> {
 
     private final List<Waiting>    children       = new ArrayList<>();
     private volatile Unit          decoded;
@@ -53,6 +53,20 @@ public class Waiting {
 
     public void clearChildren() {
         children.clear();
+    }
+
+    @Override
+    public int compareTo(Waiting o) {
+        var comp = Short.compare(creator(), o.creator());
+        if (comp < 0 || comp > 0) {
+            return comp;
+        }
+        return Integer.compare(height(), o.height());
+
+    }
+
+    public short creator() {
+        return pu.creator();
     }
 
     public void decMissing() {

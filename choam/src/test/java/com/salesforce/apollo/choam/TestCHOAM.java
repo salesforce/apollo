@@ -56,12 +56,13 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
- *
+ * 
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 10;
+    private static final int     CARDINALITY;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
+        CARDINALITY = LARGE_TESTS ? 10 : 5;
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
@@ -98,7 +99,7 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder()
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(200))
+                               .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
@@ -106,7 +107,9 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockDelta(1);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
+        if (LARGE_TESTS) {
+            params.getProducer().ethereal().setNumberOfEpochs(5).setEpochLength(60);
+        }
 
         checkpointOccurred = new CompletableFuture<>();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -175,10 +178,10 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final var timeout = Duration.ofSeconds(3);
+        final var timeout = Duration.ofSeconds(15);
 
         final var transactioneers = new ArrayList<Transactioneer>();
-        final var clientCount = LARGE_TESTS ? 1_000 : 50;
+        final var clientCount = LARGE_TESTS ? 5_000 : 50;
         final var max = LARGE_TESTS ? 1_000 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
@@ -194,13 +197,17 @@ public class TestCHOAM {
             }
         });
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
-                   "System did not become active");
+        boolean activated = Utils.waitForCondition(30_000, 1_000,
+                                                   () -> choams.values()
+                                                               .stream()
+                                                               .filter(c -> !c.active())
+                                                               .count() == 0);
+        assertTrue(activated, "System did not become active: "
+        + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList());
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(LARGE_TESTS ? 1200 : 60, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 3200 : 60, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: "
             + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {

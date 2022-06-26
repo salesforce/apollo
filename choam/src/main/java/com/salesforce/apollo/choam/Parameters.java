@@ -35,6 +35,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
@@ -56,7 +57,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
-                         int checkpointSegmentSize) {
+                         ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
+                         ExponentialBackoffPolicy.Builder drainPolicy) {
 
     public int majority() {
         return runtime.context.majority();
@@ -455,7 +457,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public static class Builder {
             private Duration       batchInterval    = Duration.ofMillis(100);
-            private Config.Builder ethereal         = Config.deterministic();
+            private Config.Builder ethereal         = Config.newBuilder();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
             private int            maxBatchByteSize = 2 * 1024 * 1024;
             private int            maxBatchCount    = 10_000;
@@ -619,28 +621,30 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public static class Builder implements Cloneable {
 
-        private BootstrapParameters            bootstrap             = BootstrapParameters.newBuilder().build();
-        private int                            checkpointBlockDelta  = 10;
-        private int                            checkpointSegmentSize = 8192;
-        private ReliableBroadcaster.Parameters combine               = ReliableBroadcaster.Parameters.newBuilder()
-                                                                                                     .build();
-        private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Digest                         genesisViewId;
-        private Duration                       gossipDuration        = Duration.ofSeconds(1);
-        private int                            maxCheckpointSegments = 200;
-        private MvStoreBuilder                 mvBuilder             = new MvStoreBuilder();
-        private ProducerParameters             producer              = ProducerParameters.newBuilder().build();
-        private int                            regenerationCycles    = 20;
-        private Duration                       submitTimeout         = Duration.ofSeconds(30);
-        private int                            synchronizationCycles = 10;
-        private LimiterBuilder                 txnLimiterBuilder     = new LimiterBuilder();
-        private SignatureAlgorithm             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private BootstrapParameters              bootstrap             = BootstrapParameters.newBuilder().build();
+        private int                              checkpointBlockDelta  = 10;
+        private int                              checkpointSegmentSize = 8192;
+        private ReliableBroadcaster.Parameters   combine               = ReliableBroadcaster.Parameters.newBuilder()
+                                                                                                       .build();
+        private DigestAlgorithm                  digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder();
+        private Digest                           genesisViewId;
+        private Duration                         gossipDuration        = Duration.ofSeconds(1);
+        private int                              maxCheckpointSegments = 200;
+        private MvStoreBuilder                   mvBuilder             = new MvStoreBuilder();
+        private ProducerParameters               producer              = ProducerParameters.newBuilder().build();
+        private int                              regenerationCycles    = 20;
+        private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder();
+        private Duration                         submitTimeout         = Duration.ofSeconds(30);
+        private int                              synchronizationCycles = 10;
+        private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
+        private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
-                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder,
-                                  checkpointSegmentSize);
+                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder, submitPolicy,
+                                  checkpointSegmentSize, drainPolicy);
         }
 
         @Override
@@ -672,6 +676,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return digestAlgorithm;
         }
 
+        public ExponentialBackoffPolicy.Builder getDrainPolicy() {
+            return drainPolicy;
+        }
+
         public Digest getGenesisViewId() {
             return genesisViewId;
         }
@@ -696,16 +704,16 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return regenerationCycles;
         }
 
+        public ExponentialBackoffPolicy.Builder getSubmitPolicy() {
+            return submitPolicy;
+        }
+
         public Duration getSubmitTimeout() {
             return submitTimeout;
         }
 
         public int getSynchronizationCycles() {
             return synchronizationCycles;
-        }
-
-        public Duration getTransactonTimeout() {
-            return submitTimeout;
         }
 
         public LimiterBuilder getTxnLimiterBuilder() {
@@ -741,6 +749,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public Builder setDrainPolicy(ExponentialBackoffPolicy.Builder drainPolicy) {
+            this.drainPolicy = drainPolicy;
+            return this;
+        }
+
         public Builder setGenesisViewId(Digest genesisViewId) {
             this.genesisViewId = genesisViewId;
             return this;
@@ -771,6 +784,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public Builder setSubmitPolicy(ExponentialBackoffPolicy.Builder submitPolicy) {
+            this.submitPolicy = submitPolicy;
+            return this;
+        }
+
         public Builder setSubmitTimeout(Duration submitTimeout) {
             this.submitTimeout = submitTimeout;
             return this;
@@ -778,11 +796,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setSynchronizationCycles(int synchronizationCycles) {
             this.synchronizationCycles = synchronizationCycles;
-            return this;
-        }
-
-        public Builder setTransactonTimeout(Duration transactonTimeout) {
-            this.submitTimeout = transactonTimeout;
             return this;
         }
 

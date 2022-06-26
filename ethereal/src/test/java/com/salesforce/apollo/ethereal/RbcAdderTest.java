@@ -61,7 +61,7 @@ public class RbcAdderTest {
                            .map(e -> (SigningMember) e)
                            .toList();
         members.forEach(m -> context.activate(m));
-        config = Config.deterministic()
+        config = Config.newBuilder()
                        .setnProc((short) members.size())
                        .setVerifiers(members.toArray(new Verifier[members.size()]))
                        .setSigner(members.get(0))
@@ -311,7 +311,7 @@ public class RbcAdderTest {
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(0, adder.getWaitingForRound().size());
-        assertEquals(5, adder.getWaiting().size());
+        assertEquals(6, adder.getWaiting().size());
 
         waiting = adder.getWaiting().get(unit(1, 2).hash());
         assertEquals(State.PREVOTED, waiting.state());
@@ -350,10 +350,6 @@ public class RbcAdderTest {
         assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
     }
 
-    private Unit unit(int pid, int level) {
-        return units.get((short) pid).get(level).get(0);
-    }
-
     // All PIDs should be output
     private void round(int round, Adder adder) {
         var u = unit(0, round);
@@ -387,5 +383,9 @@ public class RbcAdderTest {
         adder.commit(u.hash(), (short) 1);
         adder.commit(u.hash(), (short) 2);
         adder.commit(u.hash(), (short) 3);
+    }
+
+    private Unit unit(int pid, int level) {
+        return units.get((short) pid).get(level).get(0);
     }
 }

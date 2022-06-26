@@ -11,9 +11,8 @@ import static com.salesforce.apollo.thoth.KerlDHT.completeIt;
 
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -28,9 +27,14 @@ import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -39,6 +43,10 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.thoth.grpc.ValidatorClient;
+import com.salesforce.apollo.thoth.grpc.ValidatorServer;
+import com.salesforce.apollo.thoth.grpc.ValidatorService;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -48,6 +56,10 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  *
  */
 public class Ani {
+    public record AniParameters(SigningMember member, Context<Member> context, SigningThreshold threshold,
+                                Map<Identifier, Integer> validators, Duration validationTimeout, Sakshi sakshi,
+                                Executor executor, KerlDHT dht, Router communications, StereotomyMetrics metrics) {}
+
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
     public static Caffeine<EventCoordinates, KeyEvent> defaultEventsBuilder() {
@@ -77,26 +89,30 @@ public class Ani {
                                                                           cause));
     }
 
-    private final KerlDHT                                       dht;
-    private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
-    private final AsyncLoadingCache<Identifier, KeyState>       keyStates;
-    private final SigningThreshold                              threshold;
-    private final Duration                                      timeout = Duration.ofSeconds(60);
-    private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
-    private final Map<Identifier, Integer>                      validators;
+    @SuppressWarnings("unused")
+    private final CommonCommunications<ValidatorService, Sakshi> comms;
+    @SuppressWarnings("unused")
+    private final Context<Member>                                context;
+    private final KerlDHT                                        dht;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent>  events;
+    private final AsyncLoadingCache<Identifier, KeyState>        keyStates;
+    private final SigningMember                                  member;
+    private final Sakshi                                         sakshi;
+    private final SigningThreshold                               threshold;
+    private final AsyncLoadingCache<EventCoordinates, Boolean>   validated;
+    private final Map<Identifier, Integer>                       validators;
 
-    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht) {
-        this(validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
+    public Ani(AniParameters parameters) {
+        this(parameters, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
     }
 
-    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht,
-               Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
-               Caffeine<Identifier, KeyState> keyStatesBuilder) {
+    public Ani(AniParameters parameters, Caffeine<EventCoordinates, Boolean> validatedBuilder,
+               Caffeine<EventCoordinates, KeyEvent> eventsBuilder, Caffeine<Identifier, KeyState> keyStatesBuilder) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
                                                                   Executor executor) throws Exception {
-                return performValidation(key);
+                return performValidation(key, parameters.validationTimeout);
             }
         });
         events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
@@ -112,15 +128,20 @@ public class Ani {
                 return dht.getKeyState(id.toIdent()).thenApply(ks -> new KeyStateImpl(ks));
             }
         });
-        this.dht = dht;
-        this.validators = new HashMap<>();
-        for (int i = 0; i < validators.size(); i++) {
-            this.validators.put(validators.get(i), i);
-        }
-        this.threshold = threshold;
+        this.member = parameters.member;
+        this.dht = parameters.dht;
+        this.validators = parameters.validators;
+        this.threshold = parameters.threshold;
+        this.sakshi = parameters.sakshi;
+        comms = parameters.communications.create(member, parameters.context.getId(), this.sakshi,
+                                                 r -> new ValidatorServer(r, parameters.executor, parameters.metrics),
+                                                 ValidatorClient.getCreate(parameters.context.getId(),
+                                                                           parameters.metrics),
+                                                 ValidatorClient.getLocalLoopback(this.sakshi, member));
+        this.context = parameters.context;
     }
 
-    public EventValidation getValidation(Duration timeout) {
+    public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
             @Override
             public boolean validate(EstablishmentEvent event) {
@@ -130,10 +151,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: " + event.getCoordinates());
+                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member, e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: " + event.getCoordinates());
+                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
                     return false;
                 }
             }
@@ -145,15 +166,15 @@ public class Ani {
         return validated.get(event.getCoordinates());
     }
 
-    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord) {
+    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord, Duration timeout) {
         var fs = new CompletableFuture<Boolean>();
         events.get(coord)
               .thenAcceptBoth(dht.getKeyStateWithEndorsementsAndValidations(coord.toEventCoords()),
-                              (event, ksa) -> fs.complete(validate(ksa, event)));
+                              (event, ksa) -> fs.complete(validate(timeout, ksa, event)));
         return fs;
     }
 
-    private boolean validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
+    private boolean validate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
         // TODO Multisig
         var state = new KeyStateImpl(ksAttach.getState());
         boolean witnessed = false;
@@ -191,21 +212,17 @@ public class Ani {
             }
             var validations = new PublicKey[state.getWitnesses().size()];
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
-            for (var entry : validators.entrySet()) {
-                try {
-                    validations[entry.getValue()] = keyStates.get(entry.getKey())
-                                                             .get(timeout.toMillis(), TimeUnit.MILLISECONDS)
-                                                             .getKeys()
-                                                             .get(0);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    continue;
-                } catch (ExecutionException e) {
-                    log.error("Error retreiving key state: {}", entry.getKey(), e);
-                } catch (TimeoutException e) {
-                    log.error("Error retreiving key state: {}", entry.getKey(), e);
-                }
-            }
+
+            record resolved(Entry<Identifier, Integer> entry, KeyState keyState) {}
+            validators.entrySet()
+                      .stream()
+                      .map(e -> keyStates.get(e.getKey())
+                                         .orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                         .exceptionallyCompose(t -> null)
+                                         .thenApply(ks -> new resolved(e, ks)))
+                      .map(res -> res.join())
+                      .filter(res -> res != null)
+                      .forEach(res -> validations[res.entry.getValue()] = res.keyState.getKeys().get(0));
             validated = new JohnHancock(algo, signatures).verify(threshold, validations,
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                     .toByteString()));

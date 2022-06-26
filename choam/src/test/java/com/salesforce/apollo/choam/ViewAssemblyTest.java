@@ -1,12 +1,6 @@
-/*
- * Copyright (c) 2021, salesforce.com, inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,22 +8,30 @@ import static org.mockito.Mockito.when;
 import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
-import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -43,8 +45,14 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.DataSource;
+import com.salesforce.apollo.ethereal.Ethereal;
+import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
+import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -54,48 +62,113 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 
-/**
- * @author hal.hildebrand
- *
- */
 public class ViewAssemblyTest {
-    static {
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-            LoggerFactory.getLogger(ViewAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
-        });
+
+    private static class VDataSource implements DataSource {
+        private BlockingQueue<Reassemble> outbound = new ArrayBlockingQueue<>(100);
+
+        @Override
+        public ByteString getData() {
+            Reassemble.Builder result;
+            try {
+                Reassemble poll = outbound.poll(1, TimeUnit.SECONDS);
+                if (poll != null) {
+                    result = Reassemble.newBuilder(poll);
+                } else {
+                    result = Reassemble.newBuilder();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ByteString.EMPTY;
+            }
+            while (outbound.peek() != null) {
+                var current = outbound.poll();
+                result.addAllMembers(current.getMembersList()).addAllValidations(current.getValidationsList());
+            }
+            return result.build().toByteString();
+        }
+
+        public void publish(Reassemble r) {
+            outbound.add(r);
+        }
+
     }
 
-    @Test
-    public void assembly() throws Exception {
-        Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
-        Digest nextViewId = viewId.prefix(0x666);
-        int cardinality = 5;
+    private static short CARDINALITY = 4;
+
+    private Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
+    private Map<SigningMember, Router>      communications = new HashMap<>();
+    private CountDownLatch                  complete;
+    private Context<Member>                 context;
+    private List<Ethereal>                  controllers    = new ArrayList<>();
+    private Map<SigningMember, VDataSource> dataSources;
+    private List<ChRbcGossip>               gossipers      = new ArrayList<>();
+    private List<SigningMember>             members;
+    private Digest                          nextViewId;
+
+    @AfterEach
+    public void after() {
+        controllers.forEach(e -> e.stop());
+        gossipers.forEach(e -> e.stop());
+        communications.values().forEach(e -> e.close());
+    }
+
+    @BeforeEach
+    public void before() throws Exception {
+
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<Member> members = IntStream.range(0, cardinality)
-                                        .mapToObj(i -> stereotomy.newIdentifier().get())
-                                        .map(cpk -> new ControlledIdentifierMember(cpk))
-                                        .map(e -> (Member) e)
-                                        .toList();
-        Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
-        base.activate(members);
-        Context<Member> committee = Committee.viewFor(viewId, base);
+        members = IntStream.range(0, CARDINALITY)
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(e -> (SigningMember) e)
+                           .toList();
 
+        final var prefix = UUID.randomUUID().toString();
+        members.forEach(m -> {
+            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(2),
+                                      null);
+            communications.put(m, com);
+            com.setMember(m);
+        });
+        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
+        for (Member m : members) {
+            context.activate(m);
+        }
+        nextViewId = context.getId().prefix(0x666);
+
+        dataSources = members.stream().collect(Collectors.toMap(m -> m, m -> new VDataSource()));
+        complete = new CountDownLatch(context.activeCount());
+        buildAssemblies();
+        initEthereals();
+    }
+
+    @Test
+    public void testIt() throws Exception {
+
+        final var gossipPeriod = Duration.ofMillis(5);
+
+        assemblies.values().forEach(assembly -> assembly.assembled());
+        controllers.forEach(e -> e.start());
+        communications.values().forEach(e -> e.start());
+        gossipers.forEach(e -> e.start(gossipPeriod, Executors.newSingleThreadScheduledExecutor()));
+        assertTrue(complete.await(60, TimeUnit.SECONDS), "Failed to reconfigure");
+    }
+
+    private void buildAssemblies() {
         Parameters.Builder params = Parameters.newBuilder()
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(10));
-
-        Map<Member, ViewAssembly> recons = new HashMap<>();
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
         Map<Member, KeyPair> consensusPairs = new HashMap<>();
         servers.forEach((m, s) -> {
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             consensusPairs.put(m, keyPair);
-            final PubKey consensus = bs(keyPair.getPublic());
+            final PubKey consensus = QualifiedBase64.bs(keyPair.getPublic());
             when(s.join(any(JoinRequest.class), any(Digest.class))).then(new Answer<ViewMember>() {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
@@ -104,28 +177,20 @@ public class ViewAssemblyTest {
                                      .setConsensusKey(consensus)
                                      .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
-
                 }
             });
         });
-        CountDownLatch complete = new CountDownLatch(committee.size());
-        final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(),
-                                              Executors.newFixedThreadPool(2), null);
-            localRouter.setMember(m);
-            return localRouter;
-        }));
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
-                                                                        .create(m, base.getId(), servers.get(m),
-                                                                                r -> new TerminalServer(communications.get(m)
-                                                                                                                      .getClientIdentityProvider(),
-                                                                                                        null, r,
-                                                                                                        Executors.newSingleThreadExecutor()),
-                                                                                TerminalClient.getCreate(null),
-                                                                                Terminal.getLocalLoopback((SigningMember) m,
+                                                                        .create(m, context.getId(), servers.get(m),
+                                                                                r -> {
+                                                                                    Router router = communications.get(m);
+                                                                                    return new TerminalServer(router.getClientIdentityProvider(),
+                                                                                                              null, r,
+                                                                                                              Executors.newSingleThreadExecutor());
+                                                                                }, TerminalClient.getCreate(null),
+                                                                                Terminal.getLocalLoopback(m,
                                                                                                           servers.get(m)))));
 
         Map<Member, Verifier> validators = consensusPairs.entrySet()
@@ -133,45 +198,63 @@ public class ViewAssemblyTest {
                                                          .collect(Collectors.toMap(e -> e.getKey(),
                                                                                    e -> new Verifier.DefaultVerifier(e.getValue()
                                                                                                                       .getPublic())));
-        committee.activeMembers().forEach(m -> {
+        Map<Member, ViewContext> views = new HashMap<>();
+        context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            params.getProducer().ethereal().setSigner(sm);
-            ViewContext view = new ViewContext(committee,
+            ViewContext view = new ViewContext(context,
                                                params.build(RuntimeParameters.newBuilder()
                                                                              .setExec(Executors.newFixedThreadPool(2))
                                                                              .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                                                                             .setContext(base)
+                                                                             .setContext(context)
                                                                              .setMember(sm)
                                                                              .setCommunications(router)
                                                                              .build()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
                                                null);
-            recons.put(m, new ViewAssembly(nextViewId, view, comms.get(m)) {
-
+            views.put(m, view);
+            var ds = dataSources.get(m);
+            var com = comms.get(m);
+            assemblies.put(m, new ViewAssembly(nextViewId, view, r -> ds.publish(r), com) {
                 @Override
                 public void complete() {
                     super.complete();
                     complete.countDown();
                 }
-
-                @Override
-                public void failed() {
-                    super.failed();
-                }
             });
         });
+    }
 
-        try {
-            communications.values().forEach(r -> r.start());
-            recons.values().forEach(r -> r.start());
+    private void initEthereals() {
+        var builder = Config.newBuilder()
+                            .setnProc(CARDINALITY)
+                            .setVerifiers(members.toArray(new Verifier[members.size()]));
 
-            recons.values().forEach(r -> r.assembled());
+        for (short i = 0; i < CARDINALITY; i++) {
+            final short pid = i;
+            final var member = members.get(i);
+            ViewAssembly assembly = assemblies.get(member);
+            BiConsumer<PreBlock, Boolean> blocker = (pb, last) -> {
+                assembly.inbound().accept(process(pb, last));
+            };
+            var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
+                                          dataSources.get(member), blocker, ep -> {
+                                          }, Ethereal.consumer(Integer.toString(i)));
 
-            complete.await(15, TimeUnit.SECONDS);
-        } finally {
-            recons.values().forEach(r -> r.stop());
-            communications.values().forEach(r -> r.close());
+            var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member),
+                                           Executors.newFixedThreadPool(2), null);
+            gossipers.add(gossiper);
+            controllers.add(controller);
         }
+    }
+
+    private List<Reassemble> process(PreBlock preblock, Boolean last) {
+        return preblock.data().stream().map(bs -> {
+            try {
+                return Reassemble.parseFrom(bs);
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalStateException(e);
+            }
+        }).toList();
     }
 }

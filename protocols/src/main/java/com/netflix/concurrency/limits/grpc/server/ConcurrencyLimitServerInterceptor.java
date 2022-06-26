@@ -15,8 +15,16 @@
  */
 package com.netflix.concurrency.limits.grpc.server;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.internal.Preconditions;
+
 import io.grpc.ForwardingServerCall;
 import io.grpc.ForwardingServerCallListener;
 import io.grpc.Metadata;
@@ -25,12 +33,6 @@ import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * {@link ServerInterceptor} that enforces per service and/or per method
@@ -38,24 +40,18 @@ import java.util.function.Supplier;
  * has been reached.
  */
 public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
-    private static final Logger LOG = LoggerFactory.getLogger(ConcurrencyLimitServerInterceptor.class);
-
-    private static final Status LIMIT_EXCEEDED_STATUS = Status.UNAVAILABLE.withDescription("Server concurrency limit reached");
-
-    private final Limiter<GrpcServerRequestContext> grpcLimiter;
-
-    private final Supplier<Status> statusSupplier;
-
-    private Supplier<Metadata> trailerSupplier;
-
     public static class Builder {
+        private final Limiter<GrpcServerRequestContext> grpcLimiter;
         private Supplier<Status>                        statusSupplier  = () -> LIMIT_EXCEEDED_STATUS;
         private Supplier<Metadata>                      trailerSupplier = Metadata::new;
-        private final Limiter<GrpcServerRequestContext> grpcLimiter;
 
         public Builder(Limiter<GrpcServerRequestContext> grpcLimiter) {
             Preconditions.checkArgument(grpcLimiter != null, "grpcLimiter cannot be null");
             this.grpcLimiter = grpcLimiter;
+        }
+
+        public ConcurrencyLimitServerInterceptor build() {
+            return new ConcurrencyLimitServerInterceptor(this);
         }
 
         /**
@@ -86,15 +82,21 @@ public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
             this.trailerSupplier = supplier;
             return this;
         }
-
-        public ConcurrencyLimitServerInterceptor build() {
-            return new ConcurrencyLimitServerInterceptor(this);
-        }
     }
+
+    private static final Status LIMIT_EXCEEDED_STATUS = Status.UNAVAILABLE.withDescription("Server concurrency limit reached");
+
+    private static final Logger LOG = LoggerFactory.getLogger(ConcurrencyLimitServerInterceptor.class);
 
     public static Builder newBuilder(Limiter<GrpcServerRequestContext> grpcLimiter) {
         return new Builder(grpcLimiter);
     }
+
+    private final Limiter<GrpcServerRequestContext> grpcLimiter;
+
+    private final Supplier<Status> statusSupplier;
+
+    private Supplier<Metadata> trailerSupplier;
 
     /**
      * @deprecated Use {@link ConcurrencyLimitServerInterceptor#newBuilder(Limiter)}
@@ -136,16 +138,6 @@ public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
         }).map(new Function<Limiter.Listener, Listener<ReqT>>() {
             final AtomicBoolean done = new AtomicBoolean(false);
 
-            void safeComplete(Runnable action) {
-                if (done.compareAndSet(false, true)) {
-                    try {
-                        action.run();
-                    } catch (Throwable t) {
-                        LOG.error("Critical error releasing limit", t);
-                    }
-                }
-            }
-
             @Override
             public Listener<ReqT> apply(Limiter.Listener listener) {
                 final Listener<ReqT> delegate;
@@ -179,6 +171,26 @@ public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
                 return new ForwardingServerCallListener.SimpleForwardingServerCallListener<ReqT>(delegate) {
 
                     @Override
+                    public void onCancel() {
+                        try {
+                            super.onCancel();
+                        } finally {
+                            safeComplete(listener::onDropped);
+                        }
+                    }
+
+                    @Override
+                    public void onHalfClose() {
+                        try {
+                            super.onHalfClose();
+                        } catch (Throwable t) {
+                            LOG.warn("Uncaught exception. Force releasing limit. ", t);
+                            safeComplete(listener::onIgnore);
+                            throw t;
+                        }
+                    }
+
+                    @Override
                     public void onMessage(ReqT message) {
                         try {
                             super.onMessage(message);
@@ -189,27 +201,17 @@ public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
                         }
                     }
 
-                    @Override
-                    public void onHalfClose() {
-                        try {
-                            super.onHalfClose();
-                        } catch (Throwable t) {
-                            LOG.error("Uncaught exception. Force releasing limit. ", t);
-                            safeComplete(listener::onIgnore);
-                            throw t;
-                        }
-                    }
-
-                    @Override
-                    public void onCancel() {
-                        try {
-                            super.onCancel();
-                        } finally {
-                            safeComplete(listener::onDropped);
-                        }
-                    }
-
                 };
+            }
+
+            void safeComplete(Runnable action) {
+                if (done.compareAndSet(false, true)) {
+                    try {
+                        action.run();
+                    } catch (Throwable t) {
+                        LOG.error("Critical error releasing limit", t);
+                    }
+                }
             }
         }).orElseGet(() -> {
             call.close(statusSupplier.get(), trailerSupplier.get());

@@ -53,6 +53,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -123,7 +124,7 @@ public class GenesisAssemblyTest {
             comm.setMember(m);
             return comm;
         }));
-        CountDownLatch complete = new CountDownLatch(committee.activeMembers().size());
+        CountDownLatch complete = new CountDownLatch(committee.activeCount());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
@@ -135,7 +136,7 @@ public class GenesisAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.activeMembers().forEach(m -> {
+        committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -189,7 +190,7 @@ public class GenesisAssemblyTest {
                                .setConsensusKey(consensus)
                                .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), vm));
+            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, Ethereal.consumer(m.getId().toString())));
         });
 
         try {

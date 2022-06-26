@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam.support;
 
 import java.util.concurrent.CompletableFuture;
 
+import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -16,4 +17,5 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 @SuppressWarnings("rawtypes")
-public record SubmittedTransaction(Digest hash, Transaction transaction, CompletableFuture onCompletion) {}
+public record SubmittedTransaction(Digest hash, Transaction transaction, CompletableFuture onCompletion,
+                                   Timer.Context timer) {}

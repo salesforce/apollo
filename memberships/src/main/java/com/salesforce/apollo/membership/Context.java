@@ -226,6 +226,11 @@ public interface Context<T extends Member> {
     boolean activateIfMember(T m);
 
     /**
+     * @return the Stream of active members
+     */
+    Stream<T> active();
+
+    /**
      * Answer the count of active members
      */
     int activeCount();
@@ -275,18 +280,6 @@ public interface Context<T extends Member> {
      * with FF parameters, with the rings forming random graph connections segments.
      */
     int diameter();
-
-    /**
-     * Answer the aproximate diameter of the receiver, assuming the rings were built
-     * with FF parameters, with the rings forming random graph connections segments
-     * with the supplied cardinality
-     */
-    int diameter(int c);
-
-    /**
-     * Answer the collection of active members
-     */
-    Collection<T> getActive();
 
     /**
      * Answer the active member having the id, or null if offline or non-existent
@@ -373,8 +366,10 @@ public interface Context<T extends Member> {
 
     /**
      * Take a member offline
+     * 
+     * @return true if the member was active previously
      */
-    void offline(T m);
+    boolean offline(T m);
 
     int offlineCount();
 

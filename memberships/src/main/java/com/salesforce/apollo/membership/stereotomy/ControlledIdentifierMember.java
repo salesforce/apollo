@@ -7,11 +7,14 @@
 package com.salesforce.apollo.membership.stereotomy;
 
 import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -111,4 +114,8 @@ public class ControlledIdentifierMember implements SigningMember {
         return verifier.get().verify(threshold, signature, message);
     }
 
+    public CertificateWithPrivateKey getCertificateWithPrivateKey(Instant validFrom, Duration valid,
+                                                                  SignatureAlgorithm signatureAlgorithm) {
+        return identifier.provision(validFrom, valid, signatureAlgorithm).get();
+    }
 }

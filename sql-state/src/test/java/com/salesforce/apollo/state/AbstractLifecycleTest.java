@@ -7,9 +7,14 @@
 package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +30,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -69,14 +75,10 @@ abstract public class AbstractLifecycleTest {
     protected static final Random                   entropy     = new Random();
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final List<Transaction>          GENESIS_DATA;
 
-    private static final List<Transaction> GENESIS_DATA;
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     static {
-        var txns = MigrationTest.initializeBookSchema();
-        txns.add(initialInsert());
-        GENESIS_DATA = CHOAM.toGenesisData(txns);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
@@ -84,6 +86,13 @@ abstract public class AbstractLifecycleTest {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TxDataSource.class)).setLevel(Level.TRACE);
+    }
+
+    static {
+        var txns = MigrationTest.initializeBookSchema();
+        txns.add(initialInsert());
+        GENESIS_DATA = CHOAM.toGenesisData(txns);
     }
 
     private static Txn initialInsert() {
@@ -108,6 +117,7 @@ abstract public class AbstractLifecycleTest {
     private File                                 baseDir;
     private File                                 checkpointDirBase;
     private final Map<Member, Parameters>        parameters       = new HashMap<>();
+    private List<Transactioneer>                 transactioneers;
 
     public AbstractLifecycleTest() {
         super();
@@ -127,6 +137,7 @@ abstract public class AbstractLifecycleTest {
         updaters.clear();
         parameters.clear();
         members = null;
+        transactioneers = null;
     }
 
     @BeforeEach
@@ -170,6 +181,129 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected abstract int checkpointBlockSize();
+
+    protected void post() throws Exception {
+
+        final var clearTxns = Utils.waitForCondition(120_000, 1000,
+                                                     () -> transactioneers.stream()
+                                                                          .mapToInt(t -> t.inFlight())
+                                                                          .filter(t -> t == 0)
+                                                                          .count() == transactioneers.size());
+        assertTrue(clearTxns, "Transactions did not clear: "
+        + Arrays.asList(transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).toArray()));
+
+        final var synchd = Utils.waitForCondition(120_000, 1000, () -> {
+
+            var max = members.stream()
+                             .map(m -> updaters.get(m))
+                             .map(ssm -> ssm.getCurrentBlock())
+                             .filter(cb -> cb != null)
+                             .map(cb -> cb.height())
+                             .max((a, b) -> a.compareTo(b))
+                             .get();
+            return members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(max) == 0)
+                          .count() == members.size();
+        });
+        assertTrue(synchd,
+                   "state did not synchronize: " + members.stream()
+                                                          .map(m -> updaters.get(m))
+                                                          .map(ssm -> ssm.getCurrentBlock())
+                                                          .filter(cb -> cb != null)
+                                                          .map(cb -> cb.height())
+                                                          .toList());
+
+        choams.values().forEach(e -> e.stop());
+        routers.values().forEach(e -> e.close());
+
+        System.out.println("Final state: " + members.stream()
+                                                    .map(m -> updaters.get(m))
+                                                    .map(ssm -> ssm.getCurrentBlock())
+                                                    .filter(cb -> cb != null)
+                                                    .map(cb -> cb.height())
+                                                    .toList());
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        record row(float price, int quantity) {}
+
+        System.out.println("Checking replica consistency");
+
+        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
+
+        for (Member m : members) {
+            Connection connection = updaters.get(m).newConnection();
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+            while (results.next()) {
+                manifested.computeIfAbsent(m, k -> new HashMap<>())
+                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            }
+            connection.close();
+        }
+
+        Map<Integer, row> standard = manifested.get(members.get(0));
+        for (Member m : members) {
+            var candidate = manifested.get(m);
+            for (var entry : standard.entrySet()) {
+                assertTrue(candidate.containsKey(entry.getKey()));
+                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            }
+        }
+    }
+
+    protected void pre() throws Exception {
+
+        final Duration timeout = Duration.ofSeconds(6);
+        transactioneers = new ArrayList<Transactioneer>();
+        final CountDownLatch countdown = new CountDownLatch(1);
+
+        routers.entrySet()
+               .stream()
+               .filter(e -> !e.getKey().equals(testSubject.getId()))
+               .map(e -> e.getValue())
+               .forEach(r -> r.start());
+        choams.entrySet()
+              .stream()
+              .filter(e -> !e.getKey().equals(testSubject.getId()))
+              .map(e -> e.getValue())
+              .forEach(ch -> ch.start());
+
+        var txneer = updaters.get(members.get(0));
+
+        final var activated = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> choams.entrySet()
+                                                                 .stream()
+                                                                 .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                                 .map(e -> e.getValue())
+                                                                 .filter(c -> !c.active())
+                                                                 .count() == 0);
+        assertTrue(activated,
+                   "Group did not become active: " + (choams.entrySet()
+                                                            .stream()
+                                                            .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                            .map(e -> e.getValue())
+                                                            .filter(c -> !c.active())
+                                                            .map(c -> c.getId())
+                                                            .toList()));
+
+        var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
+                                               countdown, txScheduler));
+        System.out.println("Transaction member: " + members.get(0).getId());
+        System.out.println("Starting txns");
+        transactioneers.stream().forEach(e -> e.start());
+        var success = countdown.await(60, TimeUnit.SECONDS);
+        assertTrue(success,
+                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
+
+    }
 
     protected Txn update(Random entropy, Mutator mutator) {
 
@@ -216,7 +350,7 @@ abstract public class AbstractLifecycleTest {
                                                                 .build())
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setBatchInterval(Duration.ofMillis(10))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
@@ -224,7 +358,9 @@ abstract public class AbstractLifecycleTest {
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
 
-        params.getProducer().ethereal().setEpochLength(10);
+        params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
+        params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
+
         return params;
     }
 
@@ -260,8 +396,8 @@ abstract public class AbstractLifecycleTest {
         return l -> {
             try {
                 final var check = checkpointer.apply(l);
-                checkpointOccurred.countDown();
                 checkpointHeight.compareAndSet(null, l.add(1));
+                checkpointOccurred.countDown();
                 return check;
             } catch (Throwable e) {
                 e.printStackTrace();

@@ -36,7 +36,7 @@ public interface Unit extends PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit uid) {
+            if (obj instanceof Unit uid) {
                 return hash().equals(uid.hash());
             }
             return false;
@@ -65,11 +65,6 @@ public interface Unit extends PreUnit {
         @Override
         public int height() {
             return unit.height();
-        }
-
-        @Override
-        public byte[] randomSourceData() {
-            return unit.randomSourceData();
         }
 
         @Override
@@ -117,7 +112,7 @@ public interface Unit extends PreUnit {
 
         @Override
         public String toString() {
-            return "unitInDag[" + shortString() + "]";
+            return "uid[" + shortString() + "]";
         }
 
         @Override
@@ -274,7 +269,7 @@ public interface Unit extends PreUnit {
      */
     default int computeForkingHeight(Dag dag) {
         if (dealing()) {
-            if (dag.maximalUnitsPerProcess().get(creator()).size() > 0) {
+            if (dag.maximalUnitsPerProcess().get(creator()) != null) {
                 return -1;
             } else {
                 return Integer.MAX_VALUE;
@@ -283,11 +278,9 @@ public interface Unit extends PreUnit {
         var u = predecessor();
         if (u instanceof unitInDag predecessor) {
             var found = false;
-            for (Unit v : dag.maximalUnitsPerProcess().get(creator())) {
-                if (v.equals(predecessor)) {
-                    found = true;
-                    break;
-                }
+            Unit v = dag.maximalUnitsPerProcess().get(creator());
+            if (predecessor.equals(v)) {
+                found = true;
             }
             if (found) {
                 return predecessor.forkingHeight;

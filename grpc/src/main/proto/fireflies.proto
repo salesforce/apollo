@@ -11,20 +11,8 @@ import "stereotomy.proto";
 package fireflies;
 
 service Fireflies {
-    /*
-     * Fireflies 3 phase gossip
-     */
     rpc gossip (SayWhat) returns (Gossip) {}
     rpc update (State) returns (google.protobuf.Empty) {}
-
-    /**
-     * Fireflies liveness ping
-     */
-    rpc ping (Ping) returns (google.protobuf.Empty) {}
-}
-
-message Ping {
-    utils.Digeste context = 1;
 }
 
 message SayWhat {
@@ -46,7 +34,6 @@ message Accusation {
     int32 ringNumber = 2;
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
-    bytes content = 5;
 }
 
 message SignedAccusation {
@@ -94,7 +81,7 @@ message NoteGossip {
 message Digests { 
     utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
-    utils.Biff accusationBff = 3; 
+    utils.Biff accusationBff = 3;
 }
 
 message Gossip {

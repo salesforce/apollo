@@ -103,6 +103,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public Stream<T> active() {
+        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member());
+    }
+
+    @Override
     public int activeCount() {
         return (int) members.values().stream().filter(e -> e.isActive()).count();
     }
@@ -166,19 +171,9 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public int diameter() {
-        return diameter(size());
-    }
-
-    /**
-     * Answer the aproximate diameter of the receiver, assuming the rings were built
-     * with FF parameters, with the rings forming random graph connections segments
-     * with the supplied cardinality
-     */
-    @Override
-    public int diameter(int c) {
-        double pN = ((double) (bias * toleranceLevel())) / ((double) c);
-        double logN = Math.log(c);
-        return (int) (logN / Math.log(c * pN));
+        double pN = ((double) (bias * toleranceLevel())) / ((double) cardinality);
+        double logN = Math.log(cardinality);
+        return (int) (logN / Math.log(cardinality * pN));
     }
 
     @Override
@@ -194,11 +189,6 @@ public class ContextImpl<T extends Member> implements Context<T> {
         } else if (!id.equals(other.getId()))
             return false;
         return true;
-    }
-
-    @Override
-    public Collection<T> getActive() {
-        return activeMembers();
     }
 
     @Override
@@ -314,7 +304,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      * Take a member offline
      */
     @Override
-    public void offline(T m) {
+    public boolean offline(T m) {
         if (tracking(m).offline()) {
             membershipListeners.values().forEach(l -> {
                 try {
@@ -323,7 +313,9 @@ public class ContextImpl<T extends Member> implements Context<T> {
                     log.error("error sending fail to listener: " + l, e);
                 }
             });
+            return true;
         }
+        return false;
     }
 
     @Override

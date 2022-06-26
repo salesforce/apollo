@@ -74,6 +74,10 @@ final public class Entropy {
         acceptBitsStream(entropy -> entropy.nextBytes(bytes));
     }
 
+    public static double nextBitsStreamDouble() {
+        return applyBitsStream(entropy -> entropy.nextDouble());
+    }
+
     public static int nextBitsStreamInt() {
         return applyBitsStream(entropy -> entropy.nextInt());
     }

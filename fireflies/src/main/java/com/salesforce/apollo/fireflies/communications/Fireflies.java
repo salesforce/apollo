@@ -43,19 +43,12 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public int ping(Digest context, int ping) {
-                return 1;
-            }
-
-            @Override
             public void update(Digest context, int ring, Update update) {
             }
         };
     }
 
     ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests, Node from);
-
-    int ping(Digest context, int ping);
 
     void update(Digest context, int ring, Update update);
 

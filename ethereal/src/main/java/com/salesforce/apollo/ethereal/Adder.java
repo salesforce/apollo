@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -79,25 +78,22 @@ public class Adder {
                             SignedPreVote.newBuilder().setVote(prevote).setSignature(signature.toSig()).build());
     }
 
-    private final List<DigestBloomFilter>    cmts            = new ArrayList<>();
-    private final Map<Digest, Set<Short>>    commits         = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
     private final Config                     conf;
     private final Dag                        dag;
     private final int                        epoch;
     private final Set<Digest>                failed;
-    private final ReentrantLock              lock            = new ReentrantLock();
+    private final ReentrantLock              lock            = new ReentrantLock(true);
     private final int                        maxSize;
-    private final Map<Long, List<Waiting>>   missing         = new ConcurrentSkipListMap<>();
-    private final Map<Digest, Set<Short>>    prevotes        = new ConcurrentSkipListMap<>();
-    private final List<DigestBloomFilter>    prevs           = new ArrayList<>();
+    private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
+    private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
     private volatile int                     round           = 0;
-    private final Map<Digest, SignedCommit>  signedCommits   = new ConcurrentHashMap<>();
-    private final Map<Digest, SignedPreVote> signedPrevotes  = new ConcurrentHashMap<>();
+    private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
+    private final Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
     private final int                        threshold;
-    private final List<DigestBloomFilter>    unts            = new ArrayList<>();
-    private final Map<Digest, Waiting>       waiting         = new ConcurrentSkipListMap<>();
-    private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
-    private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Waiting>       waiting         = new TreeMap<>();
+    private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
+    private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
 
     public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
         this.epoch = epoch;
@@ -106,55 +102,87 @@ public class Adder {
         this.failed = failed;
         this.threshold = Dag.threshold(conf.nProc());
         this.maxSize = maxSize;
-        for (int i = 0; i < 3; i++) {
-            prevs.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                            conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            cmts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            unts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-        }
     }
 
     public void close() {
         log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
-        waiting.clear();
-        waitingById.clear();
-        waitingForRound.clear();
-        signedCommits.clear();
-        signedPrevotes.clear();
-        prevotes.clear();
-        missing.clear();
+        locked(() -> {
+            waiting.clear();
+            waitingById.clear();
+            waitingForRound.clear();
+            signedCommits.clear();
+            signedPrevotes.clear();
+            prevotes.clear();
+            missing.clear();
+        });
     }
 
     public String dump() {
-        lock.lock();
-        try {
+        return locked(() -> {
             var buff = new StringBuffer();
-            buff.append("pid: ").append(conf.pid()).append('\n');
-            buff.append('\t').append("round: ").append(round).append('\n');
-            buff.append('\t').append("failed: ").append(failed).append('\n');
-            buff.append('\t').append("missing: ").append(missing).append('\n');
-            buff.append('\t').append("waiting: ").append(waiting).append('\n');
-            buff.append('\t').append("waiting for round: ").append(waitingForRound);
+            buff.append('\t')
+                .append("pid: ")
+                .append(conf.pid())
+                .append('\n')
+                .append('\t')
+                .append("round: ")
+                .append(round)
+                .append('\n')
+                .append('\t')
+                .append("failed: ")
+                .append(failed)
+                .append('\n')
+                .append('\t')
+                .append("missing: ")
+                .append(missing)
+                .append('\n')
+                .append('\t')
+                .append("waiting: ")
+                .append(waiting.values().stream().toList())
+                .append('\n')
+                .append('\t')
+                .append("commits: ")
+                .append(commits.entrySet()
+                               .stream()
+                               .filter(e -> e.getValue().size() < 2 * threshold + 1)
+                               .map(e -> e.getKey() + ":" + e.getValue())
+                               .toList())
+                .append('\n')
+                .append('\t')
+                .append("prevotes: ")
+                .append(prevotes.entrySet()
+                                .stream()
+                                .filter(e -> e.getValue().size() < 2 * threshold + 1)
+                                .map(e -> e.getKey() + ":" + e.getValue())
+                                .toList());
+            var units = new ArrayList<Unit>();
+
+            dag.iterateUnits(u -> {
+                if (u.epoch() == epoch) {
+                    units.add(u);
+                }
+                return true;
+            });
+
+            units.sort(PreUnit.topologicalComparator());
+
+            buff.append('\n').append('\n').append('\t').append("Dag Units: ").append('\n');
+            units.forEach(u -> {
+                buff.append('\t').append(u).append('\n');
+            });
             return buff.toString();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public Have have() {
-        lock.lock();
-        try {
+        return locked(() -> {
             return Have.newBuilder()
                        .setEpoch(epoch)
                        .setHaveCommits(haveCommits())
                        .setHavePreVotes(havePreVotes())
                        .setHaveUnits(haveUnits())
                        .build();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public void produce(Unit u) {
@@ -165,24 +193,18 @@ public class Adder {
             log.trace("Produced duplicated unit: {} on: {}", u, conf.logLabel());
             return;
         }
-        lock.lock();
-        try {
+        locked(() -> {
             assert u.creator() == conf.pid();
             round = u.height();
-            log.trace("Producing unit: {} on: {}", u, conf.logLabel());
+            log.trace("Producing unit: {}:{} on: {}", u.hash(), u, conf.logLabel());
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
-            for (var unt : unts) {
-                unt.add(wpu.hash());
-            }
+            waiting.put(wpu.hash(), wpu);
             checkIfMissing(wpu);
-            checkParents(wpu);
             prevote(wpu);
             commit(wpu);
             output(wpu);
             advance();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -195,15 +217,12 @@ public class Adder {
     public Missing updateFor(Have haves) {
         assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        lock.lock();
-        try {
+        return locked(() -> {
             final var builder = Missing.newBuilder();
             builder.setEpoch(epoch);
             Adder.this.update(haves, builder);
             return builder.setHaves(have()).build();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -212,8 +231,7 @@ public class Adder {
     public void updateFrom(Missing update) {
         assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        lock.lock();
-        try {
+        locked(() -> {
             update.getUnitsList().forEach(u -> {
                 final var signature = JohnHancock.from(u.getSignature());
                 final var digest = signature.toDigest(conf.digestAlgorithm());
@@ -232,9 +250,6 @@ public class Adder {
                 signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
                     validated.set(validate(pv));
                     if (validated.get()) {
-                        for (var pvts : prevs) {
-                            pvts.add(h);
-                        }
                         return pv;
                     } else {
                         return null;
@@ -255,9 +270,6 @@ public class Adder {
                 signedCommits.computeIfAbsent(digest, h -> {
                     validated.set(validate(c));
                     if (validated.get()) {
-                        for (var cmt : cmts) {
-                            cmt.add(h);
-                        }
                         return c;
                     } else {
                         return null;
@@ -267,9 +279,7 @@ public class Adder {
                     commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
                 }
             });
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -289,10 +299,10 @@ public class Adder {
         var wpu = waiting.get(digest);
 
         if (!committed.add(member)) {
-            log.trace("Already committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
+            log.trace("Already committed: {} count: {} on: {}", wpu, committed.size(), conf.logLabel());
             return;
         }
-        log.trace("Committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
+        log.trace("Committed: {} count: {} on: {}", wpu == null ? digest : wpu, committed.size(), conf.logLabel());
 
         if (committed.size() <= threshold) {
             return;
@@ -377,17 +387,19 @@ public class Adder {
             return;
         }
         var wpu = waiting.get(digest);
-        log.trace("Prevoted: {} wpu: {} count: {} on: {}", digest, wpu, prepared.size(), conf.logLabel());
 
-        // We only care if the # of prevotes is >= 2*f + 1
-        if (prepared.size() <= 2 * threshold) {
-            return;
-        }
         // We only care if we've gotten the proposal
         if (wpu == null) {
             log.trace("Prevoted, but no proposal: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
             return;
         }
+
+        // We only care if the # of prevotes is >= 2*f + 1
+        if (prepared.size() <= 2 * threshold) {
+            return;
+        }
+
+        log.trace("Prevoting: {} wpu: {} count: {} on: {}", digest, wpu, prepared.size(), conf.logLabel());
 
         switch (wpu.state()) {
         case PREVOTED:
@@ -462,13 +474,7 @@ public class Adder {
             log.warn("Invalid parents: {} on: {}", decoded, conf.nProc() - 1, conf.logLabel());
             return;
         }
-        for (var unt : unts) {
-            unt.add(digest);
-        }
         waiting.put(digest, wpu);
-        for (var unt : unts) {
-            unt.add(digest);
-        }
 
         if (preunit.height() - 1 > round) {
             wpu.setState(State.WAITING_ON_ROUND);
@@ -483,17 +489,20 @@ public class Adder {
 
     // Advance the state of the RBC by one round
     private void advance() {
+        var ready = new ArrayList<Waiting>();
         var iterator = waitingForRound.entrySet().iterator();
         while (iterator.hasNext()) {
             var e = iterator.next();
             if (e.getValue().height() - 1 <= round) {
-                iterator.remove();
-                log.trace("Advanced: {} clearing round: {} on: {}", e.getValue(), round, conf.logLabel());
-                prevote(e.getValue());
+                ready.add(e.getValue());
             } else {
                 log.trace("Waiting for round: {} current: {} on: {}", e.getValue(), round, conf.logLabel());
             }
         }
+        ready.forEach(w -> {
+            log.trace("Advanced: {} clearing round: {} on: {}", w, round, conf.logLabel());
+            prevote(w);
+        });
     }
 
     /**
@@ -536,6 +545,8 @@ public class Adder {
                     log.trace("Waiting: {} for parent: {} on: {}", wp, par, conf.logLabel());
                 } else {
                     if (!dag.contains(parentID)) {
+                        log.trace("Missing: {} for: {} not found in DAG on: {}", PreUnit.decode(parentID), wp,
+                                  conf.logLabel());
                         wp.incMissing();
                         registerMissing(parentID, wp);
                     }
@@ -570,14 +581,14 @@ public class Adder {
             case ABIGUOUS_PARENTS:
             case COMPLIANCE_ERROR:
             case DATA_ERROR:
-                removeFailed(wp);
+                removeFailed(wp, decoded);
                 return false;
             default:
                 break;
             }
-            ;
+
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
-                removeFailed(wp);
+                removeFailed(wp, decoded);
             }
             return false;
         }
@@ -593,7 +604,7 @@ public class Adder {
 
         var err = dag.check(freeUnit);
         if (err != null) {
-            removeFailed(wp);
+            removeFailed(wp, err);
             log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.logLabel());
         }
         wp.setDecoded(freeUnit);
@@ -604,18 +615,48 @@ public class Adder {
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
-        return cmts.get(Entropy.nextBitsStreamInt(cmts.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        signedCommits.keySet().forEach(d -> bff.add(d));
+        return bff.toBff();
     }
 
     /**
      * Answer the bloom filter with the prevotes the receiver has
      */
     private Biff havePreVotes() {
-        return prevs.get(Entropy.nextBitsStreamInt(prevs.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        signedPrevotes.keySet().forEach(d -> bff.add(d));
+        return bff.toBff();
     }
 
     private Biff haveUnits() {
-        return unts.get(Entropy.nextBitsStreamInt(unts.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        waiting.keySet().forEach(d -> bff.add(d));
+        dag.have(bff);
+        return bff.toBff();
+    }
+
+    private <T> T locked(Callable<T> call) {
+        lock.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void locked(Runnable r) {
+        lock.lock();
+        try {
+            r.run();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -624,7 +665,7 @@ public class Adder {
      */
     private void missing(BloomFilter<Digest> have, Missing.Builder builder) {
         var pus = new TreeMap<Digest, PreUnit_s>();
-        dag.missing(have, pus, epoch);
+        dag.missing(have, pus);
         waiting.entrySet()
                .stream()
                .filter(e -> !have.contains(e.getKey()))
@@ -640,11 +681,11 @@ public class Adder {
             return;
         }
         wpu.setState(State.OUTPUT);
-        remove(wpu);
 
-        log.trace("Inserting unit: {} on: {}", wpu.decoded(), conf.logLabel());
+        final var decoded = wpu.decoded();
+        log.trace("Inserting unit: {} on: {}", decoded, conf.logLabel());
 
-        dag.insert(wpu.decoded());
+        dag.insert(decoded);
 
         for (var ch : wpu.children()) {
             ch.decWaiting();
@@ -656,6 +697,7 @@ public class Adder {
                 log.trace("Continuing to wait for remaining parents: {} on: {}", ch, conf.logLabel());
             }
         }
+        remove(wpu);
     }
 
     private void prevote(Waiting wpu) {
@@ -686,6 +728,16 @@ public class Adder {
     private void removeFailed(Waiting wp) {
         wp.setState(State.FAILED);
         log.warn("Failed: {} on: {}", wp, conf.logLabel());
+        failed.add(wp.hash());
+        remove(wp);
+        for (var ch : wp.children()) {
+            removeFailed(ch);
+        }
+    }
+
+    private void removeFailed(Waiting wp, Object failure) {
+        wp.setState(State.FAILED);
+        log.warn("Failed: {} reason: {} on: {}", wp, failure, conf.logLabel());
         failed.add(wp.hash());
         remove(wp);
         for (var ch : wp.children()) {

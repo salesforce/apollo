@@ -209,7 +209,7 @@ public class ServerConnectionCache {
     private final Map<Digest, ManagedServerConnection>   cache = new HashMap<>();
     private final Clock                                  clock;
     private final ServerConnectionFactory                factory;
-    private final ReentrantLock                          lock  = new ReentrantLock();
+    private final ReentrantLock                          lock  = new ReentrantLock(true);
     private final ServerConnectionCacheMetrics           metrics;
     private final Duration                               minIdle;
     private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();

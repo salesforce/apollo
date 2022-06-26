@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.time.Clock;
 import java.util.Objects;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -22,28 +21,12 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-public record Config(String label, short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote,
-                     int firstDecidedRound, int orderStartLevel, Signer signer, DigestAlgorithm digestAlgorithm,
-                     int lastLevel, boolean canSkipLevel, int numberOfEpochs, WeakThresholdKey WTKey, Clock clock,
+public record Config(String label, short nProc, int epochLength, short pid, Signer signer,
+                     DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey,
                      double bias, Verifier[] verifiers, double fpr) {
-
-    public static Builder deterministic() {
-        Builder b = new Builder();
-        b.requiredByLinear();
-        b.addConsensusConfig();
-        return b;
-    }
-
-    public static Config empty() {
-        return Builder.empty().build();
-    }
 
     public static Builder newBuilder() {
         return new Builder();
-    }
-
-    public static Builder builderFrom(Config config) {
-        return new Builder(config);
     }
 
     public String logLabel() {
@@ -51,67 +34,21 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
     }
 
     public static class Builder implements Cloneable {
-        public static Builder empty() {
-            return new Builder().requiredByLinear();
-        }
 
         private int              bias            = 3;
-        private boolean          canSkipLevel    = true;
-        private Clock            clock           = Clock.systemUTC();
         private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int              epochLength     = 30;
-        private int              firstDecidedRound;
-        private double           fpr             = 0.125;
+        private double           fpr             = 0.0125;
         private String           label           = "";
-        private int              lastLevel       = -1;
         private short            nProc;
         private int              numberOfEpochs  = 3;
-        private int              orderStartLevel = 6;
         private double           pByz            = -1;
         private short            pid;
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
-        private int              zeroVoteRoundForCommonVote;
 
         public Builder() {
-            requiredByLinear();
-            addConsensusConfig();
-        }
-
-        public Builder(Config config) {
-            canSkipLevel = config.canSkipLevel;
-            digestAlgorithm = config.digestAlgorithm;
-            epochLength = config.epochLength;
-            firstDecidedRound = config.firstDecidedRound;
-            lastLevel = config.lastLevel;
-            nProc = config.nProc;
-            numberOfEpochs = config.numberOfEpochs;
-            orderStartLevel = config.orderStartLevel;
-            pid = config.pid;
-            signer = config.signer;
-            zeroVoteRoundForCommonVote = config.zeroVoteRoundForCommonVote;
-        }
-
-        public Builder addConsensusConfig() {
-            canSkipLevel = false;
-            orderStartLevel = 0;
-            numberOfEpochs = 3;
-            epochLength = 30;
-            return this;
-        }
-
-        public Builder addLastLevel() {
-            lastLevel = epochLength + orderStartLevel - 1;
-            return this;
-        }
-
-        public Builder addSetUpConfig() {
-            canSkipLevel = false;
-            orderStartLevel = 6;
-            epochLength = 1;
-            numberOfEpochs = 1;
-            return this;
         }
 
         public Config build() {
@@ -124,12 +61,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-            if (lastLevel <= 0) {
-                addLastLevel();
-            }
-            return new Config(label, nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound,
-                              orderStartLevel, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs, wtk,
-                              clock, bias, verifiers, fpr);
+            return new Config(label, nProc, epochLength, pid, signer, digestAlgorithm, epochLength - 1, numberOfEpochs,
+                              wtk, bias, verifiers, fpr);
         }
 
         @Override
@@ -145,20 +78,12 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return bias;
         }
 
-        public Clock getClock() {
-            return clock;
-        }
-
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
         }
 
         public int getEpochLength() {
             return epochLength;
-        }
-
-        public int getFirstDecidedRound() {
-            return firstDecidedRound;
         }
 
         public double getFpr() {
@@ -169,20 +94,12 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return label;
         }
 
-        public int getLastLevel() {
-            return lastLevel;
-        }
-
         public short getnProc() {
             return nProc;
         }
 
         public int getNumberOfEpochs() {
             return numberOfEpochs;
-        }
-
-        public int getOrderStartLevel() {
-            return orderStartLevel;
         }
 
         public double getpByz() {
@@ -205,32 +122,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return wtk;
         }
 
-        public int getZeroVotRoundForCommonVote() {
-            return zeroVoteRoundForCommonVote;
-        }
-
-        public boolean isCanSkipLevel() {
-            return canSkipLevel;
-        }
-
-        public Builder requiredByLinear() {
-            firstDecidedRound = 3;
-            zeroVoteRoundForCommonVote = 3;
-            return this;
-        }
-
         public Builder setBias(int bias) {
             this.bias = bias;
-            return this;
-        }
-
-        public Builder setCanSkipLevel(boolean canSkipLevel) {
-            this.canSkipLevel = canSkipLevel;
-            return this;
-        }
-
-        public Builder setClock(Clock clock) {
-            this.clock = clock;
             return this;
         }
 
@@ -244,11 +137,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return this;
         }
 
-        public Builder setFirstDecidedRound(int firstDecidedRound) {
-            this.firstDecidedRound = firstDecidedRound;
-            return this;
-        }
-
         public Builder setFpr(double fpr) {
             this.fpr = fpr;
             return this;
@@ -259,11 +147,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return this;
         }
 
-        public Builder setLastLevel(int lastLevel) {
-            this.lastLevel = lastLevel;
-            return this;
-        }
-
         public Builder setnProc(short nProc) {
             this.nProc = nProc;
             return this;
@@ -271,11 +154,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Builder setNumberOfEpochs(int numberOfEpochs) {
             this.numberOfEpochs = numberOfEpochs;
-            return this;
-        }
-
-        public Builder setOrderStartLevel(int orderStartLevel) {
-            this.orderStartLevel = orderStartLevel;
             return this;
         }
 
@@ -303,11 +181,5 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             this.wtk = wtk;
             return this;
         }
-
-        public Builder setZeroVoteRoundForCommonVote(int zeroVoteRoundForCommonVote) {
-            this.zeroVoteRoundForCommonVote = zeroVoteRoundForCommonVote;
-            return this;
-        }
     }
-
 }

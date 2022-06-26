@@ -72,7 +72,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final int CARDINALITY = 5;
+    private static final int CARDINALITY;
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -84,14 +84,26 @@ public class CHOAMTest {
         var txns = MigrationTest.initializeBookSchema();
         txns.add(initialInsert());
         GENESIS_DATA = CHOAM.toGenesisData(txns);
+        CARDINALITY = LARGE_TESTS ? 10 : 5;
     }
 
-    private File                               baseDir;
-    private File                               checkpointDirBase;
-    private Map<Digest, CHOAM>                 choams;
-    private List<SigningMember>                members;
-    private MetricRegistry                     registry;
-    private Map<Digest, Router>                routers;
+    private static Txn initialInsert() {
+        return Txn.newBuilder()
+                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                  .build();
+    }
+
+    private File                baseDir;
+    private File                checkpointDirBase;
+    private Map<Digest, CHOAM>  choams;
+    private List<SigningMember> members;
+    private MetricRegistry      registry;
+    private Map<Digest, Router> routers;
+
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 
     @AfterEach
@@ -134,14 +146,14 @@ public class CHOAMTest {
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
-                                                              .setGossipDuration(Duration.ofMillis(20))
-                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setGossipDuration(Duration.ofMillis(10))
+                                                              .setBatchInterval(Duration.ofMillis(15))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockDelta(2);
 
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setNumberOfEpochs(7).setEpochLength(60);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
@@ -168,7 +180,7 @@ public class CHOAMTest {
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(6);
+        final Duration timeout = Duration.ofSeconds(12);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;
@@ -178,9 +190,13 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
-                   "System did not become active");
+        final var activated = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> choams.values()
+                                                                 .stream()
+                                                                 .filter(c -> !c.active())
+                                                                 .count() == 0);
+        assertTrue(activated, "System did not become active: "
+        + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList()));
 
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
@@ -193,7 +209,7 @@ public class CHOAMTest {
         });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        final var finished = countdown.await(LARGE_TESTS ? 1200 : 30, TimeUnit.SECONDS);
+        final var finished = countdown.await(LARGE_TESTS ? 1200 : 120, TimeUnit.SECONDS);
         assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
         + transactioneers.stream().map(t -> t.completed()).toList());
 
@@ -316,16 +332,6 @@ public class CHOAMTest {
                                                            }
                                                        })
                                                        .build()));
-    }
-
-    private static Txn initialInsert() {
-        return Txn.newBuilder()
-                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                  .build();
     }
 
     private Txn update(Random entropy, Mutator mutator) {
