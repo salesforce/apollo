@@ -374,8 +374,6 @@ public class CHOAM {
                   new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                                            : viewChange.block.getReconfigure().getId()));
             var context = Committee.viewFor(viewId, params.context());
-            context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
-            validators.keySet().forEach(m -> context.activate(m));
             log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
@@ -746,7 +744,7 @@ public class CHOAM {
     public Context<Member> context() {
         return params.context();
     }
-    
+
     public ULong currentHeight() {
         final var c = head.get();
         return c == null ? null : c.height();

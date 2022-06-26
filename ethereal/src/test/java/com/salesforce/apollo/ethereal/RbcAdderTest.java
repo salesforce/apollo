@@ -311,7 +311,7 @@ public class RbcAdderTest {
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(0, adder.getWaitingForRound().size());
-        assertEquals(5, adder.getWaiting().size());
+        assertEquals(6, adder.getWaiting().size());
 
         waiting = adder.getWaiting().get(unit(1, 2).hash());
         assertEquals(State.PREVOTED, waiting.state());

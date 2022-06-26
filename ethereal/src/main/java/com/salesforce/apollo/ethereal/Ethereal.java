@@ -158,6 +158,9 @@ public class Ethereal {
 
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
                     Consumer<Integer> newEpochAction, ThreadPoolExecutor consumer) {
+        if (!Dag.validate(conf.nProc())) {
+            throw new IllegalArgumentException("Invalid # of processes, unable to build quorum: " + conf.nProc());
+        }
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;

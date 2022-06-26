@@ -48,7 +48,7 @@ public interface Dag {
         private final Unit[]                                   maxUnits;
         private final List<Consumer<Unit>>                     postInsert = new ArrayList<>();
         private final List<Consumer<Unit>>                     preInsert  = new ArrayList<>();
-        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock();
+        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
         private final Map<Digest, Unit>                        units      = new HashMap<>();
 
         /**
@@ -106,7 +106,7 @@ public interface Dag {
                 var decoded = decode(id);
                 if (decoded.epoch() != epoch) {
                     log.trace("Does not contain: {} wrong epoch: {} on: {}", decoded, epoch, config.logLabel());
-                    return null;
+                    return false;
                 }
                 return heightUnits.contains(decoded);
             });
@@ -251,16 +251,16 @@ public interface Dag {
         @Override
         public DagInfo maxView() {
             return read(() -> {
-                var maxes = maximalUnitsPerProcess();
-                var heights = new ArrayList<Integer>();
-                maxes.forEach(unit -> {
+                var heights = new int[config.nProc()];
+                int i = 0;
+                for (var u : maxUnits) {
                     var h = -1;
-                    if (unit != null && unit.height() > h) {
-                        h = unit.height();
+                    if (u != null && u.height() > h) {
+                        h = u.height();
                     }
-                    heights.add(h);
-                });
-                return new DagInfo(epoch(), heights.stream().mapToInt(i -> i).toArray());
+                    heights[i++] = h;
+                }
+                return new DagInfo(epoch(), heights);
             });
         }
 
@@ -360,8 +360,6 @@ public interface Dag {
         }
     }
 
-    record DagInfo(int epoch, int[] heights) {}
-
     public interface Decoded {
         default Correctness classification() {
             return Correctness.CORRECT;
@@ -382,6 +380,8 @@ public interface Dag {
             return false;
         }
     }
+
+    record DagInfo(int epoch, int[] heights) {}
 
     class fiberMap {
         public record getResult(List<Unit> result, int unknown) {}
@@ -524,16 +524,21 @@ public interface Dag {
 
     static final Logger log = LoggerFactory.getLogger(Dag.class);
 
-    static short minimalQuorum(short np, double bias) {
+    static short minimalQuorum(int np, double bias) {
         var nProcesses = (double) np;
         short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
         return minimalQuorum;
     }
 
-    static short threshold(short np) {
+    static short threshold(int np) {
         var nProcesses = (double) np;
         short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0);
         return minimalTrusted;
+    }
+
+    static boolean validate(int nProc) {
+        var threshold = threshold(nProc);
+        return (threshold * 3 + 1) == nProc;
     }
 
     void addCheck(BiFunction<Unit, Dag, Correctness> checker);

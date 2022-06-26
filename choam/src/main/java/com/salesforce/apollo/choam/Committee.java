@@ -55,13 +55,7 @@ public interface Committee {
         Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
                                                     baseContext.getProbabilityByzantine(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
-        successors.forEach(e -> {
-            if (baseContext.isActive(e)) {
-                newView.activate(e);
-            } else {
-                newView.offline(e);
-            }
-        });
+        successors.forEach(e -> newView.activate(e));
         return newView;
     }
 
@@ -69,9 +63,6 @@ public interface Committee {
         Set<Member> successors = new HashSet<>();
         baseContext.successors(hash, m -> {
             if (successors.size() == baseContext.getRingCount()) {
-                return false;
-            }
-            if (baseContext.isOffline(m.getId())) {
                 return false;
             }
             return successors.add(m);

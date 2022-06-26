@@ -198,8 +198,8 @@ public class Adder {
             round = u.height();
             log.trace("Producing unit: {}:{} on: {}", u.hash(), u, conf.logLabel());
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
+            waiting.put(wpu.hash(), wpu);
             checkIfMissing(wpu);
-            checkParents(wpu);
             prevote(wpu);
             commit(wpu);
             output(wpu);

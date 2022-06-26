@@ -68,8 +68,8 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
-        log.warn("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
-                 processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
+        log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
+                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
@@ -77,8 +77,8 @@ public class TxDataSource implements DataSource {
         if (metrics != null) {
             metrics.dropped(processing.size(), validations.size());
         }
-        log.warn("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
-                 processing.taken(), member);
+        log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
+                  processing.taken(), member);
     }
 
     @Override
