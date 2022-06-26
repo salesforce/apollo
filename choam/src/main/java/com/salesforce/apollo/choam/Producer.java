@@ -89,7 +89,12 @@ public class Producer {
             if (dropped != 0) {
                 log.warn("Dropped txns: {} on: {}", dropped, params().member().getId());
             }
-            assembly.get().finalElection();
+            final var viewAssembly = assembly.get();
+            if (viewAssembly == null) {
+                log.warn("Assemble block never processed on: {}", params().member().getId());
+                return;
+            }
+            viewAssembly.finalElection();
             if (assembled.get()) {
                 assembled();
             }
