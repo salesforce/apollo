@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.Dag.newDag;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,6 +32,7 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.Extender;
@@ -280,7 +279,7 @@ public class Ethereal {
     }
 
     private epoch createEpoch(int epoch) {
-        Dag dg = newDag(config, epoch);
+        Dag dg = new DagImpl(config, epoch);
         final var handleTimingRounds = handleTimingRounds();
         Extender ext = new Extender(dg, config);
         final var lastTU = new AtomicReference<TimingRound>();

@@ -117,12 +117,12 @@ public class Bootstrapper {
     private void anchor(AtomicReference<ULong> start, ULong end) {
         final var randomCut = randomCut(params.digestAlgorithm());
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
-                           params.exec()).iterate(randomCut, (link, ring) -> anchor(link, start, end),
-                                                  (tally, futureSailor, destination) -> completeAnchor(futureSailor,
-                                                                                                       start, end,
-                                                                                                       destination),
-                                                  t -> scheduleAnchorCompletion(start, end));
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+                           params.scheduler()).iterate(randomCut, (link, ring) -> anchor(link, start, end),
+                                                       (tally, futureSailor,
+                                                        destination) -> completeAnchor(futureSailor, start, end,
+                                                                                       destination),
+                                                       t -> scheduleAnchorCompletion(start, end));
     }
 
     private ListenableFuture<Blocks> anchor(Terminal link, AtomicReference<ULong> start, ULong end) {

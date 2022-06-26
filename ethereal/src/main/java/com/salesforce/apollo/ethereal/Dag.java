@@ -9,11 +9,12 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -43,10 +45,10 @@ public interface Dag {
         private final int                                      epoch;
         private final fiberMap                                 heightUnits;
         private final fiberMap                                 levelUnits;
-        private final List<Unit>                               maxUnits;
+        private final Unit[]                                   maxUnits;
         private final List<Consumer<Unit>>                     postInsert = new ArrayList<>();
         private final List<Consumer<Unit>>                     preInsert  = new ArrayList<>();
-        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
+        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock();
         private final Map<Digest, Unit>                        units      = new HashMap<>();
 
         /**
@@ -56,9 +58,9 @@ public interface Dag {
         public DagImpl(Config config, int epoch) {
             this.config = config;
             this.epoch = epoch;
-            levelUnits = Dag.newFiberMap(config.nProc(), config.epochLength());
-            heightUnits = Dag.newFiberMap(config.nProc(), config.epochLength());
-            maxUnits = Dag.newSlottedUnits(config.nProc());
+            levelUnits = new fiberMap(config.nProc());
+            heightUnits = new fiberMap(config.nProc());
+            maxUnits = new Unit[config.nProc()];
         }
 
         @Override
@@ -106,17 +108,7 @@ public interface Dag {
                     log.trace("Does not contain: {} wrong epoch: {} on: {}", decoded, epoch, config.logLabel());
                     return null;
                 }
-                var fiber = heightUnits.getFiber(decoded.height());
-                if (fiber == null) {
-                    log.trace("Does not contain: {} no height fiber on: {}", decoded, config.logLabel());
-                    return false;
-                }
-                if (fiber.get(decoded.creator()) == null) {
-                    log.trace("Does not contain: {} on: {}", decoded, config.logLabel());
-                    return false;
-                }
-
-                return true;
+                return heightUnits.contains(decoded);
             });
         }
 
@@ -168,9 +160,7 @@ public interface Dag {
                 if (decoded.epoch() != epoch) {
                     return null;
                 }
-                var fiber = heightUnits.getFiber(decoded.height());
-
-                return fiber == null ? null : fiber.get(decoded.creator());
+                return heightUnits.get(decoded);
             });
         }
 
@@ -196,8 +186,8 @@ public interface Dag {
                 for (var hook : preInsert) {
                     hook.accept(unit);
                 }
-                updateUnitsOnHeight(unit);
-                updateUnitsOnLevel(unit);
+                heightUnits.updateHeight(unit);
+                levelUnits.updateLevel(unit);
                 units.put(unit.hash(), unit);
                 updateMaximal(unit);
                 log.trace("Inserted: {}:{} on: {}", v.hash(), v, config.logLabel());
@@ -241,20 +231,20 @@ public interface Dag {
 
         @Override
         public List<Unit> maximalUnitsPerProcess() {
-            return read(() -> new ArrayList<>(maxUnits));
+            return read(() -> Arrays.asList(maxUnits));
         }
 
-        /** returns the maximal level of a unit in the dag. */
         @Override
         public int maxLevel() {
             return read(() -> {
-                AtomicInteger maxLevel = new AtomicInteger(-1);
-                maximalUnitsPerProcess().forEach(unit -> {
-                    if (unit != null && unit.level() > maxLevel.get()) {
-                        maxLevel.set(unit.level());
+                int maxLevel = -1;
+                for (Unit unit : maxUnits) {
+                    if (unit != null && unit.level() > maxLevel) {
+                        maxLevel = unit.level();
                     }
-                });
-                return maxLevel.get();
+
+                }
+                return maxLevel;
             });
         }
 
@@ -332,11 +322,6 @@ public interface Dag {
             }
         }
 
-        /**
-         * return all units present in dag that are above (in height sense) given
-         * heights. When called with null argument, returns all units in the dag. Units
-         * returned by this method are in random order.
-         */
         @Override
         public List<Unit> unitsAbove(int[] heights) {
             return read(() -> {
@@ -347,15 +332,9 @@ public interface Dag {
             });
         }
 
-        /**
-         * returns the prime units at the requested level, indexed by their creator ids.
-         */
         @Override
         public List<Unit> unitsOnLevel(int level) {
-            return read(() -> {
-                var res = levelUnits.getFiber(level);
-                return res != null ? new ArrayList<>(res) : emptySlotList(config.nProc());
-            });
+            return read(() -> levelUnits.on(level));
         }
 
         @Override
@@ -371,40 +350,12 @@ public interface Dag {
             }
         }
 
-        private List<Unit> emptySlotList(short nProc) {
-            var arr = new ArrayList<Unit>();
-            for (var i = 0; i < nProc; i++) {
-                arr.add(null);
-            }
-            return arr;
-        }
-
         private void updateMaximal(Unit u) {
             var creator = u.creator();
-            var maxByCreator = maxUnits.get(creator);
+            var maxByCreator = maxUnits[creator];
             if (maxByCreator == null || u.above(maxByCreator)) {
-                maxUnits.set(creator, u);
+                maxUnits[creator] = u;
             }
-
-        }
-
-        private void updateUnitsOnHeight(Unit u) {
-            var height = u.height();
-            var creator = u.creator();
-            if (height >= heightUnits.len().get()) {
-                heightUnits.extendBy(Math.max(10, height - heightUnits.len().get()));
-            }
-            var su = heightUnits.getFiber(height);
-            su.set(creator, u);
-        }
-
-        private void updateUnitsOnLevel(Unit u) {
-            if (u.level() >= levelUnits.len().get()) {
-                levelUnits.extendBy(10);
-            }
-            var su = levelUnits.getFiber(u.level());
-            var creator = u.creator();
-            su.set(creator, u);
 
         }
     }
@@ -432,24 +383,53 @@ public interface Dag {
         }
     }
 
-    record fiberMap(List<List<Unit>> content, short width, AtomicInteger len) {
-
-        public List<Unit> getFiber(int value) {
-            return value < 0 || value >= content.size() ? null : content.get(value);
-        }
-
-        public int length() {
-            return len.get();
-        }
-
-        public void extendBy(int nValues) {
-            for (int i = len.get(); i < len.get() + nValues; i++) {
-                content.add(Dag.newSlottedUnits(width));
-            }
-            len.addAndGet(nValues);
-        }
-
+    class fiberMap {
         public record getResult(List<Unit> result, int unknown) {}
+
+        private final List<Unit[]> content = new ArrayList<>();
+        private final short        width;
+
+        fiberMap(short width) {
+            this.width = width;
+        }
+
+        public List<Unit> above(int[] heights) {
+            if (heights.length != width) {
+                throw new IllegalStateException("Incorrect number of heights");
+            }
+            var min = heights[0];
+            for (int i = 1; i < heights.length; i++) {
+                if (heights[i] < min) {
+                    min = heights[i];
+                }
+            }
+            var result = new ArrayList<Unit>();
+            for (int height = min + 1; height < length(); height++) {
+                final var su = content.get(height);
+                for (short i = 0; i < width; i++) {
+                    if (height > heights[i]) {
+                        result.add(su[i]);
+                    }
+                }
+            }
+            return result;
+        }
+
+        public boolean contains(DecodedId decoded) {
+            if (decoded.height() >= content.size()) {
+                return false;
+            }
+            final var fiber = content.get(decoded.height());
+            return fiber[decoded.creator()] != null;
+        }
+
+        public Unit get(DecodedId decoded) {
+            if (decoded.height() >= content.size()) {
+                return null;
+            }
+            final var fiber = content.get(decoded.height());
+            return fiber[decoded.creator()];
+        }
 
         /**
          * get takes a list of heights (of length nProc) and returns a slice (of length
@@ -468,9 +448,9 @@ public interface Dag {
                 if (h == -1) {
                     continue;
                 }
-                var su = (h < content.size()) ? content.get(h) : null;
+                final var su = (h < content.size()) ? content.get(h) : null;
                 if (su != null) {
-                    result.set(pid, (su.get(pid)));
+                    result.set(pid, su[pid]);
                 }
                 if (result.get(pid) == null) {
                     unknown++;
@@ -480,26 +460,41 @@ public interface Dag {
             return new getResult(result, unknown);
         }
 
-        public List<Unit> above(int[] heights) {
-            if (heights.length != width) {
-                throw new IllegalStateException("Incorrect number of heights");
+        public int length() {
+            return content.size();
+        }
+
+        public List<Unit> on(int level) {
+            if (level >= content.size()) {
+                return Collections.emptyList();
             }
-            var min = heights[0];
-            for (int i = 1; i < heights.length; i++) {
-                if (heights[i] < min) {
-                    min = heights[i];
+            final var fiber = content.get(level);
+            return Arrays.asList(fiber);
+        }
+
+        public void updateHeight(Unit u) {
+            assert u != null : "Cannot insert null unit";
+            final var fiber = getFiber(u.height());
+            if (fiber[u.creator()] == null) {
+                fiber[u.creator()] = u;
+            }
+        }
+
+        public void updateLevel(Unit u) {
+            assert u != null : "Cannot insert null unit";
+            final var fiber = getFiber(u.level());
+            if (fiber[u.creator()] == null) {
+                fiber[u.creator()] = u;
+            }
+        }
+
+        private Unit[] getFiber(int height) {
+            if (content.size() < height + 1) {
+                for (var i = content.size() - 1; i < height + 1; i++) {
+                    content.add(new Unit[width]);
                 }
             }
-            var result = new ArrayList<Unit>();
-            for (int height = min + 1; height < length(); height++) {
-                var su = content.get(height);
-                for (short i = 0; i < width; i++) {
-                    if (height > heights[i]) {
-                        result.add(su.get(i));
-                    }
-                }
-            }
-            return result;
+            return content.get(height);
         }
     }
 
@@ -529,35 +524,10 @@ public interface Dag {
 
     static final Logger log = LoggerFactory.getLogger(Dag.class);
 
-    public static List<Unit> newSlottedUnits(short nProc) {
-        var arr = new ArrayList<Unit>();
-        for (var i = 0; i < nProc; i++) {
-            arr.add(null);
-        }
-        return arr;
-    }
-
     static short minimalQuorum(short np, double bias) {
         var nProcesses = (double) np;
         short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
         return minimalQuorum;
-    }
-
-    static Dag newDag(Config config, int epoch) {
-        log.trace("New dag for epoch: {} on: {}", epoch, config.logLabel());
-//        return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
-//                       newFiberMap(config.nProc(), config.epochLength()),
-//                       newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),
-//                       config.checks(), new ArrayList<>(), new ArrayList<>(), config.bias());
-        return new DagImpl(config, epoch);
-    }
-
-    static fiberMap newFiberMap(short width, int initialLength) {
-        var newMap = new fiberMap(new ArrayList<List<Unit>>(), width, new AtomicInteger(initialLength));
-        for (int i = 0; i < initialLength; i++) {
-            newMap.content.add(Dag.newSlottedUnits(width));
-        }
-        return newMap;
     }
 
     static short threshold(short np) {

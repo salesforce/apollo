@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import com.salesforce.apollo.ethereal.Dag.DagImpl;
+
 /**
  * @author hal.hildebrand
  *
@@ -16,7 +18,7 @@ public interface DagFactory {
         @Override
         public Dag createDag(short nProc) {
             var cnf = Config.newBuilder().setnProc(nProc).build();
-            var dag = Dag.newDag(cnf, 0);
+            var dag = new DagImpl(cnf, 0);
             dag.addCheck(Checks.basicCorrectness());
             dag.addCheck(Checks.parentConsistency());
             dag.addCheck(Checks.noSelfForkingEvidence());
@@ -41,7 +43,7 @@ public interface DagFactory {
         @Override
         public Dag createDag(short nProc) {
             var cnf = Config.newBuilder().setnProc(nProc).build();
-            return Dag.newDag(cnf, initialEpoch);
+            return new DagImpl(cnf, initialEpoch);
         }
     }
 

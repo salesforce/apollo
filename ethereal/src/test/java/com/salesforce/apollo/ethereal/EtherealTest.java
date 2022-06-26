@@ -71,7 +71,7 @@ public class EtherealTest {
         }
     }
 
-    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 500 : 5;
+    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 50 : 5;
     private static final int  EPOCH_LENGTH = 30;
     private static final int  NPROC        = 4;
     private static final int  NUM_EPOCHS   = 3;
@@ -189,7 +189,7 @@ public class EtherealTest {
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });
-            finished.await(90, TimeUnit.SECONDS);
+            finished.await(10, TimeUnit.SECONDS);
         } finally {
             controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());
