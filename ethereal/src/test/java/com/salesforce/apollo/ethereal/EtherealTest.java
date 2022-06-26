@@ -16,7 +16,9 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -71,10 +73,17 @@ public class EtherealTest {
         }
     }
 
-    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 50 : 5;
-    private static final int  EPOCH_LENGTH = 30;
-    private static final int  NPROC        = 4;
-    private static final int  NUM_EPOCHS   = 3;
+    private final static long    DELAY_MS;
+    private static final int     EPOCH_LENGTH = 30;
+    private static final boolean LARGE_TESTS;
+    private static final int     NPROC;
+    private static final int     NUM_EPOCHS   = 3;
+
+    static {
+        LARGE_TESTS = Boolean.getBoolean("large_tests");
+        DELAY_MS = LARGE_TESTS ? 500 : 5;
+        NPROC = LARGE_TESTS ? 7 : 4;
+    }
 
     @Test
     public void context() throws Exception {
@@ -87,7 +96,7 @@ public class EtherealTest {
 
     @Test
     public void lots() throws Exception {
-        if (!Boolean.getBoolean("large_tests")) {
+        if (!LARGE_TESTS) {
             return;
         }
         var consumers = new ArrayList<ThreadPoolExecutor>();
@@ -189,7 +198,7 @@ public class EtherealTest {
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });
-            finished.await(10, TimeUnit.SECONDS);
+            finished.await(LARGE_TESTS ? 90 : 10, TimeUnit.SECONDS);
         } finally {
             controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());
@@ -210,8 +219,8 @@ public class EtherealTest {
         + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
-        boolean failed = false;
-        for (int i = 0; i < (short) NPROC; i++) {
+        Set<Short> failed = new HashSet<>();
+        for (short i = 0; i < NPROC; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != expected) {
                 System.out.println("Iteration: " + iteration + ", did not get all expected blocks on: " + i
@@ -221,13 +230,13 @@ public class EtherealTest {
                     var a = preblocks.get(j);
                     var b = output.get(j);
                     if (a.data().size() != b.data().size()) {
-                        failed = true;
+                        failed.add(i);
                         System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " process: " + i
                         + " data size: " + a.data().size() + " != " + b.data().size());
                     } else {
                         for (int k = 0; k < a.data().size(); k++) {
                             if (!a.data().get(k).equals(b.data().get(k))) {
-                                failed = true;
+                                failed.add(i);
                                 System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " unit: "
                                 + k + " process: " + i + " expected: " + a.data().get(k) + " received: "
                                 + b.data().get(k));
@@ -240,7 +249,7 @@ public class EtherealTest {
                 }
             }
         }
-        assertFalse(failed, "Failed iteration: " + iteration);
+        assertTrue((NPROC - failed.size()) >= context.majority(), "Failed iteration: " + iteration);
         assertTrue(produced.stream()
                            .map(pbs -> pbs.size())
                            .filter(count -> count == expected)
