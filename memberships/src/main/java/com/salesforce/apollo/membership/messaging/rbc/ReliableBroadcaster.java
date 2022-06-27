@@ -368,7 +368,7 @@ public class ReliableBroadcaster {
                     log.trace("GC'ing: {} from: {} age: {} > {} on: {}", m.hash, m.from, m.msg.getAge() + 1, maxAge,
                               member);
                 } else {
-                    break;
+                    continue;
                 }
             }
         }
