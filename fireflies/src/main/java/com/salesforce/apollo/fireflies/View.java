@@ -498,7 +498,7 @@ public class View {
                 add(wrapper);
                 member = context.getMember(from);
                 if (member == null) {
-                    log.warn("No member on ring {} from {}", ring, from);
+                    log.warn("No member on ring: {} from: {} on: {}", ring, from, node.getId());
                     return Gossip.getDefaultInstance();
                 }
             }
@@ -507,7 +507,7 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, node.getId());
                 return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
@@ -538,7 +538,7 @@ public class View {
             }
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.info("No predecessor, invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.info("No predecessor, invalid update from: {} on ring: {} on: {}", from, ring, node.getId());
                 return;
             }
             if (!successor.equals(node)) {
@@ -862,61 +862,6 @@ public class View {
         }
         return previous;
     }
-
-//    private void add(SignedAlert sa) {
-//        Digest issuedBy = Digest.from(sa.getAlert().getIssuedBy());
-//        Digest targetDigest = Digest.from(sa.getAlert().getTarget());
-//
-//        // Run the gauntlet
-//        Participant alerter = context.getActiveMember(issuedBy);
-//        if (alerter == null) {
-//            log.info("Alert discarded, isuedBy: {} target: {}, alerter does not exist in view on: {}", issuedBy,
-//                     targetDigest, node);
-//            return;
-//        }
-//
-//        Participant target = context.getMember(targetDigest);
-//        if (target == null) {
-//            log.info("Alert discarded, isuedBy: {} target: {} does not exist in view on: {}", issuedBy, targetDigest,
-//                     node);
-//            return;
-//        }
-//
-//        if (alerter.getEpoch() != sa.getAlert().getEpoch()) {
-//            log.debug("Alert discarded, issued by: {} alerted on:{} invalid epoch: {} expected: {} on: {}",
-//                      alerter.getId(), target, alerter.getEpoch(), sa.getAlert().getEpoch(), node.getId());
-//            return;
-//        }
-//
-//        int ring = sa.getAlert().getRing();
-//        if (!target.getNote().getMask().get(ring)) {
-//            log.debug("Alert discarded, issued by: {} target: {}, ring masked by target on: {}", alerter.getId(),
-//                      target, ring, node.getId());
-//            return;
-//        }
-//
-//        Participant successor = context.ring(ring).successor(alerter, m -> context.isActive(m.getId()));
-//        if (successor == null) {
-//            log.info("Alert discarded, alerter: {} cannot issue alert on target: {} in view on: {}", issuedBy,
-//                     targetDigest, node);
-//            return;
-//        }
-//
-//        JohnHancock signature = JohnHancock.from(sa.getSignature());
-//        if (!alerter.verify(signature, sa.getAlert().toByteString())) {
-//            log.debug("Alert discarded, issued by: {} allerted on:{} signature invalid on: {}", alerter.getId(), target,
-//                      node.getId());
-//            return;
-//        }
-//
-    // It's dead, Jim
-//        target.alert(issuedBy);
-//        context.offline(target);
-//        var hash = signature.toDigest(digestAlgo);
-//        alerts.put(hash, sa);
-//        alerted.add(target);
-//        amplify(target);
-//    }
 
     /**
      * For bootstrap, add the seed as a fake, non crashed member. The note is signed
@@ -1372,7 +1317,7 @@ public class View {
      * @param identity
      */
     private void update(Participant member, IdentityWrapper identity) {
-        // TODO Auto-generated method stub
+        // TODO HsH - lol. Someday 😏
     }
 
     /**

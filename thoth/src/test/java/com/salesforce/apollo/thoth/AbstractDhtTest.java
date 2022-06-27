@@ -54,7 +54,7 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 public class AbstractDhtTest {
     protected static final ProtobufEventFactory factory = new ProtobufEventFactory();
 
-    protected static final double                                                PBYZ    = 0.33;
+    protected static final double                                                PBYZ    = 0.2;
     protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected int                                                                majority;
@@ -84,7 +84,11 @@ public class AbstractDhtTest {
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();
-        Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
+        Context<Member> context = Context.<Member>newBuilder()
+                                         .setpByz(PBYZ)
+                                         .setCardinality(getCardinality())
+                                         .setBias(3)
+                                         .build();
         majority = context.majority();
         identities.keySet().forEach(member -> instantiate(member, context, prefix));
 
