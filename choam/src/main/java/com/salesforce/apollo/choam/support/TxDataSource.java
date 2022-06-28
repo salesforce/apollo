@@ -44,7 +44,7 @@ public class TxDataSource implements DataSource {
 
     private final Duration                   batchInterval;
     private volatile Thread                  blockingThread;
-    private AtomicBoolean                    draining     = new AtomicBoolean();
+    private final AtomicBoolean              draining     = new AtomicBoolean();
     private final ExponentialBackoffPolicy   drainPolicy;
     private final Member                     member;
     private final ChoamMetrics               metrics;
@@ -91,7 +91,7 @@ public class TxDataSource implements DataSource {
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
-                var target = Instant.now().plus(drainPolicy.nextBackoff().dividedBy(2));
+                var target = Instant.now().plus(drainPolicy.nextBackoff());
                 while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0 &&
                        builder.getValidationsCount() == 0) {
                     // rinse and repeat
@@ -109,7 +109,7 @@ public class TxDataSource implements DataSource {
 
                     // sleep waiting for input
                     try {
-                        Thread.sleep(drainPolicy.getInitialBackoff().toMillis());
+                        Thread.sleep(drainPolicy.getInitialBackoff().dividedBy(2).toMillis());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return ByteString.EMPTY;

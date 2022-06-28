@@ -322,9 +322,18 @@ public class SqlStateMachine {
     private final AtomicReference<Current>      executingBlock = new AtomicReference<>();
     private final TxnExec                       executor       = new TxnExec();
     private PreparedStatement                   getEvents;
+    private final SecureRandom                  secureEntropy;
     private final EventTrampoline               trampoline     = new EventTrampoline();
     private PreparedStatement                   updateCurrent;
     private final String                        url;
+
+    {
+        try {
+            secureEntropy = SecureRandom.getInstance("SHA1PRNG");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Unable to get SHA1PRNG secure random instance", e);
+        }
+    }
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -734,13 +743,8 @@ public class SqlStateMachine {
         }
         executingBlock.set(new Current(height, blkHash));
         session.getRandom().setSeed(new DigestHasher(blkHash, height.longValue()).identityHash());
-        try {
-            SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(blkHash.getBytes());
-            entropy.set(secureEntropy);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("No SHA1PRNG available", e);
-        }
+        secureEntropy.setSeed(blkHash.getBytes());
+        entropy.set(secureEntropy);
         clock.incrementHeight();
     }
 
