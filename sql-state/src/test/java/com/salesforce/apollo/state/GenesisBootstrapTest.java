@@ -9,12 +9,34 @@ package com.salesforce.apollo.state;
 import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
+import com.chiralbehaviors.tron.Fsm;
+import com.salesforce.apollo.choam.CHOAM;
+import com.salesforce.apollo.choam.Committee;
+import com.salesforce.apollo.choam.GenesisAssembly;
+import com.salesforce.apollo.choam.Producer;
+import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.ViewAssembly;
+import com.salesforce.apollo.choam.support.TxDataSource;
+
+import ch.qos.logback.classic.Level;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class GenesisBootstrapTest extends AbstractLifecycleTest {
+    static {
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TxDataSource.class)).setLevel(Level.TRACE);
+    }
 
     @Test
     public void genesisBootstrap() throws Exception {
@@ -29,6 +51,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
     @Override
     protected int checkpointBlockSize() {
-        return 10;
+        return 1000;
     }
 }
