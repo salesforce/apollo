@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -45,7 +46,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private final int                              bias;
     private volatile int                           cardinality;
     private final Digest                           id;
-    private final Map<Digest, Tracked<T>>          members             = new ConcurrentHashMap<>();
+    private final Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
     private final Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
     private final double                           pByz;
     private final List<Ring<T>>                    rings               = new ArrayList<>();

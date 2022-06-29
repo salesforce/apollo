@@ -99,7 +99,7 @@ public interface Context<T extends Member> {
          * @param member
          */
         default void active(T member) {
-        };
+        }
 
         /**
          * A member is offline
@@ -107,12 +107,12 @@ public interface Context<T extends Member> {
          * @param member
          */
         default void offline(T member) {
-        };
+        }
     }
 
     public static class Tracked<M extends Member> {
+        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
 
-        private static final Logger log    = LoggerFactory.getLogger(Tracked.class);
         private final AtomicBoolean active = new AtomicBoolean(false);
         private final Digest[]      hashes;
         private final M             member;
