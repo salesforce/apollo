@@ -66,6 +66,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
     @Override
     protected int checkpointBlockSize() {
-        return 1;
+        return 3;
     }
 }
