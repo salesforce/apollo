@@ -68,15 +68,15 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
+        if (metrics != null) {
+            metrics.dropped(processing.size(), validations.size(), reassemblies.size());
+        }
         log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
                   processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
         draining.set(true);
-        if (metrics != null) {
-            metrics.dropped(processing.size(), validations.size());
-        }
         log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
                   processing.taken(), member);
     }
@@ -138,7 +138,8 @@ public class TxDataSource implements DataSource {
 
             ByteString bs = builder.build().toByteString();
             if (metrics != null) {
-                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount());
+                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount(),
+                                       builder.getReassembliesCount());
             }
             log.trace("Unit data: {} txns, {} validations, {} reassemblies totalling: {} bytes  on: {}",
                       builder.getTransactionsCount(), builder.getValidationsCount(), builder.getReassembliesCount(),
