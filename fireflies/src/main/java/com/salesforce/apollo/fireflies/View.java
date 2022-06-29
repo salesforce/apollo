@@ -810,7 +810,6 @@ public class View {
      * @param note
      */
     private boolean add(NoteWrapper note) {
-        log.trace("Adding note {} : {} on: {}", note.getId(), note.getEpoch(), node.getId());
         Participant m = context.getMember(note.getId());
         if (m == null) {
             log.trace("No member for note: {} on: {}", note.getId(), node.getId());
@@ -1202,8 +1201,6 @@ public class View {
         if (context.activate(member)) {
             member.clearAccusations();
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
-        } else {
-            log.trace("Already active: {} on: {}", member.getId(), node.getId());
         }
     }
 
