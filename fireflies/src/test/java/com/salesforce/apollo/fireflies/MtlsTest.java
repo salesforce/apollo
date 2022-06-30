@@ -37,7 +37,6 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
-import com.salesfoce.apollo.fireflies.proto.Identity;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
@@ -53,6 +52,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -122,13 +122,13 @@ public class MtlsTest {
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
 
-        var seeds = new ArrayList<Identity>();
+        var seeds = new ArrayList<Seed>();
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
             var member = members.get(entropy.nextInt(members.size()));
-            var id = View.identityFor(0, endpoints.get(member.getId()), member.getEvent());
+            var id = new Seed(member.getEvent().getCoordinates(), endpoints.get(member.getId()));
             if (!seeds.contains(id)) {
                 seeds.add(id);
             }
@@ -140,7 +140,7 @@ public class MtlsTest {
         var frist = new AtomicBoolean(true);
         Function<Member, SocketAddress> resolver = m -> {
             var p = (Participant) m;
-            return p.getIdentity().endpoint();
+            return p.endpoint();
         };
         var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {

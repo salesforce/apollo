@@ -41,6 +41,7 @@ import com.salesforce.apollo.choam.support.OneShot;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -86,6 +87,11 @@ public class GenesisAssembly implements Genesis {
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
                                 .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
+        if (!Dag.validate(nextAssembly.size())) {
+            log.error("Invalid cardinality: {} for: {} on: {}", nextAssembly.size(), view.context().getId(),
+                      params().member().getId());
+            throw new IllegalStateException("Invalid BFT cardinality: " + nextAssembly.size());
+        }
         this.genesisMember = genesisMember;
 
         // Create a new context for reconfiguration

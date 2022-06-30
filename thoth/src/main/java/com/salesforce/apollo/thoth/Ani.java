@@ -9,6 +9,7 @@ package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.thoth.KerlDHT.completeIt;
 
+import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.Map;
@@ -32,6 +33,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier.Filtered;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -144,6 +146,12 @@ public class Ani {
     public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
             @Override
+            public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                                     InputStream message) {
+                return null; // TODO
+            }
+
+            @Override
             public boolean validate(EstablishmentEvent event) {
                 try {
                     return Ani.this.validate(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
@@ -157,6 +165,23 @@ public class Ani {
                     log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
                     return false;
                 }
+            }
+
+            @Override
+            public boolean validate(EventCoordinates coordinates) {
+                return true; // TODO - lol
+            }
+
+            @Override
+            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
+                return true; // TODO
+            }
+
+            @Override
+            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                                  InputStream message) {
+                // TODO Auto-generated method stub
+                return false;
             }
         };
     }

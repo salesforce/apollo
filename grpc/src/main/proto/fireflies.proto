@@ -17,10 +17,9 @@ service Fireflies {
 
 message SayWhat {
     utils.Digeste context = 1;
-    Identity from = 2;
-    SignedNote note = 3;
-    int32 ring = 4;
-    Digests gossip = 5;
+    SignedNote note = 2;
+    int32 ring = 3;
+    Digests gossip = 4;
 }
 
 message State {
@@ -43,8 +42,10 @@ message SignedAccusation {
 
 message Note {
     int64 epoch = 1;
-    utils.Digeste id = 2;
+    stereotomy.EventCoords coordinates = 2;
     bytes mask = 3;
+    string host = 4;
+    int32 port = 5;
 }
 
 message SignedNote {
@@ -55,22 +56,6 @@ message SignedNote {
 message AccusationGossip {
     utils.Biff bff = 1;
     repeated SignedAccusation updates = 2;
-}
-
-message Identity {
-    string host = 1;
-    int32 port = 2;
-    int64 epoch = 3;
-    oneof event {
-        stereotomy.InceptionEvent inception = 4;
-        stereotomy.RotationEvent rotation = 5;
-    }
-    stereotomy.Attachment attachment = 6;
-}
-
-message IdentityGossip {
-    utils.Biff bff = 1;
-    repeated Identity updates = 2;
 }
 
 message NoteGossip {
@@ -86,13 +71,11 @@ message Digests {
 
 message Gossip {
     bool redirect = 1;
-    IdentityGossip identities = 2;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
 }
 
 message Update {
-    repeated Identity identities = 1;
-    repeated SignedNote notes = 2;
-    repeated SignedAccusation accusations = 3;
+    repeated SignedNote notes = 1;
+    repeated SignedAccusation accusations = 2;
 }

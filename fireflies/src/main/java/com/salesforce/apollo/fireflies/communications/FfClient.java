@@ -63,7 +63,6 @@ public class FfClient implements Fireflies {
     public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests, Node from) {
         SayWhat sw = SayWhat.newBuilder()
                             .setContext(context.toDigeste())
-                            .setFrom(from.getIdentity().identity())
                             .setNote(note)
                             .setRing(ring)
                             .setGossip(digests)

@@ -6,15 +6,19 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.util.BitSet;
 
+import com.salesfoce.apollo.fireflies.proto.Note;
+import com.salesfoce.apollo.fireflies.proto.Note.Builder;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
  * @author hal.hildebrand
@@ -32,6 +36,10 @@ public class NoteWrapper {
         this.mask = BitSet.valueOf(note.getNote().getMask().asReadOnlyByteBuffer());
     }
 
+    public EventCoordinates getCoordinates() {
+        return EventCoordinates.from(note.getNote().getCoordinates());
+    }
+
     public long getEpoch() {
         return note.getNote().getEpoch();
     }
@@ -40,12 +48,22 @@ public class NoteWrapper {
         return hash;
     }
 
+    public String getHost() {
+        return note.getNote().getHost();
+    }
+
     public Digest getId() {
-        return digest(note.getNote().getId());
+        return ((SelfAddressingIdentifier) Identifier.from(note.getNote()
+                                                               .getCoordinates()
+                                                               .getIdentifier())).getDigest();
     }
 
     public BitSet getMask() {
         return mask;
+    }
+
+    public int getPort() {
+        return note.getNote().getPort();
     }
 
     public JohnHancock getSignature() {
@@ -54,5 +72,9 @@ public class NoteWrapper {
 
     public SignedNote getWrapped() {
         return note;
+    }
+
+    public Builder newBuilder() {
+        return Note.newBuilder(note.getNote());
     }
 }

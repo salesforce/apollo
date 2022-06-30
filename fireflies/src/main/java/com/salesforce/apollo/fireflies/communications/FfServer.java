@@ -60,8 +60,7 @@ public class FfServer extends FirefliesImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getFrom(),
-                                     request.getNote());
+            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getNote());
             if (timer != null) {
                 timer.stop();
                 var serializedSize = gossip.getSerializedSize();

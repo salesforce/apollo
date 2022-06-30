@@ -10,6 +10,7 @@ import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -42,8 +43,6 @@ import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Identity;
-import com.salesfoce.apollo.fireflies.proto.IdentityGossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
@@ -58,7 +57,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.fireflies.communications.Fireflies;
 import com.salesforce.apollo.membership.Context;
@@ -66,11 +64,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
-import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
@@ -93,6 +88,8 @@ import io.grpc.StatusRuntimeException;
  * @since 220
  */
 public class View {
+    public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
+
     /**
      * Used in set reconcillation of Accusation Digests
      */
@@ -105,53 +102,6 @@ public class View {
     }
 
     public record CertWithHash(X509Certificate certificate, Digest certificateHash, byte[] derEncoded) {}
-
-    public record IdentityWrapper(Digest hash, Identity identity) implements Verifier {
-        public InetSocketAddress endpoint() {
-            return new InetSocketAddress(identity.getHost(), identity.getPort());
-        }
-
-        public long epoch() {
-            return identity.getEpoch();
-        }
-
-        public Digest identifier() {
-            return ((SelfAddressingIdentifier) event().getIdentifier()).getDigest();
-        }
-
-        @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return getVerifier().filtered(threshold, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, InputStream message) {
-            return getVerifier().verify(signature, message);
-        }
-
-        @Override
-        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return getVerifier().verify(threshold, signature, message);
-        }
-
-        private Verifier getVerifier() {
-            return new DefaultVerifier(event().getKeys());
-        }
-
-        public EstablishmentEvent event() {
-            return switch (identity.getEventCase()) {
-            case EVENT_NOT_SET -> null;
-            case INCEPTION -> ProtobufEventFactory.toKeyEvent(identity.getInception());
-            case ROTATION -> ProtobufEventFactory.toKeyEvent(identity.getRotation());
-            default -> throw new IllegalArgumentException("Unexpected value: " + identity.getEventCase());
-            };
-        }
-
-        public IdentityWrapper inEpoch(long epoch, DigestAlgorithm digestAlgo) {
-            var next = Identity.newBuilder(identity).setEpoch(epoch).build();
-            return new IdentityWrapper(digestAlgo.digest(next.toByteString()), next);
-        }
-    }
 
     public class Node extends Participant implements SigningMember {
 
@@ -182,9 +132,20 @@ public class View {
 
         private final ControlledIdentifierMember wrapped;
 
-        public Node(ControlledIdentifierMember wrapped, IdentityWrapper identity) {
-            super(identity);
+        public Node(ControlledIdentifierMember wrapped, InetSocketAddress endpoint) {
+            super(wrapped.getId());
             this.wrapped = wrapped;
+            var n = Note.newBuilder()
+                        .setEpoch(0)
+                        .setHost(endpoint.getHostName())
+                        .setPort(endpoint.getPort())
+                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
+                        .build();
+            var signedNote = SignedNote.newBuilder()
+                                       .setNote(n)
+                                       .setSignature(wrapped.sign(n.toByteString()).toSig())
+                                       .build();
+            note = new NoteWrapper(signedNote, digestAlgo);
         }
 
         @Override
@@ -283,8 +244,8 @@ public class View {
          * @param newEpoch
          */
         void nextNote(long newEpoch) {
-            var n = Note.newBuilder()
-                        .setId(getId().toDigeste())
+            var n = note.newBuilder()
+                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
                         .setEpoch(newEpoch)
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
@@ -293,8 +254,6 @@ public class View {
                                        .setSignature(wrapped.sign(n.toByteString()).toSig())
                                        .build();
             note = new NoteWrapper(signedNote, digestAlgo);
-
-            identity = identity.inEpoch(newEpoch, digestAlgo);
         }
     }
 
@@ -302,18 +261,25 @@ public class View {
 
         private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
-        protected volatile IdentityWrapper              identity;
+        protected final Digest                          id;
         protected volatile NoteWrapper                  note;
         protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
 
-        public Participant(IdentityWrapper id) {
-            assert id != null;
-            this.identity = id;
+        public Participant(Digest identity) {
+            assert identity != null;
+            this.id = identity;
         }
 
         @Override
         public int compareTo(Member o) {
-            return identity.identifier().compareTo(o.getId());
+            return id.compareTo(o.getId());
+        }
+
+        public SocketAddress endpoint() {
+            if (note == null) {
+                return null;
+            }
+            return new InetSocketAddress(note.getHost(), note.getPort());
         }
 
         @Override
@@ -326,21 +292,17 @@ public class View {
 
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return identity.filtered(threshold, signature, message);
+            return validation.filtered(note.getCoordinates(), threshold, signature, message);
         }
 
         @Override
         public Digest getId() {
-            return identity.identifier();
-        }
-
-        public IdentityWrapper getIdentity() {
-            return identity;
+            return id;
         }
 
         @Override
         public int hashCode() {
-            return identity.identifier().hashCode();
+            return id.hashCode();
         }
 
         @Override
@@ -350,12 +312,12 @@ public class View {
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            return identity.verify(signature, message);
+            return validation.verify(note.getCoordinates(), signature, message);
         }
 
         @Override
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return identity.verify(threshold, signature, message);
+            return validation.verify(note.getCoordinates(), threshold, signature, message);
         }
 
         /**
@@ -364,14 +326,16 @@ public class View {
          * @param accusation
          */
         void addAccusation(AccusationWrapper accusation) {
+            Integer ringNumber = accusation.getRingNumber();
             NoteWrapper n = getNote();
             if (n == null) {
+                validAccusations.put(ringNumber, accusation);
                 return;
             }
-            Integer ringNumber = accusation.getRingNumber();
             if (n.getEpoch() != accusation.getEpoch()) {
                 log.trace("Invalid epoch discarding accusation from {} on {} ring {}", accusation.getAccuser(), getId(),
                           ringNumber);
+                return;
             }
             if (n.getMask().get(ringNumber)) {
                 validAccusations.put(ringNumber, accusation);
@@ -386,7 +350,7 @@ public class View {
          */
         void clearAccusations() {
             validAccusations.clear();
-            log.trace("Clearing accusations for {}", getId());
+            log.trace("Clearing accusations for {} on: {}", getId(), node.getId());
         }
 
         AccusationWrapper getAccusation(int ring) {
@@ -447,20 +411,10 @@ public class View {
             log.trace("Reset {}", getId());
         }
 
-        void setNote(NoteWrapper next) {
-            NoteWrapper current = note;
-            if (current != null) {
-                long nextEpoch = next.getEpoch();
-                long currentEpoch = current.getEpoch();
-                if (currentEpoch > 0 && currentEpoch < nextEpoch - 1) {
-                    log.info("discarding note for {} with wrong previous epoch {} : {}", getId(), nextEpoch,
-                             currentEpoch);
-                    return;
-                }
-            }
+        boolean setNote(NoteWrapper next) {
             note = next;
-            identity = identity.inEpoch(note.getEpoch(), digestAlgo);
             clearAccusations();
+            return true;
         }
     }
 
@@ -472,38 +426,32 @@ public class View {
          * newer or not known in this view, as well as updates from this node based on
          * out of date information in the supplied digests.
          *
-         * @param ring     - the index of the gossip ring the inbound member is
-         *                 gossiping on
-         * @param digests  - the inbound gossip
-         * @param from     - verified identity of the sending member
-         * @param identity - the identity of the sending member
-         * @param note     - the signed note for the sending member
+         * @param ring    - the index of the gossip ring the inbound member is gossiping
+         *                on
+         * @param digests - the inbound gossip
+         * @param from    - verified identity of the sending member
+         * @param note    - the signed note for the sending member
          * @return Teh response for Moar gossip - updates this node has which the sender
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
-        public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
+        public Gossip rumors(int ring, Digests digests, Digest from, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
-                log.warn("invalid ring {} from {}", ring, from);
+                log.warn("invalid ring {} from {} on: {}", ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
-            var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
-            if (!from.equals(wrapper.identifier())) {
-                log.warn("invalid identity on ring {} from {}", ring, from);
+            var wrapper = new NoteWrapper(note, digestAlgo);
+            if (!from.equals(wrapper.getId())) {
+                log.warn("invalid identity on ring {} from {} on: {}", ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
 
-            Participant member = context.getMember(from);
-            if (member == null) {
-                add(wrapper);
+            Participant member;
+            if (!add(wrapper)) {
+                member = new Participant(wrapper.getId());
+            } else {
                 member = context.getMember(from);
-                if (member == null) {
-                    log.warn("No member on ring: {} from: {} on: {}", ring, from, node.getId());
-                    return Gossip.getDefaultInstance();
-                }
             }
-
-            add(new NoteWrapper(note, digestAlgo));
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
@@ -516,7 +464,6 @@ public class View {
             long seed = Entropy.nextSecureLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setIdentities(processIdentitys(from, BloomFilter.from(digests.getIdentityBff()), seed, fpr))
                          .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), seed, fpr))
                          .build();
@@ -546,27 +493,13 @@ public class View {
                          member.getId());
                 return;
             }
-            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
+            processUpdates(update.getNotesList(), update.getAccusationsList());
         }
     }
 
     private static Logger log = LoggerFactory.getLogger(View.class);
 
     private static final int REBUTAL_TIMEOUT = 2;
-
-    public static Identity identityFor(int epoch, InetSocketAddress endpoint, EstablishmentEvent event) {
-        assert endpoint != null;
-        assert event != null;
-        var builder = Identity.newBuilder().setEpoch(epoch).setHost(endpoint.getHostName()).setPort(endpoint.getPort());
-        if (event instanceof InceptionEventImpl incept) {
-            builder.setInception(incept.toInceptionEvent_());
-        } else if (event instanceof RotationEventImpl rot) {
-            builder.setRotation(rot.toRotationEvent_());
-        } else {
-            throw new IllegalStateException("Event is not a valid type: " + event.getClass());
-        }
-        return builder.build();
-    }
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
@@ -597,7 +530,8 @@ public class View {
     private final RoundScheduler                              roundTimers;
     private final Service                                     service         = new Service();
     private final AtomicBoolean                               started         = new AtomicBoolean();
-    private final EventValidation                             validation;
+
+    private final EventValidation validation;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
@@ -608,8 +542,7 @@ public class View {
         this.digestAlgo = digestAlgo;
         this.context = context;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
-        var identity = identityFor(0, endpoint, member.getEvent());
-        this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
+        this.node = new Node(member, endpoint);
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(), r,
                                                             exec, metrics),
@@ -630,7 +563,7 @@ public class View {
     /**
      * Start the View
      */
-    public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
+    public void start(Duration d, List<Seed> seeds, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -640,17 +573,17 @@ public class View {
         context.activate(node);
         node.nextNote();
         context.activate(node);
-        List<Digest> seedList = new ArrayList<>();
-        seeds.stream()
-             .map(identity -> new Participant(new IdentityWrapper(digestAlgo.digest(identity.toByteString()),
-                                                                  identity)))
-             .peek(m -> seedList.add(m.getId()))
-             .forEach(m -> addSeed(m));
+        seeds.forEach(m -> addSeed(m));
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
         futureGossip = scheduler.schedule(() -> {
             exec.execute(Utils.wrapped(() -> gossip(d, scheduler), log));
         }, initial, TimeUnit.NANOSECONDS);
-        log.info("{} started, seeds: {}", node.getId(), seedList);
+        log.info("{} started, seeds: {}", node.getId(),
+                 seeds.stream()
+                      .map(s -> s.coordinates.getIdentifier())
+                      .map(i -> (SelfAddressingIdentifier) i)
+                      .map(sai -> sai.getDigest())
+                      .toList());
     }
 
     /**
@@ -698,12 +631,11 @@ public class View {
         if (member.isAccusedOn(ring)) {
             return; // Don't issue multiple accusations
         }
-        NoteWrapper n = member.getNote();
-        if (n == null) {
-            return;
-        }
         member.addAccusation(node.accuse(member, ring));
         pendingRebutals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTAL_TIMEOUT));
+        if (metrics != null) {
+            metrics.accusations().mark();
+        }
         log.debug("Accuse {} on ring {} (timer started) on: {}", member.getId(), ring, node.getId());
     }
 
@@ -788,23 +720,6 @@ public class View {
     }
 
     /**
-     * Add a new inbound identity
-     *
-     * @param identity
-     * @return the added member or the real member associated with this identity
-     */
-    private Participant add(IdentityWrapper identity) {
-        Participant member = context.getMember(identity.identifier());
-        if (member != null) {
-            update(member, identity);
-            return member;
-        }
-        member = new Participant(identity);
-        log.debug("Adding member via identity: {} on: {}", member.getId(), node.getId());
-        return add(member);
-    }
-
-    /**
      * add an inbound note to the view
      *
      * @param note
@@ -812,12 +727,17 @@ public class View {
     private boolean add(NoteWrapper note) {
         Participant m = context.getMember(note.getId());
         if (m == null) {
-            log.trace("No member for note: {} on: {}", note.getId(), node.getId());
-            return false;
-        }
-
-        if (m.getEpoch() >= note.getEpoch()) {
-            return false;
+            if (!validation.verify(note.getCoordinates(), note.getSignature(),
+                                   note.getWrapped().getNote().toByteString())) {
+                log.warn("invalid participant note from {} on: {}", note.getId(), node.getId());
+            }
+            m = new Participant(note.getId());
+            m.setNote(note);
+            add(m);
+        } else {
+            if (m.getEpoch() >= note.getEpoch()) {
+                return false;
+            }
         }
 
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
@@ -832,6 +752,17 @@ public class View {
         if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
             log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
             return false;
+        }
+
+        NoteWrapper current = m.getNote();
+        if (current != null) {
+            long nextEpoch = note.getEpoch();
+            long currentEpoch = current.getEpoch();
+            if (currentEpoch > 0 && currentEpoch < nextEpoch - 1) {
+                log.trace("discarding note for {} with wrong previous epoch {} current: {} on: {}", m.getId(),
+                          nextEpoch, currentEpoch, node.getId());
+                return false;
+            }
         }
 
         log.debug("Adding member via note {} on: {}", m, node.getId());
@@ -856,7 +787,6 @@ public class View {
         Participant previous = context.getMember(member.getId());
         if (previous == null) {
             context.add(member);
-            recover(member);
             return member;
         }
         return previous;
@@ -871,17 +801,20 @@ public class View {
      *
      * @param seed
      */
-    private void addSeed(Participant seed) {
+    private void addSeed(Seed seed) {
         SignedNote seedNote = SignedNote.newBuilder()
                                         .setNote(Note.newBuilder()
-                                                     .setId(seed.getId().toDigeste())
+                                                     .setHost(seed.endpoint.getHostName())
+                                                     .setPort(seed.endpoint.getPort())
+                                                     .setCoordinates(seed.coordinates.toEventCoords())
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
-        seed.setNote(new NoteWrapper(seedNote, digestAlgo));
-        context.activate(seed);
+        var participant = new Participant(((SelfAddressingIdentifier) seed.coordinates.getIdentifier()).getDigest());
+        participant.setNote(new NoteWrapper(seedNote, digestAlgo));
+        context.activate(participant);
     }
 
     /**
@@ -933,16 +866,16 @@ public class View {
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
                       .setNoteBff(getNotesBff(seed, fpr).toBff())
-                      .setIdentityBff(getIdentityBff(seed, fpr).toBff())
                       .build();
     }
 
     private void gc(Participant member) {
         if (context.isActive(member)) {
             amplify(member);
-            context.offline(member);
+            if (context.offline(member) && metrics != null) {
+                metrics.offlineMembership().inc();
+            }
             log.debug("Offlining: {} on: {}", member.getId(), node.getId());
-
         }
     }
 
@@ -951,12 +884,6 @@ public class View {
                                                                     context.cardinality() * context.getRingCount() * 2,
                                                                     p);
         context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
-        return bff;
-    }
-
-    private BloomFilter<Digest> getIdentityBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality() * 2, p);
-        context.active().map(m -> m.getIdentity()).filter(e -> e != null).forEach(n -> bff.add(n.hash));
         return bff;
     }
 
@@ -1020,7 +947,7 @@ public class View {
                 redirect(destination.member(), gossip, destination.ring());
             } else {
                 Update update = response(gossip);
-                if (!isEmpty(update)) {
+                if (!update.equals(Update.getDefaultInstance())) {
                     destination.link().update(context.getId(), destination.ring(), update);
                 }
             }
@@ -1087,10 +1014,6 @@ public class View {
         }
     }
 
-    private boolean isEmpty(Update update) {
-        return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
-    }
-
     /**
      * Process the inbound accusations from the gossip. Reconcile the differences
      * between the view's state and the digests of the gossip. Update the reply with
@@ -1115,24 +1038,6 @@ public class View {
         AccusationGossip gossip = builder.build();
         if (!gossip.getUpdatesList().isEmpty()) {
             log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
-        }
-        return gossip;
-    }
-
-    private IdentityGossip processIdentitys(Digest from, BloomFilter<Digest> bff, long seed, double p) {
-        IdentityGossip.Builder builder = IdentityGossip.newBuilder();
-        // Add all updates that this view has that aren't reflected in the inbound
-        // bff
-        context.allMembers()
-               .filter(m -> m.getId().equals(from))
-               .filter(m -> !bff.contains(m.getIdentity().hash))
-               .map(m -> m.getIdentity())
-               .filter(id -> id != null)
-               .forEach(id -> builder.addUpdates(id.identity));
-        builder.setBff(getIdentityBff(seed, p).toBff());
-        IdentityGossip gossip = builder.build();
-        if (!gossip.getUpdatesList().isEmpty()) {
-            log.trace("process identity produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
         }
         return gossip;
     }
@@ -1172,22 +1077,16 @@ public class View {
      * @param gossip
      */
     private void processUpdates(Gossip gossip) {
-        processUpdates(gossip.getIdentities().getUpdatesList(), gossip.getNotes().getUpdatesList(),
-                       gossip.getAccusations().getUpdatesList());
+        processUpdates(gossip.getNotes().getUpdatesList(), gossip.getAccusations().getUpdatesList());
     }
 
     /**
      * Process the updates of the supplied juicy gossip.
-     *
-     * @param identities
+     * 
      * @param notes
      * @param accusations
      */
-    private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
-        identities.stream()
-                  .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
-                  .filter(id -> validation.validate(id.event()))
-                  .forEach(identity -> add(identity));
+    private void processUpdates(List<SignedNote> notes, List<SignedAccusation> accusations) {
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
     }
@@ -1200,6 +1099,9 @@ public class View {
     private void recover(Participant member) {
         if (context.activate(member)) {
             member.clearAccusations();
+            if (metrics != null) {
+                metrics.onlineMembership().inc();
+            }
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         }
     }
@@ -1212,9 +1114,9 @@ public class View {
      * @param ring
      */
     private void redirect(Participant member, Gossip gossip, int ring) {
-        if (gossip.getIdentities().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
-            log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note on: {}",
-                     member.getId(), ring, node.getId());
+        if (gossip.getNotes().getUpdatesCount() != 1) {
+            log.warn("Redirect response from {} on ring {} did not contain redirect member note on: {}", member.getId(),
+                     ring, node.getId());
             return;
         }
         if (gossip.getAccusations().getUpdatesCount() > 0) {
@@ -1228,13 +1130,9 @@ public class View {
                              .orElse(-1);
             node.nextNote(max + 1);
         }
-        if (gossip.getIdentities().getUpdatesCount() == 1) {
-            var id = gossip.getIdentities().getUpdates(0);
-            IdentityWrapper identity = new IdentityWrapper(digestAlgo.digest(id.toByteString()), id);
-            if (validation.validate(identity.event())) {
-                add(identity);
-                SignedNote signed = gossip.getNotes().getUpdates(0);
-                NoteWrapper note = new NoteWrapper(signed, digestAlgo);
+        if (gossip.getNotes().getUpdatesCount() == 1) {
+            var note = new NoteWrapper(gossip.getNotes().getUpdatesList().get(0), digestAlgo);
+            if (validation.validate(note.getCoordinates())) {
                 add(note);
                 gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
                 log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring,
@@ -1265,9 +1163,9 @@ public class View {
             return Gossip.getDefaultInstance();
         }
 
-        var identity = successor.getIdentity();
+        var identity = successor.getNote();
         if (identity == null) {
-            log.debug("Cannot redirect from {} to {} on ring: {} as identity is null on: {}", node, successor, ring,
+            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring,
                       node.getId());
             return Gossip.getDefaultInstance();
         }
@@ -1275,7 +1173,6 @@ public class View {
         log.debug("Redirecting from {} to {} on ring {} on: {}", member, successor, ring, node.getId());
         return Gossip.newBuilder()
                      .setRedirect(true)
-                     .setIdentities(IdentityGossip.newBuilder().addUpdates(identity.identity).build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
                      .setAccusations(AccusationGossip.newBuilder()
                                                      .addAllUpdates(member.getEncodedAccusations(context.getRingCount())))
@@ -1308,16 +1205,6 @@ public class View {
     }
 
     /**
-     * Update the member with a new identity
-     *
-     * @param member
-     * @param identity
-     */
-    private void update(Participant member, IdentityWrapper identity) {
-        // TODO HsH - lol. Someday 😏
-    }
-
-    /**
      * Process the gossip reply. Return the gossip with the updates determined from
      * the inbound digests.
      *
@@ -1326,14 +1213,6 @@ public class View {
      */
     private Update updatesForDigests(Gossip gossip) {
         Update.Builder builder = Update.newBuilder();
-
-        // certificates
-        BloomFilter<Digest> identityBff = BloomFilter.from(gossip.getIdentities().getBff());
-        context.allMembers()
-               .filter(m -> !identityBff.contains((m.getIdentity().hash)))
-               .map(m -> m.getIdentity())
-               .filter(ec -> ec != null)
-               .forEach(id -> builder.addIdentities(id.identity));
 
         // notes
         BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());

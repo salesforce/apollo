@@ -36,7 +36,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
-import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -109,9 +109,9 @@ public class FireFliesTest {
     public void smokin() throws Exception {
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
-                                 .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
-                                 .toList()
-                                 .subList(0, CARDINALITY - 2);
+                                 .map(n -> new Seed(n.getMember().getEvent().getCoordinates(),
+                                                    new InetSocketAddress(0)))
+                                 .toList();
         domains.forEach(d -> {
             d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
         });

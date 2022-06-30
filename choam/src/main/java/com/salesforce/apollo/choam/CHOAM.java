@@ -199,17 +199,19 @@ public class CHOAM {
         private void synchronizationFailed() {
             cancelSynchronization();
             var activeCount = params.context().activeCount();
-            if (activeCount >= params.majority()) {
+            if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
                 var existed = new AtomicBoolean();
                 current.updateAndGet(cmt -> {
                     if (cmt == null) {
-                        log.info("Ouorum achieved, have: {} need: {} forming Genesis committe on: {}", activeCount,
-                                 params.majority(), params.member().getId());
+                        log.info("Quorum achieved, have: {} desired: {} required: {} forming Genesis committe on: {}",
+                                 activeCount, params.context().majority(), params.context().getRingCount(),
+                                 params.member().getId());
                         Formation formation = new Formation();
                         return formation;
                     } else {
-                        log.info("Quorum achieved, have: {} need: {} existing committee: {} on: {}", activeCount,
-                                 params.majority(), cmt.getClass().getSimpleName(), params.member().getId());
+                        log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
+                                 activeCount, params.majority(), params.context().getRingCount(),
+                                 cmt.getClass().getSimpleName(), params.member().getId());
                         existed.set(true);
                         return cmt;
                     }
@@ -220,9 +222,9 @@ public class CHOAM {
                 }
             } else {
                 final var c = current.get();
-                log.info("Synchronization failed, no quorum available, have: {} need: {}, no anchor to recover from: {} on: {}",
-                         activeCount, params.majority(), c == null ? "no formation" : c.getClass().getSimpleName(),
-                         params.member().getId());
+                log.info("Synchronization failed, no quorum available, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
+                         activeCount, params.majority(), params.context().getRingCount(),
+                         c == null ? "no formation" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }
         }

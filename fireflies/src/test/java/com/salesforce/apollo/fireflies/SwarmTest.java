@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesfoce.apollo.fireflies.proto.Identity;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -39,6 +38,7 @@ import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -76,7 +76,7 @@ public class SwarmTest {
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
-    private List<Identity>                          seeds;
+    private List<Seed>                              seeds;
     private List<View>                              views;
 
     @AfterEach
@@ -290,7 +290,8 @@ public class SwarmTest {
 
         var randomized = members.values().stream().collect(Collectors.toList());
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            var id = View.identityFor(0, new InetSocketAddress(0), randomized.get(entropy.nextInt(24)).getEvent());
+            var id = new Seed(randomized.get(entropy.nextInt(24)).getEvent().getCoordinates(),
+                              new InetSocketAddress(0));
             if (!seeds.contains(id)) {
                 seeds.add(id);
             }
