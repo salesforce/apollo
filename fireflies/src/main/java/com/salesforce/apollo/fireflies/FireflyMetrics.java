@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.protocols.EdpointMetrics;
@@ -34,10 +33,6 @@ public interface FireflyMetrics extends EdpointMetrics {
     Timer inboundUpdateTimer();
 
     Meter notes();
-
-    Counter offlineMembership();
-
-    Counter onlineMembership();
 
     Meter outboundGossip();
 

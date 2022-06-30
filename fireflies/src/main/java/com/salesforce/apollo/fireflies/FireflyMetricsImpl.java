@@ -8,7 +8,6 @@ package com.salesforce.apollo.fireflies;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -20,20 +19,18 @@ import com.salesforce.apollo.protocols.EndpointMetricsImpl;
  *
  */
 public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMetrics {
-    private final Meter   accusations;
-    private final Meter   gossipReply;
-    private final Meter   gossipResponse;
-    private final Timer   gossipRoundDuration;
-    private final Meter   inboundGossip;
-    private final Timer   inboundGossipTimer;
-    private final Meter   inboundUpdate;
-    private final Timer   inboundUpdateTimer;
-    private final Meter   notes;
-    private final Counter offlineMembership;
-    private final Counter onlineMembership;
-    private final Meter   outboundGossip;
-    private final Meter   outboundUpdate;
-    private final Timer   outboundUpdateTimer;
+    private final Meter accusations;
+    private final Meter gossipReply;
+    private final Meter gossipResponse;
+    private final Timer gossipRoundDuration;
+    private final Meter inboundGossip;
+    private final Timer inboundGossipTimer;
+    private final Meter inboundUpdate;
+    private final Timer inboundUpdateTimer;
+    private final Meter notes;
+    private final Meter outboundGossip;
+    private final Meter outboundUpdate;
+    private final Timer outboundUpdateTimer;
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -48,8 +45,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         inboundGossip = registry.meter(name(context.shortString(), "ff.gossip.inbound.bytes"));
         gossipReply = registry.meter(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
         gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
-        onlineMembership = registry.counter(name(context.shortString(), "ff.gossip.membership.online"));
-        offlineMembership = registry.counter(name(context.shortString(), "ff.gossip.membership.offline"));
         accusations = registry.meter(name(context.shortString(), "ff.gossip.accusations"));
         notes = registry.meter(name(context.shortString(), "ff.gossip.notes"));
 
@@ -98,16 +93,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Meter notes() {
         return notes;
-    }
-
-    @Override
-    public Counter offlineMembership() {
-        return offlineMembership;
-    }
-
-    @Override
-    public Counter onlineMembership() {
-        return onlineMembership;
     }
 
     @Override

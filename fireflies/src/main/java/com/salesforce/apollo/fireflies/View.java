@@ -725,6 +725,9 @@ public class View {
      * @param note
      */
     private boolean add(NoteWrapper note) {
+        if (metrics != null) {
+            metrics.notes().mark();
+        }
         Participant m = context.getMember(note.getId());
         if (m == null) {
             if (!validation.verify(note.getCoordinates(), note.getSignature(),
@@ -870,11 +873,8 @@ public class View {
     }
 
     private void gc(Participant member) {
-        if (context.isActive(member)) {
+        if (context.offline(member)) {
             amplify(member);
-            if (context.offline(member) && metrics != null) {
-                metrics.offlineMembership().inc();
-            }
             log.debug("Offlining: {} on: {}", member.getId(), node.getId());
         }
     }
@@ -1099,9 +1099,6 @@ public class View {
     private void recover(Participant member) {
         if (context.activate(member)) {
             member.clearAccusations();
-            if (metrics != null) {
-                metrics.onlineMembership().inc();
-            }
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         }
     }

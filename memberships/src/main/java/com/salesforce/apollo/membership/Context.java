@@ -123,7 +123,7 @@ public interface Context<T extends Member> {
         }
 
         public boolean activate() {
-            var activated = active.compareAndExchange(false, true);
+            var activated = active.compareAndSet(false, true);
             if (activated) {
                 log.trace("Activated: {}", member.getId());
             }
@@ -143,7 +143,7 @@ public interface Context<T extends Member> {
         }
 
         public boolean offline() {
-            var offlined = active.compareAndExchange(true, false);
+            var offlined = active.compareAndSet(true, false);
             if (offlined) {
                 log.trace("Offlined: {}", member.getId());
             }
