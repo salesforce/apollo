@@ -65,8 +65,8 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * @author hal.hildebrand

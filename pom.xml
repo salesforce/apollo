@@ -105,6 +105,11 @@
                 <version>${grpc.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.github.hakky54</groupId>
                 <artifactId>sslcontext-kickstart-for-netty</artifactId>
                 <version>7.0.3</version>
@@ -319,7 +324,7 @@
                 <artifactId>xchart</artifactId>
                 <version>3.8.1</version>
             </dependency>
-            
+
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
@@ -401,17 +406,17 @@
         </pluginRepository>
     </pluginRepositories>
 
-	<profiles>
-		<profile> 
-			<id>pre</id>
-			<activation>
-				<activeByDefault>false</activeByDefault>
-			</activation>
-			<modules>
-        		<module>h2-deterministic</module>
-			</modules>
-		</profile>
-	</profiles>
+    <profiles>
+        <profile>
+            <id>pre</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>h2-deterministic</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <build>
         <extensions>

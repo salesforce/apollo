@@ -28,8 +28,8 @@ import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.ServerCalls;
 
@@ -42,20 +42,11 @@ public class ConcurrencyLimitServerInterceptorTest {
                                                                                               .setResponseMarshaller(StringMarshaller.INSTANCE)
                                                                                               .build();
 
-    private Server  server;
-    private Channel channel;
-
     Limiter<GrpcServerRequestContext>      limiter;
     OptionalResultCaptor<Limiter.Listener> listener;
 
-    @BeforeEach
-    public void beforeEachTest() {
-        limiter = Mockito.spy(SimpleLimiter.newBuilder().named("foo").build());
-
-        listener = OptionalResultCaptor.forClass(Limiter.Listener.class);
-
-        Mockito.doAnswer(listener).when(limiter).acquire(Mockito.any());
-    }
+    private Channel channel;
+    private Server  server;
 
     @AfterEach
     public void afterEachTest() {
@@ -65,87 +56,13 @@ public class ConcurrencyLimitServerInterceptorTest {
 
     }
 
-    private void startServer(ServerCalls.UnaryMethod<String, String> method) {
-        try {
-            server = NettyServerBuilder.forPort(0)
-                                       .addService(ServerInterceptors.intercept(ServerServiceDefinition.builder("service")
-                                                                                                       .addMethod(METHOD_DESCRIPTOR,
-                                                                                                                  ServerCalls.asyncUnaryCall(method))
-                                                                                                       .build(),
-                                                                                ConcurrencyLimitServerInterceptor.newBuilder(limiter)
-                                                                                                                 .build()))
-                                       .build()
-                                       .start();
+    @BeforeEach
+    public void beforeEachTest() {
+        limiter = Mockito.spy(SimpleLimiter.newBuilder().named("foo").build());
 
-            channel = NettyChannelBuilder.forAddress("localhost", server.getPort()).usePlaintext().build();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+        listener = OptionalResultCaptor.forClass(Limiter.Listener.class);
 
-    @Test
-    public void releaseOnSuccess() {
-        // Setup server
-        startServer((req, observer) -> {
-            observer.onNext("response");
-            observer.onCompleted();
-        });
-
-        ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
-        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
-        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onSuccess();
-
-        verifyCounts(0, 0, 1, 0);
-    }
-
-    @Test
-    public void releaseOnError() {
-        // Setup server
-        startServer((req, observer) -> {
-            observer.onError(Status.INVALID_ARGUMENT.asRuntimeException());
-        });
-
-        try {
-            ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
-            fail("Should have failed with INVALID_ARGUMENT error");
-        } catch (StatusRuntimeException e) {
-            assertEquals(Status.Code.INVALID_ARGUMENT, e.getStatus().getCode());
-        }
-        // Verify
-        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
-
-        verifyCounts(0, 0, 1, 0);
-    }
-
-    @Test
-    public void releaseOnUncaughtException() throws Exception {
-        Thread.sleep(500);
-        // Setup server
-        startServer((req, observer) -> {
-            throw new RuntimeException("failure");
-        });
-        try {
-            ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
-            fail("Should have failed with UNKNOWN error");
-        } catch (StatusRuntimeException e) {
-            assertEquals(Status.Code.UNKNOWN, e.getStatus().getCode());
-        }
-        Thread.sleep(500);
-        var builder = new StringBuilder().append('\n')
-                                         .append('\n')
-                                         .append("******************************************")
-                                         .append('\n')
-                                         .append("*** 2 stack traces above were expected ***")
-                                         .append('\n')
-                                         .append("******************************************")
-                                         .append('\n')
-                                         .append('\n');
-        LoggerFactory.getLogger(getClass()).warn(builder.toString());
-        // Verify
-        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
-        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();
-
-        verifyCounts(0, 1, 0, 0);
+        Mockito.doAnswer(listener).when(limiter).acquire(Mockito.any());
     }
 
     @Test
@@ -197,6 +114,71 @@ public class ConcurrencyLimitServerInterceptorTest {
         verifyCounts(0, 0, 1, 0);
     }
 
+    @Test
+    public void releaseOnError() {
+        // Setup server
+        startServer((req, observer) -> {
+            observer.onError(Status.INVALID_ARGUMENT.asRuntimeException());
+        });
+
+        try {
+            ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
+            fail("Should have failed with INVALID_ARGUMENT error");
+        } catch (StatusRuntimeException e) {
+            assertEquals(Status.Code.INVALID_ARGUMENT, e.getStatus().getCode());
+        }
+        // Verify
+        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
+
+        verifyCounts(0, 0, 1, 0);
+    }
+
+    @Test
+    public void releaseOnSuccess() {
+        // Setup server
+        startServer((req, observer) -> {
+            observer.onNext("response");
+            observer.onCompleted();
+        });
+
+        ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
+        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
+        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onSuccess();
+
+        verifyCounts(0, 0, 1, 0);
+    }
+
+    @Test
+    public void releaseOnUncaughtException() throws Exception {
+        Thread.sleep(500);
+        // Setup server
+        startServer((req, observer) -> {
+            throw new RuntimeException("failure");
+        });
+        try {
+            ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
+            fail("Should have failed with UNKNOWN error");
+        } catch (StatusRuntimeException e) {
+            assertEquals(Status.Code.UNKNOWN, e.getStatus().getCode());
+        }
+        Thread.sleep(500);
+        var builder = new StringBuilder().append('\n')
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append("*** 2 stack traces above were expected ***")
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append('\n');
+        LoggerFactory.getLogger(getClass()).warn(builder.toString());
+        // Verify
+        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
+        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();
+
+        verifyCounts(0, 1, 0, 0);
+    }
+
     public void verifyCounts(int dropped, int ignored, int success, int rejected) {
         try {
             TimeUnit.SECONDS.sleep(1);
@@ -214,5 +196,23 @@ public class ConcurrencyLimitServerInterceptorTest {
 //        assertEquals(rejected,
 //                     registry.counter("unit.test.limiter.call", "id", testName.getMethodName(), "status", "rejected")
 //                             .count());
+    }
+
+    private void startServer(ServerCalls.UnaryMethod<String, String> method) {
+        try {
+            server = NettyServerBuilder.forPort(0)
+                                       .addService(ServerInterceptors.intercept(ServerServiceDefinition.builder("service")
+                                                                                                       .addMethod(METHOD_DESCRIPTOR,
+                                                                                                                  ServerCalls.asyncUnaryCall(method))
+                                                                                                       .build(),
+                                                                                ConcurrencyLimitServerInterceptor.newBuilder(limiter)
+                                                                                                                 .build()))
+                                       .build()
+                                       .start();
+
+            channel = NettyChannelBuilder.forAddress("localhost", server.getPort()).usePlaintext().build();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

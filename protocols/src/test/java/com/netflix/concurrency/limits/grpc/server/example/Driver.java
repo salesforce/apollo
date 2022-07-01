@@ -19,41 +19,41 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.Metadata;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
 public class Driver {
-    public static final Metadata.Key<String> ID_HEADER = Metadata.Key.of("id", Metadata.ASCII_STRING_MARSHALLER);
-
-    private interface Segment {
-        long duration();
-
-        long nextDelay();
-
-        String name();
-    }
-
-    static public Builder newBuilder() {
-        return new Builder();
-    }
-
     public static class Builder {
-        private List<Driver.Segment> segments = new ArrayList<>();
+        private String               id       = "";
+        private Consumer<Long>       latencyAccumulator;
         private int                  port;
         private long                 runtimeSeconds;
-        private Consumer<Long>       latencyAccumulator;
-        private String               id       = "";
+        private List<Driver.Segment> segments = new ArrayList<>();
 
-        public Builder normal(double mean, double sd, long duration, TimeUnit units) {
-            final NormalDistribution distribution = new NormalDistribution(mean, sd);
-            return add("normal(" + mean + ")", () -> (long) distribution.sample(), duration, units);
+        public Builder add(String name, Supplier<Long> delaySupplier, long duration, TimeUnit units) {
+            segments.add(new Segment() {
+                @Override
+                public long duration() {
+                    return units.toNanos(duration);
+                }
+
+                @Override
+                public String name() {
+                    return name;
+                }
+
+                @Override
+                public long nextDelay() {
+                    return delaySupplier.get();
+                }
+            });
+            return this;
         }
 
-        public Builder uniform(double lower, double upper, long duration, TimeUnit units) {
-            final UniformRealDistribution distribution = new UniformRealDistribution(lower, upper);
-            return add("uniform(" + lower + "," + upper + ")", () -> (long) distribution.sample(), duration, units);
+        public Driver build() {
+            return new Driver(this);
         }
 
         public Builder exponential(double mean, long duration, TimeUnit units) {
@@ -65,17 +65,8 @@ public class Driver {
             return exponential(1000.0 / rps, duration, units);
         }
 
-        public Builder slience(long duration, TimeUnit units) {
-            return add("slience()", () -> units.toMillis(duration), duration, units);
-        }
-
         public Builder id(String id) {
             this.id = id;
-            return this;
-        }
-
-        public Builder port(int port) {
-            this.port = port;
             return this;
         }
 
@@ -84,42 +75,51 @@ public class Driver {
             return this;
         }
 
+        public Builder normal(double mean, double sd, long duration, TimeUnit units) {
+            final NormalDistribution distribution = new NormalDistribution(mean, sd);
+            return add("normal(" + mean + ")", () -> (long) distribution.sample(), duration, units);
+        }
+
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
         public Builder runtime(long duration, TimeUnit units) {
             this.runtimeSeconds = units.toNanos(duration);
             return this;
         }
 
-        public Builder add(String name, Supplier<Long> delaySupplier, long duration, TimeUnit units) {
-            segments.add(new Segment() {
-                @Override
-                public long duration() {
-                    return units.toNanos(duration);
-                }
-
-                @Override
-                public long nextDelay() {
-                    return delaySupplier.get();
-                }
-
-                @Override
-                public String name() {
-                    return name;
-                }
-            });
-            return this;
+        public Builder slience(long duration, TimeUnit units) {
+            return add("slience()", () -> units.toMillis(duration), duration, units);
         }
 
-        public Driver build() {
-            return new Driver(this);
+        public Builder uniform(double lower, double upper, long duration, TimeUnit units) {
+            final UniformRealDistribution distribution = new UniformRealDistribution(lower, upper);
+            return add("uniform(" + lower + "," + upper + ")", () -> (long) distribution.sample(), duration, units);
         }
     }
 
-    private final List<Segment>  segments;
+    private interface Segment {
+        long duration();
+
+        String name();
+
+        long nextDelay();
+    }
+
+    public static final Metadata.Key<String> ID_HEADER = Metadata.Key.of("id", Metadata.ASCII_STRING_MARSHALLER);
+
+    static public Builder newBuilder() {
+        return new Builder();
+    }
+
     private final Channel        channel;
-    private final long           runtime;
-    private final Consumer<Long> latencyAccumulator;
-    private final AtomicInteger  successCounter = new AtomicInteger(0);
     private final AtomicInteger  dropCounter    = new AtomicInteger(0);
+    private final Consumer<Long> latencyAccumulator;
+    private final long           runtime;
+    private final List<Segment>  segments;
+    private final AtomicInteger  successCounter = new AtomicInteger(0);
 
     public Driver(Builder builder) {
         this.segments = builder.segments;
@@ -135,16 +135,12 @@ public class Driver {
                                                     MetadataUtils.newAttachHeadersInterceptor(metadata));
     }
 
-    public int getAndResetSuccessCount() {
-        return successCounter.getAndSet(0);
-    }
-
     public int getAndResetDropCount() {
         return dropCounter.getAndSet(0);
     }
 
-    public CompletableFuture<Void> runAsync() {
-        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor());
+    public int getAndResetSuccessCount() {
+        return successCounter.getAndSet(0);
     }
 
     public void run() {
@@ -168,7 +164,9 @@ public class Driver {
                                                                CallOptions.DEFAULT.withWaitForReady()),
                                                "request", new StreamObserver<String>() {
                                                    @Override
-                                                   public void onNext(String value) {
+                                                   public void onCompleted() {
+                                                       latencyAccumulator.accept(System.nanoTime() - startTime);
+                                                       successCounter.incrementAndGet();
                                                    }
 
                                                    @Override
@@ -177,13 +175,15 @@ public class Driver {
                                                    }
 
                                                    @Override
-                                                   public void onCompleted() {
-                                                       latencyAccumulator.accept(System.nanoTime() - startTime);
-                                                       successCounter.incrementAndGet();
+                                                   public void onNext(String value) {
                                                    }
                                                });
                 }
             }
         }
+    }
+
+    public CompletableFuture<Void> runAsync() {
+        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor());
     }
 }

@@ -21,8 +21,8 @@ import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 
 import io.grpc.ManagedChannel;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.NettyChannelBuilder;
+import io.netty.handler.ssl.ClientAuth;
 
 /**
  * @author hal.hildebrand
