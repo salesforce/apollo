@@ -176,7 +176,7 @@ public class SwarmTest {
                 toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(Duration.ofMillis(5), seeds,
+            toStart.forEach(view -> view.start(Duration.ofMillis(50), seeds,
                                                Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
