@@ -455,7 +455,7 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, node.getId());
+                log.trace("No active successor on ring: {} from: {} on: {}", ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
