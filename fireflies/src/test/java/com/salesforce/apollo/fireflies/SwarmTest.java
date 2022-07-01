@@ -101,12 +101,15 @@ public class SwarmTest {
         System.out.println();
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
+            var toStart = new ArrayList<View>();
             for (int j = 0; j < 25; j++) {
-                testViews.add(views.get(start + j));
+                final var v = views.get(start + j);
+                testViews.add(v);
+                toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(10), seeds,
-                                                 Executors.newSingleThreadScheduledExecutor()));
+            toStart.forEach(view -> view.start(Duration.ofMillis(10), seeds,
+                                               Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
@@ -166,12 +169,15 @@ public class SwarmTest {
         testViews.clear();
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
+            var toStart = new ArrayList<View>();
             for (int j = 0; j < 25; j++) {
-                testViews.add(views.get(start + j));
+                final var v = views.get(start + j);
+                testViews.add(v);
+                toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(50), seeds,
-                                                 Executors.newSingleThreadScheduledExecutor()));
+            toStart.forEach(view -> view.start(Duration.ofMillis(5), seeds,
+                                               Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
