@@ -8,6 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -19,31 +20,31 @@ import com.salesforce.apollo.protocols.EndpointMetricsImpl;
  *
  */
 public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMetrics {
-    private final Meter accusations;
-    private final Meter gossipReply;
-    private final Meter gossipResponse;
-    private final Timer gossipRoundDuration;
-    private final Meter inboundGossip;
-    private final Timer inboundGossipTimer;
-    private final Meter inboundUpdate;
-    private final Timer inboundUpdateTimer;
-    private final Meter notes;
-    private final Meter outboundGossip;
-    private final Meter outboundUpdate;
-    private final Timer outboundUpdateTimer;
+    private final Meter     accusations;
+    private final Histogram gossipReply;
+    private final Histogram gossipResponse;
+    private final Timer     gossipRoundDuration;
+    private final Histogram inboundGossip;
+    private final Timer     inboundGossipTimer;
+    private final Histogram inboundUpdate;
+    private final Timer     inboundUpdateTimer;
+    private final Meter     notes;
+    private final Histogram outboundGossip;
+    private final Histogram outboundUpdate;
+    private final Timer     outboundUpdateTimer;
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
         outboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.outbound.duration"));
         inboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.inbound.duration"));
-        outboundUpdate = registry.meter(name(context.shortString(), "ff.update.outbound.bytes"));
-        inboundUpdate = registry.meter(name(context.shortString(), "ff.update.inbound.bytes"));
+        outboundUpdate = registry.histogram(name(context.shortString(), "ff.update.outbound.bytes"));
+        inboundUpdate = registry.histogram(name(context.shortString(), "ff.update.inbound.bytes"));
 
         inboundGossipTimer = registry.timer(name(context.shortString(), "ff.gossip.inbound.duration"));
-        outboundGossip = registry.meter(name(context.shortString(), "ff.gossip.outbound.bytes"));
-        gossipResponse = registry.meter(name(context.shortString(), "ff.gossip.reply.inbound.bytes"));
-        inboundGossip = registry.meter(name(context.shortString(), "ff.gossip.inbound.bytes"));
-        gossipReply = registry.meter(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
+        outboundGossip = registry.histogram(name(context.shortString(), "ff.gossip.outbound.bytes"));
+        gossipResponse = registry.histogram(name(context.shortString(), "ff.gossip.reply.inbound.bytes"));
+        inboundGossip = registry.histogram(name(context.shortString(), "ff.gossip.inbound.bytes"));
+        gossipReply = registry.histogram(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
         gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
         accusations = registry.meter(name(context.shortString(), "ff.gossip.accusations"));
         notes = registry.meter(name(context.shortString(), "ff.gossip.notes"));
@@ -56,12 +57,12 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Meter gossipReply() {
+    public Histogram gossipReply() {
         return gossipReply;
     }
 
     @Override
-    public Meter gossipResponse() {
+    public Histogram gossipResponse() {
         return gossipResponse;
     }
 
@@ -71,7 +72,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Meter inboundGossip() {
+    public Histogram inboundGossip() {
         return inboundGossip;
     }
 
@@ -81,7 +82,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Meter inboundUpdate() {
+    public Histogram inboundUpdate() {
         return inboundUpdate;
     }
 
@@ -96,12 +97,12 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Meter outboundGossip() {
+    public Histogram outboundGossip() {
         return outboundGossip;
     }
 
     @Override
-    public Meter outboundUpdate() {
+    public Histogram outboundUpdate() {
         return outboundUpdate;
     }
 

@@ -52,7 +52,7 @@ public class FfServer extends FirefliesImplBase {
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundGossip().mark(serializedSize);
+            metrics.inboundGossip().update(serializedSize);
         }
         Digest from = identity.getFrom();
         if (from == null) {
@@ -65,7 +65,7 @@ public class FfServer extends FirefliesImplBase {
                 timer.stop();
                 var serializedSize = gossip.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
-                metrics.gossipReply().mark(serializedSize);
+                metrics.gossipReply().update(serializedSize);
             }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
@@ -78,7 +78,7 @@ public class FfServer extends FirefliesImplBase {
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundUpdate().mark(serializedSize);
+            metrics.inboundUpdate().update(serializedSize);
         }
         Digest from = identity.getFrom();
         if (from == null) {

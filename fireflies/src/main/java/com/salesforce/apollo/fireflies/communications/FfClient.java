@@ -71,7 +71,7 @@ public class FfClient implements Fireflies {
         if (metrics != null) {
             var serializedSize = sw.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundGossip().mark(serializedSize);
+            metrics.outboundGossip().update(serializedSize);
         }
         result.addListener(() -> {
             if (metrics != null) {
@@ -84,7 +84,7 @@ public class FfClient implements Fireflies {
                 }
                 var serializedSize = gossip.getSerializedSize();
                 metrics.inboundBandwidth().mark(serializedSize);
-                metrics.gossipResponse().mark(serializedSize);
+                metrics.gossipResponse().update(serializedSize);
             }
         }, r -> r.run());
         return result;
@@ -111,7 +111,7 @@ public class FfClient implements Fireflies {
             if (metrics != null) {
                 var serializedSize = state.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
-                metrics.outboundUpdate().mark(serializedSize);
+                metrics.outboundUpdate().update(serializedSize);
             }
         } finally {
             if (timer != null) {

@@ -105,7 +105,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(50), seeds,
+            testViews.forEach(view -> view.start(Duration.ofMillis(5), seeds,
                                                  Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -170,7 +170,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(50), seeds,
+            testViews.forEach(view -> view.start(Duration.ofMillis(5), seeds,
                                                  Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -312,7 +312,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.00125,
                             DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }
