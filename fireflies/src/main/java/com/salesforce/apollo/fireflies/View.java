@@ -15,12 +15,14 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
@@ -29,6 +31,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -197,7 +200,10 @@ public class View {
 
             BitSet mask = new BitSet(context.getRingCount());
             mask.flip(0, context.getRingCount());
-            for (int i : validAccusations.keySet()) {
+            for (int i = 0; i < context.getRingCount(); i++) {
+                if (validAccusations[i] == null) {
+                    continue;
+                }
                 if (mask.cardinality() <= context.toleranceLevel() + 1) {
                     assert isValidMask(mask, context.toleranceLevel()) : "Invalid mask: " + mask + "for node: "
                     + getId();
@@ -263,13 +269,14 @@ public class View {
 
         private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
-        protected final Digest                          id;
-        protected volatile NoteWrapper                  note;
-        protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
+        protected final Digest              id;
+        protected volatile NoteWrapper      note;
+        protected final AccusationWrapper[] validAccusations;
 
         public Participant(Digest identity) {
             assert identity != null;
             this.id = identity;
+            validAccusations = new AccusationWrapper[context.getRingCount()];
         }
 
         @Override
@@ -331,7 +338,7 @@ public class View {
             Integer ringNumber = accusation.getRingNumber();
             NoteWrapper n = getNote();
             if (n == null) {
-                validAccusations.put(ringNumber, accusation);
+                validAccusations[ringNumber] = accusation;
                 return;
             }
             if (n.getEpoch() != accusation.getEpoch()) {
@@ -340,7 +347,7 @@ public class View {
                 return;
             }
             if (n.getMask().get(ringNumber)) {
-                validAccusations.put(ringNumber, accusation);
+                validAccusations[ringNumber] = accusation;
                 if (log.isDebugEnabled()) {
                     log.debug("Member {} is accusing {} on {}", accusation.getAccuser(), getId(), ringNumber);
                 }
@@ -351,27 +358,36 @@ public class View {
          * clear all accusations for the member
          */
         void clearAccusations() {
-            validAccusations.clear();
+            Arrays.fill(validAccusations, null);
             log.trace("Clearing accusations for {} on: {}", getId(), node.getId());
         }
 
         AccusationWrapper getAccusation(int ring) {
-            return validAccusations.get(ring);
+            return validAccusations[ring];
         }
 
         Stream<AccusationWrapper> getAccusations() {
-            return validAccusations.values().stream();
+            var returned = new ArrayList<AccusationWrapper>();
+            for (var acc : validAccusations) {
+                if (acc != null) {
+                    returned.add(acc);
+                }
+            }
+            return returned.stream();
         }
 
         List<AccTag> getAccusationTags() {
-            return validAccusations.keySet()
-                                   .stream()
-                                   .map(ring -> new AccTag(getId(), ring))
-                                   .collect(Collectors.toList());
+            var returned = new ArrayList<AccTag>();
+            for (int ring = 0; ring < validAccusations.length; ring++) {
+                if (validAccusations[ring] != null) {
+                    returned.add(new AccTag(getId(), ring));
+                }
+            }
+            return returned;
         }
 
         AccusationWrapper getEncodedAccusation(Integer ring) {
-            return validAccusations.get(ring);
+            return validAccusations[ring];
         }
 
         List<SignedAccusation> getEncodedAccusations(int rings) {
@@ -395,21 +411,26 @@ public class View {
         }
 
         void invalidateAccusationOnRing(int index) {
-            validAccusations.remove(index);
+            validAccusations[index] = null;
             log.trace("Invalidating accusations of {} on {}", getId(), index);
         }
 
         boolean isAccused() {
-            return !validAccusations.isEmpty();
+            for (int ring = 0; ring < validAccusations.length; ring++) {
+                if (validAccusations[ring] != null) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         boolean isAccusedOn(int index) {
-            return validAccusations.containsKey(index);
+            return validAccusations[index] != null;
         }
 
         void reset() {
             note = null;
-            validAccusations.clear();
+            Arrays.fill(validAccusations, null);
             log.trace("Reset {}", getId());
         }
 
@@ -501,9 +522,9 @@ public class View {
         }
     }
 
-    private static Logger log = LoggerFactory.getLogger(View.class);
-
-    private static final int REBUTAL_TIMEOUT = 2;
+    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final int    REBUTAL_TIMEOUT       = 2;
+    private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
@@ -523,19 +544,24 @@ public class View {
 
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
+    private final AtomicReference<Digest>                     currentView         = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
     private final double                                      fpr;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
+    private final Map<Digest, SignedNote>                     joins               = new ConcurrentSkipListMap<>();
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
-    private final Map<Digest, SignedViewChange>               observations    = new ConcurrentSkipListMap<>();
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals = new ConcurrentSkipListMap<>();
+    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals     = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
-    private final Service                                     service         = new Service();
-    private final AtomicBoolean                               started         = new AtomicBoolean();
+    private final AtomicReference<RoundScheduler.Timer>       scheduledViewChange = new AtomicReference<>();
+    private final Service                                     service             = new Service();
+    private final Set<Digest>                                 shunned             = Collections.newSetFromMap(new ConcurrentSkipListMap<>());
+    private final AtomicBoolean                               started             = new AtomicBoolean();
     private final EventValidation                             validation;
+    private final AtomicReference<RoundScheduler.Timer>       viewChangeDeadline  = new AtomicReference<>();
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
@@ -582,6 +608,7 @@ public class View {
         futureGossip = scheduler.schedule(() -> {
             exec.execute(Utils.wrapped(() -> gossip(d, scheduler), log));
         }, initial, TimeUnit.NANOSECONDS);
+        roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7);
         log.info("{} started, seeds: {}", node.getId(),
                  seeds.stream()
                       .map(s -> s.coordinates.getIdentifier())
@@ -609,6 +636,7 @@ public class View {
         if (current != null) {
             current.cancel(true);
         }
+        shunned.clear();
     }
 
     @Override
@@ -874,11 +902,18 @@ public class View {
                       .build();
     }
 
+    /**
+     * View change timed out
+     */
+    private void failViewChange() {
+        roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7);
+    }
+
     private void gc(Participant member) {
-        amplify(member);
-        if (context.offline(member)) {
-            log.debug("Offlining: {} on: {}", member.getId(), node.getId());
+        if (shunned.add(member.getId())) {
+            amplify(member);
         }
+        context.offline(member);
     }
 
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
@@ -992,6 +1027,14 @@ public class View {
     }
 
     /**
+     * Initiate the view change
+     */
+    private void initiateViewChange() {
+        // TODO Auto-generated method stub
+
+    }
+
+    /**
      * If member currently is accused on ring, keep the new accusation only if it is
      * from a closer predecessor.
      *
@@ -1019,6 +1062,22 @@ public class View {
                 log.debug("Invalidated accusation on ring: {} for member: {} on: {}", ring.getIndex(), q.getId(),
                           node.getId());
             }
+        }
+    }
+
+    /**
+     * initiate a view change if there's any offline members
+     */
+    private void maybeViewChange() {
+        if (shunned.size() > 0) {
+            var timer = roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> failViewChange(), 7);
+            if (viewChangeDeadline.compareAndSet(null, timer)) {
+                initiateViewChange();
+            } else {
+                timer.cancel();
+            }
+        } else {
+            scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7));
         }
     }
 
@@ -1124,6 +1183,10 @@ public class View {
      * @param member
      */
     private void recover(Participant member) {
+        if (shunned.contains(member.getId())) {
+            log.debug("Not recovering shunned: {} on: {}", member.getId(), node.getId());
+            return;
+        }
         if (context.activate(member)) {
             member.clearAccusations();
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
