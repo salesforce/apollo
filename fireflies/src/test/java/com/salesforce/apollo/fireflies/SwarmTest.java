@@ -134,12 +134,12 @@ public class SwarmTest {
         List<Router> r = new ArrayList<>(communications);
         int delta = 10;
         for (int i = 0; i < (CARDINALITY / delta); i++) {
-            for (int j = 0; j < delta; j++) {
+            for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 c.get(j).stop();
                 r.get(j).close();
             }
-            c = c.subList(delta, c.size());
-            r = r.subList(delta, r.size());
+            c = c.subList(0, c.size() - delta);
+            r = r.subList(0, r.size() - delta);
             final var expected = c;
             long then = System.currentTimeMillis();
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -218,7 +218,8 @@ public class SwarmTest {
                 }
             }
         }
-        ConsoleReporter.forRegistry(registry)
+        System.out.println("Node 0 metrics");
+        ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
@@ -275,6 +276,7 @@ public class SwarmTest {
         }
 
         views.forEach(view -> view.stop());
+        System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)

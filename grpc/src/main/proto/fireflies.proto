@@ -75,6 +75,11 @@ message NoteGossip {
     repeated SignedNote updates = 2;
 }
 
+message JoinGossip {
+    utils.Biff bff = 1;
+    repeated SignedNote updates = 2;
+}
+
 message ViewChangeGossip {
     utils.Biff bff = 1;
     repeated SignedViewChange updates = 2;
@@ -84,7 +89,8 @@ message Digests {
     utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
     utils.Biff accusationBff = 3;
-    utils.Biff observationsBff = 4;
+    utils.Biff observationBff = 4;
+    utils.Biff joinBiff = 5;
 }
 
 message Gossip {
@@ -92,10 +98,12 @@ message Gossip {
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
     ViewChangeGossip observations = 5;
+    JoinGossip joins = 6;
 }
 
 message Update {
     repeated SignedNote notes = 1;
     repeated SignedAccusation accusations = 2;
     repeated SignedViewChange observations = 3;
+    repeated SignedNote joins = 4;
 }

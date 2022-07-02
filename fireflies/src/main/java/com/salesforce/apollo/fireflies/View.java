@@ -8,6 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -43,12 +44,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.common.base.Objects;
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
+import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.JoinGossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
@@ -493,8 +499,8 @@ public class View {
                          .setRedirect(false)
                          .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), seed, fpr))
-                         .setObservations(processObservations(BloomFilter.from(digests.getObservationsBff()), seed,
-                                                              fpr))
+                         .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()), seed, fpr))
+                         .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), seed, fpr))
                          .build();
         }
 
@@ -526,7 +532,28 @@ public class View {
         }
     }
 
-    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private record Ballot(RoaringBitmap leaving, List<Digest> joining, int hash) {
+
+        private Ballot(RoaringBitmap leaving, List<Digest> joining, DigestAlgorithm algo) {
+            this(leaving, joining, hashOf(leaving, joining, algo));
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj != null && obj instanceof Ballot b) {
+                return Objects.equal(leaving, b.leaving) && Objects.equal(joining, b.joining);
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(View.class);
+
     private static final int    REBUTAL_TIMEOUT       = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
@@ -544,6 +571,21 @@ public class View {
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
         return mask.cardinality() == toleranceLevel + 1;
+    }
+
+    private static RoaringBitmap bitmapFrom(ByteString failed) {
+        RoaringBitmap bitmap = new RoaringBitmap();
+        try {
+            bitmap.deserialize(failed.asReadOnlyByteBuffer());
+        } catch (IOException e) {
+            log.debug("Invalid bitmap", e);
+            return null;
+        }
+        return bitmap;
+    }
+
+    private static int hashOf(RoaringBitmap leaving, List<Digest> joining, DigestAlgorithm algo) {
+        return Objects.hashCode(leaving, joining.stream().reduce((a, b) -> a.xor(b)).orElse(algo.getOrigin()));
     }
 
     private final CommonCommunications<Fireflies, Service>    comm;
@@ -565,7 +607,10 @@ public class View {
     private final Set<Digest>                                 shunned             = Collections.newSetFromMap(new ConcurrentSkipListMap<>());
     private final AtomicBoolean                               started             = new AtomicBoolean();
     private final EventValidation                             validation;
-    private final AtomicReference<RoundScheduler.Timer>       viewChangeDeadline  = new AtomicReference<>();
+
+    private final AtomicReference<RoundScheduler.Timer> viewChangeDeadline = new AtomicReference<>();
+
+    private volatile BloomFilter<Digest> votesReceived;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
@@ -585,6 +630,7 @@ public class View {
         this.exec = exec;
         add(node);
         currentView = new AtomicReference<>(digestAlgo.getOrigin());
+        votesReceived = new BloomFilter.DigestBloomFilter(Entropy.nextBitsStreamLong(), context.cardinality(), 0.00001);
     }
 
     /**
@@ -643,6 +689,8 @@ public class View {
         }
         shunned.clear();
         observations.clear();
+        joins.clear();
+        votesReceived.clear();
     }
 
     @Override
@@ -829,6 +877,12 @@ public class View {
         return previous;
     }
 
+    /**
+     * Add an observation if it is for the current view and has not been previously
+     * observed by the observer
+     *
+     * @param observation
+     */
     private void add(SignedViewChange observation) {
         var member = context.getMember(Digest.from(observation.getChange().getObserver()));
         if (member == null) {
@@ -837,6 +891,10 @@ public class View {
         if (!currentView.get().equals(Digest.from(observation.getChange().getCurrent()))) {
             return;
         }
+        if (votesReceived.contains(member.getId())) {
+            return;
+        }
+        votesReceived.add(member.getId());
         final var signature = JohnHancock.from(observation.getSignature());
         if (!member.verify(signature, observation.getChange().toByteString())) {
             return;
@@ -919,11 +977,43 @@ public class View {
                       .build();
     }
 
-    private void finalizeViewChange() {
+    /**
+     * Fallback consensus driven view change using Ethereal
+     */
+    private void consensuViewChange() {
         roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7);
         observations.clear();
     }
 
+    /**
+     * Finalize the view change
+     */
+    private void finalizeViewChange() {
+        HashMultiset<Ballot> ballots = HashMultiset.create();
+        observations.values().forEach(vc -> {
+            final var bitmap = bitmapFrom(vc.getChange().getFailed());
+            if (bitmap != null) {
+                ballots.add(new Ballot(bitmap, vc.getChange().getJoinsList().stream().map(d -> Digest.from(d)).toList(),
+                                       digestAlgo));
+            }
+        });
+        var max = ballots.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
+        if (max != null) {
+            if (max.getCount() >= context.cardinality() - (context.cardinality() - 1 / 4)) {
+                install(max.getElement());
+                roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7);
+                observations.clear();
+                return;
+            }
+        }
+        consensuViewChange();
+    }
+
+    /**
+     * Garbage collect the member. Member is now shunned and cannot recover
+     *
+     * @param member
+     */
     private void gc(Participant member) {
         if (shunned.add(member.getId())) {
             amplify(member);
@@ -931,26 +1021,56 @@ public class View {
         context.offline(member);
     }
 
+    /**
+     * @param seed
+     * @param p
+     * @return the bloom filter containing the digests of known accusations
+     */
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
-                                                                    context.cardinality() * context.getRingCount() * 2,
-                                                                    p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
         return bff;
     }
 
+    /**
+     * @param seed
+     * @param p
+     * @return the bloom filter containing the digests of known joins
+     */
+    private BloomFilter<Digest> getJoinsBff(long seed, double p) {
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
+        joins.keySet().forEach(d -> bff.add(d));
+        return bff;
+    }
+
+    /**
+     * @param seed
+     * @param p
+     * @return the bloom filter containing the digests of known notes
+     */
     private BloomFilter<Digest> getNotesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality() * 2, p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.active().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
     }
 
-    private BloomFilter<Digest> getObservationsBff(long seed, double p, int cardinality) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, cardinality * 2, p);
+    /**
+     * @param seed
+     * @param p
+     * @return the bloom filter containing the digests of known observations
+     */
+    private BloomFilter<Digest> getObservationsBff(long seed, double p) {
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         observations.keySet().forEach(d -> bff.add(d));
         return bff;
     }
 
+    /**
+     * Execute one round of gossip
+     *
+     * @param duration
+     * @param scheduler
+     */
     private void gossip(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
@@ -984,6 +1104,15 @@ public class View {
         return link.gossip(context.getId(), signedNote, ring, outbound, node);
     }
 
+    /**
+     * Handle the gossip response from the destination
+     *
+     * @param futureSailor
+     * @param destination
+     * @param duration
+     * @param scheduler
+     * @param timer
+     */
     private void gossip(Optional<ListenableFuture<Gossip>> futureSailor,
                         Destination<Participant, Fireflies> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
@@ -1070,6 +1199,15 @@ public class View {
     }
 
     /**
+     * Install the new view
+     * 
+     * @param view
+     */
+    private void install(Ballot view) {
+        log.warn("Installing new view on: {}", node.getId());
+    }
+
+    /**
      * If member currently is accused on ring, keep the new accusation only if it is
      * from a closer predecessor.
      *
@@ -1101,10 +1239,10 @@ public class View {
     }
 
     /**
-     * initiate a view change if there's any offline members
+     * start a view change if there's any offline members or joining members
      */
     private void maybeViewChange() {
-        if (shunned.size() > 0) {
+        if (shunned.size() > 0 || joins.size() > 0) {
             var timer = roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> finalizeViewChange(), 7);
             if (viewChangeDeadline.compareAndSet(null, timer)) {
                 initiateViewChange();
@@ -1137,10 +1275,34 @@ public class View {
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
-        AccusationGossip gossip = builder.build();
-        if (!gossip.getUpdatesList().isEmpty()) {
-            log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (builder.getUpdatesCount() != 0) {
+            log.trace("process accusations produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
+        return builder.build();
+    }
+
+    /**
+     * Process the inbound joins from the gossip. Reconcile the differences between
+     * the view's state and the digests of the gossip. Update the reply with the
+     * list of digests the view requires, as well as proposed updates based on the
+     * inbound digests that the view has more recent information
+     *
+     * @param from
+     * @param digests
+     * @param p
+     * @param seed
+     */
+    private JoinGossip processJoins(BloomFilter<Digest> bff, long seed, double p) {
+        JoinGossip.Builder builder = JoinGossip.newBuilder();
+
+        // Add all updates that this view has that aren't reflected in the inbound bff
+        joins.entrySet()
+             .stream()
+             .filter(m -> !bff.contains(m.getKey()))
+             .map(m -> m.getValue())
+             .forEach(n -> builder.addUpdates(n));
+        builder.setBff(getJoinsBff(seed, p).toBff());
+        JoinGossip gossip = builder.build();
         return gossip;
     }
 
@@ -1148,7 +1310,7 @@ public class View {
      * Process the inbound notes from the gossip. Reconcile the differences between
      * the view's state and the digests of the gossip. Update the reply with the
      * list of digests the view requires, as well as proposed updates based on the
-     * inbound digets that the view has more recent information
+     * inbound digests that the view has more recent information
      *
      * @param from
      * @param digests
@@ -1166,13 +1328,23 @@ public class View {
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(seed, p).toBff());
-        NoteGossip gossip = builder.build();
-        if (!gossip.getUpdatesList().isEmpty()) {
-            log.trace("process notes produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (builder.getUpdatesCount() != 0) {
+            log.trace("process notes produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
-        return gossip;
+        return builder.build();
     }
 
+    /**
+     * Process the inbound observer from the gossip. Reconcile the differences
+     * between the view's state and the digests of the gossip. Update the reply with
+     * the list of digests the view requires, as well as proposed updates based on
+     * the inbound digests that the view has more recent information
+     *
+     * @param from
+     * @param digests
+     * @param p
+     * @param seed
+     */
     private ViewChangeGossip processObservations(BloomFilter<Digest> bff, long seed, double p) {
         ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
 
@@ -1182,9 +1354,11 @@ public class View {
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
                     .forEach(n -> builder.addUpdates(n));
-        builder.setBff(getObservationsBff(seed, p, context.cardinality()).toBff());
-        ViewChangeGossip gossip = builder.build();
-        return gossip;
+        builder.setBff(getObservationsBff(seed, p).toBff());
+        if (builder.getUpdatesCount() != 0) {
+            log.trace("process view change produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
+        }
+        return builder.build();
     }
 
     /**
