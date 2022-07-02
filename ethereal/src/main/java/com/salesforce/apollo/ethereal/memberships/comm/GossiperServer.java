@@ -30,10 +30,10 @@ import io.grpc.stub.StreamObserver;
  */
 public class GossiperServer extends GossiperImplBase {
     private static final Logger                    log = LoggerFactory.getLogger(GossiperServer.class);
+    private final Executor                         exec;
     private ClientIdentity                         identity;
     private final EtherealMetrics                  metrics;
     private final RoutableService<GossiperService> routing;
-    private final Executor                         exec;
 
     public GossiperServer(ClientIdentity identity, EtherealMetrics metrics, RoutableService<GossiperService> r,
                           Executor exec) {
@@ -49,7 +49,7 @@ public class GossiperServer extends GossiperImplBase {
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundGossip().mark(serializedSize);
+            metrics.inboundGossip().update(serializedSize);
         }
         Digest from = identity.getFrom();
         if (from == null) {
@@ -62,7 +62,7 @@ public class GossiperServer extends GossiperImplBase {
                 timer.stop();
                 var serializedSize = response.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
-                metrics.gossipReply().mark(serializedSize);
+                metrics.gossipReply().update(serializedSize);
             }
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -75,7 +75,7 @@ public class GossiperServer extends GossiperImplBase {
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundUpdate().mark(serializedSize);
+            metrics.inboundUpdate().update(serializedSize);
         }
         Digest from = identity.getFrom();
         if (from == null) {

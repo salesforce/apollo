@@ -58,7 +58,7 @@ public class GossiperClient implements Gossiper {
     public ListenableFuture<Update> gossip(Gossip request) {
         Context timer = metrics == null ? null : metrics.outboundGossipTimer().time();
         if (metrics != null) {
-            metrics.outboundGossip().mark(request.getSerializedSize());
+            metrics.outboundGossip().update(request.getSerializedSize());
             metrics.outboundBandwidth().mark(request.getSerializedSize());
         }
         ListenableFuture<Update> result = client.gossip(request);
@@ -69,7 +69,7 @@ public class GossiperClient implements Gossiper {
                 if (timer != null) {
                     timer.stop();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gossipResponse().mark(serializedSize);
+                    metrics.gossipResponse().update(serializedSize);
                 }
             } catch (InterruptedException | ExecutionException e) {
                 return;
@@ -90,7 +90,7 @@ public class GossiperClient implements Gossiper {
     public void update(ContextUpdate request) {
         Context timer = metrics == null ? null : metrics.outboundUpdateTimer().time();
         if (metrics != null) {
-            metrics.outboundUpdate().mark(request.getSerializedSize());
+            metrics.outboundUpdate().update(request.getSerializedSize());
             metrics.outboundBandwidth().mark(request.getSerializedSize());
         }
         var complete = client.update(request);
