@@ -826,12 +826,10 @@ public class View {
      * @param sa
      */
     private void amplify(Participant target) {
-        context.rings()
-               .filter(ring -> target.equals(ring.successor(target, m -> context.isActive(m))))
-               .forEach(ring -> {
-                   log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
-                   accuse(target, ring.getIndex());
-               });
+        context.rings().filter(ring -> target.equals(ring.successor(node, m -> context.isActive(m)))).forEach(ring -> {
+            log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
+            accuse(target, ring.getIndex());
+        });
     }
 
     /**
@@ -873,8 +871,8 @@ public class View {
     }
 
     private void gc(Participant member) {
+        amplify(member);
         if (context.offline(member)) {
-            amplify(member);
             log.debug("Offlining: {} on: {}", member.getId(), node.getId());
         }
     }

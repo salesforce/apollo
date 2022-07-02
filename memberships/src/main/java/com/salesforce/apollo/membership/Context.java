@@ -6,17 +6,13 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -107,52 +103,6 @@ public interface Context<T extends Member> {
          * @param member
          */
         default void offline(T member) {
-        }
-    }
-
-    public static class Tracked<M extends Member> {
-        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
-
-        private final AtomicBoolean active = new AtomicBoolean(false);
-        private final Digest[]      hashes;
-        private final M             member;
-
-        public Tracked(M member, Digest[] hashes) {
-            this.member = member;
-            this.hashes = hashes;
-        }
-
-        public boolean activate() {
-            var activated = active.compareAndSet(false, true);
-            if (activated) {
-                log.trace("Activated: {}", member.getId());
-            }
-            return activated;
-        }
-
-        public Digest hash(int index) {
-            return hashes[index];
-        }
-
-        public boolean isActive() {
-            return active.get();
-        }
-
-        public M member() {
-            return member;
-        }
-
-        public boolean offline() {
-            var offlined = active.compareAndSet(true, false);
-            if (offlined) {
-                log.trace("Offlined: {}", member.getId());
-            }
-            return offlined;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
         }
     }
 

@@ -14,7 +14,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -37,17 +36,13 @@ public class Ring<T extends Member> implements Iterable<T> {
         CONTINUE, FAIL, SUCCESS;
     }
 
-    private final BiFunction<T, Integer, Digest>    hasher;
+    private final ContextImpl<T>                    context;
     private final int                               index;
     private final ConcurrentNavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
 
-    public Ring() {
-        this(0, (m, r) -> m.getId());
-    }
-
-    public Ring(int index, BiFunction<T, Integer, Digest> hasher) {
+    public Ring(int index, ContextImpl<T> context) {
         this.index = index;
-        this.hasher = hasher;
+        this.context = context;
     }
 
     /**
@@ -152,7 +147,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         Answer null if function evaluates to FAIL.
      */
     public T findPredecessor(Digest d, Function<T, IterateResult> predicate) {
-        return pred(d, predicate);
+        return pred(hash(d), predicate);
     }
 
     /**
@@ -172,7 +167,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         Answer null if function evaluates to FAIL.
      */
     public T findSuccessor(Digest d, Function<T, IterateResult> predicate) {
-        return succ(d, predicate);
+        return succ(hash(d), predicate);
     }
 
     /**
@@ -215,8 +210,12 @@ public class Ring<T extends Member> implements Iterable<T> {
         return ring;
     }
 
+    public Digest hash(Digest d) {
+        return context.hashFor(d, index);
+    }
+
     public Digest hash(T m) {
-        return hasher.apply(m, index);
+        return context.hashFor(m, index);
     }
 
     public T insert(T m) {
@@ -226,13 +225,13 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     /**
      * <pre>
-     *  
+     * 
      *    - An item lies between itself. That is, if pred == itm == succ, True is
      *    returned.
      *
-     *    - Everything lies between an item and item and itself. That is, if pred == succ, then 
+     *    - Everything lies between an item and item and itself. That is, if pred == succ, then
      *    this method always returns true.
-     *              
+     * 
      *    - An item is always between itself and any other item. That is, if
      *    pred == item, or succ == item, this method returns True.
      * </pre>
@@ -272,7 +271,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         is never evaluated.
      */
     public T predecessor(Digest location, Predicate<T> predicate) {
-        return pred(location, predicate);
+        return pred(hash(location), predicate);
     }
 
     /**
@@ -305,7 +304,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(Digest location, Predicate<T> predicate) {
-        return preds(location, predicate);
+        return preds(hash(location), predicate);
     }
 
     public Iterable<T> predecessors(T start) {
@@ -327,26 +326,21 @@ public class Ring<T extends Member> implements Iterable<T> {
      * @return the number of items between item and dest
      */
     public int rank(Digest item, Digest dest) {
-        if (item.compareTo(dest) < 0) {
-            return ring.subMap(item, false, dest, false).size();
-        }
-        return ring.tailMap(item, false).size() + ring.headMap(dest, false).size();
+        return rankBetween(hash(item), hash(dest));
     }
 
     /**
      * @return the number of items between item and dest
      */
     public int rank(Digest item, T dest) {
-        return rank(item, hash(dest));
+        return rankBetween(hash(item), hash(dest));
     }
 
     /**
      * @return the number of items between item and dest
      */
     public int rank(T item, T dest) {
-        Digest itemHash = hash(item);
-        Digest destHash = hash(dest);
-        return rank(itemHash, destHash);
+        return rankBetween(hash(item), hash(dest));
     }
 
     public int size() {
@@ -376,7 +370,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Stream<T> streamPredecessors(T m, Predicate<T> predicate) {
-        return StreamSupport.stream(predecessors(hash(m), predicate).spliterator(), false);
+        return StreamSupport.stream(predecessors(m, predicate).spliterator(), false);
     }
 
     /**
@@ -398,7 +392,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Stream<T> streamSuccessors(T m, Predicate<T> predicate) {
-        return StreamSupport.stream(successors(hash(m), predicate).spliterator(), false);
+        return StreamSupport.stream(successors(m, predicate).spliterator(), false);
     }
 
     /**
@@ -452,7 +446,7 @@ public class Ring<T extends Member> implements Iterable<T> {
      *         predicate(item) evaluates to True.
      */
     public Iterable<T> successors(Digest location, Predicate<T> predicate) {
-        return succs(location, predicate);
+        return succs(hash(location), predicate);
     }
 
     /**
@@ -582,6 +576,16 @@ public class Ring<T extends Member> implements Iterable<T> {
                 return iterator;
             }
         };
+    }
+
+    /**
+     * @return the number of items between item and dest
+     */
+    private int rankBetween(Digest item, Digest dest) {
+        if (item.compareTo(dest) < 0) {
+            return ring.subMap(item, false, dest, false).size();
+        }
+        return ring.tailMap(item, false).size() + ring.headMap(dest, false).size();
     }
 
     private T succ(Digest hash, Function<T, IterateResult> predicate) {

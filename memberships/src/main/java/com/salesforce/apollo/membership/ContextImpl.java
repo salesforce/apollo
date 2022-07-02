@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
@@ -40,16 +41,61 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class ContextImpl<T extends Member> implements Context<T> {
 
-    private static final Logger log                = LoggerFactory.getLogger(Context.class);
-    private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
+    public static class Tracked<M extends Member> {
+        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
 
-    private final int                              bias;
-    private volatile int                           cardinality;
-    private final Digest                           id;
-    private final Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
-    private final Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
-    private final double                           pByz;
-    private final List<Ring<T>>                    rings               = new ArrayList<>();
+        private final AtomicBoolean active = new AtomicBoolean(false);
+        private Digest[]            hashes;
+        private final M             member;
+
+        public Tracked(M member, Supplier<Digest[]> hashes) {
+            this.member = member;
+            this.hashes = hashes.get();
+        }
+
+        public boolean activate() {
+            var activated = active.compareAndSet(false, true);
+            if (activated) {
+                log.trace("Activated: {}", member.getId());
+            }
+            return activated;
+        }
+
+        public Digest hash(int index) {
+            return hashes[index];
+        }
+
+        public boolean isActive() {
+            return active.get();
+        }
+
+        public M member() {
+            return member;
+        }
+
+        public boolean offline() {
+            var offlined = active.compareAndSet(true, false);
+            if (offlined) {
+                log.trace("Offlined: {}", member.getId());
+            }
+            return offlined;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(Context.class);
+
+    private final int                                 bias;
+    private volatile int                              cardinality;
+    private final Digest                              id;
+    private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
+    private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
+    private final double                              pByz;
+    private final List<Ring<T>>                       rings               = new ArrayList<>();
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this.pByz = pbyz;
@@ -57,7 +103,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         this.bias = bias;
         this.cardinality = cardinality;
         for (int i = 0; i < minMajority(pByz, cardinality, 0.99999, bias) * bias + 1; i++) {
-            rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
+            rings.add(new Ring<T>(i, this));
         }
     }
 
@@ -232,6 +278,10 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public int hashCode() {
         return id.hashCode();
+    }
+
+    public Digest hashFor(Digest d, int ring) {
+        return d.prefix(id, ring);
     }
 
     @Override
@@ -526,20 +576,19 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     private Digest[] hashesFor(T m) {
+        Digest key = m.getId();
         Digest[] s = new Digest[rings.size()];
         for (int ring = 0; ring < rings.size(); ring++) {
-            Digest key = m.getId();
-            s[ring] = key.getAlgorithm()
-                         .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
+            s[ring] = key.prefix(id, ring);
         }
         return s;
     }
 
-    private Tracked<T> tracking(T m) {
+    private ContextImpl.Tracked<T> tracking(T m) {
         var added = new AtomicBoolean();
         var member = members.computeIfAbsent(m.getId(), id -> {
             added.set(true);
-            return new Tracked<>(m, hashesFor(m));
+            return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
         });
         if (added.get()) {
             for (var ring : rings) {
