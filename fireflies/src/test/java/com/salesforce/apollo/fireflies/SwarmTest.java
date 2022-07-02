@@ -108,7 +108,7 @@ public class SwarmTest {
                 toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(Duration.ofMillis(50), seeds,
+            toStart.forEach(view -> view.start(Duration.ofMillis(5), seeds,
                                                Executors.newSingleThreadScheduledExecutor()));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -133,7 +133,7 @@ public class SwarmTest {
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
         int delta = 10;
-        for (int i = 0; i < (CARDINALITY / delta); i++) {
+        for (int i = 0; i < (CARDINALITY / delta) - 2; i++) {
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 c.get(j).stop();
                 r.get(j).close();

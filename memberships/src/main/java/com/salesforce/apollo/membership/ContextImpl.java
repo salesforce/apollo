@@ -285,13 +285,13 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public Digest hashFor(T m, int index) {
+    public Digest hashFor(T m, int ring) {
+        assert ring >= 0 && ring < rings.size();
         var tracked = members.get(m.getId());
         if (tracked == null) {
-            log.debug("{} is not part of this group: {} on: {} ", m, id);
-            return null;
+            return hashFor(m.getId(), ring);
         }
-        return tracked.hash(index);
+        return tracked.hash(ring);
     }
 
     @Override
@@ -579,7 +579,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         Digest key = m.getId();
         Digest[] s = new Digest[rings.size()];
         for (int ring = 0; ring < rings.size(); ring++) {
-            s[ring] = key.prefix(id, ring);
+            s[ring] = hashFor(key, ring);
         }
         return s;
     }

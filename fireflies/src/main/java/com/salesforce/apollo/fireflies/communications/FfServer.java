@@ -60,7 +60,7 @@ public class FfServer extends FirefliesImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getNote());
+            Gossip gossip = s.rumors(request, from);
             if (timer != null) {
                 timer.stop();
                 var serializedSize = gossip.getSerializedSize();
@@ -86,7 +86,7 @@ public class FfServer extends FirefliesImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            s.update(request.getRing(), request.getUpdate(), from);
+            s.update(request, from);
             if (timer != null) {
                 timer.stop();
             }

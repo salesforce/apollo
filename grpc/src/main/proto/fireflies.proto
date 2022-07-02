@@ -17,15 +17,17 @@ service Fireflies {
 
 message SayWhat {
     utils.Digeste context = 1;
-    SignedNote note = 2;
-    int32 ring = 3;
-    Digests gossip = 4;
+    utils.Digeste view = 2;
+    SignedNote note = 3;
+    int32 ring = 4;
+    Digests gossip = 5;
 }
 
 message State {
     utils.Digeste context = 1;
-    int32 ring = 2;
-    Update update = 3;
+    utils.Digeste view = 2;
+    int32 ring = 3;
+    Update update = 4;
 }
 
 message Accusation {
