@@ -61,7 +61,7 @@ public class RbcClient implements ReliableBroadcast {
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundGossip().mark(serializedSize);
+            metrics.outboundGossip().update(serializedSize);
         }
         var result = client.gossip(request);
         if (metrics != null) {
@@ -72,7 +72,7 @@ public class RbcClient implements ReliableBroadcast {
                     timer.stop();
                     var serializedSize = reconcile.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gossipResponse().mark(serializedSize);
+                    metrics.gossipResponse().update(serializedSize);
                 } catch (InterruptedException | ExecutionException e) {
                     if (timer != null) {
                         timer.close();
@@ -83,13 +83,22 @@ public class RbcClient implements ReliableBroadcast {
         return result;
     }
 
+    public void start() {
+
+    }
+
+    @Override
+    public String toString() {
+        return String.format("->[%s]", member);
+    }
+
     @Override
     public void update(ReconcileContext request) {
         Context timer = metrics == null ? null : metrics.outboundUpdateTimer().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundUpdate().mark(serializedSize);
+            metrics.outboundUpdate().update(serializedSize);
         }
         try {
             var result = client.update(request);
@@ -105,14 +114,5 @@ public class RbcClient implements ReliableBroadcast {
                 timer.close();
             }
         }
-    }
-
-    public void start() {
-
-    }
-
-    @Override
-    public String toString() {
-        return String.format("->[%s]", member);
     }
 }
