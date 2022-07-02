@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.concurrent.TimeUnit;
 
 import org.joou.ULong;
-import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.utils.Utils;
 
@@ -32,7 +31,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    @Test
+//    @Test
     public void checkpointBootstrap() throws Exception {
         pre();
 
