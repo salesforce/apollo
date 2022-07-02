@@ -11,6 +11,7 @@ import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -31,11 +32,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +55,7 @@ import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.SignedViewChange;
 import com.salesfoce.apollo.fireflies.proto.Update;
+import com.salesfoce.apollo.fireflies.proto.ViewChange;
 import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -544,7 +548,7 @@ public class View {
 
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
-    private final AtomicReference<Digest>                     currentView         = new AtomicReference<>();
+    private final AtomicReference<Digest>                     currentView;
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
     private final double                                      fpr;
@@ -580,6 +584,7 @@ public class View {
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
         add(node);
+        currentView = new AtomicReference<>(digestAlgo.getOrigin());
     }
 
     /**
@@ -637,6 +642,7 @@ public class View {
             current.cancel(true);
         }
         shunned.clear();
+        observations.clear();
     }
 
     @Override
@@ -780,10 +786,6 @@ public class View {
             return false;
         }
 
-        // verify the note after all other tests pass, as it's reasonably expensive and
-        // we want to filter out all
-        // the noise first, before going to all the trouble to validate
-
         if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
             log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
             return false;
@@ -825,6 +827,21 @@ public class View {
             return member;
         }
         return previous;
+    }
+
+    private void add(SignedViewChange observation) {
+        var member = context.getMember(Digest.from(observation.getChange().getObserver()));
+        if (member == null) {
+            return;
+        }
+        if (!currentView.get().equals(Digest.from(observation.getChange().getCurrent()))) {
+            return;
+        }
+        final var signature = JohnHancock.from(observation.getSignature());
+        if (!member.verify(signature, observation.getChange().toByteString())) {
+            return;
+        }
+        observations.put(signature.toDigest(digestAlgo), observation);
     }
 
     /**
@@ -902,11 +919,9 @@ public class View {
                       .build();
     }
 
-    /**
-     * View change timed out
-     */
-    private void failViewChange() {
+    private void finalizeViewChange() {
         roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), 7);
+        observations.clear();
     }
 
     private void gc(Participant member) {
@@ -1030,8 +1045,28 @@ public class View {
      * Initiate the view change
      */
     private void initiateViewChange() {
-        // TODO Auto-generated method stub
-
+        var dead = new RoaringBitmap();
+        var ring0 = context.ring(0);
+        var index = new AtomicInteger();
+        ring0.stream().forEach(m -> {
+            final var i = index.getAndIncrement();
+            if (context.isOffline(m)) {
+                dead.add(i);
+            }
+        });
+        dead.runOptimize();
+        var buff = ByteBuffer.allocate(dead.serializedSizeInBytes());
+        dead.serialize(buff);
+        buff.flip();
+        var change = ViewChange.newBuilder()
+                               .setObserver(node.getId().toDigeste())
+                               .setCurrent(currentView.get().toDigeste())
+                               .setFailed(ByteString.copyFrom(buff))
+                               .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList())
+                               .build();
+        var signature = node.sign(change.toByteString());
+        observations.put(signature.toDigest(digestAlgo),
+                         SignedViewChange.newBuilder().setChange(change).setSignature(signature.toSig()).build());
     }
 
     /**
@@ -1070,7 +1105,7 @@ public class View {
      */
     private void maybeViewChange() {
         if (shunned.size() > 0) {
-            var timer = roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> failViewChange(), 7);
+            var timer = roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> finalizeViewChange(), 7);
             if (viewChangeDeadline.compareAndSet(null, timer)) {
                 initiateViewChange();
             } else {
@@ -1172,9 +1207,7 @@ public class View {
                                 List<SignedViewChange> observe) {
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
-        observe.forEach(observation -> observations.put(JohnHancock.from(observation.getSignature())
-                                                                   .toDigest(digestAlgo),
-                                                        observation));
+        observe.forEach(observation -> add(observation));
     }
 
     /**
@@ -1301,7 +1334,6 @@ public class View {
     private Update updatesForDigests(Gossip gossip) {
         Update.Builder builder = Update.newBuilder();
 
-        // notes
         BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
         context.allMembers()
                .filter(m -> m.getNote() != null)
@@ -1314,6 +1346,12 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(a -> !accBff.contains(a.getHash()))
                .forEach(a -> builder.addAccusations(a.getWrapped()));
+
+        BloomFilter<Digest> obsvBff = BloomFilter.from(gossip.getAccusations().getBff());
+        observations.entrySet()
+                    .stream()
+                    .filter(e -> !obsvBff.contains(e.getKey()))
+                    .forEach(e -> builder.addObservations(e.getValue()));
 
         return builder.build();
     }
