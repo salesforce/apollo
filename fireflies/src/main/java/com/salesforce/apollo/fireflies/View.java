@@ -473,7 +473,7 @@ public class View {
         public Gossip rumors(SayWhat request, Digest from) {
             final var ring = request.getRing();
             final var requestView = Digest.from(request.getView());
-            if (!currentView.get().equals(requestView)) {
+            if (!requestView.equals(currentView.get())) {
                 log.debug("invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(), ring, from,
                           node.getId());
                 return Gossip.getDefaultInstance();
@@ -533,7 +533,7 @@ public class View {
                 return;
             }
             final var requestView = Digest.from(request.getView());
-            if (!currentView.get().equals(requestView)) {
+            if (!requestView.equals(currentView.get())) {
                 log.debug("invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(), ring, from,
                           node.getId());
                 return;
