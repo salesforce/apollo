@@ -200,25 +200,15 @@ public class CHOAM {
             cancelSynchronization();
             var activeCount = params.context().activeCount();
             if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
-                var existed = new AtomicBoolean();
-                current.updateAndGet(cmt -> {
-                    if (cmt == null) {
-                        log.info("Quorum achieved, have: {} desired: {} required: {} forming Genesis committe on: {}",
-                                 activeCount, params.context().majority(), params.context().getRingCount(),
-                                 params.member().getId());
-                        Formation formation = new Formation();
-                        return formation;
-                    } else {
-                        log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
-                                 activeCount, params.majority(), params.context().getRingCount(),
-                                 cmt.getClass().getSimpleName(), params.member().getId());
-                        existed.set(true);
-                        return cmt;
-                    }
-                });
-                if (!existed.get()) {
-                    log.info("Triggering regeneration on: {}", params.member().getId());
+                if (current.compareAndSet(null, new Formation())) {
+                    log.info("Quorum achieved, triggering regeneration. have: {} desired: {} required: {} forming Genesis committe on: {}",
+                             activeCount, params.context().majority(), params.context().getRingCount(),
+                             params.member().getId());
                     transitions.regenerate();
+                } else {
+                    log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
+                             activeCount, params.majority(), params.context().getRingCount(),
+                             current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();
