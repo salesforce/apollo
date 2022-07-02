@@ -47,7 +47,9 @@ import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
+import com.salesfoce.apollo.fireflies.proto.SignedViewChange;
 import com.salesfoce.apollo.fireflies.proto.Update;
+import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
@@ -466,6 +468,8 @@ public class View {
                          .setRedirect(false)
                          .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), seed, fpr))
+                         .setObservations(processObservations(BloomFilter.from(digests.getObservationsBff()), seed,
+                                                              fpr))
                          .build();
         }
 
@@ -493,7 +497,7 @@ public class View {
                          member.getId());
                 return;
             }
-            processUpdates(update.getNotesList(), update.getAccusationsList());
+            processUpdates(update.getNotesList(), update.getAccusationsList(), update.getObservationsList());
         }
     }
 
@@ -526,12 +530,12 @@ public class View {
     private final RingCommunications<Participant, Fireflies>  gossiper;
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
+    private final Map<Digest, SignedViewChange>               observations    = new ConcurrentSkipListMap<>();
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
     private final Service                                     service         = new Service();
     private final AtomicBoolean                               started         = new AtomicBoolean();
-
-    private final EventValidation validation;
+    private final EventValidation                             validation;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
@@ -891,6 +895,12 @@ public class View {
         return bff;
     }
 
+    private BloomFilter<Digest> getObservationsBff(long seed, double p, int cardinality) {
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, cardinality * 2, p);
+        observations.keySet().forEach(d -> bff.add(d));
+        return bff;
+    }
+
     private void gossip(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
@@ -1069,13 +1079,28 @@ public class View {
         return gossip;
     }
 
+    private ViewChangeGossip processObservations(BloomFilter<Digest> bff, long seed, double p) {
+        ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
+
+        // Add all updates that this view has that aren't reflected in the inbound bff
+        observations.entrySet()
+                    .stream()
+                    .filter(m -> !bff.contains(m.getKey()))
+                    .map(m -> m.getValue())
+                    .forEach(n -> builder.addUpdates(n));
+        builder.setBff(getObservationsBff(seed, p, context.cardinality()).toBff());
+        ViewChangeGossip gossip = builder.build();
+        return gossip;
+    }
+
     /**
      * Process the updates of the supplied juicy gossip.
      *
      * @param gossip
      */
     private void processUpdates(Gossip gossip) {
-        processUpdates(gossip.getNotes().getUpdatesList(), gossip.getAccusations().getUpdatesList());
+        processUpdates(gossip.getNotes().getUpdatesList(), gossip.getAccusations().getUpdatesList(),
+                       gossip.getObservations().getUpdatesList());
     }
 
     /**
@@ -1084,9 +1109,13 @@ public class View {
      * @param notes
      * @param accusations
      */
-    private void processUpdates(List<SignedNote> notes, List<SignedAccusation> accusations) {
+    private void processUpdates(List<SignedNote> notes, List<SignedAccusation> accusations,
+                                List<SignedViewChange> observe) {
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
+        observe.forEach(observation -> observations.put(JohnHancock.from(observation.getSignature())
+                                                                   .toDigest(digestAlgo),
+                                                        observation));
     }
 
     /**

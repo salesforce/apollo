@@ -48,6 +48,18 @@ message Note {
     int32 port = 5;
 }
 
+message ViewChange {
+    utils.Digeste observer = 1;
+    utils.Digeste current = 2;
+    repeated utils.Digeste joins = 3;
+    bytes failed = 4;
+}
+
+message SignedViewChange {
+    ViewChange change = 1;
+    utils.Sig signature = 2;
+}
+
 message SignedNote {
     Note note = 1; 
     utils.Sig signature = 2;
@@ -63,19 +75,27 @@ message NoteGossip {
     repeated SignedNote updates = 2;
 }
 
+message ViewChangeGossip {
+    utils.Biff bff = 1;
+    repeated SignedViewChange updates = 2;
+}
+
 message Digests { 
     utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
     utils.Biff accusationBff = 3;
+    utils.Biff observationsBff = 4;
 }
 
 message Gossip {
     bool redirect = 1;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
+    ViewChangeGossip observations = 5;
 }
 
 message Update {
     repeated SignedNote notes = 1;
     repeated SignedAccusation accusations = 2;
+    repeated SignedViewChange observations = 3;
 }
