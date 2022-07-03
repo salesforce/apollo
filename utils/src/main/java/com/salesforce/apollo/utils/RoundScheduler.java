@@ -80,7 +80,7 @@ public class RoundScheduler extends AtomicInteger {
     private static final long   serialVersionUID = 1L;
 
     private final String                       label;
-    private final int                          roundDuration;
+    private volatile int                       roundDuration;
     private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
     private final Map<String, Timer>           timers    = new HashMap<>();
 
@@ -125,6 +125,10 @@ public class RoundScheduler extends AtomicInteger {
         scheduled.add(timer);
         log.trace("Scheduling: {} target: {} current: {} on: {}", timerLabel, target, current, label);
         return timer;
+    }
+
+    public void setRoundDuration(int roundDuration) {
+        this.roundDuration = roundDuration;
     }
 
     public void tick() {

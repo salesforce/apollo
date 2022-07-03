@@ -834,10 +834,10 @@ public class View {
 
         if (accused.isAccusedOn(ring.getIndex())) {
             Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
-
-            if (currentAccuser != null && !currentAccuser.equals(accuser) &&
-                ring.isBetween(currentAccuser, accuser, accused)) {
+            if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
+                pendingRebutals.computeIfAbsent(accused.getId(),
+                                                d -> roundTimers.schedule(() -> gc(accused), REBUTAL_TIMEOUT));
                 log.debug("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
                           ring.getIndex(), currentAccuser, node.getId());
             }
@@ -1092,10 +1092,15 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            final var superMajority = context.cardinality() - ((context.cardinality() - 1) / 4);
+            final var cardinality = context.memberCount();
+            final var superMajority = cardinality - ((cardinality - 1) / 4);
             if (max != null && max.getCount() >= superMajority) {
+                log.warn("Fast path consensus successful: {} for: {} required: {} on: {}", max.getCount(),
+                         currentView.get(), superMajority, node.getId());
                 install(max.getElement());
             } else {
+                log.warn("Fast path consensus failed: {} for: {} required: {} on: {}", max.getCount(),
+                         currentView.get(), superMajority, node.getId());
                 consensusViewChange(ballots, superMajority, max);
             }
         } finally {
@@ -1335,6 +1340,7 @@ public class View {
 
         context.rebalance();
         gossiper.reset();
+        roundTimers.setRoundDuration(context.timeToLive());
 
         final var previousView = currentView.get();
         currentView.set(context.ring(0)
@@ -1343,9 +1349,9 @@ public class View {
                                .reduce((a, b) -> a.xor(b))
                                .orElse(digestAlgo.getOrigin()));
 
-        log.warn("Installing new view: {} from: {} for context: {} leaving: {} joining: {} evicted: {} on: {}",
-                 currentView.get(), previousView, context.getId(), view.leaving.size(), view.joining.size(),
-                 evicted.get(), node.getId());
+        log.debug("Installing new view: {} from: {} for context: {} leaving: {} joining: {} evicted: {} on: {}",
+                  currentView.get(), previousView, context.getId(), view.leaving.size(), view.joining.size(),
+                  evicted.get(), node.getId());
     }
 
     /**
@@ -1630,7 +1636,6 @@ public class View {
                  node.getId());
         context.remove(digest);
         shunned.remove(digest);
-        // TODO
     }
 
     /**
