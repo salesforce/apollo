@@ -8,7 +8,6 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -556,11 +555,12 @@ public class View {
         }
     }
 
-    private record Ballot(Digest view, ByteString leaving, List<Digest> joining, int hash) {
+    private record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
 
-        private Ballot(Digest view, ByteString leaving, List<Digest> joining, DigestAlgorithm algo) {
+        private Ballot(Digest view, List<Digest> leaving, List<Digest> joining, DigestAlgorithm algo) {
             this(view, leaving, joining,
-                 Objects.hashCode(view, leaving, joining.stream().reduce((a, b) -> a.xor(b)).orElse(algo.getOrigin())));
+                 Objects.hashCode(view, leaving.stream().reduce((a, b) -> a.xor(b)).orElse(algo.getOrigin()),
+                                  joining.stream().reduce((a, b) -> a.xor(b)).orElse(algo.getOrigin())));
         }
 
         @Override
@@ -599,17 +599,6 @@ public class View {
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
         return mask.cardinality() == toleranceLevel + 1;
-    }
-
-    private static RoaringBitmap bitmapFrom(ByteString failed) {
-        RoaringBitmap bitmap = new RoaringBitmap();
-        try {
-            bitmap.deserialize(failed.asReadOnlyByteBuffer());
-        } catch (IOException e) {
-            log.debug("Invalid bitmap", e);
-            return null;
-        }
-        return bitmap;
     }
 
     private final CommonCommunications<Fireflies, Service>    comm;
@@ -1046,9 +1035,19 @@ public class View {
         try {
             HashMultiset<Ballot> ballots = HashMultiset.create();
             observations.values().forEach(vc -> {
-                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), vc.getChange().getFailed(),
-                                       vc.getChange().getJoinsList().stream().map(d -> Digest.from(d)).toList(),
-                                       digestAlgo));
+                final var leaving = vc.getChange()
+                                      .getLeavesList()
+                                      .stream()
+                                      .map(d -> Digest.from(d))
+                                      .collect(Collectors.toList());
+                final var joining = vc.getChange()
+                                      .getJoinsList()
+                                      .stream()
+                                      .map(d -> Digest.from(d))
+                                      .collect(Collectors.toList());
+                leaving.sort(Ordering.natural());
+                joining.sort(Ordering.natural());
+                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
             });
             var max = ballots.entrySet()
                              .stream()
@@ -1077,6 +1076,7 @@ public class View {
         if (shunned.add(member.getId())) {
             amplify(member);
         }
+        log.trace("Garbage collecting: {} on: {}", member.getId(), node.getId());
         context.offline(member);
     }
 
@@ -1265,7 +1265,7 @@ public class View {
             var change = ViewChange.newBuilder()
                                    .setObserver(node.getId().toDigeste())
                                    .setCurrent(currentView.get().toDigeste())
-                                   .setFailed(ByteString.copyFrom(buff))
+                                   .addAllLeaves(shunned.stream().map(d -> d.toDigeste()).toList())
                                    .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList())
                                    .build();
             var signature = node.sign(change.toByteString());
@@ -1282,20 +1282,8 @@ public class View {
      * @param view
      */
     private void install(Ballot view) {
-        final var i = new AtomicInteger();
         final var evicted = new AtomicBoolean();
-        final var dead = bitmapFrom(view.leaving);
-        final var leaving = context.ring(0).stream().filter(p -> {
-            if (node.equals(p)) {
-                if (dead.contains(i.get())) {
-                    evicted.set(true);
-                    i.incrementAndGet();
-                }
-                return false;
-            }
-            return true;
-        }).filter(m -> dead.contains(i.getAndIncrement())).toList();
-        leaving.forEach(p -> remove(p));
+        view.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> remove(p));
         view.joining.stream()
                     .map(d -> joins.get(d))
                     .filter(sn -> sn != null)
@@ -1310,7 +1298,7 @@ public class View {
                                .orElse(digestAlgo.getOrigin()));
 
         log.warn("Installing new view: {} from: {} leaving: {} joining: {} evicted: {} on: {}", currentView.get(),
-                 previousView, dead, view.joining, evicted.get(), node.getId());
+                 previousView, view.leaving, view.joining, evicted.get(), node.getId());
     }
 
     /**
@@ -1583,12 +1571,17 @@ public class View {
     /**
      * Remove the participant from the context
      * 
-     * @param p
+     * @param digest
      */
-    private void remove(Participant p) {
-        log.info("Permanently removing {} from context: {} on: {}", p.getId(), context.getId(), node.getId());
-//        context.remove(p);  // SOON
-        shunned.remove(p.getId());
+    private void remove(Digest digest) {
+        if (context.isActive(digest)) {
+            log.warn("Shunned but active: {} context: {} view: {} on: {}", digest, context.getId(), currentView.get(),
+                     node.getId());
+        }
+        log.info("Permanently removing {} from context: {} view: {} on: {}", digest, context.getId(), currentView.get(),
+                 node.getId());
+        context.remove(digest);
+        shunned.remove(digest);
         // TODO
     }
 

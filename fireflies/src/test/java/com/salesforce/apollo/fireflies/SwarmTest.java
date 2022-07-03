@@ -133,24 +133,26 @@ public class SwarmTest {
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
         int delta = 10;
-        for (int i = 0; i < (CARDINALITY / delta) - 4; i++) {
+        for (int i = 0; i < (CARDINALITY / delta) - 3; i++) {
+            var removed = new ArrayList<Digest>();
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
-                c.get(j).stop();
+                final var view = c.get(j);
+                view.stop();
                 r.get(j).close();
+                removed.add(view.getNode().getId());
             }
             c = c.subList(0, c.size() - delta);
             r = r.subList(0, r.size() - delta);
             final var expected = c;
+//            System.out.println("** Removed: " + removed);
             long then = System.currentTimeMillis();
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
-                return expected.stream()
-                               .filter(view -> view.getContext().activeCount() != expected.size())
-                               .count() == 0;
+                return expected.stream().filter(view -> view.getContext().activeCount() > expected.size()).count() == 0;
             });
             assertTrue(success,
                        " expected: " + c.size() + " views: "
                        + c.stream()
-                          .filter(e -> e.getContext().activeCount() != expected.size())
+                          .filter(e -> e.getContext().activeCount() > expected.size())
                           .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
                           .toList());
 

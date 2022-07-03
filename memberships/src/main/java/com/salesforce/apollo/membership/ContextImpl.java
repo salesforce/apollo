@@ -451,6 +451,14 @@ public class ContextImpl<T extends Member> implements Context<T> {
         members.forEach(m -> remove(m));
     }
 
+    @Override
+    public void remove(Digest id) {
+        var removed = members.remove(id);
+        if (removed != null) {
+            remove(removed.member);
+        }
+    }
+
     /**
      * remove a member from the receiving Context
      */

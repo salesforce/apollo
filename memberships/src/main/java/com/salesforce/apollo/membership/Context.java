@@ -361,6 +361,11 @@ public interface Context<T extends Member> {
     <Q extends T> void remove(Collection<Q> members);
 
     /**
+     * remove a member with the id from the receiving Context
+     */
+    void remove(Digest id);
+
+    /**
      * remove a member from the receiving Context
      */
     void remove(T m);

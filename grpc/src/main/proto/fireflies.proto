@@ -54,7 +54,7 @@ message ViewChange {
     utils.Digeste observer = 1;
     utils.Digeste current = 2;
     repeated utils.Digeste joins = 3;
-    bytes failed = 4;
+    repeated utils.Digeste leaves = 4;
 }
 
 message SignedViewChange {
