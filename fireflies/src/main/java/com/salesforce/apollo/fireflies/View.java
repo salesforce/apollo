@@ -11,7 +11,6 @@ import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -33,14 +32,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1250,18 +1247,6 @@ public class View {
         final var lock = viewChange.writeLock();
         lock.lock();
         try {
-            var dead = new RoaringBitmap();
-            var index = new AtomicInteger();
-            context.ring(0).stream().forEach(m -> {
-                final var i = index.getAndIncrement();
-                if (shunned.contains(m.getId())) {
-                    dead.add(i);
-                }
-            });
-            dead.runOptimize();
-            var buff = ByteBuffer.allocate(dead.serializedSizeInBytes());
-            dead.serialize(buff);
-            buff.flip();
             var change = ViewChange.newBuilder()
                                    .setObserver(node.getId().toDigeste())
                                    .setCurrent(currentView.get().toDigeste())
