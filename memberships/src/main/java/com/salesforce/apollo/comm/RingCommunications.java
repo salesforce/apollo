@@ -109,6 +109,12 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     public void reset() {
         setLastRingIndex(0);
+        var order = new ArrayList<Integer>();
+        for (int i = 0; i < context.getRingCount(); i++) {
+            order.add(i);
+        }
+        Entropy.secureShuffle(order);
+        traversalOrder.set(order);
     }
 
     @Override

@@ -237,6 +237,11 @@ public interface Context<T extends Member> {
     T getActiveMember(Digest memberID);
 
     /**
+     * @return the List of all members
+     */
+    List<T> getAllMembers();
+
+    /**
      * Answer the bias of the context. The bias is the multiple of the number of
      * byzantine members the context is designed to foil
      */
@@ -349,6 +354,16 @@ public interface Context<T extends Member> {
      *         provided predicate
      */
     List<T> predecessors(T key, Predicate<T> test);
+
+    /**
+     * Rebalance the rings based on the current total membership cardinality
+     */
+    void rebalance();
+
+    /**
+     * Rebalance the rings to the new cardinality
+     */
+    void rebalance(int cardinality);
 
     /**
      * Register a listener for membership events, answer the UUID that identifies it

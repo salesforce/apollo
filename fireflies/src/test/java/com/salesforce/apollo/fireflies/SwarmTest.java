@@ -162,40 +162,6 @@ public class SwarmTest {
 
         views.forEach(e -> e.stop());
         communications.forEach(e -> e.close());
-        communications.forEach(e -> e.start());
-
-        System.out.println();
-        System.out.println("Restarting views");
-        System.out.println();
-
-        testViews.clear();
-        for (int i = 0; i < 4; i++) {
-            int start = testViews.size();
-            var toStart = new ArrayList<View>();
-            for (int j = 0; j < 25; j++) {
-                final var v = views.get(start + j);
-                testViews.add(v);
-                toStart.add(v);
-            }
-            long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(Duration.ofMillis(100), seeds,
-                                               Executors.newSingleThreadScheduledExecutor()));
-
-            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
-                return testViews.stream()
-                                .filter(view -> view.getContext().activeCount() < testViews.size())
-                                .count() == 0;
-            });
-            assertTrue(success,
-                       " expected: " + testViews.size() + " views: "
-                       + testViews.stream()
-                                  .filter(e -> e.getContext().activeCount() != testViews.size())
-                                  .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
-                                  .toList());
-
-            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-            + testViews.size() + " members");
-        }
 
         System.out.println();
 
@@ -207,15 +173,16 @@ public class SwarmTest {
         }
         assertTrue(testGraph.isSC());
 
+        var view0 = views.get(0);
         for (View view : views) {
             for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
                 final var membership = view.getContext()
                                            .ring(ring)
                                            .members()
                                            .stream()
-                                           .map(p -> members.get(p.getId()))
+                                           .map(p -> view.getContext().getMember(p.getId()))
                                            .toList();
-                for (Member node : members.values()) {
+                for (Member node : view0.getContext().getAllMembers()) {
                     assertTrue(membership.contains(node));
                 }
             }

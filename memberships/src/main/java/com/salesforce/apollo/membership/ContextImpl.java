@@ -85,12 +85,23 @@ public class ContextImpl<T extends Member> implements Context<T> {
         public String toString() {
             return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
         }
+
+        private void rebalance(int ringCount, ContextImpl<M> contextImpl) {
+            final var newHashes = new Digest[ringCount];
+            for (int i = 0; i < Math.min(ringCount, hashes.length); i++) {
+                newHashes[i] = hashes[i];
+            }
+            for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
+                newHashes[i] = contextImpl.hashFor(member.getId(), i);
+            }
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Context.class);
 
     private final int                                 bias;
     private volatile int                              cardinality;
+    private final double                              epsilon             = 0.99999;
     private final Digest                              id;
     private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
     private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
@@ -102,7 +113,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         this.id = id;
         this.bias = bias;
         this.cardinality = cardinality;
-        for (int i = 0; i < minMajority(pByz, cardinality, 0.99999, bias) * bias + 1; i++) {
+        for (int i = 0; i < minMajority(pByz, cardinality, epsilon, bias) * bias + 1; i++) {
             rings.add(new Ring<T>(i, this));
         }
     }
@@ -245,6 +256,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public List<T> getAllMembers() {
+        return allMembers().toList();
+    }
+
+    @Override
     public int getBias() {
         return bias;
     }
@@ -286,7 +302,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public Digest hashFor(T m, int ring) {
-        assert ring >= 0 && ring < rings.size();
+        assert ring >= 0 && ring < rings.size() : "Invalid ring: " + ring + " max: " + (rings.size() - 1);
         var tracked = members.get(m.getId());
         if (tracked == null) {
             return hashFor(m.getId(), ring);
@@ -440,6 +456,39 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public void rebalance() {
+        rebalance(members.size());
+    }
+
+    @Override
+    public void rebalance(int newCardinality) {
+        this.cardinality = newCardinality;
+        final var ringCount = minMajority(pByz, cardinality, epsilon, bias) * bias + 1;
+        members.values().forEach(t -> t.rebalance(ringCount, this));
+        final var currentCount = rings.size();
+        if (ringCount < currentCount) {
+            for (int i = 0; i < currentCount - ringCount; i++) {
+                var removed = rings.remove(rings.size() - 1);
+                removed.clear();
+            }
+        } else {
+            final var added = new ArrayList<Ring<T>>();
+            for (int i = currentCount; i < ringCount; i++) {
+                final var ring = new Ring<T>(i, this);
+                rings.add(ring);
+                added.add(ring);
+            }
+            members.values().forEach(t -> {
+                for (var ring : added) {
+                    ring.insert(t.member);
+                }
+            });
+        }
+        assert rings.size() == ringCount : "Ring count: " + rings.size() + " does not match: " + ringCount;
+        log.debug("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
+    }
+
+    @Override
     public UUID register(MembershipListener<T> listener) {
         var uuid = UUID.randomUUID();
         membershipListeners.put(uuid, listener);
@@ -476,7 +525,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public Ring<T> ring(int index) {
         if (index < 0 || index >= rings.size()) {
-            throw new IllegalArgumentException("Not a valid ring #: " + index);
+            throw new IllegalArgumentException("Not a valid ring #: " + index + " max: " + (rings.size() - 1));
         }
         return rings.get(index);
     }
