@@ -35,7 +35,9 @@ public class Graph<T> {
         T startingMember = adj.keySet().iterator().next();
         dfs(startingMember, visited);
 
-        if (visited.values().stream().filter(e -> !e).count() != 0) {
+        var notVisited = visited.entrySet().stream().filter(e -> !e.getValue()).map(e -> e.getKey()).toList();
+        if (notVisited.size() != 0) {
+            System.out.println("Not visited: " + notVisited);
             return false;
         }
 
@@ -46,13 +48,22 @@ public class Graph<T> {
 
         gr.dfs(startingMember, visited);
 
-        return visited.values().stream().filter(e -> !e).count() == 0;
+        notVisited = visited.entrySet().stream().filter(e -> !e.getValue()).map(e -> e.getKey()).toList();
+        if (notVisited.size() == 0) {
+            return true;
+        }
+        System.out.println("Not visited: " + notVisited);
+        return false;
     }
 
     private void dfs(T v, Map<T, Boolean> visited) {
         visited.put(v, true);
 
-        for (T n : adj.get(v)) {
+        final var list = adj.get(v);
+        if (list == null) {
+            return;
+        }
+        for (T n : list) {
             if (!visited.computeIfAbsent(n, k -> false))
                 dfs(n, visited);
         }

@@ -235,6 +235,11 @@
                 <artifactId>bctls-jdk15on</artifactId>
                 <version>${bc.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.perfmark</groupId>
+                <artifactId>perfmark-api</artifactId>
+                <version>0.23.0</version>
+            </dependency>
 
             <dependency>
                 <!-- necessary for Java 9+ -->

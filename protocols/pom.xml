@@ -18,6 +18,11 @@
             <artifactId>grpc-netty</artifactId> 
         </dependency>
         <dependency>
+            <groupId>io.perfmark</groupId>
+            <artifactId>perfmark-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <!-- necessary for Java 9+ -->
             <groupId>org.apache.tomcat</groupId>
             <artifactId>annotations-api</artifactId>
