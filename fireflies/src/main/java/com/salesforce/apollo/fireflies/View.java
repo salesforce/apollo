@@ -617,14 +617,10 @@ public class View {
         }
     }
 
-    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
-
-    private static final int FINALIZE_VIEW_ROUNDS = 3;
-
-    private static final Logger log = LoggerFactory.getLogger(View.class);
-
-    private static final int REBUTAL_TIMEOUT = 2;
-
+    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final int    FINALIZE_VIEW_ROUNDS  = 3;
+    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final int    REBUTAL_TIMEOUT       = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
     private static final int    VIEW_CHANGE_ROUNDS    = 7;
 
@@ -970,10 +966,14 @@ public class View {
         if (member == null) {
             return;
         }
-        if (!currentView.get().equals(Digest.from(observation.getChange().getCurrent()))) {
+        final var next = Digest.from(observation.getChange().getCurrent());
+        if (!currentView.get().equals(next)) {
+            log.warn("Invalid view change: {} current: {} from {} on: {}", next, currentView.get(), member.getId(),
+                     node.getId());
             return;
         }
         if (votesReceived.contains(member.getId())) {
+            log.trace("View change: {} already received from {} on: {}", next, member.getId(), node.getId());
             return;
         }
         votesReceived.add(member.getId());
@@ -1106,8 +1106,9 @@ public class View {
             final var cardinality = context.memberCount();
             final var superMajority = cardinality - ((cardinality - 1) / 4);
             if (observations.size() < superMajority) {
-                finalizeViewChange.set(roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(),
-                                                            FINALIZE_VIEW_ROUNDS));
+                log.trace("Do not have supermajority: {} view: {} for: {} required: {} on: {}", observations.size(),
+                          currentView.get(), superMajority, node.getId());
+                scheduleFinalizeViewChange();
                 return;
             }
             HashMultiset<Ballot> ballots = HashMultiset.create();
@@ -1156,17 +1157,15 @@ public class View {
      * @param member
      */
     private void gc(Participant member) {
-        final var lock = viewChange.writeLock();
-        lock.lock();
-        try {
-            if (shunned.add(member.getId())) {
-                amplify(member);
-            }
-            log.trace("Garbage collecting: {} on: {}", member.getId(), node.getId());
-            context.offline(member);
-        } finally {
-            lock.unlock();
+        var pending = pendingRebutals.remove(member.getId());
+        if (pending != null) {
+            pending.cancel();
         }
+        if (shunned.add(member.getId())) {
+            amplify(member);
+        }
+        log.trace("Garbage collecting: {} on: {}", member.getId(), node.getId());
+        context.offline(member);
     }
 
     /**
@@ -1344,6 +1343,14 @@ public class View {
         lock.lock();
         try {
             if (vote.get() != null) {
+                log.warn("Vote already cast for: {} on: {}", currentView.get(), node.getId());
+                scheduleViewChange();
+                return;
+            }
+            // Use pending rebuttals as a proxy for stability
+            if (!pendingRebutals.isEmpty()) {
+                log.debug("Pending rebutals: {} view: {} on: {}", pendingRebutals.size(), currentView.get(),
+                          node.getId());
                 scheduleViewChange();
                 return;
             }
@@ -1431,13 +1438,11 @@ public class View {
      */
     private void maybeViewChange() {
         if (shunned.size() > 0 || joins.size() > 0) {
-            var timer = roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), FINALIZE_VIEW_ROUNDS);
-            if (finalizeViewChange.compareAndSet(null, timer)) {
-                initiateViewChange();
-            } else {
-                timer.cancel();
-            }
+            scheduleFinalizeViewChange();
+            initiateViewChange();
         } else {
+            log.trace("View change for: {} rescheduled as no pending leaves/joins on: {}", currentView.get(),
+                      node.getId());
             scheduleViewChange();
         }
     }
@@ -1665,6 +1670,10 @@ public class View {
      * @param digest
      */
     private void remove(Digest digest) {
+        var pending = pendingRebutals.remove(digest);
+        if (pending != null) {
+            pending.cancel();
+        }
         if (context.isActive(digest)) {
             log.warn("Shunned but active: {} context: {} view: {} on: {}", digest, context.getId(), currentView.get(),
                      node.getId());
@@ -1687,7 +1696,15 @@ public class View {
         return updatesForDigests(gossip);
     }
 
+    private void scheduleFinalizeViewChange() {
+        log.trace("View change finalization scheduled for: {} joining: {} leaving: {} on: {}", currentView.get(),
+                  joins.size(), shunned.size(), node.getId());
+        finalizeViewChange.set(roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(),
+                                                    FINALIZE_VIEW_ROUNDS));
+    }
+
     private void scheduleViewChange() {
+        log.trace("Scheduling view change on: {}", node.getId());
         scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(),
                                                      VIEW_CHANGE_ROUNDS));
     }
