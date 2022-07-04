@@ -620,7 +620,7 @@ public class View {
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
     private static final int    FINALIZE_VIEW_ROUNDS  = 3;
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
-    private static final int    REBUTAL_TIMEOUT       = 2;
+    private static final int    REBUTTAL_TIMEOUT      = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
     private static final int    VIEW_CHANGE_ROUNDS    = 7;
 
@@ -653,7 +653,7 @@ public class View {
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
     private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals     = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
     private final AtomicReference<RoundScheduler.Timer>       scheduledViewChange = new AtomicReference<>();
     private final Service                                     service             = new Service();
@@ -733,7 +733,7 @@ public class View {
         }
         roundTimers.reset();
         comm.deregister(context.getId());
-        pendingRebutals.clear();
+        pendingRebuttals.clear();
         context.active().forEach(m -> {
             context.offline(m);
             m.clearAccusations();
@@ -782,7 +782,7 @@ public class View {
             return; // Don't issue multiple accusations
         }
         member.addAccusation(node.accuse(member, ring));
-        pendingRebutals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTAL_TIMEOUT));
+        pendingRebuttals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTTAL_TIMEOUT));
         if (metrics != null) {
             metrics.accusations().mark();
         }
@@ -850,8 +850,8 @@ public class View {
             Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
             if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
-                pendingRebutals.computeIfAbsent(accused.getId(),
-                                                d -> roundTimers.schedule(() -> gc(accused), REBUTAL_TIMEOUT));
+                pendingRebuttals.computeIfAbsent(accused.getId(),
+                                                 d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
                 log.debug("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
                           ring.getIndex(), currentAccuser, node.getId());
             }
@@ -865,12 +865,12 @@ public class View {
             Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
-                if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) &&
+                if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId()) &&
                     context.isActive(accused.getId())) {
                     log.debug("{} accused by {} on ring {} (timer started) on: {}", accused.getId(), accuser.getId(),
                               accusation.getRingNumber(), node.getId());
-                    pendingRebutals.computeIfAbsent(accused.getId(),
-                                                    d -> roundTimers.schedule(() -> gc(accused), REBUTAL_TIMEOUT));
+                    pendingRebuttals.computeIfAbsent(accused.getId(),
+                                                     d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
                 }
             } else {
                 log.debug("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
@@ -930,7 +930,7 @@ public class View {
 
         log.debug("Adding member via note {} on: {}", m, node.getId());
 
-        stopRebutalTimer(m);
+        stopRebuttalTimer(m);
 
         if (m.isAccused()) {
             checkInvalidations(m);
@@ -1157,7 +1157,7 @@ public class View {
      * @param member
      */
     private void gc(Participant member) {
-        var pending = pendingRebutals.remove(member.getId());
+        var pending = pendingRebuttals.remove(member.getId());
         if (pending != null) {
             pending.cancel();
         }
@@ -1348,8 +1348,8 @@ public class View {
                 return;
             }
             // Use pending rebuttals as a proxy for stability
-            if (!pendingRebutals.isEmpty()) {
-                log.debug("Pending rebutals: {} view: {} on: {}", pendingRebutals.size(), currentView.get(),
+            if (!pendingRebuttals.isEmpty()) {
+                log.debug("Pending rebuttals: {} view: {} on: {}", pendingRebuttals.size(), currentView.get(),
                           node.getId());
                 scheduleViewChange();
                 return;
@@ -1418,7 +1418,7 @@ public class View {
             assert q.isAccused();
             q.invalidateAccusationOnRing(ring.getIndex());
             if (!q.isAccused()) {
-                stopRebutalTimer(q);
+                stopRebuttalTimer(q);
                 if (context.isOffline(q)) {
                     recover(q);
                 } else {
@@ -1670,7 +1670,7 @@ public class View {
      * @param digest
      */
     private void remove(Digest digest) {
-        var pending = pendingRebutals.remove(digest);
+        var pending = pendingRebuttals.remove(digest);
         if (pending != null) {
             pending.cancel();
         }
@@ -1740,9 +1740,9 @@ public class View {
      *
      * @param m
      */
-    private void stopRebutalTimer(Participant m) {
+    private void stopRebuttalTimer(Participant m) {
         m.clearAccusations();
-        var timer = pendingRebutals.remove(m.getId());
+        var timer = pendingRebuttals.remove(m.getId());
         if (timer != null) {
             timer.cancel();
         }
