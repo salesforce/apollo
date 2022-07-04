@@ -335,6 +335,16 @@ public class View {
             return validation.filtered(note.getCoordinates(), threshold, signature, message);
         }
 
+        public int getAccusationCount() {
+            var count = 0;
+            for (var acc : validAccusations) {
+                if (acc != null) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
         @Override
         public Digest getId() {
             return id;
@@ -520,16 +530,13 @@ public class View {
                 if (!successor.equals(node)) {
                     return redirectTo(member, ring, successor);
                 }
-                long seed = Entropy.nextSecureLong();
                 final var digests = request.getGossip();
                 return Gossip.newBuilder()
                              .setRedirect(false)
-                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
-                             .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), seed,
-                                                                fpr))
-                             .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()), seed,
-                                                                  fpr))
-                             .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), seed, fpr))
+                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr))
+                             .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), fpr))
+                             .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()), fpr))
+                             .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), fpr))
                              .build();
             }, Gossip.getDefaultInstance());
         }
@@ -702,7 +709,8 @@ public class View {
         context.activate(node);
         node.reset();
         seeds.forEach(m -> addSeed(m));
-        roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), VIEW_CHANGE_ROUNDS);
+
+//        scheduleViewChange();
 
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
         futureGossip = scheduler.schedule(() -> gossip(d, scheduler), initial, TimeUnit.NANOSECONDS);
@@ -1044,10 +1052,11 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     private Digests commonDigests() {
-        long seed = Entropy.nextSecureLong();
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
-                      .setNoteBff(getNotesBff(seed, fpr).toBff())
+                      .setAccusationBff(getAccusationsBff(Entropy.nextSecureLong(), fpr).toBff())
+                      .setNoteBff(getNotesBff(Entropy.nextSecureLong(), fpr).toBff())
+                      .setJoinBiff(getJoinsBff(Entropy.nextSecureLong(), fpr).toBff())
+                      .setObservationBff(getObservationsBff(Entropy.nextSecureLong(), fpr).toBff())
                       .build();
     }
 
@@ -1058,10 +1067,12 @@ public class View {
      * @param majority
      */
     private void consensusViewChange(HashMultiset<Ballot> ballots, int majority, Entry<Ballot> max) {
+        final var v = vote.get();
         log.debug("Fast path view change for: {} on: {} joins: {} leaves: {} majority: {} count: {} max: {}, starting consensus view change on: {}",
-                  currentView.get(), context.getId(), vote.get().getJoinsCount(), vote.get().getLeavesCount(), majority,
-                  ballots.size(), max == null ? 0 : max.getCount(), node.getId());
-        shunned.clear();
+                  currentView.get(), context.getId(), v == null ? 0 : v.getJoinsCount(),
+                  v == null ? 0 : v.getLeavesCount(), majority, ballots.size(), max == null ? 0 : max.getCount(),
+                  node.getId());
+//        shunned.clear();
         // TODO
     }
 
@@ -1072,6 +1083,13 @@ public class View {
         final var lock = viewChange.writeLock();
         lock.lock();
         try {
+            final var cardinality = context.memberCount();
+            final var superMajority = cardinality - ((cardinality - 1) / 6);
+            if (observations.size() < superMajority) {
+                finalizeViewChange.set(roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(),
+                                                            FINALIZE_VIEW_ROUNDS));
+                return;
+            }
             HashMultiset<Ballot> ballots = HashMultiset.create();
             observations.values().forEach(vc -> {
                 final var leaving = vc.getChange()
@@ -1092,24 +1110,22 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            final var cardinality = context.memberCount();
-            final var superMajority = cardinality - ((cardinality - 1) / 4);
             if (max != null && max.getCount() >= superMajority) {
                 log.warn("Fast path consensus successful: {} for: {} required: {} on: {}", max.getCount(),
                          currentView.get(), superMajority, node.getId());
                 install(max.getElement());
             } else {
-                log.warn("Fast path consensus failed: {} for: {} required: {} on: {}", max.getCount(),
-                         currentView.get(), superMajority, node.getId());
+                log.warn("Fast path consensus failed: {} cardinality: {} for: {} required: {} on: {}",
+                         max == null ? 0 : max.getCount(), context.cardinality(), currentView.get(), superMajority,
+                         node.getId());
                 consensusViewChange(ballots, superMajority, max);
             }
-        } finally {
-            scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(),
-                                                         VIEW_CHANGE_ROUNDS));
+            scheduleViewChange();
             observations.clear();
             finalizeViewChange.set(null);
             vote.set(null);
             votesReceived.clear();
+        } finally {
             lock.unlock();
         }
     }
@@ -1309,7 +1325,11 @@ public class View {
             var change = ViewChange.newBuilder()
                                    .setObserver(node.getId().toDigeste())
                                    .setCurrent(currentView.get().toDigeste())
-                                   .addAllLeaves(shunned.stream().map(d -> d.toDigeste()).toList())
+                                   .addAllLeaves(shunned.stream()
+                                                        .map(d -> context.getMember(d))
+                                                        .filter(p -> p.getAccusationCount() >= 1)
+                                                        .map(d -> d.getId().toDigeste())
+                                                        .toList())
                                    .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList())
                                    .build();
             vote.set(change);
@@ -1317,6 +1337,10 @@ public class View {
             final var hash = signature.toDigest(digestAlgo);
             observations.put(hash,
                              SignedViewChange.newBuilder().setChange(change).setSignature(signature.toSig()).build());
+            if (change.getLeavesCount() == 0 && change.getJoinsCount() == 0) {
+                scheduleViewChange();
+                return;
+            }
             log.debug("View change vote: {} joins: {} leaves: {} on: {}", currentView.get(), change.getJoinsCount(),
                       change.getLeavesCount(), node.getId());
         } finally {
@@ -1397,8 +1421,7 @@ public class View {
                 timer.cancel();
             }
         } else {
-            scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(),
-                                                         VIEW_CHANGE_ROUNDS));
+            scheduleViewChange();
         }
     }
 
@@ -1409,12 +1432,12 @@ public class View {
      * the inbound digets that the view has more recent information. Do not forward
      * accusations from crashed members
      *
-     * @param digests
      * @param p
-     * @param seed
+     * @param digests
+     *
      * @return
      */
-    private AccusationGossip processAccusations(BloomFilter<Digest> bff, long seed, double p) {
+    private AccusationGossip processAccusations(BloomFilter<Digest> bff, double p) {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1422,7 +1445,7 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
-        builder.setBff(getAccusationsBff(seed, p).toBff());
+        builder.setBff(getAccusationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process accusations produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
@@ -1435,12 +1458,11 @@ public class View {
      * list of digests the view requires, as well as proposed updates based on the
      * inbound digests that the view has more recent information
      *
+     * @param p
      * @param from
      * @param digests
-     * @param p
-     * @param seed
      */
-    private JoinGossip processJoins(BloomFilter<Digest> bff, long seed, double p) {
+    private JoinGossip processJoins(BloomFilter<Digest> bff, double p) {
         JoinGossip.Builder builder = JoinGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound bff
@@ -1449,7 +1471,7 @@ public class View {
              .filter(m -> !bff.contains(m.getKey()))
              .map(m -> m.getValue())
              .forEach(n -> builder.addUpdates(n));
-        builder.setBff(getJoinsBff(seed, p).toBff());
+        builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
         JoinGossip gossip = builder.build();
         return gossip;
     }
@@ -1461,11 +1483,10 @@ public class View {
      * inbound digests that the view has more recent information
      *
      * @param from
-     * @param digests
      * @param p
-     * @param seed
+     * @param digests
      */
-    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, long seed, double p) {
+    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1475,7 +1496,7 @@ public class View {
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
-        builder.setBff(getNotesBff(seed, p).toBff());
+        builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process notes produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
@@ -1488,12 +1509,11 @@ public class View {
      * the list of digests the view requires, as well as proposed updates based on
      * the inbound digests that the view has more recent information
      *
+     * @param p
      * @param from
      * @param digests
-     * @param p
-     * @param seed
      */
-    private ViewChangeGossip processObservations(BloomFilter<Digest> bff, long seed, double p) {
+    private ViewChangeGossip processObservations(BloomFilter<Digest> bff, double p) {
         ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound bff
@@ -1502,7 +1522,7 @@ public class View {
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
                     .forEach(n -> builder.addUpdates(n));
-        builder.setBff(getObservationsBff(seed, p).toBff());
+        builder.setBff(getObservationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process view change produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
@@ -1650,6 +1670,11 @@ public class View {
         return updatesForDigests(gossip);
     }
 
+    private void scheduleViewChange() {
+        scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(),
+                                                     VIEW_CHANGE_ROUNDS));
+    }
+
     private <T> T stable(Callable<T> call, T defaultValue) {
         final var lock = viewChange.readLock();
         if (!lock.tryLock()) {
@@ -1712,7 +1737,7 @@ public class View {
                .filter(a -> !accBff.contains(a.getHash()))
                .forEach(a -> builder.addAccusations(a.getWrapped()));
 
-        BloomFilter<Digest> obsvBff = BloomFilter.from(gossip.getAccusations().getBff());
+        BloomFilter<Digest> obsvBff = BloomFilter.from(gossip.getObservations().getBff());
         observations.entrySet()
                     .stream()
                     .filter(e -> !obsvBff.contains(e.getKey()))

@@ -446,4 +446,9 @@ public interface Context<T extends Member> {
      */
     int toleranceLevel();
 
+    /**
+     * @return the total number of members
+     */
+    int totalCount();
+
 }

@@ -113,12 +113,12 @@ public class SwarmTest {
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().activeCount() != testViews.size())
+                                .filter(view -> view.getContext().totalCount() != testViews.size())
                                 .count() == 0;
             });
             assertTrue(success, " expected: " + testViews.size() + " views: "
             + testViews.stream()
-                       .filter(e -> e.getContext().activeCount() != testViews.size())
+                       .filter(e -> e.getContext().totalCount() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().offlineCount()))
                        .toList());
 
@@ -132,8 +132,8 @@ public class SwarmTest {
         testViews.clear();
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
-        int delta = 10;
-        for (int i = 0; i < (CARDINALITY / delta) - 3; i++) {
+        int delta = 5;
+        for (int i = 0; i < (CARDINALITY / delta) - 10; i++) {
             var removed = new ArrayList<Digest>();
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 final var view = c.get(j);
@@ -149,12 +149,12 @@ public class SwarmTest {
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().activeCount() > expected.size()).count() == 0;
             });
-            assertTrue(success,
-                       " expected: " + c.size() + " views: "
-                       + c.stream()
-                          .filter(e -> e.getContext().activeCount() > expected.size())
-                          .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
-                          .toList());
+            assertTrue(success, " expected: " + c.size() + " views: "
+            + c.stream()
+               .filter(e -> e.getContext().activeCount() > expected.size())
+               .map(v -> String.format("%s : %s : %s", v.getNode().getId(), v.getContext().activeCount(),
+                                       v.getContext().getOffline().stream().map(p -> p.getAccusationCount()).toList()))
+               .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + c.size() + " members");
@@ -289,7 +289,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.00125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
                             DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }

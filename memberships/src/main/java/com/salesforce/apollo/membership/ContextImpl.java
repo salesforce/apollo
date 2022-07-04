@@ -192,7 +192,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public int cardinality() {
-        return cardinality;
+        final var c = cardinality;
+        return c;
     }
 
     @Override
@@ -630,6 +631,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public String toString() {
         return "Context [" + id + "]";
+    }
+
+    @Override
+    public int totalCount() {
+        return members.size();
     }
 
     private Digest[] hashesFor(T m) {
