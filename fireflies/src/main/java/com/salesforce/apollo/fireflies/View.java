@@ -476,7 +476,9 @@ public class View {
 
         boolean setNote(NoteWrapper next) {
             note = next;
-            clearAccusations();
+            if (!shunned.contains(id)) {
+                clearAccusations();
+            }
             return true;
         }
     }
@@ -497,6 +499,10 @@ public class View {
          *         would like updated.
          */
         public Gossip rumors(SayWhat request, Digest from) {
+            if (shunned.contains(from)) {
+                log.warn("Shunned gossip: {} on: {}", from, node.getId());
+                return Gossip.getDefaultInstance();
+            }
             final var ring = request.getRing();
             final var requestView = Digest.from(request.getView());
             if (!requestView.equals(currentView.get())) {
@@ -504,8 +510,8 @@ public class View {
                           node.getId());
                 return Gossip.getDefaultInstance();
             }
-            var wrapper = new NoteWrapper(request.getNote(), digestAlgo);
-            if (!from.equals(wrapper.getId())) {
+            var note = new NoteWrapper(request.getNote(), digestAlgo);
+            if (!from.equals(note.getId())) {
                 log.debug("invalid identity on ring: {} from: {} on: {}", ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
@@ -516,8 +522,8 @@ public class View {
                     return Gossip.getDefaultInstance();
                 }
                 Participant member;
-                if (!add(wrapper)) {
-                    member = new Participant(wrapper.getId());
+                if (!add(note)) {
+                    member = new Participant(note.getId());
                 } else {
                     member = context.getMember(from);
                 }
@@ -549,6 +555,10 @@ public class View {
          * @param from
          */
         public void update(State request, Digest from) {
+            if (shunned.contains(from)) {
+                log.warn("Shunned update: {} on: {}", from, node.getId());
+                return;
+            }
             final var requestView = Digest.from(request.getView());
             if (!requestView.equals(currentView.get())) {
                 log.debug("invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(),
@@ -710,7 +720,7 @@ public class View {
         node.reset();
         seeds.forEach(m -> addSeed(m));
 
-//        scheduleViewChange();
+        scheduleViewChange();
 
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
         futureGossip = scheduler.schedule(() -> gossip(d, scheduler), initial, TimeUnit.NANOSECONDS);
@@ -850,6 +860,12 @@ public class View {
                           ring.getIndex(), currentAccuser, node.getId());
             }
         } else {
+            if (shunned.contains(accused.getId())) {
+                accused.addAccusation(accusation);
+                log.debug("{} accused by {} on ring {} (already shunned) on: {}", accused.getId(), accuser.getId(),
+                          accusation.getRingNumber(), node.getId());
+                return;
+            }
             Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
@@ -875,6 +891,10 @@ public class View {
     private boolean add(NoteWrapper note) {
         if (metrics != null) {
             metrics.notes().mark();
+        }
+        if (shunned.contains(note.getId())) {
+            log.trace("Ignoring shunned note from {} on: {}", note.getId(), node.getId());
+            return false;
         }
         Participant m = context.getMember(note.getId());
         if (m == null) {
@@ -1084,7 +1104,7 @@ public class View {
         lock.lock();
         try {
             final var cardinality = context.memberCount();
-            final var superMajority = cardinality - ((cardinality - 1) / 6);
+            final var superMajority = cardinality - ((cardinality - 1) / 4);
             if (observations.size() < superMajority) {
                 finalizeViewChange.set(roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(),
                                                             FINALIZE_VIEW_ROUNDS));
@@ -1225,6 +1245,10 @@ public class View {
      * @throws Exception
      */
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
+        if (shunned.contains(link.getMember().getId())) {
+            log.warn("Shunning gossip with: {} on: {}", link.getMember().getId(), node.getId());
+            return null;
+        }
         NoteWrapper n = node.getNote();
         if (n == null) {
             return null;
@@ -1320,27 +1344,38 @@ public class View {
         lock.lock();
         try {
             if (vote.get() != null) {
+                scheduleViewChange();
                 return;
             }
-            var change = ViewChange.newBuilder()
-                                   .setObserver(node.getId().toDigeste())
-                                   .setCurrent(currentView.get().toDigeste())
-                                   .addAllLeaves(shunned.stream()
-                                                        .map(d -> context.getMember(d))
-                                                        .filter(p -> p.getAccusationCount() >= 1)
-                                                        .map(d -> d.getId().toDigeste())
-                                                        .toList())
-                                   .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList())
-                                   .build();
+            final var builder = ViewChange.newBuilder()
+                                          .setObserver(node.getId().toDigeste())
+                                          .setCurrent(currentView.get().toDigeste())
+                                          .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList());
+            boolean unstable = false;
+            final var high = 1; // context.toleranceLevel() - 3;
+            final var low = 1;
+            for (var d : shunned) {
+                var m = context.getMember(d);
+                if (m == null) {
+                    continue;
+                }
+                var count = m.getAccusationCount();
+                if (count <= low || count < high) {
+                    unstable = true;
+                    break;
+                }
+                builder.addLeaves(d.toDigeste());
+            }
+            if (unstable || (builder.getLeavesCount() == 0 && builder.getJoinsCount() == 0)) {
+                scheduleViewChange();
+                return;
+            }
+            ViewChange change = builder.build();
             vote.set(change);
             var signature = node.sign(change.toByteString());
             final var hash = signature.toDigest(digestAlgo);
             observations.put(hash,
                              SignedViewChange.newBuilder().setChange(change).setSignature(signature.toSig()).build());
-            if (change.getLeavesCount() == 0 && change.getJoinsCount() == 0) {
-                scheduleViewChange();
-                return;
-            }
             log.debug("View change vote: {} joins: {} leaves: {} on: {}", currentView.get(), change.getJoinsCount(),
                       change.getLeavesCount(), node.getId());
         } finally {
