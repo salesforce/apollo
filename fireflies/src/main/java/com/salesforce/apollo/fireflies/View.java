@@ -1131,8 +1131,8 @@ public class View {
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
             if (max != null && max.getCount() >= superMajority) {
-                log.warn("Fast path consensus successful: {} for: {} required: {} on: {}", max.getCount(),
-                         currentView.get(), superMajority, node.getId());
+                log.debug("Fast path consensus successful: {} for: {} required: {} on: {}", max.getCount(),
+                          currentView.get(), superMajority, node.getId());
                 install(max.getElement());
             } else {
                 log.warn("Fast path consensus failed: {} cardinality: {} for: {} required: {} on: {}",
@@ -1350,26 +1350,8 @@ public class View {
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView.get().toDigeste())
+                                          .addAllLeaves(shunned.stream().map(d -> d.toDigeste()).toList())
                                           .addAllJoins(joins.keySet().stream().map(d -> d.toDigeste()).toList());
-            boolean unstable = false;
-            final var high = 1; // context.toleranceLevel() - 3;
-            final var low = 1;
-            for (var d : shunned) {
-                var m = context.getMember(d);
-                if (m == null) {
-                    continue;
-                }
-                var count = m.getAccusationCount();
-                if (count <= low || count < high) {
-                    unstable = true;
-                    break;
-                }
-                builder.addLeaves(d.toDigeste());
-            }
-            if (unstable || (builder.getLeavesCount() == 0 && builder.getJoinsCount() == 0)) {
-                scheduleViewChange();
-                return;
-            }
             ViewChange change = builder.build();
             vote.set(change);
             var signature = node.sign(change.toByteString());
