@@ -24,6 +24,7 @@ import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.utils.Utils;
 
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -60,15 +61,24 @@ public class FfServer extends FirefliesImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Gossip gossip = s.rumors(request, from);
-            if (timer != null) {
-                timer.stop();
-                var serializedSize = gossip.getSerializedSize();
-                metrics.outboundBandwidth().mark(serializedSize);
-                metrics.gossipReply().update(serializedSize);
+            Gossip gossip;
+
+            try {
+                gossip = s.rumors(request, from);
+                responseObserver.onNext(gossip);
+                responseObserver.onCompleted();
+                if (timer != null) {
+                    var serializedSize = gossip.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.gossipReply().update(serializedSize);
+                    timer.stop();
+                }
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
+                if (timer != null) {
+                    timer.stop();
+                }
             }
-            responseObserver.onNext(gossip);
-            responseObserver.onCompleted();
         }), log));
     }
 
@@ -86,12 +96,16 @@ public class FfServer extends FirefliesImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            s.update(request, from);
+            try {
+                s.update(request, from);
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
+            }
             if (timer != null) {
                 timer.stop();
             }
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
         }), log));
     }
 

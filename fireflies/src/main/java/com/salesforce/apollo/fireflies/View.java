@@ -64,6 +64,7 @@ import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesfoce.apollo.fireflies.proto.ViewChange;
 import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
+import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
@@ -153,6 +154,8 @@ public class View {
             this.wrapped = wrapped;
             var n = Note.newBuilder()
                         .setEpoch(0)
+                        .setCurrentView(currentView.get().toDigeste())
+                        .setPreviousView(previousView.get().toDigeste())
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
                         .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
@@ -202,50 +205,57 @@ public class View {
          * @return a new mask based on the previous mask and previous accusations.
          */
         BitSet nextMask() {
-            NoteWrapper current = note;
+            final var current = note;
+            final var toleranceLevel = context.toleranceLevel();
             if (current == null) {
-                BitSet mask = createInitialMask(context.toleranceLevel());
-                assert View.isValidMask(mask, context.toleranceLevel()) : "Invalid initial mask: " + mask + "for node: "
-                + getId();
+                BitSet mask = createInitialMask(toleranceLevel);
+                assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: " + toleranceLevel
+                + " for node: " + getId();
                 return mask;
             }
 
-            BitSet mask = new BitSet(context.getRingCount());
+            BitSet mask = new BitSet(2 * toleranceLevel + 1);
             mask.flip(0, context.getRingCount());
+            final var accusations = validAccusations;
+
             for (int i = 0; i < context.getRingCount(); i++) {
-                if (validAccusations[i] == null) {
+                if (accusations[i] != null) {
+                    mask.set(i, false);
                     continue;
                 }
-                if (mask.cardinality() <= context.toleranceLevel() + 1) {
-                    assert isValidMask(mask, context.toleranceLevel()) : "Invalid mask: " + mask + "for node: "
-                    + getId();
+                if (mask.cardinality() <= toleranceLevel) {
+                    assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: " + toleranceLevel
+                    + " for node: " + getId();
                     return mask;
                 }
-                mask.set(i, false);
             }
             if (current.getEpoch() % 2 == 1) {
+                // clear masks from previous note
                 BitSet previous = BitSet.valueOf(current.getMask().toByteArray());
                 for (int index = 0; index < context.getRingCount(); index++) {
-                    if (mask.cardinality() <= context.toleranceLevel() + 1) {
-                        assert View.isValidMask(mask, context.toleranceLevel()) : "Invalid mask: " + mask + "for node: "
-                        + getId();
+                    if (mask.cardinality() <= toleranceLevel + 1) {
+                        assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: "
+                        + toleranceLevel + " for node: " + getId();
                         return mask;
                     }
-                    if (!previous.get(index)) {
-                        mask.set(index, false);
+                    if (!previous.get(index) && accusations[index] == null) {
+                        mask.set(index, true);
                     }
                 }
             } else {
                 // Fill the rest of the mask with randomly set index
-                while (mask.cardinality() > context.toleranceLevel() + 1) {
-                    int index = Entropy.nextSecureInt(context.getRingCount());
+                while (mask.cardinality() <= toleranceLevel) {
+                    int index = Entropy.nextBitsStreamInt(context.getRingCount());
+                    if (accusations[index] != null) {
+                        continue;
+                    }
                     if (mask.get(index)) {
-                        mask.set(index, false);
+                        mask.set(index, true);
                     }
                 }
             }
-            assert isValidMask(mask, context.toleranceLevel()) : "Invalid mask: " + mask + " t: "
-            + context.toleranceLevel() + " for node: " + getId();
+            assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " t: " + toleranceLevel + " for node: "
+            + getId();
             return mask;
         }
 
@@ -269,6 +279,8 @@ public class View {
                         .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
                         .setEpoch(newEpoch)
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
+                        .setCurrentView(currentView.get().toDigeste())
+                        .setPreviousView(previousView.get().toDigeste())
                         .build();
             var signedNote = SignedNote.newBuilder()
                                        .setNote(n)
@@ -283,6 +295,8 @@ public class View {
             super.reset();
             var n = Note.newBuilder()
                         .setEpoch(0)
+                        .setCurrentView(currentView.get().toDigeste())
+                        .setPreviousView(previousView.get().toDigeste())
                         .setHost(current.getHost())
                         .setPort(current.getPort())
                         .setCoordinates(current.getCoordinates().toEventCoords())
@@ -500,19 +514,18 @@ public class View {
          */
         public Gossip rumors(SayWhat request, Digest from) {
             if (shunned.contains(from)) {
-                log.warn("Shunned gossip: {} on: {}", from, node.getId());
+                log.trace("Shunned gossip: {} on: {}", from, node.getId());
                 return Gossip.getDefaultInstance();
             }
             final var ring = request.getRing();
             final var requestView = Digest.from(request.getView());
-            if (!requestView.equals(currentView.get())) {
-                log.debug("invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(), ring, from,
-                          node.getId());
+            if (!requestView.equals(currentView.get()) && !requestView.equals(previousView.get())) {
+                log.debug("invalid view: {} current: {} previous: {} from: {} on: {}", requestView, currentView.get(),
+                          previousView.get(), ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
             var note = new NoteWrapper(request.getNote(), digestAlgo);
             if (!from.equals(note.getId())) {
-                log.debug("invalid identity on ring: {} from: {} on: {}", ring, from, node.getId());
                 return Gossip.getDefaultInstance();
             }
 
@@ -539,7 +552,7 @@ public class View {
                 final var digests = request.getGossip();
                 return Gossip.newBuilder()
                              .setRedirect(false)
-                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr))
+                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr, requestView))
                              .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), fpr))
                              .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()), fpr))
                              .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), fpr))
@@ -570,12 +583,13 @@ public class View {
                 Participant member = context.getActiveMember(from);
                 final var ring = request.getRing();
                 if (member == null) {
-                    log.debug("No member, invalid update from: {} on ring: {} on: {}", from, ring, from);
+                    log.debug("invalid member: {} view: {} current: {} from: {} on: {}", from, requestView,
+                              currentView.get(), ring, from, node.getId());
                     return;
                 }
                 if (ring < 0 || ring > context.getRingCount()) {
-                    log.debug("invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(), ring,
-                              from, node.getId());
+                    log.debug("invalid ring: {} view: {} current: {} from: {} on: {}", ring, requestView,
+                              currentView.get(), ring, from, node.getId());
                     return;
                 }
                 Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
@@ -586,7 +600,8 @@ public class View {
                 if (!successor.equals(node)) {
                     log.debug("Incorrect predecessor, invalid update from: {} on ring: {} on: {}", from, ring,
                               member.getId());
-                    return;
+                    throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("not predecessor: "
+                    + from));
                 }
                 processUpdates(update.getNotesList(), update.getAccusationsList(), update.getObservationsList(),
                                update.getJoinsList());
@@ -637,7 +652,8 @@ public class View {
      * @return
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
-        return mask.cardinality() == toleranceLevel + 1;
+        final var cardinality = mask.cardinality();
+        return cardinality >= toleranceLevel + 1 && cardinality <= 2 * toleranceLevel + 1;
     }
 
     private final CommonCommunications<Fireflies, Service>    comm;
@@ -654,6 +670,7 @@ public class View {
     private final Node                                        node;
     private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
+    private final AtomicReference<Digest>                     previousView        = new AtomicReference<>();
     private final RoundScheduler                              roundTimers;
     private final AtomicReference<RoundScheduler.Timer>       scheduledViewChange = new AtomicReference<>();
     private final Service                                     service             = new Service();
@@ -673,6 +690,8 @@ public class View {
         this.digestAlgo = digestAlgo;
         this.context = context;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
+        currentView.set(context.getId().prefix(digestAlgo.getOrigin()));
+        previousView.set(currentView.get());
         this.node = new Node(member, endpoint);
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(), r,
@@ -708,7 +727,6 @@ public class View {
                       .map(sai -> sai.getDigest())
                       .toList(),
                  node.getId());
-        currentView.set(digestAlgo.getOrigin());
         roundTimers.reset();
         comm.register(context.getId(), service);
         context.clear();
@@ -736,7 +754,6 @@ public class View {
         pendingRebuttals.clear();
         context.active().forEach(m -> {
             context.offline(m);
-            m.clearAccusations();
         });
         final var current = futureGossip;
         futureGossip = null;
@@ -889,7 +906,17 @@ public class View {
             metrics.notes().mark();
         }
         if (shunned.contains(note.getId())) {
-            log.trace("Ignoring shunned note from {} on: {}", note.getId(), node.getId());
+//            log.trace("Ignoring shunned note from {} on: {}", note.getId(), node.getId());
+            return false;
+        }
+        if (!currentView.get().equals(note.currentView())) {
+            log.trace("Ignoring note in invalid view: {} current: {} from {} on: {}", note.currentView(),
+                      currentView.get(), note.getId(), node.getId());
+            return false;
+        }
+        if (!previousView.get().equals(note.previousView())) {
+            log.warn("Ignoring note, invalid previous view: {} current: {} from {} on: {}", note.previousView(),
+                     currentView.get(), note.getId(), node.getId());
             return false;
         }
         Participant m = context.getMember(note.getId());
@@ -968,12 +995,11 @@ public class View {
         }
         final var next = Digest.from(observation.getChange().getCurrent());
         if (!currentView.get().equals(next)) {
-            log.warn("Invalid view change: {} current: {} from {} on: {}", next, currentView.get(), member.getId(),
-                     node.getId());
+            log.trace("Invalid view change: {} current: {} from {} on: {}", next, currentView.get(), member.getId(),
+                      node.getId());
             return;
         }
         if (votesReceived.contains(member.getId())) {
-            log.trace("View change: {} already received from {} on: {}", next, member.getId(), node.getId());
             return;
         }
         votesReceived.add(member.getId());
@@ -1020,6 +1046,8 @@ public class View {
                                                      .setPort(seed.endpoint.getPort())
                                                      .setCoordinates(seed.coordinates.toEventCoords())
                                                      .setEpoch(-1)
+                                                     .setCurrentView(currentView.get().toDigeste())
+                                                     .setPreviousView(currentView.get().toDigeste())
                                                      .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
@@ -1197,7 +1225,12 @@ public class View {
      */
     private BloomFilter<Digest> getNotesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality() * 2, p);
-        context.active().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
+        final var current = currentView.get();
+        context.active()
+               .map(m -> m.getNote())
+               .filter(e -> e != null)
+               .filter(n -> current.equals(n.currentView()))
+               .forEach(n -> bff.add(n.getHash()));
         return bff;
     }
 
@@ -1351,7 +1384,7 @@ public class View {
             if (!pendingRebuttals.isEmpty()) {
                 log.debug("Pending rebuttals: {} view: {} on: {}", pendingRebuttals.size(), currentView.get(),
                           node.getId());
-                scheduleViewChange();
+                scheduleViewChange(3); // 3 TTL rounds to check again
                 return;
             }
             final var builder = ViewChange.newBuilder()
@@ -1384,21 +1417,32 @@ public class View {
                     .map(d -> joins.get(d))
                     .filter(sn -> sn != null)
                     .map(sn -> new NoteWrapper(sn, digestAlgo))
-                    .forEach(sn -> add(sn));
+                    .forEach(sn -> {
+                        if (add(sn) && metrics != null) {
+                            metrics.joins().mark();
+                        }
+                    });
 
+        // Tune
         context.rebalance();
         gossiper.reset();
         roundTimers.setRoundDuration(context.timeToLive());
 
-        final var previousView = currentView.get();
+        // The circle of life
+        previousView.set(currentView.get());
+
+        // View is the combined hash of members on ring 0
         currentView.set(context.ring(0)
                                .stream()
                                .map(p -> p.getId())
                                .reduce((a, b) -> a.xor(b))
                                .orElse(digestAlgo.getOrigin()));
 
+        // Regenerate for new epoch
+        node.nextNote();
+
         log.debug("Installing new view: {} from: {} for context: {} leaving: {} joining: {} evicted: {} on: {}",
-                  currentView.get(), previousView, context.getId(), view.leaving.size(), view.joining.size(),
+                  currentView.get(), previousView.get(), context.getId(), view.leaving.size(), view.joining.size(),
                   evicted.get(), node.getId());
     }
 
@@ -1508,17 +1552,20 @@ public class View {
      * @param p
      * @param digests
      */
-    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
+    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p, Digest view) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
+        final var current = currentView.get();
         context.active()
                .filter(m -> m.getNote() != null)
+               .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
-        builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
+        builder.setBff(currentView.get().equals(view) ? getNotesBff(Entropy.nextSecureLong(), p).toBff()
+                                                      : Biff.getDefaultInstance());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process notes produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
@@ -1586,7 +1633,6 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            member.clearAccusations();
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         }
     }
@@ -1674,14 +1720,14 @@ public class View {
         if (pending != null) {
             pending.cancel();
         }
-        if (context.isActive(digest)) {
-            log.warn("Shunned but active: {} context: {} view: {} on: {}", digest, context.getId(), currentView.get(),
-                     node.getId());
-        }
-        log.info("Permanently removing {} from context: {} view: {} on: {}", digest, context.getId(), currentView.get(),
+        log.info("Permanently removing {} member {} from context: {} view: {} on: {}",
+                 context.isActive(digest) ? "active" : "failed", digest, context.getId(), currentView.get(),
                  node.getId());
         context.remove(digest);
         shunned.remove(digest);
+        if (metrics != null) {
+            metrics.leaves().mark();
+        }
     }
 
     /**
@@ -1704,9 +1750,13 @@ public class View {
     }
 
     private void scheduleViewChange() {
-        log.trace("Scheduling view change on: {}", node.getId());
-        scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(),
-                                                     VIEW_CHANGE_ROUNDS));
+        final var viewChangeRounds = VIEW_CHANGE_ROUNDS;
+        scheduleViewChange(viewChangeRounds);
+    }
+
+    private void scheduleViewChange(final int viewChangeRounds) {
+        log.trace("Scheduling view change: {} rounds on: {}", viewChangeRounds, node.getId());
+        scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), viewChangeRounds));
     }
 
     private <T> T stable(Callable<T> call, T defaultValue) {
@@ -1758,30 +1808,42 @@ public class View {
     private Update updatesForDigests(Gossip gossip) {
         Update.Builder builder = Update.newBuilder();
 
-        BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
-        context.allMembers()
-               .filter(m -> m.getNote() != null)
-               .filter(m -> !notesBff.contains(m.getNote().getHash()))
-               .map(m -> m.getNote().getWrapped())
-               .forEach(n -> builder.addNotes(n));
+        var biff = gossip.getNotes().getBff();
+        if (!biff.equals(Biff.getDefaultInstance())) {
+            BloomFilter<Digest> notesBff = BloomFilter.from(biff);
+            context.allMembers()
+                   .filter(m -> m.getNote() != null)
+                   .filter(m -> !notesBff.contains(m.getNote().getHash()))
+                   .map(m -> m.getNote().getWrapped())
+                   .forEach(n -> builder.addNotes(n));
+        }
 
-        BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
-        context.active()
-               .flatMap(m -> m.getAccusations())
-               .filter(a -> !accBff.contains(a.getHash()))
-               .forEach(a -> builder.addAccusations(a.getWrapped()));
+        biff = gossip.getAccusations().getBff();
+        if (!biff.equals(Biff.getDefaultInstance())) {
+            BloomFilter<Digest> accBff = BloomFilter.from(biff);
+            context.active()
+                   .flatMap(m -> m.getAccusations())
+                   .filter(a -> !accBff.contains(a.getHash()))
+                   .forEach(a -> builder.addAccusations(a.getWrapped()));
+        }
 
-        BloomFilter<Digest> obsvBff = BloomFilter.from(gossip.getObservations().getBff());
-        observations.entrySet()
-                    .stream()
-                    .filter(e -> !obsvBff.contains(e.getKey()))
-                    .forEach(e -> builder.addObservations(e.getValue()));
+        biff = gossip.getObservations().getBff();
+        if (!biff.equals(Biff.getDefaultInstance())) {
+            BloomFilter<Digest> obsvBff = BloomFilter.from(biff);
+            observations.entrySet()
+                        .stream()
+                        .filter(e -> !obsvBff.contains(e.getKey()))
+                        .forEach(e -> builder.addObservations(e.getValue()));
+        }
 
-        BloomFilter<Digest> joinBff = BloomFilter.from(gossip.getJoins().getBff());
-        joins.entrySet()
-             .stream()
-             .filter(e -> !joinBff.contains(e.getKey()))
-             .forEach(e -> builder.addJoins(e.getValue()));
+        biff = gossip.getJoins().getBff();
+        if (!biff.equals(Biff.getDefaultInstance())) {
+            BloomFilter<Digest> joinBff = BloomFilter.from(biff);
+            joins.entrySet()
+                 .stream()
+                 .filter(e -> !joinBff.contains(e.getKey()))
+                 .forEach(e -> builder.addJoins(e.getValue()));
+        }
 
         return builder.build();
     }

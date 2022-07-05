@@ -219,6 +219,10 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
+    public Digest prefix(Digest base) {
+        return base.prefix(hash);
+    }
+
     public Digest prefix(Digest id, int ring) {
         ByteBuffer buffer = ByteBuffer.allocate(hash.length * 8 + (id.getLongs().length * 8) + 4);
         for (long prefix : id.getLongs()) {

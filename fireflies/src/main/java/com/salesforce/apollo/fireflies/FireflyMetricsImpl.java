@@ -28,6 +28,8 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Timer     inboundGossipTimer;
     private final Histogram inboundUpdate;
     private final Timer     inboundUpdateTimer;
+    private final Meter     joining;
+    private final Meter     leaving;
     private final Meter     notes;
     private final Histogram outboundGossip;
     private final Histogram outboundUpdate;
@@ -48,7 +50,8 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
         accusations = registry.meter(name(context.shortString(), "ff.gossip.accusations"));
         notes = registry.meter(name(context.shortString(), "ff.gossip.notes"));
-
+        joining = registry.meter(name(context.shortString(), "ff.joining"));
+        leaving = registry.meter(name(context.shortString(), "ff.leaving"));
     }
 
     @Override
@@ -89,6 +92,16 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Timer inboundUpdateTimer() {
         return inboundUpdateTimer;
+    }
+
+    @Override
+    public Meter joins() {
+        return joining;
+    }
+
+    @Override
+    public Meter leaves() {
+        return leaving;
     }
 
     @Override

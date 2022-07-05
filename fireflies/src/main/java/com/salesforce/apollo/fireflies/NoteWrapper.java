@@ -25,6 +25,7 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class NoteWrapper {
+    private final Digest     currentView;
     private final Digest     hash;
     private final BitSet     mask;
     private final SignedNote note;
@@ -34,6 +35,11 @@ public class NoteWrapper {
         this.note = note;
         this.hash = JohnHancock.from(note.getSignature()).toDigest(algo);
         this.mask = BitSet.valueOf(note.getNote().getMask().asReadOnlyByteBuffer());
+        currentView = Digest.from(note.getNote().getCurrentView());
+    }
+
+    public Digest currentView() {
+        return currentView;
     }
 
     public EventCoordinates getCoordinates() {
@@ -76,5 +82,9 @@ public class NoteWrapper {
 
     public Builder newBuilder() {
         return Note.newBuilder(note.getNote());
+    }
+
+    public Digest previousView() {
+        return Digest.from(note.getNote().getPreviousView());
     }
 }

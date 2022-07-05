@@ -33,6 +33,10 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Timer inboundUpdateTimer();
 
+    Meter joins();
+
+    Meter leaves();
+
     Meter notes();
 
     Histogram outboundGossip();

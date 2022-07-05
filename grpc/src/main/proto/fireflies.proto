@@ -44,10 +44,12 @@ message SignedAccusation {
 
 message Note {
     int64 epoch = 1;
-    stereotomy.EventCoords coordinates = 2;
-    bytes mask = 3;
-    string host = 4;
-    int32 port = 5;
+    utils.Digeste currentView = 2;
+    utils.Digeste previousView = 3;
+    stereotomy.EventCoords coordinates = 4;
+    bytes mask = 5;
+    string host = 6;
+    int32 port = 7;
 }
 
 message ViewChange {
