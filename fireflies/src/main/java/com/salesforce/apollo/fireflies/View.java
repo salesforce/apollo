@@ -800,9 +800,6 @@ public class View {
         }
         member.addAccusation(node.accuse(member, ring));
         pendingRebuttals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTTAL_TIMEOUT));
-        if (metrics != null) {
-            metrics.accusations().mark();
-        }
         log.debug("Accuse {} on ring {} (timer started) on: {}", member.getId(), ring, node.getId());
     }
 
@@ -871,12 +868,16 @@ public class View {
                                                  d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
                 log.debug("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
                           ring.getIndex(), currentAccuser, node.getId());
+                if (metrics != null) {
+                    metrics.accusations().mark();
+                }
             }
         } else {
             if (shunned.contains(accused.getId())) {
                 accused.addAccusation(accusation);
-                log.debug("{} accused by {} on ring {} (already shunned) on: {}", accused.getId(), accuser.getId(),
-                          accusation.getRingNumber(), node.getId());
+                if (metrics != null) {
+                    metrics.accusations().mark();
+                }
                 return;
             }
             Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
@@ -888,6 +889,9 @@ public class View {
                               accusation.getRingNumber(), node.getId());
                     pendingRebuttals.computeIfAbsent(accused.getId(),
                                                      d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
+                }
+                if (metrics != null) {
+                    metrics.accusations().mark();
                 }
             } else {
                 log.debug("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
@@ -902,9 +906,6 @@ public class View {
      * @param note
      */
     private boolean add(NoteWrapper note) {
-        if (metrics != null) {
-            metrics.notes().mark();
-        }
         if (shunned.contains(note.getId())) {
 //            log.trace("Ignoring shunned note from {} on: {}", note.getId(), node.getId());
             return false;
@@ -919,6 +920,7 @@ public class View {
                      currentView.get(), note.getId(), node.getId());
             return false;
         }
+
         Participant m = context.getMember(note.getId());
         if (m == null) {
             if (!validation.verify(note.getCoordinates(), note.getSignature(),
@@ -944,6 +946,9 @@ public class View {
             return false;
         }
 
+        if (metrics != null) {
+            metrics.notes().mark();
+        }
         NoteWrapper current = m.getNote();
         if (current != null) {
             long nextEpoch = note.getEpoch();
