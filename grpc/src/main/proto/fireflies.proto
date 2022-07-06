@@ -116,17 +116,18 @@ message Update {
 
 message Redirect {
     utils.Digeste view = 1;
-    repeated Note predecessors = 2;
+    repeated SignedNote predecessors = 2;
 }
 
 message Gateway {
-    utils.Digeste view = 1;
-    int32 rings = 2;
-    repeated Note successors = 3;
+    utils.Digeste currentView = 1;
+    utils.Digeste previousView = 2;
+    int32 rings = 3;
+    repeated SignedNote membership = 4;
 }
 
 message Join {
     utils.Digeste context = 1;
     utils.Digeste view = 2;
-    Note note = 3;
+    SignedNote note = 3;
 }

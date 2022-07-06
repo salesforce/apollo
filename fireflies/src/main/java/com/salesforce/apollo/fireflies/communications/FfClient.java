@@ -21,8 +21,7 @@ import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
-import com.salesforce.apollo.fireflies.View.Node;
-import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
@@ -31,18 +30,17 @@ import com.salesforce.apollo.fireflies.View.Participant;
 public class FfClient implements Fireflies {
 
     public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics) {
-        return (t, f, c) -> new FfClient(c, (Participant) t, metrics);
+        return (t, f, c) -> new FfClient(c, t, metrics);
 
     }
 
     private final ManagedServerConnection channel;
     private final FirefliesFutureStub     client;
-    private final Participant             member;
+    private final Member                  member;
     private final FireflyMetrics          metrics;
 
-    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics) {
+    public FfClient(ManagedServerConnection channel, Member member, FireflyMetrics metrics) {
         this.member = member;
-        assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
         this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
@@ -54,7 +52,7 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public Participant getMember() {
+    public Member getMember() {
         return member;
     }
 
