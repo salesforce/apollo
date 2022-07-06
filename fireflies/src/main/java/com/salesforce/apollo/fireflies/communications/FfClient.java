@@ -12,7 +12,10 @@ import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
+import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.Join;
+import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -65,16 +68,35 @@ public class FfClient implements Fireflies {
         }
         result.addListener(() -> {
             if (metrics != null) {
-                Gossip gossip;
                 try {
-                    gossip = result.get();
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.gossipResponse().update(serializedSize);
                 } catch (InterruptedException | ExecutionException e) {
-                    // ignored
-                    return;
+                    // nothing
                 }
-                var serializedSize = gossip.getSerializedSize();
-                metrics.inboundBandwidth().mark(serializedSize);
-                metrics.gossipResponse().update(serializedSize);
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Gateway> join(Join join) {
+        if (metrics != null) {
+            var serializedSize = join.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.join().update(serializedSize);
+        }
+        ListenableFuture<Gateway> result = client.join(join);
+        result.addListener(() -> {
+            if (metrics != null) {
+                try {
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.gateway().update(serializedSize);
+                } catch (InterruptedException | ExecutionException e) {
+                    // nothing
+                }
             }
         }, r -> r.run());
         return result;
@@ -82,6 +104,28 @@ public class FfClient implements Fireflies {
 
     public void release() {
         close();
+    }
+
+    @Override
+    public ListenableFuture<Redirect> seed(Join join) {
+        if (metrics != null) {
+            var serializedSize = join.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.join().update(serializedSize);
+        }
+        ListenableFuture<Redirect> result = client.seed(join);
+        result.addListener(() -> {
+            if (metrics != null) {
+                try {
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.redirect().update(serializedSize);
+                } catch (InterruptedException | ExecutionException e) {
+                    // nothing
+                }
+            }
+        }, r -> r.run());
+        return result;
     }
 
     @Override
@@ -95,17 +139,12 @@ public class FfClient implements Fireflies {
         if (metrics != null) {
             timer = metrics.outboundUpdateTimer().time();
         }
-        try {
-            client.update(state);
-            if (metrics != null) {
-                var serializedSize = state.getSerializedSize();
-                metrics.outboundBandwidth().mark(serializedSize);
-                metrics.outboundUpdate().update(serializedSize);
-            }
-        } finally {
-            if (timer != null) {
-                timer.stop();
-            }
+        client.update(state);
+        if (metrics != null) {
+            var serializedSize = state.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundUpdate().update(serializedSize);
+            timer.stop();
         }
     }
 }

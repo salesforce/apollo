@@ -53,10 +53,13 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
+import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.JoinGossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
+import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
@@ -92,6 +95,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
 
 /**
  * The View is the active representation view of all members - failed and live -
@@ -501,6 +505,26 @@ public class View {
     public class Service {
 
         /**
+         * Asynchronously add a member to the next view
+         *
+         * @param request          - request to join
+         * @param from             - validated identity of partner
+         * @param responseObserver - async response
+         * @param timer            - metrics timer
+         */
+        public void join(Join request, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
+            var gateway = Gateway.getDefaultInstance();
+            responseObserver.onNext(gateway);
+            responseObserver.onCompleted();
+            if (timer != null) {
+                var serializedSize = gateway.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGateway().update(serializedSize);
+                timer.stop();
+            }
+        }
+
+        /**
          * The first message in the anti-entropy protocol. Process any digests from the
          * inbound gossip digest. Respond with the Gossip that represents the digests
          * newer or not known in this view, as well as updates from this node based on
@@ -561,6 +585,11 @@ public class View {
                              .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), fpr))
                              .build();
             }, Gossip.getDefaultInstance());
+        }
+
+        public Redirect seed(Join request, Digest from) {
+            // TODO Auto-generated method stub
+            return Redirect.getDefaultInstance();
         }
 
         /**
@@ -1318,13 +1347,26 @@ public class View {
         }
         SignedNote signedNote = n.getWrapped();
         Digests outbound = commonDigests();
-        return link.gossip(SayWhat.newBuilder()
-                                  .setContext(context.getId().toDigeste())
-                                  .setView(currentView.get().toDigeste())
-                                  .setNote(signedNote)
-                                  .setRing(ring)
-                                  .setGossip(outbound)
-                                  .build());
+        try {
+            return link.gossip(SayWhat.newBuilder()
+                                      .setContext(context.getId().toDigeste())
+                                      .setView(currentView.get().toDigeste())
+                                      .setNote(signedNote)
+                                      .setRing(ring)
+                                      .setGossip(outbound)
+                                      .build());
+        } catch (Throwable e) {
+            final var p = (Participant) link.getMember();
+            if (e instanceof StatusRuntimeException sre) {
+                handleSre(p, sre);
+                accuse(p, ring);
+                return null;
+            } else {
+                log.warn("Exception gossiping with {} on: {}", p.getId(), node.getId(), e.getCause());
+                accuse(p, ring);
+                return null;
+            }
+        }
     }
 
     /**
@@ -1342,9 +1384,10 @@ public class View {
         if (timer != null) {
             timer.close();
         }
+        final var member = destination.member();
         if (futureSailor.isEmpty()) {
-            if (destination.member() != null) {
-                accuse(destination.member(), destination.ring());
+            if (member != null) {
+                accuse(member, destination.ring());
             }
             futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(),
                                               TimeUnit.NANOSECONDS);
@@ -1354,7 +1397,7 @@ public class View {
         try {
             Gossip gossip = futureSailor.get().get();
             if (gossip.getRedirect()) {
-                redirect(destination.member(), gossip, destination.ring());
+                redirect(member, gossip, destination.ring());
             } else {
                 Update update = response(gossip);
                 if (!update.equals(Update.getDefaultInstance())) {
@@ -1368,28 +1411,15 @@ public class View {
                 }
             }
         } catch (StatusRuntimeException e) {
-            if (e.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
-                e.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
-                e.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                log.trace("Cannot find/unknown: {} on: {}", destination.member(), node.getId());
-            } else {
-                log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), e);
-            }
-            accuse(destination.member(), destination.ring());
+            handleSre(node, e);
+            accuse(member, destination.ring());
         } catch (ExecutionException e) {
-            var cause = e.getCause();
-            if (cause instanceof StatusRuntimeException sre) {
-                if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
-                    sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
-                    sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                    log.trace("Cannot find/unknown: {} on: {}", destination.member(), node.getId());
-                } else {
-                    log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), e.getCause());
-                }
+            if (e.getCause() instanceof StatusRuntimeException sre) {
+                handleSre(member, sre);
             } else {
-                log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), cause);
+                log.warn("Exception gossiping with {} on: {}", member, node.getId(), e.getCause());
             }
-            accuse(destination.member(), destination.ring());
+            accuse(member, destination.ring());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return;
@@ -1397,6 +1427,16 @@ public class View {
 
         futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
 
+    }
+
+    private void handleSre(final Participant member, StatusRuntimeException sre) {
+        if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
+            sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
+            sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
+            log.trace("Cannot find/unknown: {} on: {}", member, node.getId());
+        } else {
+            log.warn("Exception gossiping with {} on: {}", member, node.getId(), sre);
+        }
     }
 
     /**

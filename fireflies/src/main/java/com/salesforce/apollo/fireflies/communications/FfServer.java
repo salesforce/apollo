@@ -14,7 +14,10 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
+import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.Join;
+import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.RoutableService;
@@ -49,7 +52,7 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
-        Context timer = metrics == null ? null : metrics.inboundGossipTimer().time();
+        Context timer = metrics == null ? null : metrics.inboundGossipDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
@@ -63,21 +66,59 @@ public class FfServer extends FirefliesImplBase {
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Gossip gossip;
 
-            try {
-                gossip = s.rumors(request, from);
-                responseObserver.onNext(gossip);
-                responseObserver.onCompleted();
-                if (timer != null) {
-                    var serializedSize = gossip.getSerializedSize();
-                    metrics.outboundBandwidth().mark(serializedSize);
-                    metrics.gossipReply().update(serializedSize);
-                    timer.stop();
-                }
-            } catch (StatusRuntimeException e) {
-                responseObserver.onError(e);
-                if (timer != null) {
-                    timer.stop();
-                }
+            gossip = s.rumors(request, from);
+            responseObserver.onNext(gossip);
+            responseObserver.onCompleted();
+            if (timer != null) {
+                var serializedSize = gossip.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.gossipReply().update(serializedSize);
+                timer.stop();
+            }
+        }), log));
+    }
+
+    @Override
+    public void join(Join request, StreamObserver<Gateway> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundJoinDuration().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundJoin().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            // async handling
+            s.join(request, from, responseObserver, timer);
+        });
+    }
+
+    @Override
+    public void seed(Join request, StreamObserver<Redirect> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundSeedDuration().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundSeed().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            var redirect = s.seed(request, from);
+            responseObserver.onNext(redirect);
+            responseObserver.onCompleted();
+            if (timer != null) {
+                var serializedSize = redirect.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundRedirect().update(serializedSize);
+                timer.stop();
             }
         }), log));
     }
