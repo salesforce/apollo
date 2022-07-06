@@ -21,6 +21,7 @@ import com.salesforce.apollo.protocols.EndpointMetricsImpl;
  */
 public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMetrics {
     private final Meter     accusations;
+    private final Meter     filteredNotes;
     private final Histogram gossipReply;
     private final Histogram gossipResponse;
     private final Timer     gossipRoundDuration;
@@ -34,6 +35,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Histogram outboundGossip;
     private final Histogram outboundUpdate;
     private final Timer     outboundUpdateTimer;
+    private final Meter     shunnedGossip;
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -52,11 +54,18 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         notes = registry.meter(name(context.shortString(), "ff.gossip.notes"));
         joining = registry.meter(name(context.shortString(), "ff.joining"));
         leaving = registry.meter(name(context.shortString(), "ff.leaving"));
+        filteredNotes = registry.meter(name(context.shortString(), "ff.gossip.notes.filtered"));
+        shunnedGossip = registry.meter(name(context.shortString(), "ff.gossip.shunned"));
     }
 
     @Override
     public Meter accusations() {
         return accusations;
+    }
+
+    @Override
+    public Meter filteredNotes() {
+        return filteredNotes;
     }
 
     @Override
@@ -122,5 +131,10 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Timer outboundUpdateTimer() {
         return outboundUpdateTimer;
+    }
+
+    @Override
+    public Meter shunnedGossip() {
+        return shunnedGossip;
     }
 }

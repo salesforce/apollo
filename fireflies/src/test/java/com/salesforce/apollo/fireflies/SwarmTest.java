@@ -133,7 +133,7 @@ public class SwarmTest {
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
         int delta = 5;
-        for (int i = 0; i < (CARDINALITY / delta) - 8; i++) {
+        for (int i = 0; i < (CARDINALITY / delta - 4); i++) {
             var removed = new ArrayList<Digest>();
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 final var view = c.get(j);
@@ -290,12 +290,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(3));
+                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(1));
         }).collect(Collectors.toList());
     }
 }

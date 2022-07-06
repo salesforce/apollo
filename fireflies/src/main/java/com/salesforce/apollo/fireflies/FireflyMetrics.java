@@ -19,6 +19,8 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Meter accusations();
 
+    Meter filteredNotes();
+
     Histogram gossipReply();
 
     Histogram gossipResponse();
@@ -44,4 +46,6 @@ public interface FireflyMetrics extends EdpointMetrics {
     Histogram outboundUpdate();
 
     Timer outboundUpdateTimer();
+
+    Meter shunnedGossip();
 }

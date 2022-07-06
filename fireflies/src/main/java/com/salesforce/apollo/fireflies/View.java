@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -515,11 +516,14 @@ public class View {
         public Gossip rumors(SayWhat request, Digest from) {
             if (shunned.contains(from)) {
                 log.trace("Shunned gossip: {} on: {}", from, node.getId());
+                if (metrics != null) {
+                    metrics.shunnedGossip().mark();
+                }
                 return Gossip.getDefaultInstance();
             }
             final var ring = request.getRing();
             final var requestView = Digest.from(request.getView());
-            if (!requestView.equals(currentView.get()) && !requestView.equals(previousView.get())) {
+            if (!requestView.equals(currentView.get())) {
                 log.debug("invalid view: {} current: {} previous: {} from: {} on: {}", requestView, currentView.get(),
                           previousView.get(), ring, from, node.getId());
                 return Gossip.getDefaultInstance();
@@ -534,11 +538,10 @@ public class View {
                     log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
                     return Gossip.getDefaultInstance();
                 }
-                Participant member;
-                if (!add(note)) {
+                Participant member = context.getMember(from);
+                if (member == null) {
                     member = new Participant(note.getId());
-                } else {
-                    member = context.getMember(from);
+                    add(note);
                 }
 
                 Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
@@ -552,7 +555,7 @@ public class View {
                 final var digests = request.getGossip();
                 return Gossip.newBuilder()
                              .setRedirect(false)
-                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr, requestView))
+                             .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr))
                              .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), fpr))
                              .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()), fpr))
                              .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), fpr))
@@ -570,6 +573,9 @@ public class View {
         public void update(State request, Digest from) {
             if (shunned.contains(from)) {
                 log.warn("Shunned update: {} on: {}", from, node.getId());
+                if (metrics != null) {
+                    metrics.shunnedGossip().mark();
+                }
                 return;
             }
             final var requestView = Digest.from(request.getView());
@@ -658,27 +664,26 @@ public class View {
 
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
-    private final AtomicReference<Digest>                     currentView         = new AtomicReference<>();
+    private final AtomicReference<Digest>                     currentView      = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
-    private final AtomicReference<RoundScheduler.Timer>       finalizeViewChange  = new AtomicReference<>();
     private final double                                      fpr;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private final Map<Digest, SignedNote>                     joins               = new ConcurrentSkipListMap<>();
+    private final Map<Digest, SignedNote>                     joins            = new ConcurrentSkipListMap<>();
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
-    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
-    private final AtomicReference<Digest>                     previousView        = new AtomicReference<>();
+    private final Map<Digest, SignedViewChange>               observations     = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals = new ConcurrentSkipListMap<>();
+    private final AtomicReference<Digest>                     previousView     = new AtomicReference<>();
     private final RoundScheduler                              roundTimers;
-    private final AtomicReference<RoundScheduler.Timer>       scheduledViewChange = new AtomicReference<>();
-    private final Service                                     service             = new Service();
-    private final Set<Digest>                                 shunned             = Collections.newSetFromMap(new ConcurrentSkipListMap<>());
-    private final AtomicBoolean                               started             = new AtomicBoolean();
+    private final Service                                     service          = new Service();
+    private final Set<Digest>                                 shunned          = Collections.newSetFromMap(new ConcurrentSkipListMap<>());
+    private final AtomicBoolean                               started          = new AtomicBoolean();
+    private final Map<String, RoundScheduler.Timer>           timers           = new HashMap<>();
     private final EventValidation                             validation;
-    private final ReentrantReadWriteLock                      viewChange          = new ReentrantReadWriteLock();
-    private final AtomicReference<ViewChange>                 vote                = new AtomicReference<>();
+    private final ReentrantReadWriteLock                      viewChange       = new ReentrantReadWriteLock();
+    private final AtomicReference<ViewChange>                 vote             = new AtomicReference<>();
     private volatile BloomFilter<Digest>                      votesReceived;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -764,14 +769,8 @@ public class View {
         observations.clear();
         joins.clear();
         votesReceived.clear();
-        if (finalizeViewChange.get() != null) {
-            finalizeViewChange.get().cancel();
-            finalizeViewChange.set(null);
-        }
-        if (scheduledViewChange.get() != null) {
-            scheduledViewChange.get().cancel();
-            scheduledViewChange.set(null);
-        }
+        timers.values().forEach(t -> t.cancel());
+        timers.clear();
     }
 
     @Override
@@ -907,17 +906,33 @@ public class View {
      */
     private boolean add(NoteWrapper note) {
         if (shunned.contains(note.getId())) {
-//            log.trace("Ignoring shunned note from {} on: {}", note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
             return false;
         }
         if (!currentView.get().equals(note.currentView())) {
             log.trace("Ignoring note in invalid view: {} current: {} from {} on: {}", note.currentView(),
                       currentView.get(), note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
             return false;
         }
         if (!previousView.get().equals(note.previousView())) {
-            log.warn("Ignoring note, invalid previous view: {} current: {} from {} on: {}", note.previousView(),
-                     currentView.get(), note.getId(), node.getId());
+            log.trace("Ignoring note, invalid previous view: {} current: {} from {} on: {}", note.previousView(),
+                      currentView.get(), note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
+            return false;
+        }
+
+        if (!isValidMask(note.getMask(), context.toleranceLevel())) {
+            log.trace("Note: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
             return false;
         }
 
@@ -925,29 +940,30 @@ public class View {
         if (m == null) {
             if (!validation.verify(note.getCoordinates(), note.getSignature(),
                                    note.getWrapped().getNote().toByteString())) {
-                log.warn("invalid participant note from {} on: {}", note.getId(), node.getId());
+                log.trace("invalid participant note from {} on: {}", note.getId(), node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
+                return false;
             }
             m = new Participant(note.getId());
             m.setNote(note);
             add(m);
         } else {
             if (m.getEpoch() >= note.getEpoch()) {
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
                 return false;
             }
         }
 
-        if (!isValidMask(note.getMask(), context.toleranceLevel())) {
-            log.trace("Note: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
-            return false;
-        }
-
         if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
             log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
             return false;
-        }
-
-        if (metrics != null) {
-            metrics.notes().mark();
         }
         NoteWrapper current = m.getNote();
         if (current != null) {
@@ -956,8 +972,15 @@ public class View {
             if (currentEpoch > 0 && currentEpoch < nextEpoch - 1) {
                 log.trace("discarding note for {} with wrong previous epoch {} current: {} on: {}", m.getId(),
                           nextEpoch, currentEpoch, node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
                 return false;
             }
+        }
+
+        if (metrics != null) {
+            metrics.notes().mark();
         }
 
         log.debug("Adding member via note {} on: {}", m, node.getId());
@@ -1141,7 +1164,7 @@ public class View {
             if (observations.size() < superMajority) {
                 log.trace("Do not have supermajority: {} view: {} for: {} required: {} on: {}", observations.size(),
                           currentView.get(), superMajority, node.getId());
-                scheduleFinalizeViewChange();
+                scheduleFinalizeViewChange(1);
                 return;
             }
             HashMultiset<Ballot> ballots = HashMultiset.create();
@@ -1176,9 +1199,9 @@ public class View {
             }
             scheduleViewChange();
             observations.clear();
-            finalizeViewChange.set(null);
-            vote.set(null);
             votesReceived.clear();
+            timers.remove(FINALIZE_VIEW_CHANGE);
+            vote.set(null);
         } finally {
             lock.unlock();
         }
@@ -1284,6 +1307,9 @@ public class View {
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
         if (shunned.contains(link.getMember().getId())) {
             log.warn("Shunning gossip with: {} on: {}", link.getMember().getId(), node.getId());
+            if (metrics != null) {
+                metrics.shunnedGossip().mark();
+            }
             return null;
         }
         NoteWrapper n = node.getNote();
@@ -1389,7 +1415,7 @@ public class View {
             if (!pendingRebuttals.isEmpty()) {
                 log.debug("Pending rebuttals: {} view: {} on: {}", pendingRebuttals.size(), currentView.get(),
                           node.getId());
-                scheduleViewChange(3); // 3 TTL rounds to check again
+                scheduleViewChange(1); // 1 TTL round to check again
                 return;
             }
             final var builder = ViewChange.newBuilder()
@@ -1557,20 +1583,20 @@ public class View {
      * @param p
      * @param digests
      */
-    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p, Digest view) {
+    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
         final var current = currentView.get();
         context.active()
+               .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> m.getNote() != null)
                .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
-        builder.setBff(currentView.get().equals(view) ? getNotesBff(Entropy.nextSecureLong(), p).toBff()
-                                                      : Biff.getDefaultInstance());
+        builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process notes produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
@@ -1748,10 +1774,14 @@ public class View {
     }
 
     private void scheduleFinalizeViewChange() {
-        log.trace("View change finalization scheduled for: {} joining: {} leaving: {} on: {}", currentView.get(),
-                  joins.size(), shunned.size(), node.getId());
-        finalizeViewChange.set(roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(),
-                                                    FINALIZE_VIEW_ROUNDS));
+        scheduleFinalizeViewChange(FINALIZE_VIEW_ROUNDS);
+    }
+
+    private void scheduleFinalizeViewChange(final int finalizeViewRounds) {
+        log.trace("View change finalization scheduled: {} rounds for: {} joining: {} leaving: {} on: {}",
+                  finalizeViewRounds, currentView.get(), joins.size(), shunned.size(), node.getId());
+        timers.put(FINALIZE_VIEW_CHANGE,
+                   roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), finalizeViewRounds));
     }
 
     private void scheduleViewChange() {
@@ -1761,7 +1791,8 @@ public class View {
 
     private void scheduleViewChange(final int viewChangeRounds) {
         log.trace("Scheduling view change: {} rounds on: {}", viewChangeRounds, node.getId());
-        scheduledViewChange.set(roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), viewChangeRounds));
+        timers.put(SCHEDULED_VIEW_CHANGE,
+                   roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), viewChangeRounds));
     }
 
     private <T> T stable(Callable<T> call, T defaultValue) {
@@ -1816,8 +1847,11 @@ public class View {
         var biff = gossip.getNotes().getBff();
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> notesBff = BloomFilter.from(biff);
+            final var current = currentView.get();
             context.allMembers()
+                   .filter(m -> !shunned.contains(m.getId()))
                    .filter(m -> m.getNote() != null)
+                   .filter(m -> current.equals(m.getNote().currentView()))
                    .filter(m -> !notesBff.contains(m.getNote().getHash()))
                    .map(m -> m.getNote().getWrapped())
                    .forEach(n -> builder.addNotes(n));
