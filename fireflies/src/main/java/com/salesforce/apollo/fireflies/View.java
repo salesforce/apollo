@@ -589,6 +589,16 @@ public class View {
          * @param timer            - metrics timer
          */
         public void join(Join request, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
+            var note = new NoteWrapper(request.getNote(), digestAlgo);
+            if (!from.equals(note.getId())) {
+                responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
+                return;
+            }
+            var requestView = Digest.from(request.getView());
+            if (!currentView.get().equals(requestView)) {
+                responseObserver.onError(new StatusRuntimeException(Status.OUT_OF_RANGE.withDescription("View id does not match, reseed")));
+                return;
+            }
             pendingJoins.put(from, () -> {
                 var gateway = Gateway.newBuilder()
                                      .setCurrentView(currentView.get().toDigeste())
@@ -605,6 +615,7 @@ public class View {
                     timer.stop();
                 }
             });
+            joins.put(from, note.getWrapped());
         }
 
         /**
