@@ -15,6 +15,7 @@ service Fireflies {
     rpc update (State) returns (google.protobuf.Empty) {}
     rpc seed (Join) returns (Redirect) {}
     rpc join (Join) returns (Gateway) {}
+    rpc sync (Sync) returns (Synchronize) {}
 }
 
 message SayWhat {
@@ -123,11 +124,24 @@ message Gateway {
     utils.Digeste currentView = 1;
     utils.Digeste previousView = 2;
     int32 rings = 3;
-    repeated SignedNote membership = 4;
+    int32 cardinality = 4;
+    utils.Biff membership = 5;
 }
 
 message Join {
     utils.Digeste context = 1;
     utils.Digeste view = 2;
     SignedNote note = 3;
+}
+
+message Sync { 
+    utils.Digeste context = 1;
+    utils.Digeste view = 2;
+    utils.Biff haveNotes = 3;
+    int32 max = 4;
+}
+
+message Synchronize {
+    utils.Digeste view = 1;
+    repeated SignedNote notes = 2;
 }

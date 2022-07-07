@@ -18,6 +18,8 @@ import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
+import com.salesfoce.apollo.fireflies.proto.Sync;
+import com.salesfoce.apollo.fireflies.proto.Synchronize;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -118,6 +120,28 @@ public class FfClient implements Fireflies {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.redirect().update(serializedSize);
+                } catch (InterruptedException | ExecutionException e) {
+                    // nothing
+                }
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Synchronize> sync(Sync sync) {
+        ListenableFuture<Synchronize> result = client.sync(sync);
+        if (metrics != null) {
+            var serializedSize = sync.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundSync().update(serializedSize);
+        }
+        result.addListener(() -> {
+            if (metrics != null) {
+                try {
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundSynchronize().update(serializedSize);
                 } catch (InterruptedException | ExecutionException e) {
                     // nothing
                 }
