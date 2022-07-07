@@ -111,6 +111,10 @@ import io.grpc.stub.StreamObserver;
  * @since 220
  */
 public class View {
+    /**
+     * Embodiment of the client side join protocol
+     *
+     */
     public class Binding {
         private List<ListenableFuture<Gateway>>  gateways;
         private CompletableFuture<Gateway>       joining;
@@ -294,40 +298,31 @@ public class View {
             mask.flip(0, context.getRingCount());
             final var accusations = validAccusations;
 
+            // disable current accusations
             for (int i = 0; i < context.getRingCount(); i++) {
                 if (accusations[i] != null) {
                     mask.set(i, false);
                     continue;
                 }
-                if (mask.cardinality() <= toleranceLevel) {
-                    assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: " + toleranceLevel
-                    + " for node: " + getId();
-                    return mask;
+            }
+            // clear masks from previous note
+            BitSet previous = BitSet.valueOf(current.getMask().toByteArray());
+            for (int index = 0; index < context.getRingCount(); index++) {
+                if (!previous.get(index) && accusations[index] == null) {
+                    mask.set(index, true);
                 }
             }
-            if (current.getEpoch() % 2 == 1) {
-                // clear masks from previous note
-                BitSet previous = BitSet.valueOf(current.getMask().toByteArray());
-                for (int index = 0; index < context.getRingCount(); index++) {
-                    if (mask.cardinality() <= toleranceLevel + 1) {
-                        assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: "
-                        + toleranceLevel + " for node: " + getId();
-                        return mask;
-                    }
-                    if (!previous.get(index) && accusations[index] == null) {
-                        mask.set(index, true);
-                    }
+
+            // Fill the rest of the mask with randomly set index
+            while (mask.cardinality() != toleranceLevel + 1) {
+                int index = Entropy.nextBitsStreamInt(context.getRingCount());
+                if (accusations[index] != null) {
+                    continue;
                 }
-            } else {
-                // Fill the rest of the mask with randomly set index
-                while (mask.cardinality() <= toleranceLevel) {
-                    int index = Entropy.nextBitsStreamInt(context.getRingCount());
-                    if (accusations[index] != null) {
-                        continue;
-                    }
-                    if (mask.get(index)) {
-                        mask.set(index, true);
-                    }
+                if (mask.cardinality() > toleranceLevel + 1 && mask.get(index)) {
+                    mask.set(index, false);
+                } else if (mask.cardinality() < toleranceLevel && !mask.get(index)) {
+                    mask.set(index, true);
                 }
             }
             assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " t: " + toleranceLevel + " for node: "
@@ -798,8 +793,7 @@ public class View {
      * @return
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
-        final var cardinality = mask.cardinality();
-        return cardinality >= toleranceLevel + 1 && cardinality <= 2 * toleranceLevel + 1;
+        return mask.cardinality() == toleranceLevel + 1;
     }
 
     private final CommonCommunications<Fireflies, Service>    comm;
