@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -93,6 +94,7 @@ public class SwarmTest {
     @Test
     public void churn() throws Exception {
         initialize();
+        final var scheduler = Executors.newScheduledThreadPool(10);
 
         Set<View> testViews = new HashSet<>();
 
@@ -108,8 +110,7 @@ public class SwarmTest {
                 toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(Duration.ofMillis(10), seeds,
-                                               Executors.newSingleThreadScheduledExecutor()));
+            toStart.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
             boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
@@ -203,8 +204,9 @@ public class SwarmTest {
     @Test
     public void swarm() throws Exception {
         initialize();
+        final var scheduler = Executors.newScheduledThreadPool(10);
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(Duration.ofMillis(50), seeds, Executors.newSingleThreadScheduledExecutor()));
+        views.forEach(view -> view.start(Duration.ofMillis(50), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
@@ -290,12 +292,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
+                                        ForkJoinPool.commonPool(), metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(1));
+                            DigestAlgorithm.DEFAULT, metrics, ForkJoinPool.commonPool());
         }).collect(Collectors.toList());
     }
 }
