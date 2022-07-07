@@ -170,10 +170,18 @@ public class View {
         }
 
         private void completeGateway(CompletableFuture<Gateway> gateway, ListenableFuture<Gateway> fs,
-                                     List<ListenableFuture<Gateway>> gateways) {
+                                     List<ListenableFuture<Gateway>> gateways, HashMultiset<Gateway> ballots) {
             try {
-                gateway.complete(fs.get());
-                gateways.forEach(ffs -> ffs.cancel(true));
+                var g = fs.get();
+                ballots.add(g);
+                var max = ballots.entrySet()
+                                 .stream()
+                                 .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                                 .orElse(null);
+                if (max != null && max.getCount() >= context.toleranceLevel()) {
+                    gateway.complete(max.getElement());
+                    gateways.forEach(ffs -> ffs.cancel(true));
+                }
             } catch (ExecutionException e) {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -220,11 +228,13 @@ public class View {
             var joining = new CompletableFuture<Gateway>().whenComplete((g, t) -> {
                 sync(crown, g, duration, scheduler, predecessors);
             });
+            HashMultiset<Gateway> ballots = HashMultiset.create();
+
             List<ListenableFuture<Gateway>> gateways = new CopyOnWriteArrayList<>();
             predecessors.parallelStream()
                         .map(m -> comm.apply(m, node))
                         .map(link -> link.join(join))
-                        .peek(fs -> fs.addListener(() -> completeGateway(joining, fs, gateways), r -> r.run()))
+                        .peek(fs -> fs.addListener(() -> completeGateway(joining, fs, gateways, ballots), r -> r.run()))
                         .forEach(e -> gateways.add(e));
         }
 
