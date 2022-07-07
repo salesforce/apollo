@@ -137,7 +137,7 @@ public class View {
             seeding = new CompletableFuture<Redirect>().whenComplete((r, t) -> {
                 redirect(r);
             });
-            seedlings = seeds.stream()
+            seedlings = seeds.parallelStream()
                              .map(s -> new Participant(((SelfAddressingIdentifier) s.coordinates.getIdentifier()).getDigest()))
                              .map(m -> comm.apply(m, node))
                              .map(link -> link.seed(join))
@@ -175,7 +175,7 @@ public class View {
                 trigger.complete(g);
             });
             gateways = redirect.getPredecessorsList()
-                               .stream()
+                               .parallelStream()
                                .map(sn -> new NoteWrapper(sn, digestAlgo))
                                .map(nw -> new Participant(nw))
                                .map(m -> comm.apply(m, node))
