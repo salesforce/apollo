@@ -146,6 +146,12 @@ public class View {
                            .setView(currentView.get().toDigeste())
                            .setNote(node.getNote().getWrapped())
                            .build();
+            log.warn("Seeding view: {} context: {} with: {} started on: {}", currentView.get(), context.getId(),
+                     seeds.stream()
+                          .map(s -> ((SelfAddressingIdentifier) s.coordinates().getIdentifier()).getDigest())
+                          .toList(),
+                     node.getId());
+
             var seeding = new CompletableFuture<Redirect>().whenComplete((r, t) -> {
                 redirect(new AtomicReference<>(digestAlgo.getOrigin()), r, duration, scheduler);
             });
@@ -161,8 +167,17 @@ public class View {
         private void complete(CompletableFuture<Redirect> redirect, ListenableFuture<Redirect> fs,
                               List<ListenableFuture<Redirect>> seedlings) {
             try {
-                redirect.complete(fs.get());
+                final var rd = fs.get();
+                redirect.complete(rd);
                 seedlings.forEach(ffs -> ffs.cancel(true));
+                log.warn("Completing redirect, view: {} context: {} predecessors: {} on: {}", Digest.from(rd.getView()),
+                         context.getId(),
+                         rd.getPredecessorsList()
+                           .stream()
+                           .map(sn -> new NoteWrapper(sn, digestAlgo))
+                           .map(nw -> nw.getId())
+                           .toList(),
+                         node.getId());
             } catch (ExecutionException e) {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -173,12 +188,17 @@ public class View {
                                      List<ListenableFuture<Gateway>> gateways, HashMultiset<Gateway> ballots) {
             try {
                 var g = fs.get();
+                log.warn("Completing gateway, prev: {} current: {} cardinality: {} rings: {} context: {} on: {}",
+                         Digest.from(g.getPreviousView()), Digest.from(g.getCurrentView()), g.getCardinality(),
+                         g.getRings(), context.getId(), node.getId());
                 ballots.add(g);
                 var max = ballots.entrySet()
                                  .stream()
                                  .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                                  .orElse(null);
                 if (max != null && max.getCount() >= context.toleranceLevel()) {
+                    log.warn("Majority gateway achieve for: context: {} on: {}", Digest.from(g.getCurrentView()),
+                             g.getCurrentView(), context.getId(), node.getId());
                     gateway.complete(max.getElement());
                     gateways.forEach(ffs -> ffs.cancel(true));
                 }
@@ -192,13 +212,16 @@ public class View {
                              Synchronize synchro, Participant p) {
             var syncView = Digest.from(synchro.getView());
             if (!currentView.get().equals(syncView)) {
-                log.warn("View changed from: {} to: {} from: {} on: {}", currentView.get(), syncView, p, node.getId());
+                log.warn("View changed from: {} to: {} from: {} on: {}", currentView.get(), syncView, p.getId(),
+                         node.getId());
                 trigger.completeExceptionally(new IllegalStateException("View change during sync"));
                 return;
             }
             var lock = viewChange.writeLock();
             lock.lock();
             try {
+                log.warn("Processing synchronization view: {} context: {} from: {} on: {}", currentView.get(),
+                         context.getId(), p.getId(), node.getId());
                 synchro.getNotesList()
                        .stream()
                        .map(sn -> new NoteWrapper(sn, digestAlgo))
@@ -214,6 +237,7 @@ public class View {
 
         private void redirect(AtomicReference<Digest> crown, Redirect redirect, Duration duration,
                               ScheduledExecutorService scheduler) {
+            currentView.set(Digest.from(redirect.getView()));
             var join = Join.newBuilder()
                            .setContext(context.getId().toDigeste())
                            .setView(redirect.getView())
@@ -225,6 +249,8 @@ public class View {
                                        .map(sn -> new NoteWrapper(sn, digestAlgo))
                                        .map(nw -> new Participant(nw))
                                        .toList();
+            log.warn("Redirecting view: {} context: {} to: {}  started on: {}", currentView.get(), context.getId(),
+                     predecessors.stream().map(p -> p.getId()).toList(), node.getId());
             var joining = new CompletableFuture<Gateway>().whenComplete((g, t) -> {
                 sync(crown, g, duration, scheduler, predecessors);
             });
@@ -245,6 +271,8 @@ public class View {
             }
             if (bound.notes.size() == bound.cardinality && crown.get().equals(currentView.get())) { // fini
                 trigger.complete(bound); // idempotent
+                log.warn("Completing synchronization of view: {} context: {} to: {}  started on: {}", currentView.get(),
+                         context.getId(), node.getId());
                 return;
             }
             var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), bound.cardinality, fpr);
@@ -252,6 +280,8 @@ public class View {
             if (link == null) {
                 return;
             }
+            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
+                     context.getId(), member.getId(), node.getId());
             var fs = link.sync(Sync.newBuilder()
                                    .setMax(100)
                                    .setContext(context.getId().toDigeste())
@@ -276,6 +306,8 @@ public class View {
 
         private void sync(AtomicReference<Digest> crown, Gateway gateway, Duration duration,
                           ScheduledExecutorService scheduler, List<Participant> predecessors) {
+            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
+                     context.getId(), predecessors.stream().map(p -> p.getId()).toList(), node.getId());
             currentView.set(Digest.from(gateway.getCurrentView()));
             var bound = new Bound(gateway.getCardinality(), gateway.getRings());
             BloomFilter<Digest> membership = DigestBloomFilter.from(gateway.getMembership());
