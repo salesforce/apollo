@@ -94,7 +94,7 @@ public class SwarmTest {
     @Test
     public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(10);
+        final var scheduler = Executors.newScheduledThreadPool(2);
 
         Set<View> testViews = new HashSet<>();
 
@@ -204,7 +204,7 @@ public class SwarmTest {
     @Test
     public void swarm() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(10);
+        final var scheduler = Executors.newScheduledThreadPool(2);
         long then = System.currentTimeMillis();
         views.forEach(view -> view.start(Duration.ofMillis(50), seeds, scheduler));
 

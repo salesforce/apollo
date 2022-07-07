@@ -1444,39 +1444,42 @@ public class View {
      * @throws Exception
      */
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
-        if (shunned.contains(link.getMember().getId())) {
-            log.warn("Shunning gossip with: {} on: {}", link.getMember().getId(), node.getId());
-            if (metrics != null) {
-                metrics.shunnedGossip().mark();
-            }
-            return null;
-        }
-        NoteWrapper n = node.getNote();
-        if (n == null) {
-            return null;
-        }
-        SignedNote signedNote = n.getWrapped();
-        Digests outbound = commonDigests();
-        try {
-            return link.gossip(SayWhat.newBuilder()
-                                      .setContext(context.getId().toDigeste())
-                                      .setView(currentView.get().toDigeste())
-                                      .setNote(signedNote)
-                                      .setRing(ring)
-                                      .setGossip(outbound)
-                                      .build());
-        } catch (Throwable e) {
-            final var p = (Participant) link.getMember();
-            if (e instanceof StatusRuntimeException sre) {
-                handleSre(p, sre);
-                accuse(p, ring);
-                return null;
-            } else {
-                log.warn("Exception gossiping with {} on: {}", p.getId(), node.getId(), e.getCause());
-                accuse(p, ring);
+        return stableBlocking(() -> {
+            if (shunned.contains(link.getMember().getId())) {
+                log.warn("Shunning gossip with: {} on: {}", link.getMember().getId(), node.getId());
+                if (metrics != null) {
+                    metrics.shunnedGossip().mark();
+                }
                 return null;
             }
-        }
+            NoteWrapper n = node.getNote();
+            if (n == null) {
+                return null;
+            }
+            SignedNote signedNote = n.getWrapped();
+            Digests outbound = commonDigests();
+            try {
+                return link.gossip(SayWhat.newBuilder()
+                                          .setContext(context.getId().toDigeste())
+                                          .setView(currentView.get().toDigeste())
+                                          .setNote(signedNote)
+                                          .setRing(ring)
+                                          .setGossip(outbound)
+                                          .build());
+            } catch (Throwable e) {
+                final var p = (Participant) link.getMember();
+                if (e instanceof StatusRuntimeException sre) {
+                    handleSre(p, sre);
+                    accuse(p, ring);
+                    return null;
+                } else {
+                    log.warn("Exception gossiping with {} on: {}", p.getId(), node.getId(), e.getCause());
+                    accuse(p, ring);
+                    return null;
+                }
+            }
+        });
+
     }
 
     /**
@@ -1491,52 +1494,54 @@ public class View {
     private void gossip(Optional<ListenableFuture<Gossip>> futureSailor,
                         Destination<Participant, Fireflies> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
-        if (timer != null) {
-            timer.close();
-        }
-        final var member = destination.member();
-        if (futureSailor.isEmpty()) {
-            if (member != null) {
-                accuse(member, destination.ring());
+        stableBlocking(() -> {
+            if (timer != null) {
+                timer.close();
             }
+            final var member = destination.member();
+            if (futureSailor.isEmpty()) {
+                if (member != null) {
+                    accuse(member, destination.ring());
+                }
+                futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(),
+                                                  TimeUnit.NANOSECONDS);
+                return;
+            }
+
+            try {
+                Gossip gossip = futureSailor.get().get();
+                if (gossip.getRedirect()) {
+                    redirect(member, gossip, destination.ring());
+                } else {
+                    Update update = response(gossip);
+                    if (!update.equals(Update.getDefaultInstance())) {
+                        destination.link()
+                                   .update(State.newBuilder()
+                                                .setContext(context.getId().toDigeste())
+                                                .setView(currentView.get().toDigeste())
+                                                .setRing(destination.ring())
+                                                .setUpdate(update)
+                                                .build());
+                    }
+                }
+            } catch (StatusRuntimeException e) {
+                handleSre(node, e);
+                accuse(member, destination.ring());
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof StatusRuntimeException sre) {
+                    handleSre(member, sre);
+                } else {
+                    log.warn("Exception gossiping with {} on: {}", member, node.getId(), e.getCause());
+                }
+                accuse(member, destination.ring());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+
             futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(),
                                               TimeUnit.NANOSECONDS);
-            return;
-        }
-
-        try {
-            Gossip gossip = futureSailor.get().get();
-            if (gossip.getRedirect()) {
-                redirect(member, gossip, destination.ring());
-            } else {
-                Update update = response(gossip);
-                if (!update.equals(Update.getDefaultInstance())) {
-                    destination.link()
-                               .update(State.newBuilder()
-                                            .setContext(context.getId().toDigeste())
-                                            .setView(currentView.get().toDigeste())
-                                            .setRing(destination.ring())
-                                            .setUpdate(update)
-                                            .build());
-                }
-            }
-        } catch (StatusRuntimeException e) {
-            handleSre(node, e);
-            accuse(member, destination.ring());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof StatusRuntimeException sre) {
-                handleSre(member, sre);
-            } else {
-                log.warn("Exception gossiping with {} on: {}", member, node.getId(), e.getCause());
-            }
-            accuse(member, destination.ring());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-        }
-
-        futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
-
+        });
     }
 
     private void handleSre(final Participant member, StatusRuntimeException sre) {
@@ -1972,6 +1977,28 @@ public class View {
         if (!lock.tryLock()) {
             return;
         }
+        try {
+            r.run();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private <T> T stableBlocking(Callable<T> call) {
+        final var lock = viewChange.readLock();
+        lock.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void stableBlocking(Runnable r) {
+        final var lock = viewChange.readLock();
+        lock.lock();
         try {
             r.run();
         } finally {
