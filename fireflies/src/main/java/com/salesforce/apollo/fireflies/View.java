@@ -117,210 +117,6 @@ import io.grpc.stub.StreamObserver;
  * @since 220
  */
 public class View {
-    /**
-     * Embodiment of the client side join protocol
-     *
-     */
-    public class Binding {
-        static class Bound {
-            private final int                     cardinality;
-            private final Map<Digest, SignedNote> notes = new TreeMap<>();
-            @SuppressWarnings("unused")
-            private final int                     ringCount;
-
-            public Bound(int cardinality, int ringCount) {
-                this.cardinality = cardinality;
-                this.ringCount = ringCount;
-            }
-        }
-
-        private final CompletableFuture<Bound> trigger;
-
-        public Binding(CompletableFuture<Bound> trigger) {
-            this.trigger = trigger;
-        }
-
-        void seeding(List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler) {
-            var join = Join.newBuilder()
-                           .setContext(context.getId().toDigeste())
-                           .setView(currentView.get().toDigeste())
-                           .setNote(node.getNote().getWrapped())
-                           .build();
-            log.warn("Seeding view: {} context: {} with: {} started on: {}", currentView.get(), context.getId(),
-                     seeds.stream()
-                          .map(s -> ((SelfAddressingIdentifier) s.coordinates().getIdentifier()).getDigest())
-                          .toList(),
-                     node.getId());
-
-            var seeding = new CompletableFuture<Redirect>().whenComplete((r, t) -> {
-                redirect(new AtomicReference<>(digestAlgo.getOrigin()), r, duration, scheduler);
-            });
-            List<ListenableFuture<Redirect>> seedlings = new CopyOnWriteArrayList<>();
-            seeds.parallelStream()
-                 .map(s -> new Participant(((SelfAddressingIdentifier) s.coordinates.getIdentifier()).getDigest()))
-                 .map(m -> comm.apply(m, node))
-                 .map(link -> link.seed(join))
-                 .peek(fs -> fs.addListener(() -> complete(seeding, fs, seedlings), r -> r.run()))
-                 .forEach(e -> seedlings.add(e));
-        }
-
-        private void complete(CompletableFuture<Redirect> redirect, ListenableFuture<Redirect> fs,
-                              List<ListenableFuture<Redirect>> seedlings) {
-            try {
-                final var rd = fs.get();
-                redirect.complete(rd);
-                seedlings.forEach(ffs -> ffs.cancel(true));
-                log.warn("Completing redirect, view: {} context: {} predecessors: {} on: {}", Digest.from(rd.getView()),
-                         context.getId(),
-                         rd.getPredecessorsList()
-                           .stream()
-                           .map(sn -> new NoteWrapper(sn, digestAlgo))
-                           .map(nw -> nw.getId())
-                           .toList(),
-                         node.getId());
-            } catch (ExecutionException e) {
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        private void completeGateway(CompletableFuture<Gateway> gateway, ListenableFuture<Gateway> fs,
-                                     List<ListenableFuture<Gateway>> gateways, HashMultiset<Gateway> ballots) {
-            try {
-                var g = fs.get();
-                log.warn("Completing gateway, prev: {} current: {} cardinality: {} rings: {} context: {} on: {}",
-                         Digest.from(g.getPreviousView()), Digest.from(g.getCurrentView()), g.getCardinality(),
-                         g.getRings(), context.getId(), node.getId());
-                ballots.add(g);
-                var max = ballots.entrySet()
-                                 .stream()
-                                 .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
-                                 .orElse(null);
-                if (max != null && max.getCount() >= context.toleranceLevel()) {
-                    log.warn("Majority gateway achieve for: context: {} on: {}", Digest.from(g.getCurrentView()),
-                             g.getCurrentView(), context.getId(), node.getId());
-                    gateway.complete(max.getElement());
-                    gateways.forEach(ffs -> ffs.cancel(true));
-                }
-            } catch (ExecutionException e) {
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        private void process(AtomicReference<Digest> crown, BloomFilter<Digest> membership, Bound bound,
-                             Synchronize synchro, Participant p) {
-            var syncView = Digest.from(synchro.getView());
-            if (!currentView.get().equals(syncView)) {
-                log.warn("View changed from: {} to: {} from: {} on: {}", currentView.get(), syncView, p.getId(),
-                         node.getId());
-                trigger.completeExceptionally(new IllegalStateException("View change during sync"));
-                return;
-            }
-            var lock = viewChange.writeLock();
-            lock.lock();
-            try {
-                log.warn("Processing synchronization view: {} context: {} from: {} on: {}", currentView.get(),
-                         context.getId(), p.getId(), node.getId());
-                synchro.getNotesList()
-                       .stream()
-                       .map(sn -> new NoteWrapper(sn, digestAlgo))
-                       .filter(nw -> membership.contains(nw.getId()))
-                       .filter(n -> !bound.notes.containsKey(n.getId()))
-                       .peek(n -> bound.notes.put(n.getId(), n.getWrapped()))
-                       .map(n -> n.getId())
-                       .forEach(id -> crown.accumulateAndGet(id, (a, b) -> a.xor(b)));
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private void redirect(AtomicReference<Digest> crown, Redirect redirect, Duration duration,
-                              ScheduledExecutorService scheduler) {
-            currentView.set(Digest.from(redirect.getView()));
-            var join = Join.newBuilder()
-                           .setContext(context.getId().toDigeste())
-                           .setView(redirect.getView())
-                           .setNote(node.getNote().getWrapped())
-                           .build();
-
-            var predecessors = redirect.getPredecessorsList()
-                                       .stream()
-                                       .map(sn -> new NoteWrapper(sn, digestAlgo))
-                                       .map(nw -> new Participant(nw))
-                                       .toList();
-            log.warn("Redirecting view: {} context: {} to: {}  started on: {}", currentView.get(), context.getId(),
-                     predecessors.stream().map(p -> p.getId()).toList(), node.getId());
-            var joining = new CompletableFuture<Gateway>().whenComplete((g, t) -> {
-                sync(crown, g, duration, scheduler, predecessors);
-            });
-            HashMultiset<Gateway> ballots = HashMultiset.create();
-
-            List<ListenableFuture<Gateway>> gateways = new CopyOnWriteArrayList<>();
-            predecessors.parallelStream()
-                        .map(m -> comm.apply(m, node))
-                        .map(link -> link.join(join))
-                        .peek(fs -> fs.addListener(() -> completeGateway(joining, fs, gateways, ballots), r -> r.run()))
-                        .forEach(e -> gateways.add(e));
-        }
-
-        private void sync(AtomicReference<Digest> crown, BloomFilter<Digest> membership, Participant member,
-                          Bound bound, Duration duration, ScheduledExecutorService scheduler) {
-            if (trigger.isDone()) {
-                return;
-            }
-            if (bound.notes.size() == bound.cardinality && crown.get().equals(currentView.get())) { // fini
-                trigger.complete(bound); // idempotent
-                log.warn("Completing synchronization of view: {} context: {} to: {}  started on: {}", currentView.get(),
-                         context.getId(), node.getId());
-                return;
-            }
-            var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), bound.cardinality, fpr);
-            final var link = comm.apply(member, node);
-            if (link == null) {
-                return;
-            }
-            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
-                     context.getId(), member.getId(), node.getId());
-            var fs = link.sync(Sync.newBuilder()
-                                   .setMax(100)
-                                   .setContext(context.getId().toDigeste())
-                                   .setHaveNotes(biff.toBff())
-                                   .setView(currentView.get().toDigeste())
-                                   .build());
-            fs.addListener(() -> {
-                try {
-                    process(crown, membership, bound, fs.get(), member);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return;
-                } catch (ExecutionException e) {
-                    log.warn("Error syncing with: {} on: {}", e.getCause());
-                }
-                // rinse and repeat
-                scheduler.schedule(() -> exec.execute(() -> sync(crown, membership, member, bound, duration,
-                                                                 scheduler)),
-                                   duration.toNanos(), TimeUnit.NANOSECONDS);
-            }, exec);
-        }
-
-        private void sync(AtomicReference<Digest> crown, Gateway gateway, Duration duration,
-                          ScheduledExecutorService scheduler, List<Participant> predecessors) {
-            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
-                     context.getId(), predecessors.stream().map(p -> p.getId()).toList(), node.getId());
-            currentView.set(Digest.from(gateway.getCurrentView()));
-            var bound = new Bound(gateway.getCardinality(), gateway.getRings());
-            BloomFilter<Digest> membership = DigestBloomFilter.from(gateway.getMembership());
-            predecessors.stream()
-                        .forEach(m -> scheduler.schedule(() -> exec.execute(Utils.wrapped(() -> sync(crown, membership,
-                                                                                                     m, bound, duration,
-                                                                                                     scheduler),
-                                                                                          log)),
-                                                         Entropy.nextBitsStreamLong(duration.toNanos()),
-                                                         TimeUnit.NANOSECONDS));
-        }
-    }
-
     public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
 
     /**
@@ -915,6 +711,210 @@ public class View {
         }
     }
 
+    /**
+     * Embodiment of the client side join protocol
+     *
+     */
+    class Binding {
+        static class Bound {
+            private final int                     cardinality;
+            private final Map<Digest, SignedNote> notes = new TreeMap<>();
+            @SuppressWarnings("unused")
+            private final int                     ringCount;
+
+            public Bound(int cardinality, int ringCount) {
+                this.cardinality = cardinality;
+                this.ringCount = ringCount;
+            }
+        }
+
+        private final CompletableFuture<Bound> trigger;
+
+        Binding(CompletableFuture<Bound> trigger) {
+            this.trigger = trigger;
+        }
+
+        void seeding(List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler) {
+            var join = Join.newBuilder()
+                           .setContext(context.getId().toDigeste())
+                           .setView(currentView.get().toDigeste())
+                           .setNote(node.getNote().getWrapped())
+                           .build();
+            log.warn("Seeding view: {} context: {} with: {} started on: {}", currentView.get(), context.getId(),
+                     seeds.stream()
+                          .map(s -> ((SelfAddressingIdentifier) s.coordinates().getIdentifier()).getDigest())
+                          .toList(),
+                     node.getId());
+
+            var seeding = new CompletableFuture<Redirect>().whenComplete((r, t) -> {
+                redirect(new AtomicReference<>(digestAlgo.getOrigin()), r, duration, scheduler);
+            });
+            List<ListenableFuture<Redirect>> seedlings = new CopyOnWriteArrayList<>();
+            seeds.parallelStream()
+                 .map(s -> new Participant(((SelfAddressingIdentifier) s.coordinates.getIdentifier()).getDigest()))
+                 .map(m -> comm.apply(m, node))
+                 .map(link -> link.seed(join))
+                 .peek(fs -> fs.addListener(() -> complete(seeding, fs, seedlings), r -> r.run()))
+                 .forEach(e -> seedlings.add(e));
+        }
+
+        private void complete(CompletableFuture<Redirect> redirect, ListenableFuture<Redirect> fs,
+                              List<ListenableFuture<Redirect>> seedlings) {
+            try {
+                final var rd = fs.get();
+                redirect.complete(rd);
+                seedlings.forEach(ffs -> ffs.cancel(true));
+                log.warn("Completing redirect, view: {} context: {} predecessors: {} on: {}", Digest.from(rd.getView()),
+                         context.getId(),
+                         rd.getPredecessorsList()
+                           .stream()
+                           .map(sn -> new NoteWrapper(sn, digestAlgo))
+                           .map(nw -> nw.getId())
+                           .toList(),
+                         node.getId());
+            } catch (ExecutionException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void completeGateway(CompletableFuture<Gateway> gateway, ListenableFuture<Gateway> fs,
+                                     List<ListenableFuture<Gateway>> gateways, HashMultiset<Gateway> ballots) {
+            try {
+                var g = fs.get();
+                log.warn("Completing gateway, prev: {} current: {} cardinality: {} rings: {} context: {} on: {}",
+                         Digest.from(g.getPreviousView()), Digest.from(g.getCurrentView()), g.getCardinality(),
+                         g.getRings(), context.getId(), node.getId());
+                ballots.add(g);
+                var max = ballots.entrySet()
+                                 .stream()
+                                 .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                                 .orElse(null);
+                if (max != null && max.getCount() >= context.toleranceLevel()) {
+                    log.warn("Majority gateway achieve for: context: {} on: {}", Digest.from(g.getCurrentView()),
+                             g.getCurrentView(), context.getId(), node.getId());
+                    gateway.complete(max.getElement());
+                    gateways.forEach(ffs -> ffs.cancel(true));
+                }
+            } catch (ExecutionException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void process(AtomicReference<Digest> crown, BloomFilter<Digest> membership, Bound bound,
+                             Synchronize synchro, Participant p) {
+            var syncView = Digest.from(synchro.getView());
+            if (!currentView.get().equals(syncView)) {
+                log.warn("View changed from: {} to: {} from: {} on: {}", currentView.get(), syncView, p.getId(),
+                         node.getId());
+                trigger.completeExceptionally(new IllegalStateException("View change during sync"));
+                return;
+            }
+            var lock = viewChange.writeLock();
+            lock.lock();
+            try {
+                log.warn("Processing synchronization view: {} context: {} from: {} on: {}", currentView.get(),
+                         context.getId(), p.getId(), node.getId());
+                synchro.getNotesList()
+                       .stream()
+                       .map(sn -> new NoteWrapper(sn, digestAlgo))
+                       .filter(nw -> membership.contains(nw.getId()))
+                       .filter(n -> !bound.notes.containsKey(n.getId()))
+                       .peek(n -> bound.notes.put(n.getId(), n.getWrapped()))
+                       .map(n -> n.getId())
+                       .forEach(id -> crown.accumulateAndGet(id, (a, b) -> a.xor(b)));
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private void redirect(AtomicReference<Digest> crown, Redirect redirect, Duration duration,
+                              ScheduledExecutorService scheduler) {
+            currentView.set(Digest.from(redirect.getView()));
+            var join = Join.newBuilder()
+                           .setContext(context.getId().toDigeste())
+                           .setView(redirect.getView())
+                           .setNote(node.getNote().getWrapped())
+                           .build();
+
+            var predecessors = redirect.getPredecessorsList()
+                                       .stream()
+                                       .map(sn -> new NoteWrapper(sn, digestAlgo))
+                                       .map(nw -> new Participant(nw))
+                                       .toList();
+            log.warn("Redirecting view: {} context: {} to: {}  started on: {}", currentView.get(), context.getId(),
+                     predecessors.stream().map(p -> p.getId()).toList(), node.getId());
+            var joining = new CompletableFuture<Gateway>().whenComplete((g, t) -> {
+                sync(crown, g, duration, scheduler, predecessors);
+            });
+            HashMultiset<Gateway> ballots = HashMultiset.create();
+
+            List<ListenableFuture<Gateway>> gateways = new CopyOnWriteArrayList<>();
+            predecessors.parallelStream()
+                        .map(m -> comm.apply(m, node))
+                        .map(link -> link.join(join))
+                        .peek(fs -> fs.addListener(() -> completeGateway(joining, fs, gateways, ballots), r -> r.run()))
+                        .forEach(e -> gateways.add(e));
+        }
+
+        private void sync(AtomicReference<Digest> crown, BloomFilter<Digest> membership, Participant member,
+                          Bound bound, Duration duration, ScheduledExecutorService scheduler) {
+            if (trigger.isDone()) {
+                return;
+            }
+            if (bound.notes.size() == bound.cardinality && crown.get().equals(currentView.get())) { // fini
+                trigger.complete(bound); // idempotent
+                log.warn("Completing synchronization of view: {} context: {} to: {}  started on: {}", currentView.get(),
+                         context.getId(), node.getId());
+                return;
+            }
+            var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), bound.cardinality, fpr);
+            final var link = comm.apply(member, node);
+            if (link == null) {
+                return;
+            }
+            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
+                     context.getId(), member.getId(), node.getId());
+            var fs = link.sync(Sync.newBuilder()
+                                   .setMax(100)
+                                   .setContext(context.getId().toDigeste())
+                                   .setHaveNotes(biff.toBff())
+                                   .setView(currentView.get().toDigeste())
+                                   .build());
+            fs.addListener(() -> {
+                try {
+                    process(crown, membership, bound, fs.get(), member);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (ExecutionException e) {
+                    log.warn("Error syncing with: {} on: {}", e.getCause());
+                }
+                // rinse and repeat
+                scheduler.schedule(() -> exec.execute(() -> sync(crown, membership, member, bound, duration,
+                                                                 scheduler)),
+                                   duration.toNanos(), TimeUnit.NANOSECONDS);
+            }, exec);
+        }
+
+        private void sync(AtomicReference<Digest> crown, Gateway gateway, Duration duration,
+                          ScheduledExecutorService scheduler, List<Participant> predecessors) {
+            log.warn("Synchronizing view: {} context: {} with: {} to: {}  started on: {}", currentView.get(),
+                     context.getId(), predecessors.stream().map(p -> p.getId()).toList(), node.getId());
+            currentView.set(Digest.from(gateway.getCurrentView()));
+            var bound = new Bound(gateway.getCardinality(), gateway.getRings());
+            BloomFilter<Digest> membership = DigestBloomFilter.from(gateway.getMembership());
+            predecessors.stream()
+                        .forEach(m -> scheduler.schedule(() -> exec.execute(Utils.wrapped(() -> sync(crown, membership,
+                                                                                                     m, bound, duration,
+                                                                                                     scheduler),
+                                                                                          log)),
+                                                         Entropy.nextBitsStreamLong(duration.toNanos()),
+                                                         TimeUnit.NANOSECONDS));
+        }
+    }
+
     private record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
 
         private Ballot(Digest view, List<Digest> leaving, List<Digest> joining, DigestAlgorithm algo) {
@@ -939,11 +939,11 @@ public class View {
     }
 
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
-    private static final int    FINALIZE_VIEW_ROUNDS  = 3;
+    private static final int    FINALIZE_VIEW_ROUNDS  = 2;
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
     private static final int    REBUTTAL_TIMEOUT      = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
-    private static final int    VIEW_CHANGE_ROUNDS    = 7;
+    private static final int    VIEW_CHANGE_ROUNDS    = 2;
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
