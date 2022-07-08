@@ -33,7 +33,7 @@
         <dropwizard.version>2.0.28</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.16.6</jooq.version>
-        <bc.version>1.70</bc.version>
+        <bc.version>1.71</bc.version>
         <logback.version>1.2.11</logback.version>
         <grpc.version>1.47.0</grpc.version>
         <protobuf.version>3.21.2</protobuf.version>
@@ -222,17 +222,17 @@
 
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk15on</artifactId>
+                <artifactId>bcprov-jdk15to18</artifactId>
                 <version>${bc.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcpkix-jdk15on</artifactId>
+                <artifactId>bcpkix-jdk15to18</artifactId>
                 <version>${bc.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bctls-jdk15on</artifactId>
+                <artifactId>bctls-jdk15to18</artifactId>
                 <version>${bc.version}</version>
             </dependency>
             <dependency>
