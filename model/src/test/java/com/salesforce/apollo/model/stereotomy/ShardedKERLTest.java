@@ -124,7 +124,7 @@ public class ShardedKERLTest {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
-        assertEquals("a42da90118b493ad67234a6d0ec6df989d0f66758eb378c5811b812a3c0ceac0",
+        assertEquals("2287a5841816c8c02d4e188376b1f1a50dfcdc9eaac17610deba4ae33bb617f4",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
