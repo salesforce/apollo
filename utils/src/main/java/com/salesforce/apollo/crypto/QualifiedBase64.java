@@ -9,7 +9,6 @@ import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_256;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_512;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_256;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_512;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 
@@ -53,9 +52,8 @@ public class QualifiedBase64 {
     public static SignatureAlgorithm attachedSignatureAlgorithm(String code) {
         return switch (code.charAt(0)) {
         case 'A' -> SignatureAlgorithm.ED_25519;
-        case 'B' -> SignatureAlgorithm.EC_SECP256K1;
         case '0' -> switch (code.charAt(1)) {
-        case 'A' -> SignatureAlgorithm.EC_SECP256K1;
+        case 'A' -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
         };
         default -> throw new IllegalArgumentException("unknown code: " + code);
@@ -65,7 +63,6 @@ public class QualifiedBase64 {
     public static String attachedSignatureCode(SignatureAlgorithm algorithm, int index) {
         return switch (algorithm) {
         case ED_25519 -> "A" + base64(index, 1);
-        case EC_SECP256K1 -> "B" + base64(index, 1);
         case ED_448 -> "0A" + base64(index, 2);
         case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
         default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
@@ -154,7 +151,6 @@ public class QualifiedBase64 {
 
     public static String nonTransferrableIdentifierCode(SignatureAlgorithm a) {
         return switch (a) {
-        case EC_SECP256K1 -> "1AAA";
         case ED_25519 -> "B";
         case ED_448 -> "1AAC";
         case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + a);
@@ -172,7 +168,6 @@ public class QualifiedBase64 {
         if (qb64.startsWith("1")) {
             var bytes = unbase64(qb64.substring(4));
             return switch (qb64.substring(1, 4)) {
-            case "AAB" -> EC_SECP256K1.publicKey(bytes);
             case "AAD" -> ED_448.publicKey(bytes);
             default -> throw new IllegalStateException("Unrecognized public key: " + qb64);
             };
@@ -189,7 +184,6 @@ public class QualifiedBase64 {
 
     public static SignatureAlgorithm publicKeyAlgorithm(String code) {
         return switch (code) {
-        case "1AAB" -> SignatureAlgorithm.EC_SECP256K1;
         case "D" -> SignatureAlgorithm.ED_25519;
         case "1AAD" -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
@@ -198,7 +192,6 @@ public class QualifiedBase64 {
 
     public static String publicKeyCode(SignatureAlgorithm a) {
         return switch (a) {
-        case EC_SECP256K1 -> "1AAB";
         case ED_25519 -> "D";
         case ED_448 -> "1AAD";
         default -> throw new IllegalArgumentException("Unexpected value: " + a);
@@ -256,7 +249,6 @@ public class QualifiedBase64 {
             var bytes = unbase64(qb64.substring(2));
             return switch (qb64.substring(1, 2)) {
             case "B" -> ED_25519.signature(bytes);
-            case "C" -> EC_SECP256K1.signature(bytes);
             default -> throw new IllegalStateException("Unrecognized signature: " + qb64);
             };
         } else if (qb64.startsWith("1")) {
@@ -273,7 +265,6 @@ public class QualifiedBase64 {
     public static SignatureAlgorithm signatureAlgorithm(String code) {
         return switch (code) {
         case "0B" -> SignatureAlgorithm.ED_25519;
-        case "0C" -> SignatureAlgorithm.EC_SECP256K1;
         case "1AAE" -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
         };
@@ -282,7 +273,6 @@ public class QualifiedBase64 {
     public static String signatureCode(SignatureAlgorithm algorithm) {
         return switch (algorithm) {
         case ED_25519 -> "0B";
-        case EC_SECP256K1 -> "0C";
         case ED_448 -> "1AAE";
         case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
         default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -22,7 +23,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
 import com.salesforce.apollo.crypto.ssl.NodeTrustManagerFactory;
@@ -74,7 +74,7 @@ public class MtlsServer implements ClientIdentity {
 
     public static final String TL_SV1_3 = "TLSv1.3";
 
-    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
+    private static final Provider PROVIDER_BCJSSE = Security.getProvider("SunJSSE");
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {

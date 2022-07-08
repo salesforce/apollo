@@ -21,12 +21,31 @@ import com.salesforce.apollo.utils.Hex;
 public class EdDSAOperationsTests {
 
     @Test
-    public void test_ED25519_generateKeyPair() {
-        var ops = SignatureAlgorithm.ED_25519;
-        var result = ops.generateKeyPair();
+    public void test_ED25519_decode() {
+        var encoded = Hex.unhex("0c7f50c3260bf7ede3e6cafbf0a5b096c853bdd112117cc44f3498671fe69107");
 
-        assertEquals("Ed25519", result.getPrivate().getAlgorithm());
-        assertEquals("Ed25519", result.getPublic().getAlgorithm());
+        var ops = SignatureAlgorithm.ED_25519;
+        var result = (EdECPublicKey) ops.publicKey(encoded);
+
+        assertEquals("EdDSA", result.getAlgorithm());
+        assertEquals(NamedParameterSpec.ED25519.getName(), result.getParams().getName());
+
+        var expectedPoint = new EdECPoint(false,
+                                          new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c",
+                                                         16));
+        assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
+        assertEquals(expectedPoint.getY(), result.getPoint().getY());
+    }
+
+    @Test
+    public void test_ED25519_decodeEncodeRoundtrip() {
+        var encoded = Hex.unhex("0c7f50c3260bf7ede3e6cafbf0a5b096c853bdd112117cc44f3498671fe69107");
+
+        var ops = SignatureAlgorithm.ED_25519;
+        var publicKey = ops.publicKey(encoded);
+        var bytes = ops.encode(publicKey);
+
+        assertArrayEquals(encoded, bytes);
     }
 
     @Test
@@ -46,23 +65,6 @@ public class EdDSAOperationsTests {
     }
 
     @Test
-    public void test_ED25519_decode() {
-        var encoded = Hex.unhex("0c7f50c3260bf7ede3e6cafbf0a5b096c853bdd112117cc44f3498671fe69107");
-
-        var ops = SignatureAlgorithm.ED_25519;
-        var result = (EdECPublicKey) ops.publicKey(encoded);
-
-        assertEquals("Ed25519", result.getAlgorithm());
-        assertEquals(NamedParameterSpec.ED25519.getName(), result.getParams().getName());
-
-        var expectedPoint = new EdECPoint(false,
-                                          new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c",
-                                                         16));
-        assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
-        assertEquals(expectedPoint.getY(), result.getPoint().getY());
-    }
-
-    @Test
     public void test_ED25519_encodeDecodeRoundtrip() throws GeneralSecurityException {
         final var ecPointY = new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c", 16);
         var point = new EdECPoint(false, ecPointY);
@@ -75,7 +77,7 @@ public class EdDSAOperationsTests {
         var bytes = ops.encode(publicKey);
         var decoding = (EdECPublicKey) ops.publicKey(bytes);
 
-        assertEquals("Ed25519", decoding.getAlgorithm());
+        assertEquals("EdDSA", decoding.getAlgorithm());
         assertEquals(NamedParameterSpec.ED25519.getName(), decoding.getParams().getName());
 
         var expectedPoint = new EdECPoint(false, ecPointY);
@@ -84,14 +86,12 @@ public class EdDSAOperationsTests {
     }
 
     @Test
-    public void test_ED25519_decodeEncodeRoundtrip() {
-        var encoded = Hex.unhex("0c7f50c3260bf7ede3e6cafbf0a5b096c853bdd112117cc44f3498671fe69107");
-
+    public void test_ED25519_generateKeyPair() {
         var ops = SignatureAlgorithm.ED_25519;
-        var publicKey = ops.publicKey(encoded);
-        var bytes = ops.encode(publicKey);
+        var result = ops.generateKeyPair();
 
-        assertArrayEquals(encoded, bytes);
+        assertEquals("EdDSA", result.getPrivate().getAlgorithm());
+        assertEquals("EdDSA", result.getPublic().getAlgorithm());
     }
 
     @Test
@@ -116,12 +116,31 @@ public class EdDSAOperationsTests {
     }
 
     @Test
-    public void test_ED448_generateKeyPair() {
-        var ops = SignatureAlgorithm.ED_448;
-        var result = ops.generateKeyPair();
+    public void test_ED448_decode() {
+        var encoded = Hex.unhex("af9bf36a4bb8f12144f1459972bd05db22d6c318ebda9637f5a804dbf0fca2793fd8e78d646542fce6b16d6285b3b33d6fca0d64ca3d06c580");
 
-        assertEquals("Ed448", result.getPrivate().getAlgorithm());
-        assertEquals("Ed448", result.getPublic().getAlgorithm());
+        var ops = SignatureAlgorithm.ED_448;
+        var result = (EdECPublicKey) ops.publicKey(encoded);
+
+        assertEquals("EdDSA", result.getAlgorithm());
+        assertEquals(NamedParameterSpec.ED448.getName(), result.getParams().getName());
+
+        var expectedPoint = new EdECPoint(true,
+                                          new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
+                                                         16));
+        assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
+        assertEquals(expectedPoint.getY(), result.getPoint().getY());
+    }
+
+    @Test
+    public void test_ED448_decodeEncodeRoundtrip() {
+        var encoded = Hex.unhex("f35ec70547678147cd6fc0bec2e31a35b37adfba1fee705372f3586ceea6a82236d32a2da37eaca4e30b6e3e6926c1de98d4583cfcff243500");
+
+        var ops = SignatureAlgorithm.ED_448;
+        var publicKey = ops.publicKey(encoded);
+        var bytes = ops.encode(publicKey);
+
+        assertArrayEquals(encoded, bytes);
     }
 
     @Test
@@ -141,23 +160,6 @@ public class EdDSAOperationsTests {
     }
 
     @Test
-    public void test_ED448_decode() {
-        var encoded = Hex.unhex("af9bf36a4bb8f12144f1459972bd05db22d6c318ebda9637f5a804dbf0fca2793fd8e78d646542fce6b16d6285b3b33d6fca0d64ca3d06c580");
-
-        var ops = SignatureAlgorithm.ED_448;
-        var result = (EdECPublicKey) ops.publicKey(encoded);
-
-        assertEquals("Ed448", result.getAlgorithm());
-        assertEquals(NamedParameterSpec.ED448.getName(), result.getParams().getName());
-
-        var expectedPoint = new EdECPoint(true,
-                                          new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
-                                                         16));
-        assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
-        assertEquals(expectedPoint.getY(), result.getPoint().getY());
-    }
-
-    @Test
     public void test_ED448_encodeDecodeRoundtrip() throws GeneralSecurityException {
         final var ecPointY = new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
                                             16);
@@ -171,7 +173,7 @@ public class EdDSAOperationsTests {
         var bytes = ops.encode(publicKey);
         var decoding = (EdECPublicKey) ops.publicKey(bytes);
 
-        assertEquals("Ed448", decoding.getAlgorithm());
+        assertEquals("EdDSA", decoding.getAlgorithm());
         assertEquals(NamedParameterSpec.ED448.getName(), decoding.getParams().getName());
 
         var expectedPoint = new EdECPoint(true, ecPointY);
@@ -180,14 +182,12 @@ public class EdDSAOperationsTests {
     }
 
     @Test
-    public void test_ED448_decodeEncodeRoundtrip() {
-        var encoded = Hex.unhex("f35ec70547678147cd6fc0bec2e31a35b37adfba1fee705372f3586ceea6a82236d32a2da37eaca4e30b6e3e6926c1de98d4583cfcff243500");
-
+    public void test_ED448_generateKeyPair() {
         var ops = SignatureAlgorithm.ED_448;
-        var publicKey = ops.publicKey(encoded);
-        var bytes = ops.encode(publicKey);
+        var result = ops.generateKeyPair();
 
-        assertArrayEquals(encoded, bytes);
+        assertEquals("EdDSA", result.getPrivate().getAlgorithm());
+        assertEquals("EdDSA", result.getPublic().getAlgorithm());
     }
 
     @Test
