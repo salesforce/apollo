@@ -285,6 +285,17 @@ public interface Context<T extends Member> {
     boolean isActive(T m);
 
     /**
+     * Answer true if a member who's id is the supplied digest is a member of the
+     * view
+     */
+    boolean isMember(Digest digest);
+
+    /**
+     * Answer true if is a member of the view
+     */
+    boolean isMember(T m);
+
+    /**
      * Answer true if a member who's id is the supplied digest is offline
      */
     boolean isOffline(Digest digest);

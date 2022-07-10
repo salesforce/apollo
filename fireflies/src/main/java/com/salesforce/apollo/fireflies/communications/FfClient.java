@@ -94,7 +94,7 @@ public class FfClient implements Fireflies {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.gateway().update(serializedSize);
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (Throwable e) {
                     // nothing
                 }
             }
@@ -120,7 +120,7 @@ public class FfClient implements Fireflies {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.redirect().update(serializedSize);
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (Throwable e) {
                     // nothing
                 }
             }

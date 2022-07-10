@@ -171,7 +171,7 @@ public class LocalRouter extends Router {
         super.close();
         serverMembers.remove(member.getId());
         if (server != null) {
-            server.shutdown();
+            server.shutdownNow();
             try {
                 server.awaitTermination();
             } catch (InterruptedException e) {

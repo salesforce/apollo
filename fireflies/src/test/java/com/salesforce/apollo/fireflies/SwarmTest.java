@@ -13,10 +13,10 @@ import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -206,11 +206,40 @@ public class SwarmTest {
         initialize();
         final var scheduler = Executors.newScheduledThreadPool(2);
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(Duration.ofMillis(50), seeds, scheduler));
 
-        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
-        }));
+        // Bootstrap the kernel
+
+        final var bootstrapSeed = seeds.subList(0, 1);
+
+        final var gossipDuration = Duration.ofMillis(50);
+        views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
+
+        var bootstrappers = views.subList(1, 25);
+        bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
+
+        var success = Utils.waitForCondition(15_000, 1_000, () -> {
+            return bootstrappers.stream()
+                                .filter(view -> view.getContext().activeCount() != bootstrappers.size() + 1)
+                                .count() == 0;
+        });
+        var failed = bootstrappers.stream()
+                                  .filter(e -> e.getContext().totalCount() != bootstrappers.size() + 1)
+                                  .map(v -> String.format("%s : %s ", v.getNode().getId(),
+                                                          v.getContext().activeCount()))
+                                  .toList();
+        assertTrue(success,
+                   " expected: " + bootstrappers.size() + 1 + " failed: " + failed.size() + " views: " + failed);
+
+        final var next = views.subList(0, CARDINALITY);
+        next.forEach(v -> v.start(gossipDuration, seeds, scheduler));
+        success = Utils.waitForCondition(120_000, 1_000, () -> {
+            return next.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
+        });
+        failed = next.stream()
+                     .filter(e -> e.getContext().totalCount() != CARDINALITY)
+                     .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                     .toList();
+        assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + views.size() + " members");
@@ -261,7 +290,6 @@ public class SwarmTest {
     }
 
     private void initialize() {
-        Random entropy = new Random(0x666);
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
@@ -272,14 +300,11 @@ public class SwarmTest {
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
 
-        var randomized = members.values().stream().collect(Collectors.toList());
-        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            var id = new Seed(randomized.get(entropy.nextInt(24)).getEvent().getCoordinates(),
-                              new InetSocketAddress(0));
-            if (!seeds.contains(id)) {
-                seeds.add(id);
-            }
-        }
+        seeds = members.values()
+                       .stream()
+                       .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                       .limit(24)
+                       .toList();
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();

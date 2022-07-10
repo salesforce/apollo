@@ -94,6 +94,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
             for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
                 newHashes[i] = contextImpl.hashFor(member.getId(), i);
             }
+            hashes = newHashes;
         }
     }
 
@@ -328,6 +329,16 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public boolean isMember(Digest digest) {
+        return members.containsKey(digest);
+    }
+
+    @Override
+    public boolean isMember(T m) {
+        return members.containsKey(m.getId());
+    }
+
+    @Override
     public boolean isOffline(Digest digest) {
         assert digest != null;
         var member = members.get(digest);
@@ -463,7 +474,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public void rebalance(int newCardinality) {
-        this.cardinality = newCardinality;
+        this.cardinality = Math.max(5, newCardinality);
         final var ringCount = minMajority(pByz, cardinality, epsilon, bias) * bias + 1;
         members.values().forEach(t -> t.rebalance(ringCount, this));
         final var currentCount = rings.size();
@@ -472,13 +483,14 @@ public class ContextImpl<T extends Member> implements Context<T> {
                 var removed = rings.remove(rings.size() - 1);
                 removed.clear();
             }
-        } else {
+        } else if (ringCount > currentCount) {
             final var added = new ArrayList<Ring<T>>();
             for (int i = currentCount; i < ringCount; i++) {
                 final var ring = new Ring<T>(i, this);
                 rings.add(ring);
                 added.add(ring);
             }
+            assert rings.size() == ringCount : "Whoops: " + rings.size() + " != " + ringCount;
             members.values().forEach(t -> {
                 for (var ring : added) {
                     ring.insert(t.member);

@@ -116,16 +116,17 @@ message Update {
 }
 
 message Redirect {
-    utils.Digeste view = 1;
-    repeated SignedNote predecessors = 2;
-}
-
-message Gateway {
     utils.Digeste currentView = 1;
     utils.Digeste previousView = 2;
-    int32 rings = 3;
-    int32 cardinality = 4;
-    utils.Biff membership = 5;
+    int32 cardinality = 3;
+    repeated SignedNote predecessors = 4;
+}
+
+message Gateway { 
+    utils.Digeste currentView = 1;
+    utils.Digeste previousView = 2;
+    int32 cardinality = 3;
+    utils.Biff membership = 4;
 }
 
 message Join {
