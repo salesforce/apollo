@@ -232,7 +232,7 @@ public class SwarmTest {
 
         // Start remaining views
         views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
-        success = Utils.waitForCondition(15_000, 1_000, () -> {
+        success = Utils.waitForCondition(10_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 

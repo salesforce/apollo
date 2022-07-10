@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -492,6 +493,9 @@ public class View {
         }
 
         boolean isAccusedOn(int index) {
+            if (index >= validAccusations.length) {
+                return false;
+            }
             return validAccusations[index] != null;
         }
 
@@ -523,8 +527,6 @@ public class View {
             if (!started.get()) {
                 return;
             }
-            log.warn("Member pending join: {} view: {} previous: {} context: {} on: {}", from, currentView.get(),
-                     previousView.get(), context.getId(), node.getId());
             viewChange(() -> {
                 var note = new NoteWrapper(request.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
@@ -538,16 +540,14 @@ public class View {
                 }
                 pendingJoins.put(from, biff -> {
                     var gateway = Gateway.newBuilder()
-                                         .setCurrentView(currentView.get().toDigeste())
-                                         .setPreviousView(previousView.get().toDigeste())
+                                         .setView(currentView.get().toDigeste())
                                          .setCardinality((int) context.allMembers().count())
                                          .setMembership(biff)
                                          .build();
                     responseObserver.onNext(gateway);
                     responseObserver.onCompleted();
-                    log.info("Gateway established for: {} view: {} previous: {} context: {} cardinality: {} on: {}",
-                             from, currentView.get(), previousView.get(), context.getId(), context.cardinality(),
-                             node.getId());
+                    log.info("Gateway established for: {} view: {}  context: {} cardinality: {} on: {}", from,
+                             currentView.get(), context.getId(), context.cardinality(), node.getId());
                     if (timer != null) {
                         var serializedSize = gateway.getSerializedSize();
                         metrics.outboundBandwidth().mark(serializedSize);
@@ -561,8 +561,8 @@ public class View {
                 }
                 joins.put(note.getHash(), note);
                 joiningMembers.put(from, note.getHash());
-                log.info("Member joining: {} view: {} previous: {} context: {} on: {}", from, currentView.get(),
-                         previousView.get(), context.getId(), node.getId());
+                log.warn("Member pending join: {} view: {} context: {} on: {}", from, currentView.get(),
+                         context.getId(), node.getId());
             });
         }
 
@@ -581,7 +581,8 @@ public class View {
          */
         public Gossip rumors(SayWhat request, Digest from) {
             if (!started.get() | !joined.get()) {
-                return Gossip.getDefaultInstance();
+                throw new StatusRuntimeException(Status.UNAVAILABLE.withDescription("Member: " + node.getId()
+                + " is offline or not joined"));
             }
             if (context.isOffline(from)) {
                 log.trace("Shunned gossip from: {} local count: {} on: {}", from, context.allMembers().count(),
@@ -589,24 +590,26 @@ public class View {
                 if (metrics != null) {
                     metrics.shunnedGossip().mark();
                 }
-                return Gossip.getDefaultInstance();
+                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is offline: "
+                + from));
             }
             final var ring = request.getRing();
             final var requestView = Digest.from(request.getView());
             if (!requestView.equals(currentView.get())) {
-                log.debug("invalid view: {} current: {} previous: {} ring: {} from: {} on: {}", requestView,
-                          currentView.get(), previousView.get(), ring, from, node.getId());
+                log.debug("invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView.get(), ring,
+                          from, node.getId());
                 return Gossip.getDefaultInstance();
             }
             var note = new NoteWrapper(request.getNote(), digestAlgo);
             if (!from.equals(note.getId())) {
-                return Gossip.getDefaultInstance();
+                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member does not match: "
+                + from));
             }
 
             return stable(() -> {
                 if (ring >= context.getRingCount() || ring < 0) {
                     log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
-                    return Gossip.getDefaultInstance();
+                    throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Invalid ring: " + ring));
                 }
                 Participant member = context.getActiveMember(from);
                 Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
@@ -653,12 +656,11 @@ public class View {
                 }
                 var newMember = new Participant(note.getId());
                 final var predecessors = new TreeSet<>(context.predecessors(newMember));
-                log.warn("Member seeding: {} view: {} previous: {} context: {} predecessors: {} on: {}",
-                         newMember.getId(), currentView.get(), previousView.get(), context.getId(),
-                         predecessors.stream().map(e -> e.getId()).toList(), node.getId());
+                log.warn("Member seeding: {} view: {} context: {} predecessors: {} on: {}", newMember.getId(),
+                         currentView.get(), context.getId(), predecessors.stream().map(e -> e.getId()).toList(),
+                         node.getId());
                 return Redirect.newBuilder()
-                               .setCurrentView(currentView.get().toDigeste())
-                               .setPreviousView(previousView.get().toDigeste())
+                               .setView(currentView.get().toDigeste())
                                .setCardinality(context.cardinality())
                                .addAllPredecessors(predecessors.stream()
                                                                .filter(p -> p != null)
@@ -777,7 +779,6 @@ public class View {
                 log.info("Bootstrapping seed node view: {} context: {} on: {}", currentView.get(), context.getId(),
                          node.getId());
                 context.activate(node);
-                currentView.set(previousView.get());
                 install(new Ballot(currentView.get(), Collections.emptyList(), Collections.emptyList(), digestAlgo));
                 final var bound = new TreeMap<Digest, NoteWrapper>();
                 bound.put(node.note.getHash(), node.note);
@@ -794,8 +795,8 @@ public class View {
             try {
                 final var r = futureSailor.get().get();
                 if (redirect.complete(r)) {
-                    log.info("Redirect to view: {} context: {} on: {}", Digest.from(r.getCurrentView()),
-                             context.getId(), node.getId());
+                    log.info("Redirect to view: {} context: {} on: {}", Digest.from(r.getView()), context.getId(),
+                             node.getId());
                     return false;
                 }
             } catch (ExecutionException e) {
@@ -815,8 +816,8 @@ public class View {
             try {
                 var g = futureSailor.get().get();
                 if (gateway.complete(g)) {
-                    log.info("Gateway acquired view: {} context: {} on: {}", Digest.from(g.getCurrentView()),
-                             context.getId(), node.getId());
+                    log.info("Gateway acquired view: {} context: {} on: {}", Digest.from(g.getView()), context.getId(),
+                             node.getId());
                     return false;
                 }
             } catch (ExecutionException e) {
@@ -828,7 +829,7 @@ public class View {
         }
 
         private boolean process(BloomFilter<Digest> membership, Map<Digest, NoteWrapper> bound,
-                                Optional<ListenableFuture<Synchronize>> futureSailor, Participant p, int cardinality) {
+                                Optional<ListenableFuture<Synchronize>> futureSailor, Member member, int cardinality) {
             if (futureSailor.isEmpty()) {
                 return true;
             }
@@ -840,11 +841,20 @@ public class View {
                 return false;
             } catch (ExecutionException e) {
                 log.warn("Error in synchronization of view: {} context: {} from: {} on: {}", currentView.get(),
-                         context.getId(), p.getId(), node.getId(), e);
+                         context.getId(), member.getId(), node.getId(), e);
                 return true;
             }
             if (Synchronize.getDefaultInstance().equals(synchronize)) {
                 return true; // no op, ignore
+            }
+            var syncView = Digest.from(synchronize.getView());
+            if (!currentView.get().equals(syncView)) {
+                log.warn("View changed from: {} to: {} predecessor: {} on: {}", currentView.get(), syncView,
+                         member.getId(), node.getId());
+                trigger.completeExceptionally(new IllegalStateException(String.format("View changed from: %s to: %s predecessor: %s",
+                                                                                      currentView.get(), syncView,
+                                                                                      member.getId())));
+                return false;
             }
             if (bound.size() == cardinality) {
                 final var crown = bound.values()
@@ -856,22 +866,12 @@ public class View {
                 if (currentView.get().equals(crown)) {
                     trigger.complete(bound.values().stream().toList()); // idempotent
                     log.info("Completing synchronization of view: {} context: {} from: {} on: {}", currentView.get(),
-                             context.getId(), p.getId(), node.getId());
+                             context.getId(), member.getId(), node.getId());
                 } else {
                     log.error("Crown: {} does not match view: {} on: {}", crown, currentView.get(), node.getId());
-                    trigger.completeExceptionally(new IllegalStateException(String.format("crown: %s does not match view: %s on: %s",
-                                                                                          crown, currentView.get(),
-                                                                                          node.getId())));
+                    trigger.completeExceptionally(new IllegalStateException(String.format("crown: %s does not match view: %s",
+                                                                                          crown, currentView.get())));
                 }
-                return false;
-            }
-            var syncView = Digest.from(synchronize.getView());
-            if (!currentView.get().equals(syncView)) {
-                log.warn("View changed from: {} to: {} predecessor: {} on: {}", currentView.get(), syncView, p.getId(),
-                         node.getId());
-                trigger.completeExceptionally(new IllegalStateException(String.format("View changed from: %s to: %s predecessor: %s on: %s",
-                                                                                      currentView.get(), syncView,
-                                                                                      p.getId(), node.getId())));
                 return false;
             }
             viewChange(() -> {
@@ -884,7 +884,7 @@ public class View {
                            .peek(nw -> added.incrementAndGet())
                            .forEach(n -> bound.put(n.getHash(), n));
                 log.info("Processing synchronization: {} added: {}   view: {} context: {} from: {} on: {}",
-                         synchronize.getNotesCount(), added.get(), currentView.get(), context.getId(), p.getId(),
+                         synchronize.getNotesCount(), added.get(), currentView.get(), context.getId(), member.getId(),
                          node.getId());
             });
             return true;
@@ -894,7 +894,7 @@ public class View {
                               ScheduledExecutorService scheduler) {
             var join = Join.newBuilder()
                            .setContext(context.getId().toDigeste())
-                           .setView(redirect.getCurrentView())
+                           .setView(redirect.getView())
                            .setNote(node.getNote().getWrapped())
                            .build();
 
@@ -904,15 +904,15 @@ public class View {
                                        .map(nw -> new Participant(nw))
                                        .collect(Collectors.toList());
             log.info("Redirecting to: {} context: {} predecessors: {} on: {}", currentView.get(), context.getId(),
-                     predecessors.stream().map(p -> p.getId()).toList(), node.getId());
+                     predecessors.stream().filter(p -> !node.getId().equals(p.getId())).map(p -> p.getId()).toList(),
+                     node.getId());
             var joining = new CompletableFuture<Gateway>();
             joining.whenComplete((g, t) -> {
                 if (t != null) {
                     log.error("Failed redirecting on: {}", node.getId(), t);
                     return;
                 }
-                currentView.set(Digest.from(g.getCurrentView()));
-                previousView.set(Digest.from(g.getPreviousView()));
+                currentView.set(Digest.from(g.getView()));
 
                 context.rebalance(g.getCardinality());
                 gossiper.reset();
@@ -956,8 +956,7 @@ public class View {
                     log.error("Failed seeding on: {}", node.getId(), t);
                     return;
                 }
-                currentView.set(Digest.from(r.getCurrentView()));
-                previousView.set(Digest.from(r.getPreviousView()));
+                currentView.set(Digest.from(r.getView()));
 
                 context.rebalance(r.getCardinality());
                 gossiper.reset();
@@ -984,6 +983,7 @@ public class View {
             var seedlings = new SliceIterator<>("Seedlings", node,
                                                 seeds.stream()
                                                      .map(s -> new Participant(((SelfAddressingIdentifier) s.coordinates.getIdentifier()).getDigest()))
+                                                     .filter(p -> !node.getId().equals(p.getId()))
                                                      .collect(Collectors.toList()),
                                                 comm, scheduler);
             AtomicReference<Runnable> reseed = new AtomicReference<>();
@@ -1030,7 +1030,8 @@ public class View {
             resync.set(() -> syncs.iterate((link, m) -> {
                 log.trace("Requesting Seeding from: {} on: {}", link.getMember().getId(), node.getId());
                 return sync(link, gateway.getCardinality());
-            }, (futureSailor, link, m) -> process(membership, bound, futureSailor, node, gateway.getCardinality()),
+            }, (futureSailor, link, m) -> process(membership, bound, futureSailor, link.getMember(),
+                                                  gateway.getCardinality()),
                                            () -> {
                                                if (!trigger.isDone()) {
                                                    resync.get().run();
@@ -1064,7 +1065,7 @@ public class View {
 
         @Override
         public String toString() {
-            return String.format("h: %s, j: %s, l: %s", hash, joining.size(), leaving.size());
+            return String.format("{h: %s, j: %s, l: %s}", hash, joining.size(), leaving.size());
         }
     }
 
@@ -1462,34 +1463,6 @@ public class View {
     }
 
     /**
-     * For bootstrap, add the seed as a fake, non crashed member. The note is signed
-     * by this node, and so will be rejected by any other node as invalid. The
-     * gossip protocol of Fireflies provides redirects to what actual members
-     * believe the view should be gossiping with, and so new members quickly
-     * converge on a common, valid view of the membership
-     *
-     * @param seed
-     */
-    @SuppressWarnings("unused")
-    private void addSeed(Seed seed) {
-        SignedNote seedNote = SignedNote.newBuilder()
-                                        .setNote(Note.newBuilder()
-                                                     .setHost(seed.endpoint.getHostName())
-                                                     .setPort(seed.endpoint.getPort())
-                                                     .setCoordinates(seed.coordinates.toEventCoords())
-                                                     .setEpoch(-1)
-                                                     .setCurrentView(currentView.get().toDigeste())
-                                                     .setPreviousView(currentView.get().toDigeste())
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
-                                                                                      .toByteArray())))
-                                        .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
-                                        .build();
-        var participant = new Participant(((SelfAddressingIdentifier) seed.coordinates.getIdentifier()).getDigest());
-        participant.setNote(new NoteWrapper(seedNote, digestAlgo));
-        context.activate(participant);
-    }
-
-    /**
      * add an inbound note to the view
      *
      * @param note
@@ -1615,7 +1588,9 @@ public class View {
                 install(max.getElement());
             } else {
                 log.warn("Fast path consensus failed, local joins: {} leaving: {} ballots: {} for: {} on: {}",
-                         joiningMembers.size(), context.offlineCount(), ballots, currentView.get(), node.getId());
+                         joiningMembers.size(), context.offlineCount(),
+                         ballots.entrySet().stream().sorted(Comparator.comparing(e -> e.getCount())).toList(),
+                         currentView.get(), node.getId());
             }
             scheduleViewChange();
             observations.clear();
@@ -1757,7 +1732,9 @@ public class View {
             } catch (Throwable e) {
                 final var p = (Participant) link.getMember();
                 if (e instanceof StatusRuntimeException sre) {
-                    handleSre(p, sre);
+                    if (sre.getStatus().getCode() != Status.NOT_FOUND.getCode()) {
+                        log.error("Error gossiping: {} from: {} on: {}", sre.getStatus(), p.getId(), node.getId());
+                    }
                     accuse(p, ring);
                     return null;
                 } else {
@@ -1801,29 +1778,33 @@ public class View {
                 if (gossip.getRedirect()) {
                     redirect(member, gossip, destination.ring());
                 } else {
-                    Update update = response(gossip);
-                    if (!update.equals(Update.getDefaultInstance())) {
-                        log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
-                                  destination.link().getMember().getId(), update.getNotesCount(),
-                                  update.getAccusationsCount(), update.getJoinsCount(), update.getObservationsCount(),
-                                  node.getId());
-                        destination.link()
-                                   .update(State.newBuilder()
-                                                .setContext(context.getId().toDigeste())
-                                                .setView(currentView.get().toDigeste())
-                                                .setRing(destination.ring())
-                                                .setUpdate(update)
-                                                .build());
+                    try {
+                        Update update = response(gossip);
+                        if (!update.equals(Update.getDefaultInstance())) {
+                            log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
+                                      destination.link().getMember().getId(), update.getNotesCount(),
+                                      update.getAccusationsCount(), update.getJoinsCount(),
+                                      update.getObservationsCount(), node.getId());
+                            destination.link()
+                                       .update(State.newBuilder()
+                                                    .setContext(context.getId().toDigeste())
+                                                    .setView(currentView.get().toDigeste())
+                                                    .setRing(destination.ring())
+                                                    .setUpdate(update)
+                                                    .build());
+                        }
+                    } catch (StatusRuntimeException e) {
+                        log.error("Error updating: {} from: {} on: {}", e.getStatus(), node, node.getId());
+                        accuse(member, destination.ring());
                     }
                 }
-            } catch (StatusRuntimeException e) {
-                handleSre(node, e);
-                accuse(member, destination.ring());
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    handleSre(member, sre);
+                    if (sre.getStatus().getCode() != Status.NOT_FOUND.getCode()) {
+                        log.error("Error gossiping: {} from: {} on: {}", sre.getStatus(), member, node.getId());
+                    }
                 } else {
-                    log.warn("Exception gossiping with {} on: {}", member, node.getId(), e.getCause());
+                    log.warn("Exception gossiping: with {} on: {}", member, node.getId(), e.getCause());
                 }
                 accuse(member, destination.ring());
             } catch (InterruptedException e) {
@@ -1834,16 +1815,6 @@ public class View {
             futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(),
                                               TimeUnit.NANOSECONDS);
         });
-    }
-
-    private void handleSre(final Participant member, StatusRuntimeException sre) {
-        if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
-            sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
-            sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-            log.trace("Cannot find/unknown: {} on: {}", member, node.getId());
-        } else {
-            log.warn("Exception gossiping with {} on: {}", member, node.getId(), sre);
-        }
     }
 
     /**
@@ -1980,8 +1951,8 @@ public class View {
         final var trigger = new CompletableFuture<List<NoteWrapper>>();
         trigger.whenComplete((bound, error) -> {
             if (error != null) {
-                log.warn("Failed to join current: {} previous: {} context: {} error: {} on: {}", currentView.get(),
-                         previousView.get(), context.getId(), error.toString(), node.getId());
+                log.warn("Failed to join current: {}  context: {} error: {} on: {}", currentView.get(), context.getId(),
+                         error.toString(), node.getId());
                 resetBootstrapView();
                 node.nextNote();
                 new Binding(join(seeds, d, scheduler)).seeding(seeds, d, scheduler);
@@ -1992,8 +1963,7 @@ public class View {
                 joined.set(true);
                 futureGossip = scheduler.schedule(() -> gossip(d, scheduler), initial, TimeUnit.NANOSECONDS);
                 log.warn("Joined view: {} cardinality: {} count: {} previous: {} context: {} on: {}", currentView.get(),
-                         context.cardinality(), context.getAllMembers().size(), previousView.get(), context.getId(),
-                         node.getId());
+                         context.cardinality(), context.getAllMembers().size(), context.getId(), node.getId());
             }
             context.activeMembers().forEach(p -> {
                 var dig = joiningMembers.remove(p.getId());
@@ -2069,7 +2039,7 @@ public class View {
         builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
         JoinGossip gossip = builder.build();
         if (builder.getUpdatesCount() != 0) {
-            log.warn("process joins produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
+            log.trace("process joins produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
         return gossip;
     }
@@ -2273,7 +2243,7 @@ public class View {
 
     private void resetBootstrapView() {
         currentView.set(bootstrapView());
-        previousView.set(currentView.get());
+        previousView.set(bootstrapView());
     }
 
     /**

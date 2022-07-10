@@ -68,8 +68,12 @@ public class FfServer extends FirefliesImplBase {
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Gossip gossip;
-
-            gossip = s.rumors(request, from);
+            try {
+                gossip = s.rumors(request, from);
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
+                return;
+            }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
             if (timer != null) {
@@ -167,7 +171,12 @@ public class FfServer extends FirefliesImplBase {
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             try {
-                s.update(request, from);
+                try {
+                    s.update(request, from);
+                } catch (StatusRuntimeException e) {
+                    responseObserver.onError(e);
+                    return;
+                }
                 responseObserver.onNext(Empty.getDefaultInstance());
                 responseObserver.onCompleted();
             } catch (StatusRuntimeException e) {
