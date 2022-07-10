@@ -202,7 +202,6 @@ public class DomainTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
-                                  .parallel()
                                   .mapToObj(i -> stereotomy.newIdentifier().get())
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));

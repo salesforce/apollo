@@ -79,7 +79,6 @@ public class AbstractDhtTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, getCardinality())
-                              .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));

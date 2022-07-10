@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -67,10 +68,9 @@ public class SwarmTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
-                              .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                        controlled -> controlled));
+                                                        controlled -> controlled, (a, b) -> a, TreeMap::new));
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -211,34 +211,36 @@ public class SwarmTest {
 
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(50);
+        final var gossipDuration = Duration.ofMillis(5);
         views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
 
-        var bootstrappers = views.subList(1, 25);
+        var bootstrappers = views.subList(0, 25);
         bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
 
+        // Test that all bootstrappers up
         var success = Utils.waitForCondition(15_000, 1_000, () -> {
             return bootstrappers.stream()
-                                .filter(view -> view.getContext().activeCount() != bootstrappers.size() + 1)
+                                .filter(view -> view.getContext().activeCount() != bootstrappers.size())
                                 .count() == 0;
         });
         var failed = bootstrappers.stream()
-                                  .filter(e -> e.getContext().totalCount() != bootstrappers.size() + 1)
+                                  .filter(e -> e.getContext().totalCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
                                                           v.getContext().activeCount()))
                                   .toList();
-        assertTrue(success,
-                   " expected: " + bootstrappers.size() + 1 + " failed: " + failed.size() + " views: " + failed);
+        assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
 
-        final var next = views.subList(0, CARDINALITY);
-        next.forEach(v -> v.start(gossipDuration, seeds, scheduler));
-        success = Utils.waitForCondition(120_000, 1_000, () -> {
-            return next.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
+        // Start remaining views
+        views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
+        success = Utils.waitForCondition(15_000, 1_000, () -> {
+            return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
-        failed = next.stream()
-                     .filter(e -> e.getContext().totalCount() != CARDINALITY)
-                     .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
-                     .toList();
+
+        // Test that all views are up
+        failed = views.stream()
+                      .filter(e -> e.getContext().totalCount() != CARDINALITY)
+                      .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                      .toList();
         assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "

@@ -49,6 +49,7 @@ public class SliceIterator<Comm extends Link> {
         this.slice = slice;
         this.comm = comm;
         this.exec = exec;
+        Entropy.secureShuffle(slice);
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
