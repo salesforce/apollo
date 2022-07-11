@@ -7,9 +7,12 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -22,6 +25,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -52,23 +56,24 @@ public class SliceIterator<Comm extends Link> {
         Entropy.secureShuffle(slice);
     }
 
-    public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
-                            SlicePredicateHandler<T, Comm> handler) {
-        iterate(round, handler, null);
+    public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,
+                            Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
+        internalIterate(round, handler, onComplete, scheduler, frequency);
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,
-                            Runnable onComplete) {
-        internalIterate(round, handler, onComplete);
+                            ScheduledExecutorService scheduler, Duration frequency) {
+        iterate(round, handler, null, scheduler, frequency);
     }
 
     private <T> void internalIterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
-                                     SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
-        Runnable proceed = () -> internalIterate(round, handler, onComplete);
+                                     SlicePredicateHandler<T, Comm> handler, Runnable onComplete,
+                                     ScheduledExecutorService scheduler, Duration frequency) {
+        Runnable proceed = () -> internalIterate(round, handler, onComplete, scheduler, frequency);
 
         boolean finalIteration = current.get() % slice.size() >= slice.size() - 1;
 
-        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete);
+        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete, scheduler, frequency);
         try (Comm link = next()) {
             if (link == null) {
                 log.trace("No link found on: {} member: {}  on: {}", label, slice.get(current.get()), member);
@@ -120,7 +125,8 @@ public class SliceIterator<Comm extends Link> {
         return link;
     }
 
-    private void proceed(final boolean allow, Runnable proceed, boolean finalIteration, Runnable onComplete) {
+    private void proceed(final boolean allow, Runnable proceed, boolean finalIteration, Runnable onComplete,
+                         ScheduledExecutorService scheduler, Duration frequency) {
         log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, finalIteration, allow,
                   member);
         if (finalIteration && allow) {
@@ -131,7 +137,7 @@ public class SliceIterator<Comm extends Link> {
             }
         } else if (allow) {
             log.trace("Proceeding for: {} on: {}", label, member);
-            proceed.run();
+            scheduler.schedule(Utils.wrapped(proceed, log), frequency.toNanos(), TimeUnit.NANOSECONDS);
         } else {
             log.trace("Termination for: {} on: {}", label, member);
         }

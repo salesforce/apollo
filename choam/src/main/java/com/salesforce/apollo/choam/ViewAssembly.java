@@ -129,7 +129,8 @@ public class ViewAssembly {
                 }
                 log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
                 return term.join(request);
-            }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate)));
+            }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate),
+                                                  params().scheduler(), params().gossipDuration()));
             reiterate.get().run();
         }
 

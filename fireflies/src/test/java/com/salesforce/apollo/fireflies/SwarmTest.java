@@ -21,7 +21,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -204,7 +203,7 @@ public class SwarmTest {
     @Test
     public void swarm() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(2);
+        final var scheduler = Executors.newScheduledThreadPool(20);
         long then = System.currentTimeMillis();
 
         // Bootstrap the kernel
@@ -218,7 +217,7 @@ public class SwarmTest {
         bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
 
         // Test that all bootstrappers up
-        var success = Utils.waitForCondition(15_000, 1_000, () -> {
+        var success = Utils.waitForCondition(20_000, 1_000, () -> {
             return bootstrappers.stream()
                                 .filter(view -> view.getContext().activeCount() != bootstrappers.size())
                                 .count() == 0;
@@ -310,6 +309,7 @@ public class SwarmTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var exec = Executors.newCachedThreadPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -319,12 +319,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        ForkJoinPool.commonPool(), metrics.limitsMetrics());
+                                        exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics, ForkJoinPool.commonPool());
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }
 }
