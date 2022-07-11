@@ -838,8 +838,8 @@ public class View {
                 Thread.currentThread().interrupt();
                 return false;
             } catch (ExecutionException e) {
-                log.warn("Error in synchronization of view: {} context: {} from: {} on: {}", view, context.getId(),
-                         member.getId(), node.getId(), e);
+                log.debug("Error in synchronization of view: {} context: {} from: {} on: {}", view, context.getId(),
+                          member.getId(), node.getId(), e.getCause());
                 return true;
             }
             if (Synchronize.getDefaultInstance().equals(synchronize)) {
@@ -847,8 +847,8 @@ public class View {
             }
             var syncView = Digest.from(synchronize.getView());
             if (!view.equals(syncView)) {
-                log.warn("View changed from: {} to: {} predecessor: {} on: {}", view, syncView, member.getId(),
-                         node.getId());
+                log.debug("View changed from: {} to: {} predecessor: {} on: {}", view, syncView, member.getId(),
+                          node.getId());
                 trigger.completeExceptionally(new IllegalStateException(String.format("View changed from: %s to: %s predecessor: %s",
                                                                                       view, syncView, member.getId())));
                 return false;
@@ -1576,7 +1576,7 @@ public class View {
         } else {
             @SuppressWarnings("unchecked")
             final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
-            log.warn("Fast path consensus failed, local joins: {} leaving: {} ballots: {} for: {} on: {}",
+            log.info("Fast path consensus failed, local joins: {} leaving: {} ballots: {} for: {} on: {}",
                      joiningMembers.size(), context.offlineCount(),
                      ballots.entrySet().stream().sorted(reversed).toList(), currentView.get(), node.getId());
         }
@@ -1713,12 +1713,12 @@ public class View {
             final var p = (Participant) link.getMember();
             if (e instanceof StatusRuntimeException sre) {
                 if (sre.getStatus().getCode() != Status.NOT_FOUND.getCode()) {
-                    log.error("Error gossiping: {} from: {} on: {}", sre.getStatus(), p.getId(), node.getId());
+                    log.debug("Error gossiping: {} from: {} on: {}", sre.getStatus(), p.getId(), node.getId());
                 }
                 accuse(p, ring);
                 return null;
             } else {
-                log.warn("Exception gossiping with {} on: {}", p.getId(), node.getId(), e.getCause());
+                log.debug("Exception gossiping with {} on: {}", p.getId(), node.getId(), e.getCause());
                 accuse(p, ring);
                 return null;
             }
@@ -1772,17 +1772,17 @@ public class View {
                                                 .build());
                     }
                 } catch (StatusRuntimeException e) {
-                    log.error("Error updating: {} from: {} on: {}", e.getStatus(), node, node.getId());
+                    log.debug("Error updating: {} from: {} on: {}", e.getStatus(), node, node.getId());
                     accuse(member, destination.ring());
                 }
             }
         } catch (ExecutionException e) {
             if (e.getCause() instanceof StatusRuntimeException sre) {
                 if (sre.getStatus().getCode() != Status.NOT_FOUND.getCode()) {
-                    log.error("Error gossiping: {} from: {} on: {}", sre.getStatus(), member, node.getId());
+                    log.debug("Error gossiping: {} from: {} on: {}", sre.getStatus(), member, node.getId());
                 }
             } else {
-                log.warn("Exception gossiping: with {} on: {}", member, node.getId(), e.getCause());
+                log.debug("Exception gossiping: with {} on: {}", member, node.getId(), e.getCause());
             }
             accuse(member, destination.ring());
         } catch (InterruptedException e) {
@@ -1928,21 +1928,18 @@ public class View {
             } else {
                 currentView.set(bound.view);
                 node.nextNote();
+                joined.set(true);
+
                 bound.members.forEach(n -> context.activate(new Participant(n)));
                 scheduleViewChange();
+
                 var initial = Entropy.nextBitsStreamLong(d.toNanos());
-                joined.set(true);
                 futureGossip = scheduler.schedule(() -> gossip(d, scheduler), initial, TimeUnit.NANOSECONDS);
+
                 log.info("Joined view: {} cardinality: {} count: {} previous: {} context: {} on: {}", currentView.get(),
                          context.cardinality(), context.getAllMembers().size(), previousView.get(), context.getId(),
                          node.getId());
             }
-            context.activeMembers().forEach(p -> {
-                var dig = joiningMembers.remove(p.getId());
-                if (dig != null) {
-                    joins.remove(dig);
-                }
-            });
 
         });
         return trigger;
