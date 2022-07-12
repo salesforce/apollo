@@ -125,6 +125,7 @@ message Gateway {
     utils.Digeste view = 1; 
     int32 cardinality = 2;
     utils.Biff membership = 3;
+    repeated SignedNote initial = 4;
 }
 
 message Join {

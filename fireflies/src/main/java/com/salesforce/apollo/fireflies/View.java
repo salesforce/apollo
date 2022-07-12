@@ -546,6 +546,11 @@ public class View {
                                          .setView(currentView.get().toDigeste())
                                          .setCardinality((int) context.allMembers().count())
                                          .setMembership(biff)
+                                         .addAllInitial(context.activeMembers()
+                                                               .stream()
+                                                               .map(p -> p.getNote().getWrapped())
+                                                               .limit(MAX_SYNC)
+                                                               .toList())
                                          .build();
                     responseObserver.onNext(gateway);
                     responseObserver.onCompleted();
@@ -835,6 +840,29 @@ public class View {
             return true;
         }
 
+        private boolean isBound(Digest view, Map<Digest, NoteWrapper> bound, int cardinality) {
+            if (bound.size() == cardinality) {
+                final var crown = bound.values()
+                                       .stream()
+                                       .map(nw -> nw.getId())
+                                       .sorted()
+                                       .reduce((a, b) -> a.xor(b))
+                                       .orElse(digestAlgo.getOrigin());
+                if (view.equals(crown)) {
+                    if (trigger.complete(new Bound(view, bound.values().stream().toList()))) {
+                        log.debug("Completing synchronization of view: {} context: {} on: {}", view, context.getId(),
+                                  node.getId());
+                    }
+                } else {
+                    log.error("Crown: {} does not match view: {} on: {}", crown, view, node.getId());
+                    trigger.completeExceptionally(new IllegalStateException(String.format("crown: %s does not match view: %s",
+                                                                                          crown, view)));
+                }
+                return true;
+            }
+            return false;
+        }
+
         private boolean process(Digest view, BloomFilter<Digest> membership, Map<Digest, NoteWrapper> bound,
                                 Optional<ListenableFuture<Synchronize>> futureSailor, Member member, int cardinality) {
             if (futureSailor.isEmpty()) {
@@ -862,23 +890,7 @@ public class View {
                                                                                       view, syncView, member.getId())));
                 return false;
             }
-            if (bound.size() == cardinality) {
-                final var crown = bound.values()
-                                       .stream()
-                                       .map(nw -> nw.getId())
-                                       .sorted()
-                                       .reduce((a, b) -> a.xor(b))
-                                       .orElse(digestAlgo.getOrigin());
-                if (view.equals(crown)) {
-                    if (trigger.complete(new Bound(view, bound.values().stream().toList()))) {
-                        log.debug("Completing synchronization of view: {} context: {} from: {} on: {}", syncView,
-                                  context.getId(), member.getId(), node.getId());
-                    }
-                } else {
-                    log.error("Crown: {} does not match view: {} on: {}", crown, syncView, node.getId());
-                    trigger.completeExceptionally(new IllegalStateException(String.format("crown: %s does not match view: %s",
-                                                                                          crown, syncView)));
-                }
+            if (isBound(view, bound, cardinality)) {
                 return false;
             }
             var added = new AtomicInteger();
@@ -1012,7 +1024,7 @@ public class View {
             log.debug("Synchronizing  view: {} context: {} with: {} started on: {}", view, context.getId(),
                       link.getMember().getId(), node.getId());
             return link.sync(Sync.newBuilder()
-                                 .setMax(100)
+                                 .setMax(MAX_SYNC)
                                  .setContext(context.getId().toDigeste())
                                  .setHaveNotes(biff.toBff())
                                  .setView(view.toDigeste())
@@ -1030,6 +1042,15 @@ public class View {
 
             AtomicReference<Runnable> resync = new AtomicReference<>();
             var bound = new TreeMap<Digest, NoteWrapper>();
+            predecessors.stream().map(p -> p.note).forEach(nw -> bound.put(nw.getId(), nw));
+            gateway.getInitialList()
+                   .stream()
+                   .map(sn -> new NoteWrapper(sn, digestAlgo))
+                   .forEach(nw -> bound.put(nw.getId(), nw));
+
+            if (isBound(syncView, bound, gateway.getCardinality())) {
+                return;
+            }
 
             var syncs = new SliceIterator<>("Gateways", node, predecessors, comm, scheduler);
             resync.set(() -> {
@@ -1076,9 +1097,11 @@ public class View {
         }
     }
 
-    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
+
     private static final int    FINALIZE_VIEW_ROUNDS  = 3;
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final int    MAX_SYNC              = 100;
     private static final int    MINIMUM_BIFF_SIZE     = 100;
     private static final int    REBUTTAL_TIMEOUT      = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";

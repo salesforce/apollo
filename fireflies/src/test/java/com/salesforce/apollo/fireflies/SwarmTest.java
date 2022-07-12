@@ -223,7 +223,7 @@ public class SwarmTest {
                                 .count() == 0;
         });
         var failed = bootstrappers.stream()
-                                  .filter(e -> e.getContext().totalCount() != bootstrappers.size())
+                                  .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
                                                           v.getContext().activeCount()))
                                   .toList();
@@ -231,13 +231,13 @@ public class SwarmTest {
 
         // Start remaining views
         views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
-        success = Utils.waitForCondition(10_000, 1_000, () -> {
+        success = Utils.waitForCondition(30_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
         // Test that all views are up
         failed = views.stream()
-                      .filter(e -> e.getContext().totalCount() != CARDINALITY)
+                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
                       .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
                       .toList();
         assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
