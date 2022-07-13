@@ -474,7 +474,7 @@ public class View {
         long getEpoch() {
             NoteWrapper current = note;
             if (current == null) {
-                return 0;
+                return -1;
             }
             return current.getEpoch();
         }
@@ -609,6 +609,7 @@ public class View {
                 if (!successor.equals(node)) {
                     return redirectTo(member, request.getRing(), successor);
                 }
+                add(new NoteWrapper(request.getNote(), digestAlgo));
                 final var digests = request.getGossip();
                 final var g = Gossip.newBuilder()
                                     .setRedirect(false)
@@ -863,8 +864,8 @@ public class View {
                 node.nextNote(view);
                 scheduleViewChange();
 
-                log.error("Joined view: {} cardinality: {} count: {} on: {}", view, context.cardinality(),
-                          context.activeCount(), node.getId(), t);
+                log.info("Joined view: {} cardinality: {} count: {} on: {}", view, context.cardinality(),
+                         context.activeCount(), node.getId(), t);
                 trigger.run();
             });
 
@@ -1391,8 +1392,8 @@ public class View {
      */
     private boolean addToCurrentView(NoteWrapper note) {
         if (!currentView.get().equals(note.currentView())) {
-//            log.trace("Ignoring note in invalid view: {} current: {} from {} on: {}", note.currentView(),
-//                      currentView.get(), note.getId(), node.getId());
+            log.trace("Ignoring note in invalid view: {} current: {} from {} on: {}", note.currentView(),
+                      currentView.get(), note.getId(), node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
@@ -2023,26 +2024,31 @@ public class View {
      */
     private void redirect(Participant member, Gossip gossip, int ring) {
         if (gossip.getNotes().getUpdatesCount() != 1) {
-            log.warn("Redirect response from {} on ring {} did not contain redirect member note on: {}", member.getId(),
-                     ring, node.getId());
+            log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
+                     node.getId());
             return;
-        }
-        if (gossip.getAccusations().getUpdatesCount() > 0) {
-            // Reset our epoch to whatever the group has recorded for this recovering node
-            long max = gossip.getAccusations()
-                             .getUpdatesList()
-                             .stream()
-                             .map(signed -> new AccusationWrapper(signed, digestAlgo))
-                             .mapToLong(a -> a.getEpoch())
-                             .max()
-                             .orElse(-1);
-            node.nextNote(max + 1, currentView.get());
         }
         if (gossip.getNotes().getUpdatesCount() == 1) {
             var note = new NoteWrapper(gossip.getNotes().getUpdatesList().get(0), digestAlgo);
+            if (!currentView.get().equals(note.currentView())) {
+                log.warn("Redirect from {} on ring: {} invalid view: {} expected: {} on: {}", member.getId(), ring,
+                         note.currentView(), currentView.get(), node.getId());
+                return;
+            }
             if (validation.validate(note.getCoordinates())) {
                 addToCurrentView(note);
-                gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
+                if (gossip.getAccusations().getUpdatesCount() > 0) {
+                    gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
+                    // Reset our epoch to whatever the group has recorded for this node
+                    long max = gossip.getAccusations()
+                                     .getUpdatesList()
+                                     .stream()
+                                     .map(signed -> new AccusationWrapper(signed, digestAlgo))
+                                     .mapToLong(a -> a.getEpoch())
+                                     .max()
+                                     .orElse(-1);
+                    node.nextNote(max + 1, currentView.get());
+                }
                 log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring,
                           node.getId());
             } else {
