@@ -83,8 +83,4 @@ public class NoteWrapper {
     public Builder newBuilder() {
         return Note.newBuilder(note.getNote());
     }
-
-    public Digest previousView() {
-        return Digest.from(note.getNote().getPreviousView());
-    }
 }

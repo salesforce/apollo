@@ -15,8 +15,6 @@ import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesfoce.apollo.fireflies.proto.Sync;
-import com.salesfoce.apollo.fireflies.proto.Synchronize;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
@@ -55,11 +53,6 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Synchronize> sync(Sync sync) {
-                return null;
-            }
-
-            @Override
             public void update(State state) {
             }
         };
@@ -70,8 +63,6 @@ public interface Fireflies extends Link {
     ListenableFuture<Gateway> join(Join join);
 
     ListenableFuture<Redirect> seed(Join join);
-
-    ListenableFuture<Synchronize> sync(Sync sync);
 
     void update(State state);
 

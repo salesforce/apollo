@@ -660,16 +660,12 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     private ContextImpl.Tracked<T> tracking(T m) {
-        var added = new AtomicBoolean();
         var member = members.computeIfAbsent(m.getId(), id -> {
-            added.set(true);
-            return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
-        });
-        if (added.get()) {
             for (var ring : rings) {
                 ring.insert(m);
             }
-        }
+            return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
+        });
         return member;
     }
 }

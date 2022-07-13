@@ -20,8 +20,6 @@ import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesfoce.apollo.fireflies.proto.Sync;
-import com.salesfoce.apollo.fireflies.proto.Synchronize;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -125,32 +123,6 @@ public class FfServer extends FirefliesImplBase {
                 var serializedSize = redirect.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
                 metrics.outboundRedirect().update(serializedSize);
-                timer.stop();
-            }
-        }), log));
-    }
-
-    @Override
-    public void sync(Sync request, StreamObserver<Synchronize> responseObserver) {
-        Context timer = metrics == null ? null : metrics.inboundSyncDuration().time();
-        if (metrics != null) {
-            var serializedSize = request.getSerializedSize();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundSync().update(serializedSize);
-        }
-        Digest from = identity.getFrom();
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var sync = s.sync(request, from);
-            responseObserver.onNext(sync);
-            responseObserver.onCompleted();
-            if (timer != null) {
-                var serializedSize = sync.getSerializedSize();
-                metrics.outboundBandwidth().mark(serializedSize);
-                metrics.outboundSynchronize().update(serializedSize);
                 timer.stop();
             }
         }), log));

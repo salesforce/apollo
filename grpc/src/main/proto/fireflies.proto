@@ -15,7 +15,6 @@ service Fireflies {
     rpc update (State) returns (google.protobuf.Empty) {}
     rpc seed (Join) returns (Redirect) {}
     rpc join (Join) returns (Gateway) {}
-    rpc sync (Sync) returns (Synchronize) {}
 }
 
 message SayWhat {
@@ -48,11 +47,10 @@ message SignedAccusation {
 message Note {
     int64 epoch = 1;
     utils.Digeste currentView = 2;
-    utils.Digeste previousView = 3;
-    stereotomy.EventCoords coordinates = 4;
-    bytes mask = 5;
-    string host = 6;
-    int32 port = 7;
+    stereotomy.EventCoords coordinates = 3;
+    bytes mask = 4;
+    string host = 5;
+    int32 port = 6;
 }
 
 message ViewChange {
@@ -116,32 +114,19 @@ message Update {
 }
 
 message Redirect {
-    utils.Digeste view = 1; 
-    int32 cardinality = 2;
-    repeated SignedNote predecessors = 3;
+    utils.Digeste view = 1;
+    repeated SignedNote predecessors = 2;
+    int32 cardinality = 3;
 }
 
 message Gateway { 
-    utils.Digeste view = 1; 
-    int32 cardinality = 2;
-    utils.Biff membership = 3;
-    repeated SignedNote initial = 4;
+    utils.Digeste view = 1;
+    repeated utils.Digeste membership = 2;
+    repeated SignedNote initialSeedSet = 3;
 }
 
 message Join {
     utils.Digeste context = 1;
     utils.Digeste view = 2;
     SignedNote note = 3;
-}
-
-message Sync { 
-    utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    utils.Biff haveNotes = 3;
-    int32 max = 4;
-}
-
-message Synchronize {
-    utils.Digeste view = 1;
-    repeated SignedNote notes = 2;
 }
