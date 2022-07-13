@@ -474,7 +474,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public void rebalance(int newCardinality) {
-        this.cardinality = Math.max(5, newCardinality);
+        this.cardinality = Math.max(bias + 1, newCardinality);
         final var ringCount = minMajority(pByz, cardinality, epsilon, bias) * bias + 1;
         members.values().forEach(t -> t.rebalance(ringCount, this));
         final var currentCount = rings.size();

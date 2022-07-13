@@ -2030,30 +2030,27 @@ public class View {
         }
         if (gossip.getNotes().getUpdatesCount() == 1) {
             var note = new NoteWrapper(gossip.getNotes().getUpdatesList().get(0), digestAlgo);
-            if (!currentView.get().equals(note.currentView())) {
-                log.warn("Redirect from {} on ring: {} invalid view: {} expected: {} on: {}", member.getId(), ring,
-                         note.currentView(), currentView.get(), node.getId());
+            final Participant redirect = context.getActiveMember(note.getId());
+            if (redirect == null) {
+                log.trace("Shunned redirect from {} to: {} on ring: {} invalid view: {} expected: {} on: {}",
+                          member.getId(), note.getId(), ring, note.currentView(), currentView.get(), node.getId());
                 return;
             }
-            if (validation.validate(note.getCoordinates())) {
-                addToCurrentView(note);
-                if (gossip.getAccusations().getUpdatesCount() > 0) {
-                    gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
-                    // Reset our epoch to whatever the group has recorded for this node
-                    long max = gossip.getAccusations()
-                                     .getUpdatesList()
-                                     .stream()
-                                     .map(signed -> new AccusationWrapper(signed, digestAlgo))
-                                     .mapToLong(a -> a.getEpoch())
-                                     .max()
-                                     .orElse(-1);
-                    node.nextNote(max + 1, currentView.get());
-                }
-                log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring,
-                          node.getId());
-            } else {
-                log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
+            addToCurrentView(note);
+            if (gossip.getAccusations().getUpdatesCount() > 0) {
+                gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
+                // Reset our epoch to whatever the group has recorded for this node
+                long max = Math.max(node.getEpoch(),
+                                    gossip.getAccusations()
+                                          .getUpdatesList()
+                                          .stream()
+                                          .map(signed -> new AccusationWrapper(signed, digestAlgo))
+                                          .mapToLong(a -> a.getEpoch())
+                                          .max()
+                                          .orElse(-1));
+                node.nextNote(max + 1, currentView.get());
             }
+            log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring, node.getId());
         } else {
             log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
         }
@@ -2072,11 +2069,15 @@ public class View {
         assert member != null;
         assert successor != null;
         if (successor.getNote() == null) {
-            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring,
-                      node.getId());
+            log.debug("Cannot redirect to: {} ring: {} as note is null on: {}", successor, ring, node.getId());
             return Gossip.getDefaultInstance();
         }
-        log.debug("Redirecting: {} to {} on ring {} on: {}", member, successor, ring, node.getId());
+        if (!currentView.get().equals(successor.getNote().currentView())) {
+//            log.debug("Cannot redirect to: {} ring: {} as note view is not current: {} on: {}", successor, ring,
+//                      successor.getNote().currentView(), node.getId());
+            return Gossip.getDefaultInstance();
+        }
+        log.debug("Redirecting to: {} ring: {} on: {}", member, successor, ring, node.getId());
         return Gossip.newBuilder()
                      .setRedirect(true)
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
