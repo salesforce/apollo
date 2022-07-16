@@ -171,7 +171,7 @@ public class SwarmTest {
             c = c.subList(0, c.size() - delta);
             r = r.subList(0, r.size() - delta);
             final var expected = c;
-            System.out.println("** Removed: " + removed);
+//            System.out.println("** Removed: " + removed);
             long then = System.currentTimeMillis();
             success = Utils.waitForCondition(10_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;

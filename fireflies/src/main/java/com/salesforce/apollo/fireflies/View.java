@@ -41,7 +41,6 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -117,13 +116,6 @@ import io.grpc.stub.StreamObserver;
  * @since 220
  */
 public class View {
-    public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
-
-    /**
-     * Used in set reconcillation of Accusation Digests
-     */
-    public record AccTag(Digest id, int ring) {}
-
     public class Node extends Participant implements SigningMember {
 
         /**
@@ -264,7 +256,7 @@ public class View {
 
         void nextNote(Digest view) {
             NoteWrapper current = note;
-            long newEpoch = current == null ? 1 : note.getEpoch() + 1;
+            long newEpoch = current == null ? 0 : note.getEpoch() + 1;
             nextNote(newEpoch, view);
         }
 
@@ -443,38 +435,7 @@ public class View {
         }
 
         Stream<AccusationWrapper> getAccusations() {
-            var returned = new ArrayList<AccusationWrapper>();
-            for (var acc : validAccusations) {
-                if (acc != null) {
-                    returned.add(acc);
-                }
-            }
-            return returned.stream();
-        }
-
-        List<AccTag> getAccusationTags() {
-            var returned = new ArrayList<AccTag>();
-            for (int ring = 0; ring < validAccusations.length; ring++) {
-                if (validAccusations[ring] != null) {
-                    returned.add(new AccTag(getId(), ring));
-                }
-            }
-            return returned;
-        }
-
-        AccusationWrapper getEncodedAccusation(int ring) {
-            if (ring >= validAccusations.length) {
-                return null;
-            }
-            return validAccusations[ring];
-        }
-
-        List<SignedAccusation> getEncodedAccusations(int rings) {
-            return IntStream.range(0, rings)
-                            .mapToObj(i -> getEncodedAccusation(i))
-                            .filter(e -> e != null)
-                            .map(e -> e.getWrapped())
-                            .collect(Collectors.toList());
+            return Arrays.asList(validAccusations).stream().filter(a -> a != null);
         }
 
         long getEpoch() {
@@ -523,6 +484,8 @@ public class View {
             return true;
         }
     }
+
+    public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
 
     public class Service {
 
@@ -1039,11 +1002,10 @@ public class View {
      * @return
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
-        return mask.cardinality() == toleranceLevel + 1;
+        return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
-    private final CommonCommunications<Fireflies, Service> comm;
-
+    private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     currentView      = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
@@ -1173,7 +1135,7 @@ public class View {
      * @param ring
      */
     private void accuse(Participant member, int ring, Throwable e) {
-        if (member.isAccusedOn(ring)) {
+        if (member.isAccusedOn(ring) || member.isDisabled(ring)) {
             return; // Don't issue multiple accusations
         }
         member.addAccusation(node.accuse(member, ring));
@@ -1197,30 +1159,31 @@ public class View {
         Participant accuser = context.getMember(accusation.getAccuser());
         Participant accused = context.getMember(accusation.getAccused());
         if (accuser == null || accused == null) {
-            log.trace("Accusation discarded, accused or accuser do not exist in view on: {}", node);
+            log.trace("Accusation discarded, accused: {} or accuser: {} do not exist in view on: {}",
+                      accusation.getAccused(), accusation.getAccuser(), node.getId());
             return false;
         }
 
         if (accusation.getRingNumber() > context.getRingCount()) {
-            log.trace("Invalid ring in accusation: {} on: {}", accusation.getRingNumber(), node);
+            log.trace("Accusation discarded, invalid ring: {} on: {}", accusation.getRingNumber(), node.getId());
             return false;
         }
 
         if (accused.getEpoch() != accusation.getEpoch()) {
-            log.trace("Accusation discarded in epoch: {}  for: {} epoch: {} on: {}", accusation.getEpoch(),
-                      accused.getId(), accused.getEpoch(), node);
+            log.trace("Accusation discarded, epoch: {}  for: {} != epoch: {} on: {}", accusation.getEpoch(),
+                      accused.getId(), accused.getEpoch(), node.getId());
             return false;
         }
 
-        if (!accused.isDisabled(accusation.getRingNumber())) {
-            log.trace("Member {} accused on disabled ring {} by {} on: {}", accused.getId(), accusation.getRingNumber(),
-                      accuser.getId(), node);
+        if (accused.isDisabled(accusation.getRingNumber())) {
+            log.trace("Accusation discarded, Member: {} accused on disabled ring: {} by: {} on: {}", accused.getId(),
+                      accusation.getRingNumber(), accuser.getId(), node.getId());
             return false;
         }
 
         if (!accuser.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
-            log.trace("Accusation by: {} accused:{} signature invalid on: {}", accuser.getId(), accused.getId(),
-                      node.getId());
+            log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}", accuser.getId(),
+                      accused.getId(), node.getId());
             return false;
         }
 
@@ -1251,14 +1214,14 @@ public class View {
                 accused.addAccusation(accusation);
                 pendingRebuttals.computeIfAbsent(accused.getId(),
                                                  d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
-                log.debug("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
+                log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
                           ring.getIndex(), currentAccuser.getId(), node.getId());
                 if (metrics != null) {
                     metrics.accusations().mark();
                 }
                 return true;
             } else {
-                log.debug("{} accused by {} on ring {} discarded as not predecessor on: {}", accused.getId(),
+                log.debug("{} accused by: {} on ring: {} discarded as not predecessor on: {}", accused.getId(),
                           accuser.getId(), accusation.getRingNumber(), node.getId());
                 return false;
             }
@@ -1274,7 +1237,7 @@ public class View {
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId())) {
-                    log.debug("{} accused by {} on ring {} (timer started) on: {}", accused.getId(), accuser.getId(),
+                    log.debug("{} accused by: {} on ring: {} (timer started) on: {}", accused.getId(), accuser.getId(),
                               accusation.getRingNumber(), node.getId());
                     pendingRebuttals.computeIfAbsent(accused.getId(),
                                                      d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
@@ -1284,7 +1247,7 @@ public class View {
                 }
                 return true;
             } else {
-                log.debug("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
+                log.debug("{} accused by: {} on ring: {} discarded as not predecessor: {} on: {}", accused.getId(),
                           accuser.getId(), accusation.getRingNumber(), predecessor.getId(), node.getId());
                 return false;
             }
@@ -1293,18 +1256,20 @@ public class View {
 
     private boolean add(NoteWrapper note) {
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
-            log.trace("Note: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
+            log.trace("Note: {} mask invalid: {} on: {}", note.getId(), note.getMask(), node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
             return false;
         }
 
+        var newMember = false;
         Participant m = context.getMember(note.getId());
         if (m == null) {
+            newMember = true;
             if (!validation.verify(note.getCoordinates(), note.getSignature(),
                                    note.getWrapped().getNote().toByteString())) {
-                log.trace("invalid participant note from {} on: {}", note.getId(), node.getId());
+                log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
                 if (metrics != null) {
                     metrics.filteredNotes().mark();
                 }
@@ -1328,11 +1293,11 @@ public class View {
             return false;
         }
         NoteWrapper current = m.getNote();
-        if (current != null) {
+        if (!newMember && current != null) {
             long nextEpoch = note.getEpoch();
             long currentEpoch = current.getEpoch();
-            if (nextEpoch < currentEpoch) {
-                log.trace("discarding note for {} with wrong epoch {} current: {} on: {}", m.getId(), nextEpoch,
+            if (nextEpoch <= currentEpoch) {
+                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
                           currentEpoch, node.getId());
                 if (metrics != null) {
                     metrics.filteredNotes().mark();
@@ -1451,10 +1416,13 @@ public class View {
      * @param sa
      */
     private void amplify(Participant target) {
-        context.rings().filter(ring -> target.equals(ring.successor(node, m -> context.isActive(m)))).forEach(ring -> {
-            log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
-            accuse(target, ring.getIndex(), new IllegalStateException("Amplifying accusation"));
-        });
+        context.rings()
+               .filter(ring -> !target.isDisabled(ring.getIndex()) &&
+                               target.equals(ring.successor(node, m -> context.isActive(m))))
+               .forEach(ring -> {
+                   log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
+                   accuse(target, ring.getIndex(), new IllegalStateException("Amplifying accusation"));
+               });
     }
 
     private Digest bootstrapView() {
@@ -1663,8 +1631,8 @@ public class View {
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
         roundTimers.tick();
         if (context.isOffline(link.getMember().getId())) {
-            log.warn("Shunning gossip view: {} with: {} on: {}", currentView.get(), link.getMember().getId(),
-                     node.getId());
+            log.trace("Shunning gossip view: {} with: {} on: {}", currentView.get(), link.getMember().getId(),
+                      node.getId());
             if (metrics != null) {
                 metrics.shunnedGossip().mark();
             }
