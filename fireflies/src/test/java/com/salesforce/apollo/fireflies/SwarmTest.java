@@ -14,6 +14,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +102,30 @@ public class SwarmTest {
         System.out.println();
         System.out.println("Starting views");
         System.out.println();
+
+        // Bootstrap the kernel
+
+        final var bootstrapSeed = seeds.subList(0, 1);
+
+        final var gossipDuration = Duration.ofMillis(5);
+        views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
+
+        var bootstrappers = views.subList(0, 25);
+        bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
+
+        // Test that all bootstrappers up
+        var success = Utils.waitForCondition(20_000, 1_000, () -> {
+            return bootstrappers.stream()
+                                .filter(view -> view.getContext().activeCount() != bootstrappers.size())
+                                .count() == 0;
+        });
+        var failed = bootstrappers.stream()
+                                  .filter(e -> e.getContext().activeCount() != bootstrappers.size())
+                                  .map(v -> String.format("%s : %s ", v.getNode().getId(),
+                                                          v.getContext().activeCount()))
+                                  .toList();
+        assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
+
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
@@ -112,16 +137,17 @@ public class SwarmTest {
             long then = System.currentTimeMillis();
             toStart.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
-            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
+            success = Utils.waitForCondition(10_000, 1_000, () -> {
                 return testViews.stream()
                                 .filter(view -> view.getContext().totalCount() != testViews.size())
                                 .count() == 0;
             });
-            assertTrue(success, " expected: " + testViews.size() + " views: "
-            + testViews.stream()
-                       .filter(e -> e.getContext().totalCount() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().offlineCount()))
-                       .toList());
+            failed = testViews.stream()
+                              .filter(e -> e.getContext().activeCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                              .toList();
+            assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
@@ -145,22 +171,17 @@ public class SwarmTest {
             c = c.subList(0, c.size() - delta);
             r = r.subList(0, r.size() - delta);
             final var expected = c;
-//            System.out.println("** Removed: " + removed);
+            System.out.println("** Removed: " + removed);
             long then = System.currentTimeMillis();
-            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
+            success = Utils.waitForCondition(10_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
             });
-            assertTrue(success,
-                       " expected: " + c.size() + " views: "
-                       + c.stream()
-                          .filter(e -> e.getContext().totalCount() > expected.size())
-                          .map(v -> String.format("%s : %s : %s", v.getNode().getId(), v.getContext().activeCount(),
-                                                  v.getContext()
-                                                   .getOffline()
-                                                   .stream()
-                                                   .map(p -> "[" + /* p.getId() + ":" + */ p.getAccusationCount() + "]")
-                                                   .toList()))
-                          .toList());
+            failed = expected.stream()
+                             .filter(e -> e.getContext().activeCount() != testViews.size())
+                             .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                             .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                             .toList();
+            assertTrue(success, " expected: " + expected.size() + " failed: " + failed.size() + " views: " + failed);
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + c.size() + " members");

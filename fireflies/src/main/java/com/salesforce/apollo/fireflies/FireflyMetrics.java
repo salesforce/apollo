@@ -41,12 +41,6 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Timer inboundSeedDuration();
 
-    Histogram inboundSync();
-
-    Timer inboundSyncDuration();
-
-    Histogram inboundSynchronize();
-
     Histogram inboundUpdate();
 
     Timer inboundUpdateTimer();
@@ -66,10 +60,6 @@ public interface FireflyMetrics extends EdpointMetrics {
     Histogram outboundGossip();
 
     Histogram outboundRedirect();
-
-    Histogram outboundSync();
-
-    Histogram outboundSynchronize();
 
     Histogram outboundUpdate();
 

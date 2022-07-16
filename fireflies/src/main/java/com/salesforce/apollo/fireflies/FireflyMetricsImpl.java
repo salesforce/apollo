@@ -32,9 +32,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Timer     inboundJoinDuration;
     private final Histogram inboundSeed;
     private final Timer     inboundSeedDuration;
-    private final Histogram inboundSync;
-    private final Timer     inboundSyncDuration;
-    private final Histogram inboundSynchronize;
     private final Histogram inboundUpdate;
     private final Timer     inboundUpdateTimer;
     private final Histogram join;
@@ -45,8 +42,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Histogram outboundGateway;
     private final Histogram outboundGossip;
     private final Histogram outboundRedirect;
-    private final Histogram outboundSync;
-    private final Histogram outboundSynchronize;
     private final Histogram outboundUpdate;
     private final Timer     outboundUpdateTimer;
     private final Histogram redirect;
@@ -60,14 +55,10 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         inboundJoin = registry.histogram(name(context.shortString(), "ff.join.inbound"));
         inboundJoinDuration = registry.timer(name(context.shortString(), "ff.join.inbound.duration"));
         inboundSeedDuration = registry.timer(name(context.shortString(), "ff.seed.inbound.duration"));
-        inboundSync = registry.histogram(name(context.shortString(), "ff.sync.inbound"));
-        inboundSyncDuration = registry.timer(name(context.shortString(), "ff.sync.duration"));
-        inboundSynchronize = registry.histogram(name(context.shortString(), "ff.synchronize.inbound"));
         join = registry.histogram(name(context.shortString(), "ff.join"));
         joinDuration = registry.timer(name(context.shortString(), "ff.join.duration"));
         outboundGateway = registry.histogram(name(context.shortString(), "ff.gateway.outbound"));
         outboundRedirect = registry.histogram(name(context.shortString(), "ff.redirect.outbound"));
-        outboundSync = registry.histogram(name(context.shortString(), "ff.sync.outbound"));
         outboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.outbound.duration"));
         inboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.inbound.duration"));
         outboundUpdate = registry.histogram(name(context.shortString(), "ff.update.outbound.bytes"));
@@ -89,7 +80,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         seedDuration = registry.timer(name(context.shortString(), "ff.seed.duration"));
         shunnedGossip = registry.meter(name(context.shortString(), "ff.gossip.shunned"));
         inboundSeed = registry.histogram(name(context.shortString(), "ff.seed.inbound"));
-        outboundSynchronize = registry.histogram(name(context.shortString(), "ff.synchronize.outbound"));
     }
 
     @Override
@@ -153,21 +143,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Histogram inboundSync() {
-        return inboundSync;
-    }
-
-    @Override
-    public Timer inboundSyncDuration() {
-        return inboundSyncDuration;
-    }
-
-    @Override
-    public Histogram inboundSynchronize() {
-        return inboundSynchronize;
-    }
-
-    @Override
     public Histogram inboundUpdate() {
         return inboundUpdate;
     }
@@ -215,16 +190,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Histogram outboundRedirect() {
         return outboundRedirect;
-    }
-
-    @Override
-    public Histogram outboundSync() {
-        return outboundSync;
-    }
-
-    @Override
-    public Histogram outboundSynchronize() {
-        return outboundSynchronize;
     }
 
     @Override

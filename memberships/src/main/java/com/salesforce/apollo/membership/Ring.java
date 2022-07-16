@@ -239,7 +239,8 @@ public class Ring<T extends Member> implements Iterable<T> {
      * @param predecessor - the asserted predecessor on the ring
      * @param item        - the item to test
      * @param successor   - the asserted successor on the ring
-     * @return true if the member m is between the pred and succ members on the ring
+     * @return true if the member item is between the pred and succ members on the
+     *         ring
      */
     public boolean isBetween(T predecessor, T item, T successor) {
         if (predecessor.equals(item) || successor.equals(item)) {
@@ -248,7 +249,7 @@ public class Ring<T extends Member> implements Iterable<T> {
         Digest predHash = hash(predecessor);
         Digest memberHash = hash(item);
         Digest succHash = hash(successor);
-        return predHash.compareTo(memberHash) < 0 && memberHash.compareTo(succHash) < 0;
+        return predHash.compareTo(memberHash) < 0 & memberHash.compareTo(succHash) < 0;
     }
 
     @Override
