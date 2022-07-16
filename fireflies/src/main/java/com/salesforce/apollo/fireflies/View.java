@@ -1213,8 +1213,8 @@ public class View {
         }
 
         if (!accused.isDisabled(accusation.getRingNumber())) {
-            log.trace("Member {} accussed on disabled ring {} by {} on: {}", accused.getId(),
-                      accusation.getRingNumber(), accuser.getId(), node);
+            log.trace("Member {} accused on disabled ring {} by {} on: {}", accused.getId(), accusation.getRingNumber(),
+                      accuser.getId(), node);
             return false;
         }
 
@@ -1774,7 +1774,6 @@ public class View {
             log.debug("Error updating: {} from: {} on: {}", sre.getStatus(), member.getId(), node.getId());
             accuse(member, destination.ring(), sre);
             break;
-
         }
     }
 
@@ -1863,7 +1862,9 @@ public class View {
         // Regenerate for new epoch
         node.nextNote();
 
-        context.allMembers().forEach(p -> p.clearAccusations()); // by definition, we only contain live members
+        context.allMembers().peek(p -> stopRebuttalTimer(p)).forEach(p -> p.clearAccusations()); // by definition, we
+                                                                                                 // only contain live
+                                                                                                 // members
 
         var members = context.allMembers().map(p -> p.getId().toDigeste()).toList();
 
@@ -2208,7 +2209,7 @@ public class View {
     }
 
     /**
-     * Cancel the timer to track the accussed member
+     * Cancel the timer to track the accused member
      *
      * @param m
      */
@@ -2274,36 +2275,42 @@ public class View {
         return builder.build();
     }
 
+    private void validate(Digest from, final int ring, Digest requestView) {
+        if (!started.get()) {
+            log.trace("Offline from: {}  on: {}", from, node.getId());
+            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member: " + node.getId() + " is offline"));
+        }
+        if (!joined.get()) {
+            log.trace("Pending join from: {}  on: {}", from, node.getId());
+            throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is pending join: "
+            + node.getId()));
+        }
+        if (context.isOffline(from)) {
+            log.trace("Shunned from: {} local count: {} on: {}", from, context.allMembers().count(), node.getId());
+            throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is shunned: " + from));
+        }
+        if (!requestView.equals(currentView.get())) {
+            log.debug("Invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView.get(), ring,
+                      from, node.getId());
+            throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Invalid view: " + requestView
+            + " current: " + currentView.get()));
+        }
+    }
+
+    private void validate(Digest from, NoteWrapper note, Digest requestView, final int ring) {
+        if (!from.equals(note.getId())) {
+            throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Member does not match: " + from));
+        }
+        validate(from, ring, requestView);
+    }
+
     private void validate(Digest from, SayWhat request) {
         var valid = false;
         var note = new NoteWrapper(request.getNote(), digestAlgo);
         var requestView = Digest.from(request.getView());
+        final int ring = request.getRing();
         try {
-            if (!started.get()) {
-                log.trace("Offline from: {}  on: {}", from, node.getId());
-                throw new StatusRuntimeException(Status.UNAVAILABLE.withDescription("Member: " + node.getId()
-                + " is offline"));
-            }
-            if (!joined.get()) {
-                log.trace("Pending join from: {}  on: {}", from, node.getId());
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is pending join: "
-                + node.getId()));
-            }
-            if (context.isOffline(from)) {
-                log.trace("Shunned from: {} local count: {} on: {}", from, context.allMembers().count(), node.getId());
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is offline: "
-                + from));
-            }
-            if (!requestView.equals(currentView.get())) {
-                log.debug("Invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView.get(),
-                          request.getRing(), from, node.getId());
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Invalid view: " + requestView
-                + " current: " + currentView.get()));
-            }
-            if (!from.equals(note.getId())) {
-                throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Member does not match: "
-                + from));
-            }
+            validate(from, note, requestView, ring);
             valid = true;
         } finally {
             if (!valid && metrics != null) {
@@ -2315,26 +2322,7 @@ public class View {
     private void validate(Digest from, State request) {
         var valid = true;
         try {
-            if (!started.get()) {
-                throw new StatusRuntimeException(Status.UNAVAILABLE.withDescription("Member: " + node.getId()
-                + " is  offline"));
-            }
-            if (!joined.get()) {
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is pending join: "
-                + node.getId()));
-            }
-            if (context.isOffline(from)) {
-                log.warn("Shunned update: {} on: {}", from, node.getId());
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is offline: "
-                + from));
-            }
-            final var requestView = Digest.from(request.getView());
-            if (!requestView.equals(currentView.get())) {
-                log.debug("Invalid view: {} current: {} from: {} on: {}", requestView, currentView.get(),
-                          request.getRing(), from, node.getId());
-                throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Invalid view: " + requestView
-                + " current: " + currentView.get()));
-            }
+            validate(from, request.getRing(), Digest.from(request.getView()));
             valid = true;
         } finally {
             if (!valid && metrics != null) {
