@@ -109,7 +109,7 @@ public class FfClient implements Fireflies {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.join().update(serializedSize);
+            metrics.seed().update(serializedSize);
         }
         ListenableFuture<Redirect> result = client.seed(join);
         result.addListener(() -> {
