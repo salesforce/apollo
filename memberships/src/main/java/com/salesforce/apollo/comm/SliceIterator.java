@@ -86,12 +86,13 @@ public class SliceIterator<Comm extends Link> {
             if (futureSailor == null) {
                 log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.get(),
                           link.getMember(), member);
-                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current.get()));
+                final boolean allow = handler.handle(Optional.empty(), link, link.getMember());
                 allowed.accept(allow);
                 return;
             }
-            futureSailor.addListener(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
-                                                                         slice.get(current.get()))),
+            futureSailor.addListener(Utils.wrapped(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
+                                                                                       link.getMember())),
+                                                   log),
                                      exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
@@ -102,7 +103,7 @@ public class SliceIterator<Comm extends Link> {
         try {
             return comm.apply(slice.get(index), member);
         } catch (Throwable e) {
-            log.trace("error opening connection to {}: {}", slice.get(index).getId(),
+            log.error("error opening connection to {}: {}", slice.get(index).getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;

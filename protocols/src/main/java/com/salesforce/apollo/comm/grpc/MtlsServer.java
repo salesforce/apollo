@@ -187,13 +187,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public void stop() {
-        server.shutdown();
-        try {
-            server.awaitTermination();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                                            e);
-        }
+        server.shutdownNow();
     }
 
     private X509Certificate getCert() {

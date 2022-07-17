@@ -265,13 +265,14 @@ public class View {
          *
          * @param newEpoch
          */
-        void nextNote(long newEpoch, Digest current) {
-            var n = note.newBuilder()
-                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
-                        .setEpoch(newEpoch)
-                        .setMask(ByteString.copyFrom(nextMask().toByteArray()))
-                        .setCurrentView(current.toDigeste())
-                        .build();
+        void nextNote(long newEpoch, Digest view) {
+            final var current = note;
+            var n = current.newBuilder()
+                           .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
+                           .setEpoch(newEpoch)
+                           .setMask(ByteString.copyFrom(nextMask().toByteArray()))
+                           .setCurrentView(view.toDigeste())
+                           .build();
             var signedNote = SignedNote.newBuilder()
                                        .setNote(n)
                                        .setSignature(wrapped.sign(n.toByteString()).toSig())
@@ -324,10 +325,11 @@ public class View {
         }
 
         public SocketAddress endpoint() {
-            if (note == null) {
+            final var current = note;
+            if (current == null) {
                 return null;
             }
-            return new InetSocketAddress(note.getHost(), note.getPort());
+            return new InetSocketAddress(current.getHost(), current.getPort());
         }
 
         @Override
@@ -340,7 +342,8 @@ public class View {
 
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return validation.filtered(note.getCoordinates(), threshold, signature, message);
+            final var current = note;
+            return validation.filtered(current.getCoordinates(), threshold, signature, message);
         }
 
         public int getAccusationCount() {
@@ -364,8 +367,9 @@ public class View {
         }
 
         public boolean isDisabled(int ringNumber) {
-            if (note != null) {
-                return !note.getMask().get(ringNumber);
+            final var current = note;
+            if (current != null) {
+                return !current.getMask().get(ringNumber);
             }
             return false;
         }
@@ -377,15 +381,17 @@ public class View {
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            if (note == null) {
+            final var current = note;
+            if (current == null) {
                 return true;
             }
-            return validation.verify(note.getCoordinates(), signature, message);
+            return validation.verify(current.getCoordinates(), signature, message);
         }
 
         @Override
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return validation.verify(note.getCoordinates(), threshold, signature, message);
+            final var current = note;
+            return validation.verify(current.getCoordinates(), threshold, signature, message);
         }
 
         /**
@@ -447,7 +453,8 @@ public class View {
         }
 
         NoteWrapper getNote() {
-            return note;
+            final var current = note;
+            return current;
         }
 
         void invalidateAccusationOnRing(int index) {
@@ -642,7 +649,7 @@ public class View {
             validate(from, request);
             stable(() -> {
                 final var ring = request.getRing();
-                if (ring < 0 || ring > context.getRingCount()) {
+                if (!context.validRing(ring)) {
                     log.debug("invalid ring: {} current: {} from: {} on: {}", ring, currentView.get(), ring, from,
                               node.getId());
                     throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("No successor of: "
@@ -673,18 +680,11 @@ public class View {
     private class Binding {
         private record Bound(Digest view, List<Digest> members, Map<Digest, NoteWrapper> seeds) {}
 
-        private final Runnable trigger;
-
-        public Binding(Runnable trigger) {
-            this.trigger = trigger;
-        }
-
-        private void bootstrap() {
+        private void bootstrap(ScheduledExecutorService scheduler, Duration duration) {
             log.info("Bootstrapping seed node view: {} context: {} on: {}", currentView.get(), context.getId(),
                      node.getId());
 
             joined.set(true);
-            context.activate(node);
             var nw = node.getNote();
             joiningMembers.put(nw.getId(), nw.getHash());
             joins.put(nw.getHash(), nw);
@@ -693,7 +693,8 @@ public class View {
 
             scheduleViewChange();
 
-            trigger.run();
+            futureGossip = scheduler.schedule(() -> gossip(duration, scheduler),
+                                              Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
 
             log.info("Bootstrapped view: {} cardinality: {} count: {} context: {} on: {}", currentView.get(),
                      context.cardinality(), context.activeCount(), context.getId(), node.getId());
@@ -713,6 +714,7 @@ public class View {
                 }
                 return false;
             } catch (ExecutionException e) {
+                log.error("Error in redirect: {} on: {}", e.getCause(), node.getId());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (CancellationException e) {
@@ -846,16 +848,18 @@ public class View {
 
                 scheduleViewChange();
 
-                log.info("Joined view: {} cardinality: {} count: {} on: {}", bound.view, context.cardinality(),
-                         context.activeCount(), node.getId(), t);
-                trigger.run();
+                log.info("Joined view: {} seeds: {} cardinality: {} count: {} on: {}", bound.view, bound.seeds.size(),
+                         context.cardinality(), context.activeCount(), node.getId(), t);
+
+                futureGossip = scheduler.schedule(() -> gossip(duration, scheduler),
+                                                  Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
             });
 
             var regate = new AtomicReference<Runnable>();
             HashMultiset<Digest> ballots = HashMultiset.create();
             var retries = new AtomicInteger();
 
-            var gateways = new SliceIterator<>("Gateways", node, predecessors, comm, scheduler);
+            var gateways = new SliceIterator<>("Gateways", node, predecessors, comm, exec);
             HashMultiset<Integer> cardinality = HashMultiset.create();
             HashMultiset<Digest> views = HashMultiset.create();
             HashMultiset<SignedNote> seeds = HashMultiset.create();
@@ -882,7 +886,8 @@ public class View {
                                                       ballots.clear();
                                                       cardinality.clear();
                                                       views.clear();
-                                                      regate.get().run();
+                                                      scheduler.schedule(() -> regate.get().run(), duration.toNanos(),
+                                                                         TimeUnit.NANOSECONDS);
                                                   } else {
                                                       log.error("Failed to join view: {} cannot obtain majority on: {}",
                                                                 view, node.getId());
@@ -894,7 +899,7 @@ public class View {
 
         private void seeding(List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler) {
             if (seeds.isEmpty()) {// This node is the bootstrap seed
-                bootstrap();
+                bootstrap(scheduler, duration);
                 return;
             }
             seeds = new ArrayList<>(seeds);
@@ -932,10 +937,11 @@ public class View {
 
             var seedlings = new SliceIterator<>("Seedlings", node,
                                                 seeds.stream()
-                                                     .map(s -> new Participant(((SelfAddressingIdentifier) s.coordinates.getIdentifier()).getDigest()))
+                                                     .map(s -> seedFor(s))
+                                                     .map(nw -> new Participant(nw))
                                                      .filter(p -> !node.getId().equals(p.getId()))
                                                      .collect(Collectors.toList()),
-                                                comm, scheduler);
+                                                comm, exec);
             AtomicReference<Runnable> reseed = new AtomicReference<>();
             reseed.set(() -> {
                 seedlings.iterate((link, m) -> {
@@ -943,7 +949,7 @@ public class View {
                     return link.seed(join);
                 }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                     if (!seeding.isDone()) {
-                        reseed.get().run();
+                        scheduler.schedule(() -> reseed.get().run(), duration.toNanos(), TimeUnit.NANOSECONDS);
                     }
                 }, scheduler, duration);
             });
@@ -981,7 +987,8 @@ public class View {
 
     private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
 
-    private static final int    FINALIZE_VIEW_ROUNDS  = 3;
+    private static final int FINALIZE_VIEW_ROUNDS = 3;
+
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
     private static final int    MAX_JOIN_RETRIES      = 3;
     private static final int    MINIMUM_BIFF_SIZE     = 100;
@@ -1005,7 +1012,8 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
-    private final CommonCommunications<Fireflies, Service>    comm;
+    private final CommonCommunications<Fireflies, Service> comm;
+
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     currentView      = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
@@ -1046,7 +1054,6 @@ public class View {
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
-        context.activate(node);
     }
 
     /**
@@ -1082,10 +1089,8 @@ public class View {
         context.activate(node);
         node.reset();
 
-        new Binding(() -> {
-            var initial = Entropy.nextBitsStreamLong(d.toNanos());
-            futureGossip = scheduler.schedule(() -> gossip(d, scheduler), initial, TimeUnit.NANOSECONDS);
-        }).seeding(seeds, d, scheduler);
+        var initial = Entropy.nextBitsStreamLong(d.toNanos());
+        scheduler.schedule(() -> new Binding().seeding(seeds, d, scheduler), initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -1164,7 +1169,7 @@ public class View {
             return false;
         }
 
-        if (accusation.getRingNumber() > context.getRingCount()) {
+        if (!context.validRing(accusation.getRingNumber())) {
             log.trace("Accusation discarded, invalid ring: {} on: {}", accusation.getRingNumber(), node.getId());
             return false;
         }
@@ -1203,7 +1208,7 @@ public class View {
             node.nextNote();
             return false;
         }
-        if (accusation.getRingNumber() < 0 || accusation.getRingNumber() >= context.getRingCount()) {
+        if (!context.validRing(accusation.getRingNumber())) {
             return false;
         }
         Ring<Participant> ring = context.ring(accusation.getRingNumber());
@@ -1282,8 +1287,8 @@ public class View {
             long nextEpoch = note.getEpoch();
             long currentEpoch = current.getEpoch();
             if (nextEpoch <= currentEpoch) {
-                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
-                          currentEpoch, node.getId());
+//                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
+//                          currentEpoch, node.getId());
                 return false;
             }
         }
@@ -1505,7 +1510,7 @@ public class View {
             }
             scheduleViewChange();
             observations.clear();
-            timers.remove(FINALIZE_VIEW_CHANGE).cancel();
+            timers.remove(FINALIZE_VIEW_CHANGE);
             vote.set(null);
         });
     }
@@ -1784,7 +1789,7 @@ public class View {
                                   .filter(d -> d != null)
                                   .map(d -> joins.get(d))
                                   .filter(nw -> nw != null)
-                                  .filter(nw -> add(nw))
+                                  .peek(nw -> add(nw))
                                   .peek(nw -> {
                                       if (metrics != null) {
                                           metrics.joins().mark();
@@ -2115,11 +2120,8 @@ public class View {
     private void scheduleFinalizeViewChange(final int finalizeViewRounds) {
         log.trace("View change finalization scheduled: {} rounds for: {} joining: {} leaving: {} on: {}",
                   finalizeViewRounds, currentView.get(), joins.size(), context.getOffline().size(), node.getId());
-        var t = timers.put(FINALIZE_VIEW_CHANGE,
-                           roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), finalizeViewRounds));
-        if (t != null) {
-            t.cancel();
-        }
+        timers.put(FINALIZE_VIEW_CHANGE,
+                   roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), finalizeViewRounds));
     }
 
     private void scheduleViewChange() {
@@ -2129,11 +2131,23 @@ public class View {
     private void scheduleViewChange(final int viewChangeRounds) {
         log.trace("Schedule view change: {} rounds for: {}   on: {}", viewChangeRounds, currentView.get(),
                   node.getId());
-        var t = timers.put(SCHEDULED_VIEW_CHANGE,
-                           roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), viewChangeRounds));
-        if (t != null) {
-            t.cancel();
-        }
+        timers.put(SCHEDULED_VIEW_CHANGE,
+                   roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> maybeViewChange(), viewChangeRounds));
+    }
+
+    private NoteWrapper seedFor(Seed seed) {
+        SignedNote seedNote = SignedNote.newBuilder()
+                                        .setNote(Note.newBuilder()
+                                                     .setCurrentView(currentView.get().toDigeste())
+                                                     .setHost(seed.endpoint.getHostName())
+                                                     .setPort(seed.endpoint.getPort())
+                                                     .setCoordinates(seed.coordinates.toEventCoords())
+                                                     .setEpoch(-1)
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
+                                                                                      .toByteArray())))
+                                        .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
+                                        .build();
+        return new NoteWrapper(seedNote, digestAlgo);
     }
 
     private <T> T stable(Callable<T> call) {

@@ -18,11 +18,10 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -76,7 +75,6 @@ public class MtlsTest {
     private static final int                                                   CARDINALITY;
     private static final Map<Digest, CertificateWithPrivateKey>                certs       = new HashMap<>();
     private static final Map<Digest, InetSocketAddress>                        endpoints   = new HashMap<>();
-    private static final Random                                                entropy     = new Random(0x666);
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final boolean                                               LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
@@ -90,7 +88,6 @@ public class MtlsTest {
         String localhost = InetAddress.getLocalHost().getHostName();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
-                              .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
@@ -119,29 +116,25 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
+        final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
 
-        var seeds = new ArrayList<Seed>();
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            var member = members.get(entropy.nextInt(members.size()));
-            var id = new Seed(member.getEvent().getCoordinates(), endpoints.get(member.getId()));
-            if (!seeds.contains(id)) {
-                seeds.add(id);
-            }
-        }
+        var seeds = members.stream()
+                           .map(m -> new Seed(m.getEvent().getCoordinates(), endpoints.get(m.getId())))
+                           .limit(LARGE_TESTS ? 24 : 3)
+                           .toList();
+
         var scheduler = Executors.newScheduledThreadPool(members.size());
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
+        var exec = Executors.newFixedThreadPool(CARDINALITY);
 
         var builder = ServerConnectionCache.newBuilder().setTarget(2);
         var frist = new AtomicBoolean(true);
-        Function<Member, SocketAddress> resolver = m -> {
-            var p = (Participant) m;
-            return p.endpoint();
-        };
+        Function<Member, SocketAddress> resolver = m -> ((Participant) m).endpoint();
+
         var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
@@ -160,7 +153,25 @@ public class MtlsTest {
 
         var then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.start(Duration.ofMillis(200), seeds, scheduler));
+
+        views.get(0).start(duration, Collections.emptyList(), scheduler);
+
+        assertTrue(Utils.waitForCondition(10_000, 1_000, () -> views.get(0).getContext().activeCount() == 1),
+                   "KERNEL did not stabilize");
+
+        var seedlings = views.subList(1, seeds.size());
+        var kernel = seeds.subList(0, 1);
+
+        seedlings.forEach(view -> view.start(duration, kernel, scheduler));
+
+        assertTrue(Utils.waitForCondition(30_000, 1_000,
+                                          () -> seedlings.stream()
+                                                         .filter(view -> view.getContext()
+                                                                             .activeCount() != seeds.size())
+                                                         .count() == 0),
+                   "Seeds did not stabilize");
+
+        views.forEach(view -> view.start(duration, seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -193,10 +204,7 @@ public class MtlsTest {
         views.forEach(view -> view.start(Duration.ofMillis(1000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
-            return views.stream()
-                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
+            return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
         }));
 
         System.out.println("Stabilized, now sleeping to see if views remain stabilized");

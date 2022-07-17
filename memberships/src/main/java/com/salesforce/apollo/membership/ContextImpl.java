@@ -650,6 +650,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return members.size();
     }
 
+    @Override
+    public boolean validRing(int ring) {
+        return ring >= 0 && ring < rings.size();
+    }
+
     private Digest[] hashesFor(T m) {
         Digest key = m.getId();
         Digest[] s = new Digest[rings.size()];

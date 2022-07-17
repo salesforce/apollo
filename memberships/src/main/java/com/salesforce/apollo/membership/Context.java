@@ -462,4 +462,6 @@ public interface Context<T extends Member> {
      */
     int totalCount();
 
+    boolean validRing(int ring);
+
 }
