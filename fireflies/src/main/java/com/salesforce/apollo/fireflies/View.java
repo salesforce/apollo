@@ -580,7 +580,7 @@ public class View {
          */
         public Gossip rumors(SayWhat request, Digest from) {
             validate(from, request);
-            if (request.getRing() >= context.getRingCount() || request.getRing() < 0) {
+            if (!context.validRing(request.getRing())) {
                 log.debug("invalid ring: {} from: {} on: {}", request.getRing(), from, node.getId());
                 return Gossip.getDefaultInstance();
             }

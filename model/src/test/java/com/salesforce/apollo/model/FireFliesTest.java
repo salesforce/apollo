@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +111,14 @@ public class FireFliesTest {
         final var seeds = domains.stream()
                                  .map(n -> new Seed(n.getMember().getEvent().getCoordinates(),
                                                     new InetSocketAddress(0)))
+                                 .limit(1)
                                  .toList();
-        domains.forEach(d -> {
+        // start seed
+        domains.get(0)
+               .getFoundation()
+               .start(Duration.ofMillis(10), Collections.emptyList(), Executors.newSingleThreadScheduledExecutor());
+
+        domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
         });
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
