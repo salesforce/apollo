@@ -200,23 +200,6 @@ public class MtlsTest {
         System.out.println("Stoping views");
         views.forEach(view -> view.stop());
 
-        System.out.println("Restarting views");
-        views.forEach(view -> view.start(Duration.ofMillis(1000), seeds, scheduler));
-
-        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
-            return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
-        }));
-
-        System.out.println("Stabilized, now sleeping to see if views remain stabilized");
-        Thread.sleep(10_000);
-        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
-            return views.stream()
-                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        }));
-        System.out.println("View has stabilized after restart in " + (System.currentTimeMillis() - then) + " Ms");
-
         System.out.println("Checking views for consistency");
         invalid = views.stream()
                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)

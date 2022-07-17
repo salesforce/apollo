@@ -23,12 +23,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -356,6 +358,10 @@ public class View {
             return count;
         }
 
+        public Iterable<? extends SignedAccusation> getEncodedAccusations() {
+            return getAccusations().map(w -> w.getWrapped()).toList();
+        }
+
         @Override
         public Digest getId() {
             return id;
@@ -485,7 +491,7 @@ public class View {
 
         boolean setNote(NoteWrapper next) {
             note = next;
-            if (context.isActive(id)) {
+            if (!shunned.contains(id)) {
                 clearAccusations();
             }
             return true;
@@ -530,8 +536,7 @@ public class View {
                     log.info("Gateway established for: {} view: {}  context: {} cardinality: {} on: {}", from,
                              currentView.get(), context.getId(), context.cardinality(), node.getId());
                     var seedSet = new TreeSet<Participant>();
-                    context.predecessors(from).forEach(p -> seedSet.add(p));
-                    context.successors(from).forEach(p -> seedSet.add(p));
+                    context.successors(from, m -> context.isActive(m)).forEach(p -> seedSet.add(p));
                     var gateway = Gateway.newBuilder()
                                          .setView(currentView.get().toDigeste())
                                          .addAllMembership(membership)
@@ -580,6 +585,13 @@ public class View {
                 return Gossip.getDefaultInstance();
             }
             Participant member = context.getActiveMember(from);
+            if (member == null) {
+                add(new NoteWrapper(request.getNote(), digestAlgo));
+                member = context.getActiveMember(from);
+                if (member == null) {
+                    return Gossip.getDefaultInstance();
+                }
+            }
             Participant successor = context.ring(request.getRing()).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
                 log.debug("No active successor on ring: {} from: {} on: {}", request.getRing(), from, node.getId());
@@ -587,8 +599,7 @@ public class View {
                 + from));
             }
             if (!successor.equals(node)) {
-//                    log.debug("Not the successor on ring: {} of: {} on: {}", request.getRing(), from, node.getId());
-                return Gossip.getDefaultInstance();
+                return redirectTo(member, request.getRing(), successor);
             }
             return stable(() -> {
                 add(new NoteWrapper(request.getNote(), digestAlgo));
@@ -623,7 +634,7 @@ public class View {
             }
             return stable(() -> {
                 var newMember = new Participant(note.getId());
-                final var predecessors = new TreeSet<>(context.predecessors(newMember));
+                final var predecessors = new TreeSet<>(context.predecessors(newMember, m -> context.isActive(m)));
                 log.debug("Member seeding: {} view: {} context: {} predecessors: {} on: {}", newMember.getId(),
                           currentView.get(), context.getId(), predecessors.stream().map(e -> e.getId()).toList(),
                           node.getId());
@@ -663,7 +674,6 @@ public class View {
                     + from));
                 }
                 if (!successor.equals(node)) {
-//                    log.debug("Not the successor on ring: {} of: {} on: {}", request.getRing(), from, node.getId());
                     return;
                 }
                 final var update = request.getUpdate();
@@ -837,8 +847,8 @@ public class View {
                 currentView.set(bound.view);
                 context.rebalance(bound.members.size());
 
-                bound.seeds.values().forEach(nw -> context.activate(new Participant(nw)));
-                bound.members.forEach(d -> context.activate(new Participant(d)));
+                bound.members.forEach(d -> context.add(new Participant(d)));
+                bound.seeds.values().forEach(nw -> add(nw));
 
                 gossiper.reset();
                 roundTimers.setRoundDuration(context.timeToLive());
@@ -1031,6 +1041,7 @@ public class View {
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
     private final Service                                     service          = new Service();
+    private final Set<Digest>                                 shunned          = new ConcurrentSkipListSet<>();
     private final AtomicBoolean                               started          = new AtomicBoolean();
     private final Map<String, RoundScheduler.Timer>           timers           = new HashMap<>();
     private final EventValidation                             validation;
@@ -1231,7 +1242,7 @@ public class View {
                 return false;
             }
         } else {
-            if (context.isOffline(accused.getId())) {
+            if (shunned.contains(accused.getId())) {
                 accused.addAccusation(accusation);
                 if (metrics != null) {
                     metrics.accusations().mark();
@@ -1260,6 +1271,13 @@ public class View {
     }
 
     private boolean add(NoteWrapper note) {
+        if (shunned.contains(note.getId())) {
+            log.trace("Note: {} is shunned on: {}", note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
+            }
+            return false;
+        }
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
             log.trace("Note: {} mask invalid: {} on: {}", note.getId(), note.getMask(), node.getId());
             if (metrics != null) {
@@ -1281,24 +1299,24 @@ public class View {
                 return false;
             }
             m = new Participant(note);
-        }
-        NoteWrapper current = m.getNote();
-        if (!newMember && current != null) {
-            long nextEpoch = note.getEpoch();
-            long currentEpoch = current.getEpoch();
-            if (nextEpoch <= currentEpoch) {
-//                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
-//                          currentEpoch, node.getId());
+            context.add(m);
+        } else {
+            NoteWrapper current = m.getNote();
+            if (!newMember && current != null) {
+                long nextEpoch = note.getEpoch();
+                long currentEpoch = current.getEpoch();
+                if (nextEpoch <= currentEpoch) {
+                    return false;
+                }
+            }
+
+            if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+                log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
                 return false;
             }
-        }
-
-        if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
-            log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
-            if (metrics != null) {
-                metrics.filteredNotes().mark();
-            }
-            return false;
         }
 
         if (metrics != null) {
@@ -1331,8 +1349,8 @@ public class View {
         }
         final var member = context.getActiveMember(observer);
         if (member == null) {
-            log.trace("Invalid view change: {} current: {} offline: {} on: {}", inView, currentView.get(), observer,
-                      node.getId());
+            log.trace("Cannot validate view change: {} current: {} offline: {} on: {}", inView, currentView.get(),
+                      observer, node.getId());
             return false;
         }
         final var signature = JohnHancock.from(observation.getSignature());
@@ -1395,7 +1413,7 @@ public class View {
             }
             return false;
         }
-        if (context.isOffline(note.getId())) {
+        if (shunned.contains(note.getId())) {
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
@@ -1530,6 +1548,7 @@ public class View {
         }
         log.debug("Garbage collecting: {} on: {}", member.getId(), node.getId());
         context.offline(member);
+        shunned.add(member.getId());
     }
 
     /**
@@ -1571,7 +1590,7 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(MINIMUM_BIFF_SIZE,
                                                                                    context.cardinality() * 2),
                                                                     p);
-        context.active().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
+        context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
     }
 
@@ -1619,7 +1638,7 @@ public class View {
      */
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
         roundTimers.tick();
-        if (context.isOffline(link.getMember().getId())) {
+        if (shunned.contains(link.getMember().getId())) {
             log.trace("Shunning gossip view: {} with: {} on: {}", currentView.get(), link.getMember().getId(),
                       node.getId());
             if (metrics != null) {
@@ -1754,9 +1773,8 @@ public class View {
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView.get().toDigeste())
-                                          .addAllLeaves(context.getOffline()
-                                                               .stream()
-                                                               .map(p -> p.getId().toDigeste())
+                                          .addAllLeaves(shunned.stream()
+                                                               .map(id -> id.toDigeste())
                                                                .collect(Collectors.toSet()))
                                           .addAllJoins(joiningMembers.keySet()
                                                                      .stream()
@@ -1823,7 +1841,11 @@ public class View {
                                                                                                  // only contain live
                                                                                                  // members
 
-        var members = context.allMembers().map(p -> p.getId().toDigeste()).toList();
+        var members = context.allMembers()
+                             .map(p -> p.getId())
+                             .filter(d -> !shunned.contains(d))
+                             .map(id -> id.toDigeste())
+                             .toList();
 
         // complete all pending joins
         pending.forEach(r -> r.accept(members));
@@ -1950,6 +1972,7 @@ public class View {
         context.active()
                .filter(m -> m.getNote() != null)
                .filter(m -> current.equals(m.getNote().currentView()))
+               .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
@@ -2027,7 +2050,7 @@ public class View {
      * @param member
      */
     private void recover(Participant member) {
-        if (context.isMember(member) && context.isOffline(member.getId())) {
+        if (shunned.contains(member.id)) {
             log.debug("Not recovering shunned: {} on: {}", member.getId(), node.getId());
             return;
         }
@@ -2079,6 +2102,39 @@ public class View {
     }
 
     /**
+     * Redirect the member to the successor from this view's perspective
+     *
+     * @param member
+     * @param ring
+     * @param successor
+     * @return the Gossip containing the successor's Identity and Note from this
+     *         view
+     */
+    private Gossip redirectTo(Participant member, int ring, Participant successor) {
+        assert member != null;
+        assert successor != null;
+        if (successor.getNote() == null) {
+            log.debug("Cannot redirect from: {} to: {} on ring: {} as note is null on: {}", node, successor, ring,
+                      node.getId());
+            return Gossip.getDefaultInstance();
+        }
+
+        var identity = successor.getNote();
+        if (identity == null) {
+            log.debug("Cannot redirect from: {} to: {} on ring: {} as note is null on: {}", node, successor, ring,
+                      node.getId());
+            return Gossip.getDefaultInstance();
+        }
+
+        log.debug("Redirecting from: {} to: {} on ring: {} on: {}", member, successor, ring, node.getId());
+        return Gossip.newBuilder()
+                     .setRedirect(true)
+                     .setNotes(NoteGossip.newBuilder().addUpdates(identity.getWrapped()).build())
+                     .setAccusations(AccusationGossip.newBuilder().addAllUpdates(member.getEncodedAccusations()))
+                     .build();
+    }
+
+    /**
      * Remove the participant from the context
      * 
      * @param digest
@@ -2092,6 +2148,7 @@ public class View {
                  context.isActive(digest) ? "active" : "failed", digest, context.getId(), currentView.get(),
                  node.getId());
         context.remove(digest);
+        shunned.remove(digest);
         if (metrics != null) {
             metrics.leaves().mark();
         }
@@ -2251,7 +2308,7 @@ public class View {
             throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is pending join: "
             + node.getId()));
         }
-        if (context.isOffline(from)) {
+        if (shunned.contains(from)) {
             log.trace("Shunned from: {} local count: {} on: {}", from, context.allMembers().count(), node.getId());
             throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is shunned: " + from));
         }

@@ -183,7 +183,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public void add(T m) {
-        offline(m);
+        tracking(m);
     }
 
     @Override
