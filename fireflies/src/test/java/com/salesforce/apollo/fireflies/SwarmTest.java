@@ -135,9 +135,9 @@ public class SwarmTest {
                 toStart.add(v);
             }
             long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
+            toStart.forEach(view -> view.start(gossipDuration, seeds, scheduler));
 
-            success = Utils.waitForCondition(10_000, 1_000, () -> {
+            success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
                                 .filter(view -> view.getContext().totalCount() != testViews.size())
                                 .count() == 0;
@@ -173,7 +173,7 @@ public class SwarmTest {
             final var expected = c;
 //            System.out.println("** Removed: " + removed);
             long then = System.currentTimeMillis();
-            success = Utils.waitForCondition(10_000, 1_000, () -> {
+            success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
             });
             failed = expected.stream()

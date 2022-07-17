@@ -456,8 +456,8 @@ public class View {
         }
 
         boolean isAccused() {
-            for (int ring = 0; ring < validAccusations.length; ring++) {
-                if (validAccusations[ring] != null) {
+            for (var acc : validAccusations) {
+                if (acc != null) {
                     return true;
                 }
             }
@@ -1276,11 +1276,14 @@ public class View {
                 return false;
             }
             m = new Participant(note);
-        } else {
-            if (m.getEpoch() >= note.getEpoch()) {
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
+        }
+        NoteWrapper current = m.getNote();
+        if (!newMember && current != null) {
+            long nextEpoch = note.getEpoch();
+            long currentEpoch = current.getEpoch();
+            if (nextEpoch <= currentEpoch) {
+                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
+                          currentEpoch, node.getId());
                 return false;
             }
         }
@@ -1292,32 +1295,18 @@ public class View {
             }
             return false;
         }
-        NoteWrapper current = m.getNote();
-        if (!newMember && current != null) {
-            long nextEpoch = note.getEpoch();
-            long currentEpoch = current.getEpoch();
-            if (nextEpoch <= currentEpoch) {
-                log.trace("discarding note for: {} with wrong epoch: {} <= {} on: {}", m.getId(), nextEpoch,
-                          currentEpoch, node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
-                return false;
-            }
-        }
 
         if (metrics != null) {
             metrics.notes().mark();
         }
 
+        var accused = m.isAccused();
         stopRebuttalTimer(m);
-
-        if (m.isAccused()) {
-            checkInvalidations(m);
-        }
-
         m.setNote(note);
         recover(m);
+        if (accused) {
+            checkInvalidations(m);
+        }
         return true;
     }
 
@@ -1577,12 +1566,7 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(MINIMUM_BIFF_SIZE,
                                                                                    context.cardinality() * 2),
                                                                     p);
-        final var current = currentView.get();
-        context.active()
-               .map(m -> m.getNote())
-               .filter(e -> e != null)
-               .filter(n -> current.equals(n.currentView()))
-               .forEach(n -> bff.add(n.getHash()));
+        context.active().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
     }
 
