@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -683,6 +684,19 @@ public class View {
         }
     }
 
+    @FunctionalInterface
+    public interface ViewChangeListener {
+        /**
+         * Notification of a view change event
+         *
+         * @param context - the context for which the view change has occurred
+         * @param viewId  - the Digest id of the new view
+         * @param joins   - the list of joining members ids
+         * @param leaves  - the list of leaving members ids
+         */
+        void viewChange(Context<Participant> context, Digest viewId, List<Digest> joins, List<Digest> leaves);
+    }
+
     /**
      * Embodiment of the client side join protocol
      *
@@ -863,6 +877,8 @@ public class View {
 
                 futureGossip = scheduler.schedule(() -> gossip(duration, scheduler),
                                                   Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
+
+                notifyListeners(bound.members, Collections.emptyList());
             });
 
             var regate = new AtomicReference<Runnable>();
@@ -1017,28 +1033,29 @@ public class View {
 
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
-    private final AtomicReference<Digest>                     currentView      = new AtomicReference<>();
+    private final AtomicReference<Digest>                     currentView         = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private final AtomicBoolean                               joined           = new AtomicBoolean();
-    private final ConcurrentMap<Digest, Digest>               joiningMembers   = new ConcurrentSkipListMap<>();
-    private final ConcurrentMap<Digest, NoteWrapper>          joins            = new ConcurrentSkipListMap<>();
+    private final AtomicBoolean                               joined              = new AtomicBoolean();
+    private final ConcurrentMap<Digest, Digest>               joiningMembers      = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, NoteWrapper>          joins               = new ConcurrentSkipListMap<>();
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
-    private final Map<Digest, SignedViewChange>               observations     = new ConcurrentSkipListMap<>();
+    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
     private final Parameters                                  params;
-    private final Map<Digest, Consumer<List<Digeste>>>        pendingJoins     = new ConcurrentSkipListMap<>();
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Consumer<List<Digeste>>>        pendingJoins        = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
-    private final Service                                     service          = new Service();
-    private final Set<Digest>                                 shunned          = new ConcurrentSkipListSet<>();
-    private final AtomicBoolean                               started          = new AtomicBoolean();
-    private final Map<String, RoundScheduler.Timer>           timers           = new HashMap<>();
+    private final Service                                     service             = new Service();
+    private final Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
+    private final AtomicBoolean                               started             = new AtomicBoolean();
+    private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
-    private final ReadWriteLock                               viewChange       = new ReentrantReadWriteLock(true);
-    private final AtomicReference<ViewChange>                 vote             = new AtomicReference<>();
+    private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
+    private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
+    private final AtomicReference<ViewChange>                 vote                = new AtomicReference<>();
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
@@ -1060,11 +1077,32 @@ public class View {
     }
 
     /**
+     * Deregister the listener with the supplied id
+     *
+     * @param listenerId
+     */
+    public void deregister(UUID listenerId) {
+        viewChangeListeners.remove(listenerId);
+    }
+
+    /**
      * 
      * @return the context of the view
      */
     public Context<Participant> getContext() {
         return context;
+    }
+
+    /**
+     * Register a listener to receive view change events
+     *
+     * @param listener - the ViewChangeListener to receive events
+     * @return the UUID identifying this listener
+     */
+    public UUID register(ViewChangeListener listener) {
+        final var id = UUID.randomUUID();
+        viewChangeListeners.put(id, listener);
+        return id;
     }
 
     /**
@@ -1848,6 +1886,8 @@ public class View {
         log.info("Installed view: {} from: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
                  currentView.get(), previousView, context.getId(), context.cardinality(), context.allMembers().count(),
                  pending.size(), view.leaving.size(), view.joining.size(), node.getId());
+
+        notifyListeners(view.joining, view.leaving);
     }
 
     /**
@@ -1890,6 +1930,17 @@ public class View {
         } else {
             scheduleViewChange();
         }
+    }
+
+    private void notifyListeners(List<Digest> joining, List<Digest> leaving) {
+        final var current = currentView.get();
+        viewChangeListeners.forEach((id, listener) -> {
+            try {
+                listener.viewChange(context, current, joining, leaving);
+            } catch (Throwable e) {
+                log.error("error in view change listener: {} on: {} ", id, node.getId(), e);
+            }
+        });
     }
 
     /**
