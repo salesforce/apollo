@@ -35,7 +35,6 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.Sets;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
@@ -184,28 +183,12 @@ public class MtlsTest {
         + views.size() + " members");
 
         System.out.println("Checking views for consistency");
-        var invalid = views.stream()
-                           .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                           .filter(view -> view != null)
-                           .collect(Collectors.toList());
-        assertEquals(0, invalid.size(), invalid.stream().map(view -> {
-            var difference = Sets.difference(views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()),
-                                             view.getContext()
-                                                 .active()
-                                                 .map(m -> m.getId())
-                                                 .collect(Collectors.toSet()));
-            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-        }).collect(Collectors.toList()).toString());
-
-        System.out.println("Stoping views");
-        views.forEach(view -> view.stop());
-
-        System.out.println("Checking views for consistency");
-        invalid = views.stream()
-                       .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                       .filter(view -> view != null)
-                       .collect(Collectors.toList());
-        assertEquals(0, invalid.size());
+        var failed = views.stream()
+                          .filter(e -> e.getContext().activeCount() != views.size())
+                          .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                          .toList();
+        assertEquals(0, failed.size(),
+                     " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
 
         System.out.println("Stoping views");
         views.forEach(view -> view.stop());
