@@ -116,6 +116,7 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
+        var parameters = Parameters.newBuilder().build();
         final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
@@ -148,7 +149,7 @@ public class MtlsTest {
             MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey), commExec,
                                               clientContextSupplier);
             communications.add(comms);
-            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
+            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
                             DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
 

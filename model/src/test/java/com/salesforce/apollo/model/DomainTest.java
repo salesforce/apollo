@@ -192,6 +192,7 @@ public class DomainTest {
 
     @BeforeEach
     public void before() throws Exception {
+        var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
@@ -223,7 +224,7 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(Executors.newFixedThreadPool(3))
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0), txnConfig);
+                                           new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(domain);
             localRouter.setMember(domain.getMember());
             localRouter.start();

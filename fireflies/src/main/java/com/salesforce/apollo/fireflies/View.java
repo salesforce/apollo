@@ -606,12 +606,12 @@ public class View {
                 final var digests = request.getGossip();
                 final var g = Gossip.newBuilder()
                                     .setRedirect(false)
-                                    .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), fpr))
+                                    .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
                                     .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()),
-                                                                       fpr))
+                                                                       params.fpr()))
                                     .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()),
-                                                                         fpr))
-                                    .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), fpr))
+                                                                         params.fpr()))
+                                    .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
                                     .build();
                 return g;
             });
@@ -889,9 +889,9 @@ public class View {
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, views, cardinality,
                                                           ballots, seeds, view),
                                               () -> {
-                                                  if (retries.get() < MAX_JOIN_RETRIES) {
+                                                  if (retries.get() < params.joinRetries()) {
                                                       log.warn("Failed to join view: {} retry: {} out of: {} on: {}",
-                                                               view, retries.incrementAndGet(), MAX_JOIN_RETRIES,
+                                                               view, retries.incrementAndGet(), params.joinRetries(),
                                                                node.getId());
                                                       ballots.clear();
                                                       cardinality.clear();
@@ -995,16 +995,9 @@ public class View {
         }
     }
 
-    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
-
-    private static final int FINALIZE_VIEW_ROUNDS = 3;
-
+    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
-    private static final int    MAX_JOIN_RETRIES      = 3;
-    private static final int    MINIMUM_BIFF_SIZE     = 100;
-    private static final int    REBUTTAL_TIMEOUT      = 2;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
-    private static final int    VIEW_CHANGE_ROUNDS    = 7;
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
@@ -1022,13 +1015,11 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
-    private final CommonCommunications<Fireflies, Service> comm;
-
+    private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     currentView      = new AtomicReference<>();
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
-    private final double                                      fpr;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
     private final AtomicBoolean                               joined           = new AtomicBoolean();
@@ -1037,6 +1028,7 @@ public class View {
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
     private final Map<Digest, SignedViewChange>               observations     = new ConcurrentSkipListMap<>();
+    private final Parameters                                  params;
     private final Map<Digest, Consumer<List<Digeste>>>        pendingJoins     = new ConcurrentSkipListMap<>();
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
@@ -1049,11 +1041,11 @@ public class View {
     private final AtomicReference<ViewChange>                 vote             = new AtomicReference<>();
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
-                EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
+                EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
         this.metrics = metrics;
         this.validation = validation;
-        this.fpr = fpr;
+        this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
@@ -1155,7 +1147,8 @@ public class View {
             return; // Don't issue multiple accusations
         }
         member.addAccusation(node.accuse(member, ring));
-        pendingRebuttals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTTAL_TIMEOUT));
+        pendingRebuttals.computeIfAbsent(member.getId(),
+                                         d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
         log.debug("Accuse {} on ring {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView.get(),
                   e.toString(), node.getId());
     }
@@ -1228,8 +1221,8 @@ public class View {
             Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
             if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
-                pendingRebuttals.computeIfAbsent(accused.getId(),
-                                                 d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
+                pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
+                                                                                            params.rebuttalTimeout()));
                 log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
                           ring.getIndex(), currentAccuser.getId(), node.getId());
                 if (metrics != null) {
@@ -1256,7 +1249,8 @@ public class View {
                     log.debug("{} accused by: {} on ring: {} (timer started) on: {}", accused.getId(), accuser.getId(),
                               accusation.getRingNumber(), node.getId());
                     pendingRebuttals.computeIfAbsent(accused.getId(),
-                                                     d -> roundTimers.schedule(() -> gc(accused), REBUTTAL_TIMEOUT));
+                                                     d -> roundTimers.schedule(() -> gc(accused),
+                                                                               params.rebuttalTimeout()));
                 }
                 if (metrics != null) {
                     metrics.accusations().mark();
@@ -1473,10 +1467,10 @@ public class View {
      */
     private Digests commonDigests() {
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(Entropy.nextSecureLong(), fpr).toBff())
-                      .setNoteBff(getNotesBff(Entropy.nextSecureLong(), fpr).toBff())
-                      .setJoinBiff(getJoinsBff(Entropy.nextSecureLong(), fpr).toBff())
-                      .setObservationBff(getObservationsBff(Entropy.nextSecureLong(), fpr).toBff())
+                      .setAccusationBff(getAccusationsBff(Entropy.nextSecureLong(), params.fpr()).toBff())
+                      .setNoteBff(getNotesBff(Entropy.nextSecureLong(), params.fpr()).toBff())
+                      .setJoinBiff(getJoinsBff(Entropy.nextSecureLong(), params.fpr()).toBff())
+                      .setObservationBff(getObservationsBff(Entropy.nextSecureLong(), params.fpr()).toBff())
                       .build();
     }
 
@@ -1557,8 +1551,8 @@ public class View {
      * @return the bloom filter containing the digests of known accusations
      */
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
-                                                                    Math.max(MINIMUM_BIFF_SIZE, context.cardinality()),
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
+                                                                                   context.cardinality()),
                                                                     p);
         var current = currentView.get();
         context.allMembers()
@@ -1575,7 +1569,8 @@ public class View {
      * @return the bloom filter containing the digests of known joins
      */
     private BloomFilter<Digest> getJoinsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(MINIMUM_BIFF_SIZE, joins.size() * 2),
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
+                                                                                   joins.size() * 2),
                                                                     p);
         joins.keySet().forEach(d -> bff.add(d));
         return bff;
@@ -1587,7 +1582,7 @@ public class View {
      * @return the bloom filter containing the digests of known notes
      */
     private BloomFilter<Digest> getNotesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(MINIMUM_BIFF_SIZE,
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality() * 2),
                                                                     p);
         context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
@@ -1600,7 +1595,7 @@ public class View {
      * @return the bloom filter containing the digests of known observations
      */
     private BloomFilter<Digest> getObservationsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(MINIMUM_BIFF_SIZE,
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality() * 2),
                                                                     p);
         observations.keySet().forEach(d -> bff.add(d));
@@ -2171,7 +2166,7 @@ public class View {
     }
 
     private void scheduleFinalizeViewChange() {
-        scheduleFinalizeViewChange(FINALIZE_VIEW_ROUNDS);
+        scheduleFinalizeViewChange(params.finalizeViewRounds());
     }
 
     private void scheduleFinalizeViewChange(final int finalizeViewRounds) {
@@ -2182,7 +2177,7 @@ public class View {
     }
 
     private void scheduleViewChange() {
-        scheduleViewChange(VIEW_CHANGE_ROUNDS);
+        scheduleViewChange(params.viewChangeRounds());
     }
 
     private void scheduleViewChange(final int viewChangeRounds) {

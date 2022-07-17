@@ -314,6 +314,7 @@ public class SwarmTest {
     }
 
     private void initialize() {
+        var parameters = Parameters.newBuilder().build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
@@ -346,7 +347,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
                             DigestAlgorithm.DEFAULT, metrics, viewExec);
         }).collect(Collectors.toList());
     }
