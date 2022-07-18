@@ -198,15 +198,6 @@ public class ChurnTest {
             assertTrue(testGraph.isSC());
         }
 
-        var view0 = views.get(0);
-        for (View view : views) {
-            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final var test = view.getContext().ring(ring);
-                for (var node : view0.getContext().getAllMembers()) {
-                    assertTrue(test.contains(node));
-                }
-            }
-        }
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
