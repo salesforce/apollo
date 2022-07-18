@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>thoth</artifactId>
-    <name>Thoth - Stable and Consistent Membership Views</name>
-    <description>Stable and consistent membership views based upon Fireclies views.  Uses Ethereal consensus to manage membership view evolution. Integrates with Stereotomy for underlying decentralized PKI Async, BFT and PKI secured.</description>
+    <name>Thoth - KERI at scale</name>
+    <description>Stereotomy for async, decentralized, byzantine fault tolerant PKI.</description>
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>

@@ -29,7 +29,8 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * Stereotomy - Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
 * MTLS network communication - Can use KERI for certificate authentication and generation.  Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
-* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay
+* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay providing virtually synchronous, stable membership views.
+* Efficient and easy to reuse utility patterns for Fireflies style gossiping on membership contexts
 * Reliable Broadcast - garbage collected, context routed reliable broadcast
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
 * CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines, built on Ethereal.
