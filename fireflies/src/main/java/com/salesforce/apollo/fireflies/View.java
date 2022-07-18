@@ -1890,7 +1890,13 @@ public class View {
                              .toList();
 
         // complete all pending joins
-        pending.forEach(r -> r.accept(members));
+        pending.forEach(r -> {
+            try {
+                r.accept(members);
+            } catch (Throwable t) {
+                log.error("Exception in pending join on: {}", node.getId(), t);
+            }
+        });
 
         log.info("Installed view: {} from: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
                  currentView.get(), previousView, context.getId(), context.cardinality(), context.allMembers().count(),
