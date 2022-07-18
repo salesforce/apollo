@@ -817,10 +817,11 @@ public class View {
                             }
                         } else {
                             log.error("Gateway crown: {} does not match view: {} cardinality: {} context: {} on: {}",
-                                      crown, Digest.from(g.getView()), context.getId(), node.getId());
+                                      crown, Digest.from(g.getView()), context.getId(), cardinality, node.getId());
                             gateway.completeExceptionally(new IllegalStateException(String.format("Gateway crown: %s does not match view: %s cardinality: %s context: %s on: %s",
                                                                                                   crown,
                                                                                                   Digest.from(g.getView()),
+                                                                                                  cardinality,
                                                                                                   context.getId(),
                                                                                                   node.getId())));
                         }
