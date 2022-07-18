@@ -191,6 +191,7 @@ public class View {
                                        .setRingNumber(ringNumber)
                                        .setAccuser(getId().toDigeste())
                                        .setAccused(m.getId().toDigeste())
+                                       .setCurrentView(currentView.get().toDigeste())
                                        .build();
             return new AccusationWrapper(SignedAccusation.newBuilder()
                                                          .setAccusation(accusation)
@@ -1061,6 +1062,7 @@ public class View {
     private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
     private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
+    private final AtomicInteger                               viewChangeAttempt   = new AtomicInteger();
     private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
     private final AtomicReference<ViewChange>                 vote                = new AtomicReference<>();
 
@@ -1217,7 +1219,7 @@ public class View {
             return false;
         }
 
-        if (accused.getEpoch() != accusation.getEpoch()) {
+        if (accused.getEpoch() >= 0 && accused.getEpoch() != accusation.getEpoch()) {
             log.trace("Accusation discarded, epoch: {}  for: {} != epoch: {} on: {}", accusation.getEpoch(),
                       accused.getId(), accused.getEpoch(), node.getId());
             return false;
@@ -1258,19 +1260,26 @@ public class View {
 
         if (accused.isAccusedOn(ring.getIndex())) {
             Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
-            if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
-                accused.addAccusation(accusation);
-                pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
-                                                                                            params.rebuttalTimeout()));
-                log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
-                          ring.getIndex(), currentAccuser.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.accusations().mark();
+            if (!currentAccuser.equals(accuser)) {
+                if (ring.isBetween(currentAccuser, accuser, accused)) {
+                    accused.addAccusation(accusation);
+                    pendingRebuttals.computeIfAbsent(accused.getId(),
+                                                     d -> roundTimers.schedule(() -> gc(accused),
+                                                                               params.rebuttalTimeout()));
+                    log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
+                              ring.getIndex(), currentAccuser.getId(), node.getId());
+                    if (metrics != null) {
+                        metrics.accusations().mark();
+                    }
+                    return true;
+                } else {
+                    log.debug("{} accused by: {} on ring: {} discarded as not closer than: {} on: {}", accused.getId(),
+                              accuser.getId(), accusation.getRingNumber(), currentAccuser.getId(), node.getId());
+                    return false;
                 }
-                return true;
             } else {
-                log.debug("{} accused by: {} on ring: {} discarded as not predecessor on: {}", accused.getId(),
-                          accuser.getId(), accusation.getRingNumber(), node.getId());
+                log.debug("{} accused by: {} on ring: {} discarded as redundant: {} on: {}", accused.getId(),
+                          accuser.getId(), accusation.getRingNumber(), currentAccuser.getId(), node.getId());
                 return false;
             }
         } else {
@@ -1551,7 +1560,9 @@ public class View {
                 log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
                          superMajority, context.cardinality(), currentView.get(), node.getId());
                 install(max.getElement());
+                viewChangeAttempt.set(0);
             } else {
+                viewChangeAttempt.incrementAndGet();
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
@@ -1559,10 +1570,11 @@ public class View {
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView.get(),
                          node.getId());
             }
+
             scheduleViewChange();
-            observations.clear();
             timers.remove(FINALIZE_VIEW_CHANGE);
             vote.set(null);
+            observations.clear();
         });
     }
 
@@ -1632,7 +1644,7 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality() * 2),
                                                                     p);
-        observations.keySet().forEach(d -> bff.add(d));
+        observations.entrySet().stream().map(e -> e.getKey()).forEach(d -> bff.add(d));
         return bff;
     }
 
@@ -1808,7 +1820,8 @@ public class View {
                                           .addAllJoins(joiningMembers.keySet()
                                                                      .stream()
                                                                      .map(d -> d.toDigeste())
-                                                                     .toList());
+                                                                     .toList())
+                                          .setAttempt(viewChangeAttempt.get());
             ViewChange change = builder.build();
             vote.set(change);
             var signature = node.sign(change.toByteString());
@@ -1955,8 +1968,10 @@ public class View {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
+        var current = currentView.get();
         context.allMembers()
                .flatMap(m -> m.getAccusations())
+               .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
                .limit(params.maximumTxfr())
                .forEach(a -> builder.addUpdates(a.getWrapped()));
@@ -2040,9 +2055,11 @@ public class View {
         ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound bff
+        final var currentAttempt = viewChangeAttempt.get();
         observations.entrySet()
                     .stream()
                     .filter(m -> !bff.contains(m.getKey()))
+                    .filter(e -> e.getValue().getChange().getAttempt() == currentAttempt)
                     .map(m -> m.getValue())
                     .limit(params.maximumTxfr())
                     .forEach(n -> builder.addUpdates(n));
@@ -2079,7 +2096,10 @@ public class View {
                                 .map(s -> new AccusationWrapper(s, digestAlgo))
                                 .filter(accusation -> add(accusation))
                                 .count();
-        var oCount = observe.stream().filter(observation -> add(observation)).count();
+        var oCount = observe.stream()
+                            .filter(vc -> vc.getChange().getAttempt() == viewChangeAttempt.get())
+                            .filter(observation -> add(observation))
+                            .count();
         var jCount = joins.stream().filter(j -> addJoin(j)).count();
         if (nCount + aCount + oCount + jCount != 0) {
             log.trace("Updating notes: {}:{} accusations: {}:{} observations: {}:{} joins: {}:{} on: {}", nCount,
@@ -2299,10 +2319,10 @@ public class View {
     private Update updatesForDigests(Gossip gossip) {
         Update.Builder builder = Update.newBuilder();
 
+        final var current = currentView.get();
         var biff = gossip.getNotes().getBff();
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> notesBff = BloomFilter.from(biff);
-            final var current = currentView.get();
             context.activeMembers()
                    .stream()
                    .filter(m -> m.getNote() != null)
@@ -2317,6 +2337,7 @@ public class View {
             BloomFilter<Digest> accBff = BloomFilter.from(biff);
             context.allMembers()
                    .flatMap(m -> m.getAccusations())
+                   .filter(a -> a.currentView().equals(current))
                    .filter(a -> !accBff.contains(a.getHash()))
                    .forEach(a -> builder.addAccusations(a.getWrapped()));
         }
@@ -2326,6 +2347,8 @@ public class View {
             BloomFilter<Digest> obsvBff = BloomFilter.from(biff);
             observations.entrySet()
                         .stream()
+                        .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
+                        .filter(e -> e.getValue().getChange().getAttempt() != viewChangeAttempt.get())
                         .filter(e -> !obsvBff.contains(e.getKey()))
                         .forEach(e -> builder.addObservations(e.getValue()));
         }
@@ -2354,7 +2377,7 @@ public class View {
         }
         if (shunned.contains(from)) {
             log.trace("Shunned from: {} local count: {} on: {}", from, context.allMembers().count(), node.getId());
-            throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is shunned: " + from));
+            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned: " + from));
         }
         if (!requestView.equals(currentView.get())) {
             log.debug("Invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView.get(), ring,

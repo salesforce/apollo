@@ -129,7 +129,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     public boolean contains(T member) {
-        return ring.containsKey(member.getId());
+        return ring.containsKey(hash(member));
     }
 
     public void delete(T m) {

@@ -27,6 +27,10 @@ public class AccusationWrapper {
         this.hash = JohnHancock.from(signedAccusation.getSignature()).toDigest(algo);
     }
 
+    public Digest currentView() {
+        return new Digest(signedAccusation.getAccusation().getCurrentView());
+    }
+
     public Digest getAccused() {
         return new Digest(signedAccusation.getAccusation().getAccused());
     }

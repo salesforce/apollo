@@ -37,6 +37,7 @@ message Accusation {
     int32 ringNumber = 2;
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
+    utils.Digeste currentView = 5;
 }
 
 message SignedAccusation {
@@ -56,8 +57,9 @@ message Note {
 message ViewChange {
     utils.Digeste observer = 1;
     utils.Digeste current = 2;
-    repeated utils.Digeste joins = 3;
-    repeated utils.Digeste leaves = 4;
+    int32 attempt = 3;
+    repeated utils.Digeste joins = 4;
+    repeated utils.Digeste leaves = 5;
 }
 
 message SignedViewChange {

@@ -41,7 +41,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Number of TTL rounds an accussed has to rebut the accusation
          */
-        private int    rebuttalTimeout        = 2;
+        private int    rebuttalTimeout        = 3;
         /**
          * Minimum number of rounds to check for view change
          */
