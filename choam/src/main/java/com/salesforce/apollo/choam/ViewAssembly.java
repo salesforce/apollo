@@ -45,7 +45,6 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.Entropy;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -130,7 +129,8 @@ public class ViewAssembly {
                 }
                 log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
                 return term.join(request);
-            }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate)));
+            }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate),
+                                                  params().scheduler(), params().gossipDuration()));
             reiterate.get().run();
         }
 
@@ -171,7 +171,6 @@ public class ViewAssembly {
                                 .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
-        Entropy.secureShuffle(slice);
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms,
                                                 params().exec());
 

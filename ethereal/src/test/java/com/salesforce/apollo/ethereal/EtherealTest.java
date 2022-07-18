@@ -255,12 +255,5 @@ public class EtherealTest {
                            .filter(count -> count == expected)
                            .count() >= context.majority(),
                    "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
-//        System.out.println();
-//
-//        ConsoleReporter.forRegistry(registry)
-//                       .convertRatesTo(TimeUnit.SECONDS)
-//                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-//                       .build()
-//                       .report();
     }
 }

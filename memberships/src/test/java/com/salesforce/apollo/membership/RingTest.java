@@ -125,6 +125,28 @@ public class RingTest {
     }
 
     @Test
+    public void incrementBreaksTwoThirdsMajority() {
+        double epsilon = 0.99999;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
+
+        for (double pByz : probabilityByzantine) {
+            int tPrev = 0;
+            for (int card = 4; card < 10_000; card++) {
+                try {
+                    var t = Context.minMajority(pByz, card, epsilon, 3);
+                    if (t != tPrev) {
+                        System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
+                                                         pByz, card));
+                    }
+                    tPrev = t;
+                } catch (Exception e) {
+                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                }
+            }
+        }
+    }
+
+    @Test
     public void predecessor() {
         Member predecessor = ring.predecessor(members.get(6));
         assertEquals(5, members.indexOf(predecessor));
@@ -148,9 +170,9 @@ public class RingTest {
 
         assertEquals(members.size() - 2, ring.rank(members.get(1), members.get(0)));
 
-        assertEquals(2, ring.rank(members.get(0), members.get(3)));
+        assertEquals(7, ring.rank(members.get(5), members.get(3)));
 
-        assertEquals(6, ring.rank(members.get(0), members.get(7)));
+        assertEquals(4, ring.rank(members.get(2), members.get(7)));
     }
 
     @Test
@@ -199,28 +221,6 @@ public class RingTest {
                     int t = Context.minMajority(pByz, card, epsilon, 3);
                     System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
                                                      pByz, card));
-                } catch (Exception e) {
-                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
-                }
-            }
-        }
-    }
-
-    @Test
-    public void incrementBreaksTwoThirdsMajority() {
-        double epsilon = 0.99999;
-        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
-
-        for (double pByz : probabilityByzantine) {
-            int tPrev = 0;
-            for (int card = 4; card < 10_000; card++) {
-                try {
-                    var t = Context.minMajority(pByz, card, epsilon, 3);
-                    if (t != tPrev) {
-                        System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
-                                                         pByz, card));
-                    }
-                    tPrev = t;
                 } catch (Exception e) {
                     System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
                 }

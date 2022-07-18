@@ -12,7 +12,7 @@ import java.util.function.Function;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.ClientAuth;
 
 /**
  * @author hal.hildebrand
@@ -22,8 +22,8 @@ public class StandardEpProvider implements EndpointProvider {
 
     private final SocketAddress                   bindAddress;
     private final ClientAuth                      clientAuth;
-    private final CertificateValidator            validator;
     private final Function<Member, SocketAddress> resolver;
+    private final CertificateValidator            validator;
 
     public StandardEpProvider(SocketAddress bindAddress, ClientAuth clientAuth, CertificateValidator validator,
                               Function<Member, SocketAddress> resolver) {

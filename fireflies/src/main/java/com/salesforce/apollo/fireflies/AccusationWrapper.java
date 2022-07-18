@@ -19,12 +19,16 @@ import com.salesforce.apollo.crypto.JohnHancock;
  */
 public class AccusationWrapper {
 
-    private final SignedAccusation signedAccusation;
     private final Digest           hash;
+    private final SignedAccusation signedAccusation;
 
     public AccusationWrapper(SignedAccusation signedAccusation, DigestAlgorithm algo) {
         this.signedAccusation = signedAccusation;
         this.hash = JohnHancock.from(signedAccusation.getSignature()).toDigest(algo);
+    }
+
+    public Digest currentView() {
+        return new Digest(signedAccusation.getAccusation().getCurrentView());
     }
 
     public Digest getAccused() {

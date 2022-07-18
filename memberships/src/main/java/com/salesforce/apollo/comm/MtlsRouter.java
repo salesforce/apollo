@@ -68,11 +68,13 @@ public class MtlsRouter extends Router {
 
     @Override
     public void close() {
-        if (!started.compareAndSet(true, false)) {
+        if (!started.get()) {
             return;
         }
-        server.stop();
         super.close();
+        if (server != null) {
+            server.stop();
+        }
     }
 
     @Override

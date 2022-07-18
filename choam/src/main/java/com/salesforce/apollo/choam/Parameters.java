@@ -627,14 +627,22 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private ReliableBroadcaster.Parameters   combine               = ReliableBroadcaster.Parameters.newBuilder()
                                                                                                        .build();
         private DigestAlgorithm                  digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder();
+        private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder()
+                                                                                                 .setInitialBackoff(Duration.ofMillis(5))
+                                                                                                 .setJitter(0.2)
+                                                                                                 .setMultiplier(1.2)
+                                                                                                 .setMaxBackoff(Duration.ofMillis(500));
         private Digest                           genesisViewId;
         private Duration                         gossipDuration        = Duration.ofSeconds(1);
         private int                              maxCheckpointSegments = 200;
         private MvStoreBuilder                   mvBuilder             = new MvStoreBuilder();
         private ProducerParameters               producer              = ProducerParameters.newBuilder().build();
         private int                              regenerationCycles    = 20;
-        private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder();
+        private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder()
+                                                                                                 .setInitialBackoff(Duration.ofMillis(10))
+                                                                                                 .setJitter(0.2)
+                                                                                                 .setMultiplier(1.6)
+                                                                                                 .setMaxBackoff(Duration.ofMillis(500));
         private Duration                         submitTimeout         = Duration.ofSeconds(30);
         private int                              synchronizationCycles = 10;
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();

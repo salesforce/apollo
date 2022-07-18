@@ -9,12 +9,13 @@ package com.salesforce.apollo.fireflies.communications;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Digests;
+import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.SignedNote;
-import com.salesfoce.apollo.fireflies.proto.Update;
+import com.salesfoce.apollo.fireflies.proto.Join;
+import com.salesfoce.apollo.fireflies.proto.Redirect;
+import com.salesfoce.apollo.fireflies.proto.SayWhat;
+import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.Link;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
@@ -37,19 +38,32 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests,
-                                                   Node from) {
+            public ListenableFuture<Gossip> gossip(SayWhat sw) {
                 return null;
             }
 
             @Override
-            public void update(Digest context, int ring, Update update) {
+            public ListenableFuture<Gateway> join(Join join) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Redirect> seed(Join join) {
+                return null;
+            }
+
+            @Override
+            public void update(State state) {
             }
         };
     }
 
-    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests, Node from);
+    ListenableFuture<Gossip> gossip(SayWhat sw);
 
-    void update(Digest context, int ring, Update update);
+    ListenableFuture<Gateway> join(Join join);
+
+    ListenableFuture<Redirect> seed(Join join);
+
+    void update(State state);
 
 }

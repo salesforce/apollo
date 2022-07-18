@@ -31,12 +31,14 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
 
     private final RbcMetrics      combineMetrics;
     private final Meter           completedTransactions;
+    private final Counter         droppedReassemblies;
     private final Counter         droppedTransactions;
     private final Counter         droppedValidations;
     private final Meter           failedTransactions;
     private final EtherealMetrics genesisMetrics;
     private final EtherealMetrics producerMetrics;
     private final Histogram       publishedBytes;
+    private final Meter           publishedReassemblies;
     private final Meter           publishedTransactions;
     private final Meter           publishedValidations;
     private final MetricRegistry  registry;
@@ -55,9 +57,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         genesisMetrics = new EtherealMetricsImpl(context, "genesis", registry);
 
         droppedTransactions = registry.counter(name(context.shortString(), "transactions.dropped"));
+        droppedReassemblies = registry.counter(name(context.shortString(), "reassemblies.dropped"));
         droppedValidations = registry.counter(name(context.shortString(), "validations.dropped"));
         publishedTransactions = registry.meter(name(context.shortString(), "transactions.published"));
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
+        publishedReassemblies = registry.meter(name(context.shortString(), "reassemblies.published"));
         publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
         transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
         transactionSubmitRetry = registry.meter(name(context.shortString(), "transaction.submit.retry"));
@@ -70,9 +74,10 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void dropped(int transactions, int validations) {
+    public void dropped(int transactions, int validations, int reassemblies) {
         droppedTransactions.inc(transactions);
         droppedValidations.inc(validations);
+        droppedReassemblies.inc(reassemblies);
     }
 
     @Override
@@ -96,10 +101,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void publishedBatch(int transactions, int byteSize, int validations) {
+    public void publishedBatch(int transactions, int byteSize, int validations, int reassemblies) {
         publishedTransactions.mark(transactions);
         publishedBytes.update(byteSize);
         publishedValidations.mark(validations);
+        publishedReassemblies.mark(reassemblies);
     }
 
     @Override
@@ -107,7 +113,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         if (t != null) {
             if (t instanceof TimeoutException) {
                 transactionTimeout.mark();
-                ;
+
             } else if (t instanceof TransactionCancelled) {
                 // ignore
             } else {

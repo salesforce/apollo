@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.protocols.EdpointMetrics;
@@ -16,23 +17,59 @@ import com.salesforce.apollo.protocols.EdpointMetrics;
  */
 public interface FireflyMetrics extends EdpointMetrics {
 
-    Meter gossipReply();
+    Meter accusations();
 
-    Meter gossipResponse();
+    Meter filteredNotes();
+
+    Histogram gossipReply();
+
+    Histogram gossipResponse();
 
     Timer gossipRoundDuration();
 
-    Meter inboundGossip();
+    Histogram inboundGateway();
 
-    Timer inboundGossipTimer();
+    Histogram inboundGossip();
 
-    Meter inboundUpdate();
+    Timer inboundGossipDuration();
+
+    Histogram inboundJoin();
+
+    Timer inboundJoinDuration();
+
+    Histogram inboundRedirect();
+
+    Histogram inboundSeed();
+
+    Timer inboundSeedDuration();
+
+    Histogram inboundUpdate();
 
     Timer inboundUpdateTimer();
 
-    Meter outboundGossip();
+    Timer joinDuration();
 
-    Meter outboundUpdate();
+    Meter joins();
+
+    Meter leaves();
+
+    Meter notes();
+
+    Histogram outboundGateway();
+
+    Histogram outboundGossip();
+
+    Histogram outboundJoin();
+
+    Histogram outboundRedirect();
+
+    Histogram outboundSeed();
+
+    Histogram outboundUpdate();
 
     Timer outboundUpdateTimer();
+
+    Timer seedDuration();
+
+    Meter shunnedGossip();
 }

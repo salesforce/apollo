@@ -12,7 +12,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -22,6 +26,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.View.ViewChangeListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -42,25 +47,27 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class ProcessDomain extends Domain {
-    private record Managed(SubDomain domain, Context<?> embedded, ContextBridge bridge) {}
+    private record Managed(SubDomain domain, Context<?> embedded) {}
 
-    private final ContextBridge        bridge;
+    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
+
     private final View                 foundation;
     @SuppressWarnings("unused")
     private final Map<Digest, Managed> hostedDomains = new ConcurrentHashMap<>();
+    private final UUID                 listener;
 
     public ProcessDomain(Digest group, ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
-                         InetSocketAddress endpoint, TransactionConfiguration txnConfig) {
+                         InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
+                         TransactionConfiguration txnConfig) {
         super(id, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
-        this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(), 0.0125,
-                                   DigestAlgorithm.DEFAULT, null, params.exec());
-        bridge = new ContextBridge(params.context(), this);
-        bridge.register(base);
+        this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(),
+                                   ff.build(), DigestAlgorithm.DEFAULT, null, params.exec());
+        listener = foundation.register(listener());
     }
 
     public View getFoundation() {
@@ -69,5 +76,25 @@ public class ProcessDomain extends Domain {
 
     public Optional<CertificateWithPrivateKey> provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {
         return identifier.provision(Instant.now(), duration, signatureAlgorithm);
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        foundation.deregister(listener);
+    }
+
+    private ViewChangeListener listener() {
+        return (context, id, join, leaving) -> {
+            for (var d : join) {
+                params.context().activate(context.getMember(d));
+            }
+            for (var d : leaving) {
+                params.context().remove(d);
+            }
+
+            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
+                     join.size(), leaving.size(), params.member().getId());
+        };
     }
 }

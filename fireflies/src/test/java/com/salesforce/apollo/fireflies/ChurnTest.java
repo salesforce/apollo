@@ -1,12 +1,11 @@
 /*
- * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2022, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.fireflies;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetSocketAddress;
@@ -14,8 +13,11 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -40,7 +42,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -52,9 +53,9 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
- * @since 220
+ *
  */
-public class SwarmTest {
+public class ChurnTest {
 
     private static final int                                                   CARDINALITY = 100;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
@@ -90,16 +91,21 @@ public class SwarmTest {
     }
 
     @Test
-    public void swarm() throws Exception {
+    public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(20);
-        long then = System.currentTimeMillis();
+        final var scheduler = Executors.newScheduledThreadPool(2);
+
+        Set<View> testViews = new HashSet<>();
+
+        System.out.println();
+        System.out.println("Starting views");
+        System.out.println();
 
         // Bootstrap the kernel
 
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(25);
+        final var gossipDuration = Duration.ofMillis(5);
         views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
 
         var bootstrappers = views.subList(0, 25);
@@ -118,60 +124,89 @@ public class SwarmTest {
                                   .toList();
         assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
 
-        // Start remaining views
-        views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
-        success = Utils.waitForCondition(20_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
-        });
-
-        // Test that all views are up
-        failed = views.stream()
-                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
-                      .toList();
-        assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
-
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-        + views.size() + " members");
-
-        Thread.sleep(5_000);
-
-        for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
-            for (View view : views) {
-                assertEquals(views.get(0).getContext().ring(i).getRing(), view.getContext().ring(i).getRing());
+        for (int i = 0; i < 4; i++) {
+            int start = testViews.size();
+            var toStart = new ArrayList<View>();
+            for (int j = 0; j < 25; j++) {
+                final var v = views.get(start + j);
+                testViews.add(v);
+                toStart.add(v);
             }
+            long then = System.currentTimeMillis();
+            toStart.forEach(view -> view.start(gossipDuration, seeds, scheduler));
+
+            success = Utils.waitForCondition(30_000, 1_000, () -> {
+                return testViews.stream()
+                                .filter(view -> view.getContext().totalCount() != testViews.size())
+                                .count() == 0;
+            });
+            failed = testViews.stream()
+                              .filter(e -> e.getContext().activeCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                              .toList();
+            assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
+
+            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+            + testViews.size() + " members");
+        }
+        System.out.println();
+        System.out.println("Stopping views");
+        System.out.println();
+
+        testViews.clear();
+        List<View> c = new ArrayList<>(views);
+        List<Router> r = new ArrayList<>(communications);
+        int delta = 5;
+        for (int i = 0; i < (CARDINALITY / delta - 4); i++) {
+            var removed = new ArrayList<Digest>();
+            for (int j = c.size() - 1; j >= c.size() - delta; j--) {
+                final var view = c.get(j);
+                view.stop();
+                r.get(j).close();
+                removed.add(view.getNode().getId());
+            }
+            c = c.subList(0, c.size() - delta);
+            r = r.subList(0, r.size() - delta);
+            final var expected = c;
+//            System.out.println("** Removed: " + removed);
+            long then = System.currentTimeMillis();
+            success = Utils.waitForCondition(30_000, 1_000, () -> {
+                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
+            });
+            failed = expected.stream()
+                             .filter(e -> e.getContext().activeCount() != testViews.size())
+                             .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                             .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                             .toList();
+            assertTrue(success, " expected: " + expected.size() + " failed: " + failed.size() + " views: " + failed);
+
+            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+            + c.size() + " members");
         }
 
-//        failed = views.stream()
-//                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-//                      .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
-//                      .toList();
-//        assertEquals(0, failed.size(),
-//                     " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
+        views.forEach(e -> e.stop());
+        communications.forEach(e -> e.close());
+
+        System.out.println();
 
         for (View v : views) {
             Graph<Participant> testGraph = new Graph<>();
-            for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
+            for (int i = 0; i < v.getContext().getRingCount(); i++) {
                 testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
             assertTrue(testGraph.isSC());
         }
 
+        var view0 = views.get(0);
         for (View view : views) {
             for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final var membership = view.getContext()
-                                           .ring(ring)
-                                           .members()
-                                           .stream()
-                                           .map(p -> members.get(p.getId()))
-                                           .toList();
-                for (Member node : members.values()) {
-                    assertTrue(membership.contains(node));
+                final var test = view.getContext().ring(ring);
+                for (var node : view0.getContext().getAllMembers()) {
+                    assertTrue(test.contains(node));
                 }
             }
         }
-
-        views.forEach(view -> view.stop());
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)

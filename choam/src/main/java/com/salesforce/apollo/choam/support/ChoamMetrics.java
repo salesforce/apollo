@@ -18,17 +18,17 @@ import com.salesforce.apollo.protocols.EdpointMetrics;
  */
 public interface ChoamMetrics extends EdpointMetrics {
 
-    void dropped(int transactions, int validations);
+    void dropped(int transactions, int validations, int reassemblies);
 
     RbcMetrics getCombineMetrics();
+
+    EtherealMetrics getGensisMetrics();
 
     MetricRegistry getMetricRegistry(String prefix);
 
     EtherealMetrics getProducerMetrics();
 
-    EtherealMetrics getGensisMetrics();
-
-    void publishedBatch(int batchSize, int byteSize, int validations);
+    void publishedBatch(int batchSize, int byteSize, int validations, int reassemblies);
 
     void transactionComplete(Throwable t);
 

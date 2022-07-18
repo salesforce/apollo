@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.ethereal.memberships.comm;
 
-import com.codahale.metrics.Meter;
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.protocols.EdpointMetrics;
 
@@ -16,25 +16,25 @@ import com.salesforce.apollo.protocols.EdpointMetrics;
  */
 public interface EtherealMetrics extends EdpointMetrics {
 
-    Meter gossipReply();
+    Histogram gossipReply();
 
-    Meter gossipResponse();
+    Histogram gossipResponse();
 
     Timer gossipRoundDuration();
 
-    Meter inboundGossip();
+    Histogram inboundGossip();
 
     Timer inboundGossipTimer();
 
-    Meter inboundUpdate();
+    Histogram inboundUpdate();
 
     Timer inboundUpdateTimer();
 
-    Meter outboundGossip();
+    Histogram outboundGossip();
 
     Timer outboundGossipTimer();
 
-    Meter outboundUpdate();
+    Histogram outboundUpdate();
 
     Timer outboundUpdateTimer();
 }

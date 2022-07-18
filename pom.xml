@@ -33,10 +33,10 @@
         <dropwizard.version>2.0.28</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.16.6</jooq.version>
-        <bc.version>1.70</bc.version>
+        <bc.version>1.71</bc.version>
         <logback.version>1.2.11</logback.version>
-        <grpc.version>1.43.1</grpc.version>
-        <protobuf.version>3.19.2</protobuf.version>
+        <grpc.version>1.47.0</grpc.version>
+        <protobuf.version>3.21.2</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
 
@@ -102,6 +102,11 @@
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-netty-shaded</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty</artifactId>
                 <version>${grpc.version}</version>
             </dependency>
             <dependency>
@@ -199,11 +204,6 @@
                 <artifactId>grpc</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>thoth</artifactId>
-                <version>${project.version}</version>
-            </dependency>
 
             <dependency>
                 <groupId>io.dropwizard</groupId>
@@ -222,18 +222,23 @@
 
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk15on</artifactId>
+                <artifactId>bcprov-jdk15to18</artifactId>
                 <version>${bc.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcpkix-jdk15on</artifactId>
+                <artifactId>bcpkix-jdk15to18</artifactId>
                 <version>${bc.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bctls-jdk15on</artifactId>
+                <artifactId>bctls-jdk15to18</artifactId>
                 <version>${bc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.perfmark</groupId>
+                <artifactId>perfmark-api</artifactId>
+                <version>0.23.0</version>
             </dependency>
 
             <dependency>
@@ -298,14 +303,9 @@
                 <version>4.0.0</version>
             </dependency>
             <dependency>
-                <groupId>org.antlr</groupId>
-                <artifactId>antlr4</artifactId>
-                <version>${antlr4.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.antlr</groupId>
-                <artifactId>antlr4-runtime</artifactId>
-                <version>${antlr4.version}</version>
+                <groupId>org.roaringbitmap</groupId>
+                <artifactId>RoaringBitmap</artifactId>
+                <version>0.9.30</version>
             </dependency>
 
             <dependency>
@@ -324,7 +324,7 @@
                 <artifactId>xchart</artifactId>
                 <version>3.8.1</version>
             </dependency>
-            
+
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
@@ -406,17 +406,17 @@
         </pluginRepository>
     </pluginRepositories>
 
-	<profiles>
-		<profile> 
-			<id>pre</id>
-			<activation>
-				<activeByDefault>false</activeByDefault>
-			</activation>
-			<modules>
-        		<module>h2-deterministic</module>
-			</modules>
-		</profile>
-	</profiles>
+    <profiles>
+        <profile>
+            <id>pre</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>h2-deterministic</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <build>
         <extensions>

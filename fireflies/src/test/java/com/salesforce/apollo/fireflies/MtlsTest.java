@@ -18,12 +18,12 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -36,8 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.Sets;
-import com.salesfoce.apollo.fireflies.proto.Identity;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
@@ -53,6 +51,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -65,8 +64,8 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * @author hal.hildebrand
@@ -76,7 +75,6 @@ public class MtlsTest {
     private static final int                                                   CARDINALITY;
     private static final Map<Digest, CertificateWithPrivateKey>                certs       = new HashMap<>();
     private static final Map<Digest, InetSocketAddress>                        endpoints   = new HashMap<>();
-    private static final Random                                                entropy     = new Random(0x666);
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final boolean                                               LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
@@ -90,7 +88,6 @@ public class MtlsTest {
         String localhost = InetAddress.getLocalHost().getHostName();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
-                              .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
@@ -119,29 +116,27 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
+        var parameters = Parameters.newBuilder().build();
+        final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
 
-        var seeds = new ArrayList<Identity>();
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            var member = members.get(entropy.nextInt(members.size()));
-            var id = View.identityFor(0, endpoints.get(member.getId()), member.getEvent());
-            if (!seeds.contains(id)) {
-                seeds.add(id);
-            }
-        }
-        var scheduler = Executors.newScheduledThreadPool(members.size());
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
+        var seeds = members.stream()
+                           .map(m -> new Seed(m.getEvent().getCoordinates(), endpoints.get(m.getId())))
+                           .limit(LARGE_TESTS ? 24 : 3)
+                           .toList();
 
-        var builder = ServerConnectionCache.newBuilder().setTarget(2);
+        var scheduler = Executors.newScheduledThreadPool(10);
+        var exec = ForkJoinPool.commonPool();
+        var commExec = new ForkJoinPool();
+
+        var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);
-        Function<Member, SocketAddress> resolver = m -> {
-            var p = (Participant) m;
-            return p.getIdentity().endpoint();
-        };
+        Function<Member, SocketAddress> resolver = m -> ((Participant) m).endpoint();
+
         var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
@@ -151,18 +146,36 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey),
-                                              Executors.newFixedThreadPool(3), clientContextSupplier);
+            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey), commExec,
+                                              clientContextSupplier);
             communications.add(comms);
-            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
+            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
                             DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.start(Duration.ofMillis(200), seeds, scheduler));
 
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
+        views.get(0).start(duration, Collections.emptyList(), scheduler);
+
+        assertTrue(Utils.waitForCondition(10_000, 1_000, () -> views.get(0).getContext().activeCount() == 1),
+                   "KERNEL did not stabilize");
+
+        var seedlings = views.subList(1, seeds.size());
+        var kernel = seeds.subList(0, 1);
+
+        seedlings.forEach(view -> view.start(duration, kernel, scheduler));
+
+        assertTrue(Utils.waitForCondition(30_000, 1_000,
+                                          () -> seedlings.stream()
+                                                         .filter(view -> view.getContext()
+                                                                             .activeCount() != seeds.size())
+                                                         .count() == 0),
+                   "Seeds did not stabilize");
+
+        views.forEach(view -> view.start(duration, seeds, scheduler));
+
+        assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()
                         .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                         .filter(view -> view != null)
@@ -173,48 +186,12 @@ public class MtlsTest {
         + views.size() + " members");
 
         System.out.println("Checking views for consistency");
-        var invalid = views.stream()
-                           .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                           .filter(view -> view != null)
-                           .collect(Collectors.toList());
-        assertEquals(0, invalid.size(), invalid.stream().map(view -> {
-            var difference = Sets.difference(views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()),
-                                             view.getContext()
-                                                 .active()
-                                                 .map(m -> m.getId())
-                                                 .collect(Collectors.toSet()));
-            return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
-        }).collect(Collectors.toList()).toString());
-
-        System.out.println("Stoping views");
-        views.forEach(view -> view.stop());
-
-        System.out.println("Restarting views");
-        views.forEach(view -> view.start(Duration.ofMillis(1000), seeds, scheduler));
-
-        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
-            return views.stream()
-                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        }));
-
-        System.out.println("Stabilized, now sleeping to see if views remain stabilized");
-        Thread.sleep(10_000);
-        assertTrue(Utils.waitForCondition(30_000, 100, () -> {
-            return views.stream()
-                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        }));
-        System.out.println("View has stabilized after restart in " + (System.currentTimeMillis() - then) + " Ms");
-
-        System.out.println("Checking views for consistency");
-        invalid = views.stream()
-                       .map(view -> view.getContext().activeCount() != views.size() ? view : null)
-                       .filter(view -> view != null)
-                       .collect(Collectors.toList());
-        assertEquals(0, invalid.size());
+        var failed = views.stream()
+                          .filter(e -> e.getContext().activeCount() != views.size())
+                          .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                          .toList();
+        assertEquals(0, failed.size(),
+                     " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
 
         System.out.println("Stoping views");
         views.forEach(view -> view.stop());
@@ -231,7 +208,7 @@ public class MtlsTest {
             return new ClientContextSupplier() {
                 @Override
                 public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                            Provider provider, String tlsVersion) {
+                                            String tlsVersion) {
                     CertificateWithPrivateKey certWithKey = certs.get(m.getId());
                     return MtlsServer.forClient(clientAuth, alias, certWithKey.getX509Certificate(),
                                                 certWithKey.getPrivateKey(), validator);

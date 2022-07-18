@@ -457,7 +457,7 @@ public enum DigestAlgorithm {
 
     protected MessageDigest createJCA() {
         try {
-            return MessageDigest.getInstance(algorithmName(), ProviderUtils.getProviderBC());
+            return MessageDigest.getInstance(algorithmName());
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Unable to retrieve " + algorithmName()
             + " Message DigestAlgorithm instance", e);

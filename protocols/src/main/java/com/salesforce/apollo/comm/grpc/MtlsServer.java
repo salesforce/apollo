@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -22,7 +23,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
 import com.salesforce.apollo.crypto.ssl.NodeTrustManagerFactory;
@@ -36,18 +36,19 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
-import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolNames;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 /**
  * @author hal.hildebrand
@@ -73,7 +74,7 @@ public class MtlsServer implements ClientIdentity {
 
     public static final String TL_SV1_3 = "TLSv1.3";
 
-    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
+    private static final Provider PROVIDER_BCJSSE = Security.getProvider("SunJSSE");
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
@@ -82,9 +83,9 @@ public class MtlsServer implements ClientIdentity {
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                                                            privateKey,
                                                                                            PROVIDER_BCJSSE));
-//        GrpcSslContexts.configure(builder);
+        GrpcSslContexts.configure(builder, SslProvider.JDK);
         builder.protocols(TL_SV1_3)
-               .sslProvider(SslProvider.JDK)
+               .sslContextProvider(PROVIDER_BCJSSE)
                .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
@@ -110,9 +111,9 @@ public class MtlsServer implements ClientIdentity {
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
                                                                                           privateKey, PROVIDER_BCJSSE));
-//        GrpcSslContexts.configure(builder);
+        GrpcSslContexts.configure(builder, SslProvider.JDK);
         builder.protocols(TL_SV1_3)
-               .sslProvider(SslProvider.JDK)
+               .sslContextProvider(PROVIDER_BCJSSE)
                .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
@@ -186,13 +187,7 @@ public class MtlsServer implements ClientIdentity {
     }
 
     public void stop() {
-        server.shutdown();
-        try {
-            server.awaitTermination();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                                            e);
-        }
+        server.shutdownNow();
     }
 
     private X509Certificate getCert() {

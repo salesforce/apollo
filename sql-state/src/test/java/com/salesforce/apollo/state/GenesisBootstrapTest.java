@@ -29,6 +29,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
     @Override
     protected int checkpointBlockSize() {
-        return 10;
+        return 1000;
     }
 }

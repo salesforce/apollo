@@ -57,19 +57,30 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
 
         return grpcLimiter.acquire(new GrpcClientRequestContext() {
             @Override
-            public MethodDescriptor<?, ?> getMethod() {
-                return method;
+            public CallOptions getCallOptions() {
+                return callOptions;
             }
 
             @Override
-            public CallOptions getCallOptions() {
-                return callOptions;
+            public MethodDescriptor<?, ?> getMethod() {
+                return method;
             }
         })
                           // Perform the operation and release the limiter once done.
                           .map(listener -> (ClientCall<ReqT, RespT>) new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method,
                                                                                                                                                    callOptions)) {
                               final AtomicBoolean done = new AtomicBoolean(false);
+
+                              @Override
+                              public void cancel(final @Nullable String message, final @Nullable Throwable cause) {
+                                  try {
+                                      super.cancel(message, cause);
+                                  } finally {
+                                      if (done.compareAndSet(false, true)) {
+                                          listener.onIgnore();
+                                      }
+                                  }
+                              }
 
                               @Override
                               public void start(final Listener<RespT> responseListener, final Metadata headers) {
@@ -92,30 +103,10 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
                                       }
                                   }, headers);
                               }
-
-                              @Override
-                              public void cancel(final @Nullable String message, final @Nullable Throwable cause) {
-                                  try {
-                                      super.cancel(message, cause);
-                                  } finally {
-                                      if (done.compareAndSet(false, true)) {
-                                          listener.onIgnore();
-                                      }
-                                  }
-                              }
                           })
                           .orElseGet(() -> new ClientCall<ReqT, RespT>() {
 
                               private Listener<RespT> responseListener;
-
-                              @Override
-                              public void start(io.grpc.ClientCall.Listener<RespT> responseListener, Metadata headers) {
-                                  this.responseListener = responseListener;
-                              }
-
-                              @Override
-                              public void request(int numMessages) {
-                              }
 
                               @Override
                               public void cancel(String message, Throwable cause) {
@@ -127,7 +118,16 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
                               }
 
                               @Override
+                              public void request(int numMessages) {
+                              }
+
+                              @Override
                               public void sendMessage(ReqT message) {
+                              }
+
+                              @Override
+                              public void start(io.grpc.ClientCall.Listener<RespT> responseListener, Metadata headers) {
+                                  this.responseListener = responseListener;
                               }
                           });
     }

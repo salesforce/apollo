@@ -15,7 +15,6 @@ import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_256;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_512;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_256;
 import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_512;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
@@ -47,7 +46,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
 
     public static SignatureAlgorithm basicIdentifierSignatureAlgorithm(String code) {
         return switch (code) {
-        case "1AAA" -> SignatureAlgorithm.EC_SECP256K1;
         case "1AAC" -> SignatureAlgorithm.ED_25519;
         case "B" -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
@@ -76,7 +74,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
             return switch (qb64.substring(1, 2)) {
             // case "A" -> null; // Random seed or private key of length 128 bits
             case "B" -> new SelfSigningIdentifier(ED_25519.signature(bytes));
-            case "C" -> new SelfSigningIdentifier(EC_SECP256K1.signature(bytes));
             case "D" -> new SelfAddressingIdentifier(new Digest(BLAKE3_512, bytes));
             case "E" -> new SelfAddressingIdentifier(new Digest(SHA3_512, bytes));
             case "F" -> new SelfAddressingIdentifier(new Digest(BLAKE2B_512, bytes));
@@ -86,7 +83,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         } else if (qb64.startsWith("1")) {
             var bytes = unbase64(qb64.substring(4));
             return switch (qb64.substring(1, 4)) {
-            case "AAA" -> new BasicIdentifier(EC_SECP256K1.publicKey(bytes));
             // case "AAB" -> null; // EC SECP256K1 public key
             case "AAC" -> new BasicIdentifier(ED_448.publicKey(bytes));
             // case "AAD" -> null; // Ed448 public key

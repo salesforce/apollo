@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
-import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -66,6 +67,7 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
+        var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
@@ -75,7 +77,6 @@ public class FireFliesTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
-                                  .parallel()
                                   .mapToObj(i -> stereotomy.newIdentifier().get())
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
@@ -97,7 +98,7 @@ public class FireFliesTest {
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(3))
                                                           .setCommunications(localRouter),
-                                         new InetSocketAddress(0), txnConfig);
+                                         new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.setMember(node.getMember());
@@ -109,10 +110,16 @@ public class FireFliesTest {
     public void smokin() throws Exception {
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
-                                 .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
-                                 .toList()
-                                 .subList(0, CARDINALITY - 2);
-        domains.forEach(d -> {
+                                 .map(n -> new Seed(n.getMember().getEvent().getCoordinates(),
+                                                    new InetSocketAddress(0)))
+                                 .limit(1)
+                                 .toList();
+        // start seed
+        domains.get(0)
+               .getFoundation()
+               .start(Duration.ofMillis(10), Collections.emptyList(), Executors.newSingleThreadScheduledExecutor());
+
+        domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
         });
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {

@@ -6,17 +6,19 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
@@ -39,24 +41,81 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class ContextImpl<T extends Member> implements Context<T> {
 
-    private static final Logger log                = LoggerFactory.getLogger(Context.class);
-    private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
+    public static class Tracked<M extends Member> {
+        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
 
-    private final int                              bias;
-    private volatile int                           cardinality;
-    private final Digest                           id;
-    private final Map<Digest, Tracked<T>>          members             = new ConcurrentHashMap<>();
-    private final Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
-    private final double                           pByz;
-    private final List<Ring<T>>                    rings               = new ArrayList<>();
+        private final AtomicBoolean active = new AtomicBoolean(false);
+        private Digest[]            hashes;
+        private final M             member;
+
+        public Tracked(M member, Supplier<Digest[]> hashes) {
+            this.member = member;
+            this.hashes = hashes.get();
+        }
+
+        public boolean activate() {
+            var activated = active.compareAndSet(false, true);
+            if (activated) {
+                log.trace("Activated: {}", member.getId());
+            }
+            return activated;
+        }
+
+        public Digest hash(int index) {
+            return hashes[index];
+        }
+
+        public boolean isActive() {
+            return active.get();
+        }
+
+        public M member() {
+            return member;
+        }
+
+        public boolean offline() {
+            var offlined = active.compareAndSet(true, false);
+            if (offlined) {
+                log.trace("Offlined: {}", member.getId());
+            }
+            return offlined;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+        }
+
+        private void rebalance(int ringCount, ContextImpl<M> contextImpl) {
+            final var newHashes = new Digest[ringCount];
+            for (int i = 0; i < Math.min(ringCount, hashes.length); i++) {
+                newHashes[i] = hashes[i];
+            }
+            for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
+                newHashes[i] = contextImpl.hashFor(member.getId(), i);
+            }
+            hashes = newHashes;
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(Context.class);
+
+    private final int                                 bias;
+    private volatile int                              cardinality;
+    private final double                              epsilon             = 0.99999;
+    private final Digest                              id;
+    private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
+    private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
+    private final double                              pByz;
+    private final List<Ring<T>>                       rings               = new ArrayList<>();
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;
         this.cardinality = cardinality;
-        for (int i = 0; i < minMajority(pByz, cardinality, 0.99999, bias) * bias + 1; i++) {
-            rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
+        for (int i = 0; i < minMajority(pByz, cardinality, epsilon, bias) * bias + 1; i++) {
+            rings.add(new Ring<T>(i, this));
         }
     }
 
@@ -124,7 +183,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public void add(T m) {
-        offline(m);
+        tracking(m);
     }
 
     @Override
@@ -134,7 +193,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public int cardinality() {
-        return cardinality;
+        final var c = cardinality;
+        return c;
     }
 
     @Override
@@ -198,6 +258,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public List<T> getAllMembers() {
+        return allMembers().toList();
+    }
+
+    @Override
     public int getBias() {
         return bias;
     }
@@ -233,14 +298,18 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return id.hashCode();
     }
 
+    public Digest hashFor(Digest d, int ring) {
+        return d.prefix(id, ring);
+    }
+
     @Override
-    public Digest hashFor(T m, int index) {
+    public Digest hashFor(T m, int ring) {
+        assert ring >= 0 && ring < rings.size() : "Invalid ring: " + ring + " max: " + (rings.size() - 1);
         var tracked = members.get(m.getId());
         if (tracked == null) {
-            log.debug("{} is not part of this group: {} on: {} ", m, id);
-            return null;
+            return hashFor(m.getId(), ring);
         }
-        return tracked.hash(index);
+        return tracked.hash(ring);
     }
 
     @Override
@@ -257,6 +326,16 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public boolean isActive(T m) {
         assert m != null;
         return isActive(m.getId());
+    }
+
+    @Override
+    public boolean isMember(Digest digest) {
+        return members.containsKey(digest);
+    }
+
+    @Override
+    public boolean isMember(T m) {
+        return members.containsKey(m.getId());
     }
 
     @Override
@@ -389,6 +468,40 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public void rebalance() {
+        rebalance(members.size());
+    }
+
+    @Override
+    public void rebalance(int newCardinality) {
+        this.cardinality = Math.max(bias + 1, newCardinality);
+        final var ringCount = minMajority(pByz, cardinality, epsilon, bias) * bias + 1;
+        members.values().forEach(t -> t.rebalance(ringCount, this));
+        final var currentCount = rings.size();
+        if (ringCount < currentCount) {
+            for (int i = 0; i < currentCount - ringCount; i++) {
+                var removed = rings.remove(rings.size() - 1);
+                removed.clear();
+            }
+        } else if (ringCount > currentCount) {
+            final var added = new ArrayList<Ring<T>>();
+            for (int i = currentCount; i < ringCount; i++) {
+                final var ring = new Ring<T>(i, this);
+                rings.add(ring);
+                added.add(ring);
+            }
+            assert rings.size() == ringCount : "Whoops: " + rings.size() + " != " + ringCount;
+            members.values().forEach(t -> {
+                for (var ring : added) {
+                    ring.insert(t.member);
+                }
+            });
+        }
+        assert rings.size() == ringCount : "Ring count: " + rings.size() + " does not match: " + ringCount;
+        log.debug("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
+    }
+
+    @Override
     public UUID register(MembershipListener<T> listener) {
         var uuid = UUID.randomUUID();
         membershipListeners.put(uuid, listener);
@@ -398,6 +511,14 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public <Q extends T> void remove(Collection<Q> members) {
         members.forEach(m -> remove(m));
+    }
+
+    @Override
+    public void remove(Digest id) {
+        var removed = members.remove(id);
+        if (removed != null) {
+            remove(removed.member);
+        }
     }
 
     /**
@@ -417,7 +538,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public Ring<T> ring(int index) {
         if (index < 0 || index >= rings.size()) {
-            throw new IllegalArgumentException("Not a valid ring #: " + index);
+            throw new IllegalArgumentException("Not a valid ring #: " + index + " max: " + (rings.size() - 1));
         }
         return rings.get(index);
     }
@@ -524,27 +645,32 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return "Context [" + id + "]";
     }
 
+    @Override
+    public int totalCount() {
+        return members.size();
+    }
+
+    @Override
+    public boolean validRing(int ring) {
+        return ring >= 0 && ring < rings.size();
+    }
+
     private Digest[] hashesFor(T m) {
+        Digest key = m.getId();
         Digest[] s = new Digest[rings.size()];
         for (int ring = 0; ring < rings.size(); ring++) {
-            Digest key = m.getId();
-            s[ring] = key.getAlgorithm()
-                         .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
+            s[ring] = hashFor(key, ring);
         }
         return s;
     }
 
-    private Tracked<T> tracking(T m) {
-        var added = new AtomicBoolean();
+    private ContextImpl.Tracked<T> tracking(T m) {
         var member = members.computeIfAbsent(m.getId(), id -> {
-            added.set(true);
-            return new Tracked<>(m, hashesFor(m));
-        });
-        if (added.get()) {
             for (var ring : rings) {
                 ring.insert(m);
             }
-        }
+            return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
+        });
         return member;
     }
 }

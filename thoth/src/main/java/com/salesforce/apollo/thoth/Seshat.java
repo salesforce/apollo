@@ -1,10 +1,4 @@
-/*
- * Copyright (c) 2021, salesforce.com, inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.thoth;
 
 import java.io.InputStream;
 
@@ -12,18 +6,11 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier.Filtered;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
-/**
- * The EventValidation provides validation predicates for EstablishmentEvents
- * 
- * @author hal.hildebrand
- *
- */
-public interface EventValidation {
+public interface Seshat {
+    Seshat NONE = new Seshat() {
 
-    EventValidation NONE = new EventValidation() {
         @Override
         public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                  InputStream message) {
@@ -31,12 +18,12 @@ public interface EventValidation {
         }
 
         @Override
-        public boolean validate(EstablishmentEvent event) {
+        public boolean validate(EventCoordinates coordinates) {
             return true;
         }
 
         @Override
-        public boolean validate(EventCoordinates coordinates) {
+        public boolean verify(EventCoordinates coordinates, JohnHancock from, ByteString byteString) {
             return true;
         }
 
@@ -55,25 +42,13 @@ public interface EventValidation {
     Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                       InputStream message);
 
-    /**
-     * Answer true if the event is validated. This means that thresholds have been
-     * met from indicated witnesses and trusted validators.
-     */
-    boolean validate(EstablishmentEvent event);
-
-    /**
-     * Answer true if the event indicated by the coordinates is validated. This
-     * means that thresholds have been met from indicated witnesses and trusted
-     * validators.
-     */
     boolean validate(EventCoordinates coordinates);
 
-    default boolean verify(EventCoordinates coordinates, JohnHancock signature, ByteString byteString) {
-        return verify(coordinates, signature, BbBackedInputStream.aggregate(byteString));
-    }
+    boolean verify(EventCoordinates coordinates, JohnHancock from, ByteString byteString);
 
     boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message);
 
     boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                    InputStream message);
+
 }

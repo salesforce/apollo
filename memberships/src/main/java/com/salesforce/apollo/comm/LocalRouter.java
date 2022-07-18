@@ -132,10 +132,10 @@ public class LocalRouter extends Router {
     private static final Map<Digest, Member> serverMembers         = new ConcurrentHashMap<>();
 
     private final Executor           executor;
+    private GrpcServerLimiterBuilder limitsBuilder;
     private Member                   member;
     private final String             prefix;
     private Server                   server;
-    private GrpcServerLimiterBuilder limitsBuilder;
 
     public LocalRouter(String prefix, ServerConnectionCache.Builder builder, Executor executor,
                        LimitsRegistry limitsRegistry) {
@@ -165,17 +165,23 @@ public class LocalRouter extends Router {
 
     @Override
     public void close() {
-        if (server != null) {
-            server.shutdown();
-            try {
-                server.awaitTermination();
-            } catch (InterruptedException e) {
-                throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                                                e);
-            }
+        if (!started.get()) {
+            return;
         }
         super.close();
         serverMembers.remove(member.getId());
+        if (server != null) {
+            server.shutdownNow();
+            try {
+                server.awaitTermination();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
+                                                e);
+            } finally {
+                server = null;
+            }
+        }
     }
 
     @Override

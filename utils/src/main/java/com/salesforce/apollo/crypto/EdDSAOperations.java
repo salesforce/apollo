@@ -40,6 +40,18 @@ public class EdDSAOperations {
 
     public static final String EDDSA_ALGORITHM_NAME = "EdDSA";
 
+    private static final ThreadLocal<Signature> SIGNATURE_CACHE = new ThreadLocal<>() {
+
+        @Override
+        protected Signature initialValue() {
+            try {
+                return Signature.getInstance(EDDSA_ALGORITHM_NAME);
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("Unable to retrieve sig algo: " + EDDSA_ALGORITHM_NAME, e);
+            }
+        }
+    };
+
     private static void reverse(byte[] arr) {
         var i = 0;
         var j = arr.length - 1;
@@ -61,7 +73,8 @@ public class EdDSAOperations {
     private final KeyFactory           keyFactory;
     private final KeyPairGenerator     keyPairGenerator;
     private final NamedParameterSpec   parameterSpec;
-    private final SignatureAlgorithm   signatureAlgorithm;
+
+    private final SignatureAlgorithm signatureAlgorithm;
 
     public EdDSAOperations(SignatureAlgorithm signatureAlgorithm) {
         try {
@@ -79,9 +92,9 @@ public class EdDSAOperations {
             default -> throw new RuntimeException("Unknown Edwards curve: " + signatureAlgorithm);
             };
 
-            keyPairGenerator = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            keyPairGenerator = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
             keyPairGenerator.initialize(parameterSpec);
-            keyFactory = KeyFactory.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            keyFactory = KeyFactory.getInstance(EDDSA_ALGORITHM_NAME);
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
             throw new IllegalStateException("Unable to initialize", e);
         }
@@ -105,7 +118,7 @@ public class EdDSAOperations {
 
     public KeyPair generateKeyPair(SecureRandom secureRandom) {
         try {
-            var kpg = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            var kpg = KeyPairGenerator.getInstance(EDDSA_ALGORITHM_NAME);
             kpg.initialize(parameterSpec, secureRandom);
             return kpg.generateKeyPair();
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
@@ -128,13 +141,13 @@ public class EdDSAOperations {
         try {
             x509KeySpec = new X509EncodedKeySpec(pubKeyInfo.getEncoded());
         } catch (IOException e1) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(e1);
         }
 
         try {
             return keyFactory.generatePublic(x509KeySpec);
         } catch (InvalidKeySpecException e1) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(e1);
         }
     }
 
@@ -165,18 +178,6 @@ public class EdDSAOperations {
     public JohnHancock signature(byte[] signatureBytes) {
         return new JohnHancock(signatureAlgorithm, signatureBytes);
     }
-
-    private static final ThreadLocal<Signature> SIGNATURE_CACHE = new ThreadLocal<>() {
-
-        @Override
-        protected Signature initialValue() {
-            try {
-                return Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("Unable to retrieve sig algo: " + EDDSA_ALGORITHM_NAME, e);
-            }
-        }
-    };
 
     public boolean verify(PublicKey publicKey, byte[] bytes, InputStream is) {
         try {

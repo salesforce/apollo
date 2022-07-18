@@ -44,7 +44,7 @@ public class TxDataSource implements DataSource {
 
     private final Duration                   batchInterval;
     private volatile Thread                  blockingThread;
-    private AtomicBoolean                    draining     = new AtomicBoolean();
+    private final AtomicBoolean              draining     = new AtomicBoolean();
     private final ExponentialBackoffPolicy   drainPolicy;
     private final Member                     member;
     private final ChoamMetrics               metrics;
@@ -68,15 +68,15 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
+        if (metrics != null) {
+            metrics.dropped(processing.size(), validations.size(), reassemblies.size());
+        }
         log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
                   processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
         draining.set(true);
-        if (metrics != null) {
-            metrics.dropped(processing.size(), validations.size());
-        }
         log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
                   processing.taken(), member);
     }
@@ -91,7 +91,7 @@ public class TxDataSource implements DataSource {
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
-                var target = Instant.now().plus(drainPolicy.nextBackoff().dividedBy(2));
+                var target = Instant.now().plus(drainPolicy.nextBackoff());
                 while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0 &&
                        builder.getValidationsCount() == 0) {
                     // rinse and repeat
@@ -109,7 +109,7 @@ public class TxDataSource implements DataSource {
 
                     // sleep waiting for input
                     try {
-                        Thread.sleep(drainPolicy.getInitialBackoff().toMillis());
+                        Thread.sleep(drainPolicy.getInitialBackoff().dividedBy(2).toMillis());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return ByteString.EMPTY;
@@ -138,7 +138,8 @@ public class TxDataSource implements DataSource {
 
             ByteString bs = builder.build().toByteString();
             if (metrics != null) {
-                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount());
+                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount(),
+                                       builder.getReassembliesCount());
             }
             log.trace("Unit data: {} txns, {} validations, {} reassemblies totalling: {} bytes  on: {}",
                       builder.getTransactionsCount(), builder.getValidationsCount(), builder.getReassembliesCount(),

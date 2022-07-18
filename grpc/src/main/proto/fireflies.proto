@@ -13,11 +13,13 @@ package fireflies;
 service Fireflies {
     rpc gossip (SayWhat) returns (Gossip) {}
     rpc update (State) returns (google.protobuf.Empty) {}
+    rpc seed (Join) returns (Redirect) {}
+    rpc join (Join) returns (Gateway) {}
 }
 
 message SayWhat {
     utils.Digeste context = 1;
-    Identity from = 2;
+    utils.Digeste view = 2;
     SignedNote note = 3;
     int32 ring = 4;
     Digests gossip = 5;
@@ -25,8 +27,9 @@ message SayWhat {
 
 message State {
     utils.Digeste context = 1;
-    int32 ring = 2;
-    Update update = 3;
+    utils.Digeste view = 2;
+    int32 ring = 3;
+    Update update = 4;
 }
 
 message Accusation {
@@ -34,6 +37,7 @@ message Accusation {
     int32 ringNumber = 2;
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
+    utils.Digeste currentView = 5;
 }
 
 message SignedAccusation {
@@ -43,8 +47,24 @@ message SignedAccusation {
 
 message Note {
     int64 epoch = 1;
-    utils.Digeste id = 2;
-    bytes mask = 3;
+    utils.Digeste currentView = 2;
+    stereotomy.EventCoords coordinates = 3;
+    bytes mask = 4;
+    string host = 5;
+    int32 port = 6;
+}
+
+message ViewChange {
+    utils.Digeste observer = 1;
+    utils.Digeste current = 2;
+    int32 attempt = 3;
+    repeated utils.Digeste joins = 4;
+    repeated utils.Digeste leaves = 5;
+}
+
+message SignedViewChange {
+    ViewChange change = 1;
+    utils.Sig signature = 2;
 }
 
 message SignedNote {
@@ -57,42 +77,58 @@ message AccusationGossip {
     repeated SignedAccusation updates = 2;
 }
 
-message Identity {
-    string host = 1;
-    int32 port = 2;
-    int64 epoch = 3;
-    oneof event {
-        stereotomy.InceptionEvent inception = 4;
-        stereotomy.RotationEvent rotation = 5;
-    }
-    stereotomy.Attachment attachment = 6;
-}
-
-message IdentityGossip {
-    utils.Biff bff = 1;
-    repeated Identity updates = 2;
-}
-
 message NoteGossip {
     utils.Biff bff = 1;
     repeated SignedNote updates = 2;
+}
+
+message JoinGossip {
+    utils.Biff bff = 1;
+    repeated SignedNote updates = 2;
+}
+
+message ViewChangeGossip {
+    utils.Biff bff = 1;
+    repeated SignedViewChange updates = 2;
 }
 
 message Digests { 
     utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
     utils.Biff accusationBff = 3;
+    utils.Biff observationBff = 4;
+    utils.Biff joinBiff = 5;
 }
 
 message Gossip {
     bool redirect = 1;
-    IdentityGossip identities = 2;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
+    ViewChangeGossip observations = 5;
+    JoinGossip joins = 6;
 }
 
 message Update {
-    repeated Identity identities = 1;
-    repeated SignedNote notes = 2;
-    repeated SignedAccusation accusations = 3;
+    repeated SignedNote notes = 1;
+    repeated SignedAccusation accusations = 2;
+    repeated SignedViewChange observations = 3;
+    repeated SignedNote joins = 4;
+}
+
+message Redirect {
+    utils.Digeste view = 1;
+    repeated SignedNote predecessors = 2;
+    int32 cardinality = 3;
+}
+
+message Gateway { 
+    utils.Digeste view = 1;
+    repeated utils.Digeste membership = 2;
+    repeated SignedNote initialSeedSet = 3;
+}
+
+message Join {
+    utils.Digeste context = 1;
+    utils.Digeste view = 2;
+    SignedNote note = 3;
 }

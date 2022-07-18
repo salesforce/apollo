@@ -24,62 +24,17 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCalls;
 import io.grpc.stub.ServerCalls.UnaryMethod;
 import io.grpc.stub.StreamObserver;
 
 public class TestServer {
 
-    public static final MethodDescriptor<String, String> METHOD_DESCRIPTOR = MethodDescriptor.<String, String>newBuilder()
-                                                                                             .setType(MethodType.UNARY)
-                                                                                             .setFullMethodName("service/method")
-                                                                                             .setRequestMarshaller(StringMarshaller.INSTANCE)
-                                                                                             .setResponseMarshaller(StringMarshaller.INSTANCE)
-                                                                                             .build();
-
-    private interface Segment {
-        long duration();
-
-        long latency();
-
-        String name();
-    }
-
-    public static Builder newBuilder() {
-        return new Builder();
-    }
-
     public static class Builder {
-        private List<TestServer.Segment>          segments    = new ArrayList<>();
         private int                               concurrency = 2;
         private Limiter<GrpcServerRequestContext> limiter;
-
-        public Builder limiter(Limiter<GrpcServerRequestContext> limiter) {
-            this.limiter = limiter;
-            return this;
-        }
-
-        public Builder concurrency(int concurrency) {
-            this.concurrency = concurrency;
-            return this;
-        }
-
-        public Builder exponential(double mean, long duration, TimeUnit units) {
-            final ExponentialDistribution distribution = new ExponentialDistribution(mean);
-            return add("exponential(" + mean + ")", () -> (long) distribution.sample(), duration, units);
-        }
-
-        public Builder lognormal(long mean, long duration, TimeUnit units) {
-            final LogNormalDistribution distribution = new LogNormalDistribution(3.0, 1.0);
-            final double distmean = distribution.getNumericalMean();
-            return add("lognormal(" + mean + ")", () -> (long) (distribution.sample() * mean / distmean), duration,
-                       units);
-        }
-
-        public Builder slience(long duration, TimeUnit units) {
-            return add("slience()", () -> units.toMillis(duration), duration, units);
-        }
+        private List<TestServer.Segment>          segments    = new ArrayList<>();
 
         public Builder add(String name, Supplier<Long> latencySupplier, long duration, TimeUnit units) {
             segments.add(new Segment() {
@@ -105,6 +60,51 @@ public class TestServer {
             return new TestServer(this);
         }
 
+        public Builder concurrency(int concurrency) {
+            this.concurrency = concurrency;
+            return this;
+        }
+
+        public Builder exponential(double mean, long duration, TimeUnit units) {
+            final ExponentialDistribution distribution = new ExponentialDistribution(mean);
+            return add("exponential(" + mean + ")", () -> (long) distribution.sample(), duration, units);
+        }
+
+        public Builder limiter(Limiter<GrpcServerRequestContext> limiter) {
+            this.limiter = limiter;
+            return this;
+        }
+
+        public Builder lognormal(long mean, long duration, TimeUnit units) {
+            final LogNormalDistribution distribution = new LogNormalDistribution(3.0, 1.0);
+            final double distmean = distribution.getNumericalMean();
+            return add("lognormal(" + mean + ")", () -> (long) (distribution.sample() * mean / distmean), duration,
+                       units);
+        }
+
+        public Builder slience(long duration, TimeUnit units) {
+            return add("slience()", () -> units.toMillis(duration), duration, units);
+        }
+
+    }
+
+    private interface Segment {
+        long duration();
+
+        long latency();
+
+        String name();
+    }
+
+    public static final MethodDescriptor<String, String> METHOD_DESCRIPTOR = MethodDescriptor.<String, String>newBuilder()
+                                                                                             .setType(MethodType.UNARY)
+                                                                                             .setFullMethodName("service/method")
+                                                                                             .setRequestMarshaller(StringMarshaller.INSTANCE)
+                                                                                             .setResponseMarshaller(StringMarshaller.INSTANCE)
+                                                                                             .build();
+
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     private final Semaphore semaphore;
