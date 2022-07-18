@@ -139,7 +139,7 @@ public class SwarmTest {
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().totalCount() != testViews.size())
+                                .filter(view -> view.getContext().activeCount() != testViews.size())
                                 .count() == 0;
             });
             failed = testViews.stream()
@@ -174,7 +174,9 @@ public class SwarmTest {
 //            System.out.println("** Removed: " + removed);
             long then = System.currentTimeMillis();
             success = Utils.waitForCondition(30_000, 1_000, () -> {
-                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
+                return expected.stream()
+                               .filter(view -> view.getContext().activeCount() != expected.size())
+                               .count() == 0;
             });
             failed = expected.stream()
                              .filter(e -> e.getContext().activeCount() != testViews.size())
