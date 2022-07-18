@@ -21,13 +21,13 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Meter filteredNotes();
 
-    Histogram gateway();
-
     Histogram gossipReply();
 
     Histogram gossipResponse();
 
     Timer gossipRoundDuration();
+
+    Histogram inboundGateway();
 
     Histogram inboundGossip();
 
@@ -37,6 +37,8 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Timer inboundJoinDuration();
 
+    Histogram inboundRedirect();
+
     Histogram inboundSeed();
 
     Timer inboundSeedDuration();
@@ -44,8 +46,6 @@ public interface FireflyMetrics extends EdpointMetrics {
     Histogram inboundUpdate();
 
     Timer inboundUpdateTimer();
-
-    Histogram join();
 
     Timer joinDuration();
 
@@ -59,15 +59,15 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Histogram outboundGossip();
 
+    Histogram outboundJoin();
+
     Histogram outboundRedirect();
+
+    Histogram outboundSeed();
 
     Histogram outboundUpdate();
 
     Timer outboundUpdateTimer();
-
-    Histogram redirect();
-
-    Histogram seed();
 
     Timer seedDuration();
 

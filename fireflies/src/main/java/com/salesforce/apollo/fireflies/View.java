@@ -191,7 +191,6 @@ public class View {
                                        .setRingNumber(ringNumber)
                                        .setAccuser(getId().toDigeste())
                                        .setAccused(m.getId().toDigeste())
-                                       .setCurrentView(currentView.get().toDigeste())
                                        .build();
             return new AccusationWrapper(SignedAccusation.newBuilder()
                                                          .setAccusation(accusation)
@@ -851,6 +850,7 @@ public class View {
                      predecessors.stream().filter(p -> !node.getId().equals(p.getId())).map(p -> p.getId()).toList(),
                      node.getId());
             var gateway = new CompletableFuture<Bound>();
+            var timer = metrics == null ? null : metrics.joinDuration().time();
             gateway.whenComplete((bound, t) -> {
                 if (t != null) {
                     log.error("Failed to join view: {}on: {}", bound.view, node.getId(), t);
@@ -879,6 +879,9 @@ public class View {
                                                   Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
 
                 notifyListeners(bound.members, Collections.emptyList());
+                if (timer != null) {
+                    timer.stop();
+                }
             });
 
             var regate = new AtomicReference<Runnable>();
@@ -937,6 +940,7 @@ public class View {
                      node.getId());
 
             var seeding = new CompletableFuture<Redirect>();
+            var timer = metrics == null ? null : metrics.seedDuration().time();
             seeding.whenComplete((r, t) -> {
                 if (t != null) {
                     log.error("Failed seeding on: {}", node.getId(), t);
@@ -953,6 +957,9 @@ public class View {
                            .map(nw -> nw.getId())
                            .toList(),
                           node.getId());
+                if (timer != null) {
+                    timer.close();
+                }
                 redirect(new AtomicReference<>(digestAlgo.getOrigin()), r, duration, scheduler);
             });
             var join = Join.newBuilder()
@@ -1197,12 +1204,6 @@ public class View {
      * @param accusation
      */
     private boolean add(AccusationWrapper accusation) {
-        final Digest accusationView = accusation.currentView();
-        if (!currentView.get().equals(accusationView)) {
-            log.trace("Accusation discarded, incorrect view: {} current: {} on: {}", accusationView, currentView.get(),
-                      node);
-            return false;
-        }
         Participant accuser = context.getMember(accusation.getAccuser());
         Participant accused = context.getMember(accusation.getAccused());
         if (accuser == null || accused == null) {
@@ -1592,12 +1593,7 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality()),
                                                                     p);
-        var current = currentView.get();
-        context.allMembers()
-               .flatMap(m -> m.getAccusations())
-               .filter(e -> e != null)
-               .filter(m -> current.equals(m.currentView()))
-               .forEach(m -> bff.add(m.getHash()));
+        context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
         return bff;
     }
 
@@ -1959,11 +1955,10 @@ public class View {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        var current = currentView.get();
         context.allMembers()
                .flatMap(m -> m.getAccusations())
-               .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
+               .limit(params.maximumTxfr())
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
@@ -1989,6 +1984,7 @@ public class View {
         joins.entrySet()
              .stream()
              .filter(m -> !bff.contains(m.getKey()))
+             .limit(params.maximumTxfr())
              .map(m -> m.getValue())
              .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
@@ -2020,6 +2016,7 @@ public class View {
                .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
+               .limit(params.maximumTxfr())
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
@@ -2047,6 +2044,7 @@ public class View {
                     .stream()
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
+                    .limit(params.maximumTxfr())
                     .forEach(n -> builder.addUpdates(n));
         builder.setBff(getObservationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
@@ -2083,7 +2081,7 @@ public class View {
                                 .count();
         var oCount = observe.stream().filter(observation -> add(observation)).count();
         var jCount = joins.stream().filter(j -> addJoin(j)).count();
-        if (nCount != 0 || aCount != 0 || oCount != 0 || jCount != 0) {
+        if (nCount + aCount + oCount + jCount != 0) {
             log.trace("Updating notes: {}:{} accusations: {}:{} observations: {}:{} joins: {}:{} on: {}", nCount,
                       notes.size(), aCount, accusations.size(), oCount, observe.size(), jCount, joins.size(),
                       node.getId());

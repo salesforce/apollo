@@ -83,7 +83,7 @@ public class FfClient implements Fireflies {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.join().update(serializedSize);
+            metrics.outboundJoin().update(serializedSize);
         }
         ListenableFuture<Gateway> result = client.join(join);
         result.addListener(() -> {
@@ -91,7 +91,7 @@ public class FfClient implements Fireflies {
                 try {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gateway().update(serializedSize);
+                    metrics.inboundGateway().update(serializedSize);
                 } catch (Throwable e) {
                     // nothing
                 }
@@ -109,7 +109,7 @@ public class FfClient implements Fireflies {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.seed().update(serializedSize);
+            metrics.outboundSeed().update(serializedSize);
         }
         ListenableFuture<Redirect> result = client.seed(join);
         result.addListener(() -> {
@@ -117,7 +117,7 @@ public class FfClient implements Fireflies {
                 try {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.redirect().update(serializedSize);
+                    metrics.inboundRedirect().update(serializedSize);
                 } catch (Throwable e) {
                     // nothing
                 }

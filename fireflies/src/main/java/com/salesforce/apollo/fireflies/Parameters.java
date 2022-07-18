@@ -11,14 +11,13 @@ package com.salesforce.apollo.fireflies;
  *
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
-                         int finalizeViewRounds, double fpr) {
+                         int finalizeViewRounds, double fpr, int maximumTxfr) {
 
     public static Builder newBuilder() {
         return new Builder();
     }
 
     public static class Builder {
-
         /**
          * Number of TTL rounds to wait before finalizing a view change
          */
@@ -31,6 +30,10 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          * Number of retries when joining until giving up
          */
         private int    joinRetries            = 3;
+        /**
+         * Maximum number of elements to transfer per type per update
+         */
+        private int    maximumTxfr            = 100;
         /**
          * Minimum cardinality for bloom filters
          */
@@ -46,7 +49,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
-                                  finalizeViewRounds, fpr);
+                                  finalizeViewRounds, fpr, maximumTxfr);
         }
 
         public int getFinalizeViewRounds() {
@@ -59,6 +62,10 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public int getJoinRetries() {
             return joinRetries;
+        }
+
+        public int getMaximumTxfr() {
+            return maximumTxfr;
         }
 
         public int getMinimumBiffCardinality() {
@@ -85,6 +92,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setJoinRetries(int joinRetries) {
             this.joinRetries = joinRetries;
+            return this;
+        }
+
+        public Builder setMaximumTxfr(int maximumTxfr) {
+            this.maximumTxfr = maximumTxfr;
             return this;
         }
 

@@ -37,7 +37,6 @@ message Accusation {
     int32 ringNumber = 2;
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
-    utils.Digeste currentView = 5;
 }
 
 message SignedAccusation {
