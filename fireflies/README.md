@@ -9,6 +9,7 @@ Apollo Fireflies is fundamentally based on the most excellent paper [Fireflies: 
 The Fireflies implementation in Apollo differs significantly from the original paper. The Apollo implementation combines the ideas of the [original Fireflies paper](https://ymsir.com/papers/fireflies-tocs.pdf) as well as the additional ideas from two most excellent papers:
  * [Self-stabilizing and Byzantine-Tolerant Overlay Network](https://www.cs.huji.ac.il/~dolev/pubs/opodis07-DHR-fulltext.pdf)
  * [Stable and Consistent Membership at Scale with Rapid](https://www.usenix.org/system/files/conference/atc18/atc18-suresh.pdf)
+
 and synthesizes the three into a BFT stable Rapid like membership.
 
 Apollo Fireflies provides a stable, virtually synchronous membership view in much the same fashion as the Rapid paper describes.  Membership is agreed upon across the group and changes only by consensus within the group.  This provides an incredibly stable foundation for utilizing the BFT secure overlay that Fireflies provides.
