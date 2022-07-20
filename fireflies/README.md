@@ -12,10 +12,12 @@ The Fireflies implementation in Apollo differs significantly from the original p
 
 and synthesizes the three into a BFT stable Rapid like membership.
 
+### Stable, Virtually Synchronous View Membership Service
 Apollo Fireflies provides a stable, virtually synchronous membership view in much the same fashion as the Rapid paper describes.  Membership is agreed upon across the group and changes only by consensus within the group.  This provides an incredibly stable foundation for utilizing the BFT secure overlay that Fireflies provides.
 
-Members must formally join a context.  This is a two phase protocol of first contacting a seed (any one will do) and then redirecting to further members of the context to await the next view that includes the joining member.  To join a context (cluster) of nodes, the joining member needs to know the complete membership of the context. This is transmitted in the Gateway of the join response from the redirect member for the joining view (the first phase of the Join protocol).  Currently, all view member IDs are returned, and these are at minimum 32 byte digests, so eventually scalability will play an outsized role here.
+Members must formally join a context.  This is a two phase protocol of first contacting a seed (any one will do) and then redirecting to further members of the context to await the next view that includes the joining member.  To join a context (cluster) of nodes, the joining member needs to know the complete membership of the context. This is transmitted in the Gateway of the join response from the redirect member for the joining view (the first phase of the Join protocol).  Currently, all view member IDs are returned, and these are at minimum 32 byte digests, so eventually scalability will play an outsized role here. The current plan is to use Merkle tree replication to obtain the membership ids and then bootstrap from there. This will take some protocol finessing which is currently scheduled for other bootstrappiping/join integration with Thoth
 
+### Gossip Optimized Join
 Apollo Fireflies does not, however, return all the _SignedNotes_ (Apollo Fireflies KERI equivalent of an X509 certificate, as in the origina FF paper) for all the members.  Rather in the Join protocol, most members in the context of the joining member have no signed notes, and thus cannot be contacted.  They are essentially in a pending state with identity only, where the joining member is awaiting the state transfer of the these members' _SignedNotes_.
 
 Apollo Fireflies reuses the _redirect_ part of the original Fireflies protocol to both redirect the joining members to their correct successors in the current state of the view. The underlying gossip state replication provides the state transfer  of all the member's SignedNote state for the view to the joining member.  This occurs rather quickly and spreads this rather large plug of state transfer required in the join of a view across the system, rather than punishing a member or two.  It's also schocastic and BFT, which is nice.
@@ -24,6 +26,7 @@ After a member has joined, the member participates in the global consensus that 
 
 Thus, only incremental state transfer occurs for existing members during future joins, modulo any state reconcilliation transfer for joining members. Steady state overhead is bounded and linear with the number of members in the view.
 
+### Designed For Stablity
 Apollo Fireflies leverages the same sort of "almost everywhere" agreement that _Rapid_ provides. Rather than using a clever windowing proxy for stability as Rapid does, Apollo  reuses the Accusation mechanism of the Fireflies protocol.  Instability is defined as existing _rebuttal timers_ when the vote is proposed.  If there are no rebuttal timers, the View is considered to be in a Stable state for the member and if there are non zero joining/leavings, a Vote on the new membership view is created and submitted.  After the vote is submitted, the member awaits the fast path consensus on the membership (slow path consensus not implemented yet).
 
 Apollo Fireflies also differs from the original Fireflies by enforcing the _shunning_ of members that have failed.  In the original protocol, members can come back to life after failing to rebutt accusations if they issue a new note.  In Apollo Fireflies, like Rapid, the failing member is shunned after failing to rebutt and must rejoin the system again.
@@ -32,13 +35,13 @@ Apollo also implements the same _amplification_ strategy of Rapid.  When a membe
 
 ## View Identity
 
-View identity in Apollo Fireflies is defined by the set of digest IDs of the total membership, in sorted order, XORd together.  This provides a _crown_ of the membership set that is unique for the membership set.
+View identity in Apollo Fireflies is defined by the set of digest IDs of the total membership, in the order of ring 0 of the context, XORd together.  This provides a _crown_ of the membership set that is unique for the membership set.
 
 ## Liveness, Failure Detection and Monitoring
 
 Unlike other popular solutions, Apollo Fireflies does not have a separate monitoring _ping_ failure detection protocol. For example, the Fireflies papers and Rapid both use a separate monitoring _ping_ for failure detection.  Apollo Fireflies depends on the continual gossip with partners and thus the monitored member is also the member that is gossiped with.  Apollo Fireflies combines these two logical operations into one.  Therefore, a member is considered _live_ if they can complete gossip communication without failure or exception.
 
-Note that _failure_ and _liveness_ now include understanding the consensus membership.  Views that do not share a common view identity do not communicate with each other and will treat this as a failure and thus accuse appropriately.  Likewise when a member is shunned, or the receiving member is in the process of joining a view.
+Note that  _failure_  and  _liveness_  now include understanding the state of consensus membership.  Views that do not share a common view identity do not communicate with each other and will treat this as a failure and thus accuse appropriately.  Likewise when a member is shunned, or the receiving member is in the process of joining a view.
 
 This is a crisp defintion of _liveness_ that also matches the functional operation of the protocol.  This does mean that, unlike Rapid, Apollo Fireflies cannot (currently) monitor non Fireflies members; Apollo requires gossip with monitored members to ensure liveness.  Apollo Fireflies view membership maintenance protocol is intimately tied to the functional use of the system, so this makes perfect sense to me.  Also, Apollo Fireflies operates over GRPC, which itself does _liveness_ pings, etc. So Apollo Fireflies merely leverages this existing communications infrasture to elide the necessity of a seperate monitoring protocol.
 
