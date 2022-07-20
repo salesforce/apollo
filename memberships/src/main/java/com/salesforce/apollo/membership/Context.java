@@ -197,8 +197,10 @@ public interface Context<T extends Member> {
 
     /**
      * Add a member in the offline state
+     *
+     * @return true if the member is newly added to the context
      */
-    void add(T m);
+    boolean add(T m);
 
     /**
      * Answer a stream over all members, offline and active

@@ -26,7 +26,7 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class DigestTree implements Iterable<DigestTree.NodeEntry> {
 
-    public record NodeEntry(int hash, Digest leaf) {
+    public record NodeEntry(int hash, Digest leaf, int level) {
         public boolean isLeaf() {
             return leaf != null;
         }
@@ -90,30 +90,34 @@ public class DigestTree implements Iterable<DigestTree.NodeEntry> {
 
     private final List<Digest> digests;
     private final short        height;
-
-    private final int nnodes;
-
-    private final Node root;
+    private final int          nnodes;
+    private final Node         root;
 
     public DigestTree(List<Digest> digests) {
-        if (digests.size() <= 1) {
-            throw new IllegalArgumentException("Must be at least two signatures to construct a Merkle tree");
+        if (digests.isEmpty()) {
+            throw new IllegalArgumentException("Must have at least one signature to construct a Merkle tree");
         }
         this.digests = digests;
 
-        var count = digests.size();
-        var parents = bottomLevel();
-        count += parents.size();
-        short depth = 1;
-
-        while (parents.size() > 1) {
-            parents = internalLevel(parents);
-            depth++;
+        if (digests.size() == 1) {
+            height = 1;
+            nnodes = 1;
+            root = new LeafNode(digests.get(0));
+        } else {
+            var count = digests.size();
+            var parents = bottomLevel();
             count += parents.size();
+            short depth = 1;
+
+            while (parents.size() > 1) {
+                parents = internalLevel(parents);
+                depth++;
+                count += parents.size();
+            }
+            height = depth;
+            nnodes = count;
+            root = parents.get(0);
         }
-        height = depth;
-        nnodes = count;
-        root = parents.get(0);
     }
 
     public List<Digest> getDigests() {
@@ -138,8 +142,10 @@ public class DigestTree implements Iterable<DigestTree.NodeEntry> {
      */
     @Override
     public Iterator<NodeEntry> iterator() {
-        var deque = new ArrayDeque<Node>();
-        deque.add(root);
+        record traversal(int height, Node node) {}
+
+        var deque = new ArrayDeque<traversal>();
+        deque.add(new traversal(0, root));
         return new Iterator<NodeEntry>() {
 
             @Override
@@ -150,22 +156,22 @@ public class DigestTree implements Iterable<DigestTree.NodeEntry> {
             @Override
             public NodeEntry next() {
                 var n = deque.removeFirst();
-                if (n instanceof LeafParent lp) {
-                    deque.add(new LeafNode(digests.get(lp.leftIndex)));
+                if (n.node() instanceof LeafParent lp) {
+                    deque.add(new traversal(n.height + 1, new LeafNode(digests.get(lp.leftIndex))));
                     if (lp.leftIndex != lp.rightIndex) {
-                        deque.add(new LeafNode(digests.get(lp.rightIndex)));
+                        deque.add(new traversal(n.height + 1, new LeafNode(digests.get(lp.rightIndex))));
                     }
-                } else if (n instanceof LeafNode ln) {
-                    return new NodeEntry(ln.hash(), ln.value);
+                } else if (n.node() instanceof LeafNode ln) {
+                    return new NodeEntry(ln.hash(), ln.value, n.height);
                 } else {
-                    if (n.left() != null) {
-                        deque.add(n.left());
+                    if (n.node.left() != null) {
+                        deque.add(new traversal(n.height + 1, n.node.left()));
                     }
-                    if (n.right() != null) {
-                        deque.add(n.right());
+                    if (n.node.right() != null) {
+                        deque.add(new traversal(n.height + 1, n.node.right()));
                     }
                 }
-                return new NodeEntry(n.hash(), null);
+                return new NodeEntry(n.node.hash(), null, n.height);
             }
         };
     }
