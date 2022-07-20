@@ -182,8 +182,12 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public void add(T m) {
+    public boolean add(T m) {
+        if (members.containsKey(m.getId())) {
+            return false;
+        }
         tracking(m);
+        return true;
     }
 
     @Override
@@ -665,12 +669,12 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     private ContextImpl.Tracked<T> tracking(T m) {
-        var member = members.computeIfAbsent(m.getId(), id -> {
+        var tracking = members.computeIfAbsent(m.getId(), id -> {
             for (var ring : rings) {
                 ring.insert(m);
             }
             return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
         });
-        return member;
+        return tracking;
     }
 }

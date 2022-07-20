@@ -128,6 +128,10 @@ public class Ring<T extends Member> implements Iterable<T> {
         ring.clear();
     }
 
+    public boolean contains(Digest id) {
+        return ring.containsKey(hash(id));
+    }
+
     public boolean contains(T member) {
         return ring.containsKey(hash(member));
     }

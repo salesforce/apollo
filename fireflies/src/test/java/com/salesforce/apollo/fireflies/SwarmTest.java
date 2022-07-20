@@ -40,7 +40,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -120,7 +119,7 @@ public class SwarmTest {
 
         // Start remaining views
         views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
-        success = Utils.waitForCondition(20_000, 1_000, () -> {
+        success = Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
@@ -159,14 +158,9 @@ public class SwarmTest {
 
         for (View view : views) {
             for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final var membership = view.getContext()
-                                           .ring(ring)
-                                           .members()
-                                           .stream()
-                                           .map(p -> members.get(p.getId()))
-                                           .toList();
-                for (Member node : members.values()) {
-                    assertTrue(membership.contains(node));
+                final var deRing = view.getContext().ring(ring);
+                for (var node : members.values()) {
+                    assertTrue(deRing.contains(node.getId()));
                 }
             }
         }

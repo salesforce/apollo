@@ -112,7 +112,7 @@ public class ChurnTest {
         bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
 
         // Test that all bootstrappers up
-        var success = Utils.waitForCondition(20_000, 1_000, () -> {
+        var success = Utils.waitForCondition(30_000, 1_000, () -> {
             return bootstrappers.stream()
                                 .filter(view -> view.getContext().activeCount() != bootstrappers.size())
                                 .count() == 0;
@@ -137,13 +137,17 @@ public class ChurnTest {
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().totalCount() != testViews.size())
+                                .map(v -> v.getContext())
+                                .filter(ctx -> ctx.totalCount() != testViews.size() ||
+                                               ctx.activeCount() != testViews.size())
                                 .count() == 0;
             });
             failed = testViews.stream()
-                              .filter(e -> e.getContext().activeCount() != testViews.size())
+                              .filter(e -> e.getContext().activeCount() != testViews.size() ||
+                                           e.getContext().totalCount() != testViews.size())
                               .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
                               .toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
@@ -198,15 +202,6 @@ public class ChurnTest {
             assertTrue(testGraph.isSC());
         }
 
-        var view0 = views.get(0);
-        for (View view : views) {
-            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final var test = view.getContext().ring(ring);
-                for (var node : view0.getContext().getAllMembers()) {
-                    assertTrue(test.contains(node));
-                }
-            }
-        }
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
