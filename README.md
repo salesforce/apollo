@@ -53,6 +53,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure.  KEL, KERL and other fundamental identity, key and trust management
 * [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
 * [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing KERI decentralized identity
+* [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
 * [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
 
 
