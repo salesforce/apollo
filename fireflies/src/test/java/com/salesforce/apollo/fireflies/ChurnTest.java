@@ -112,7 +112,7 @@ public class ChurnTest {
         bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
 
         // Test that all bootstrappers up
-        var success = Utils.waitForCondition(20_000, 1_000, () -> {
+        var success = Utils.waitForCondition(30_000, 1_000, () -> {
             return bootstrappers.stream()
                                 .filter(view -> view.getContext().activeCount() != bootstrappers.size())
                                 .count() == 0;
