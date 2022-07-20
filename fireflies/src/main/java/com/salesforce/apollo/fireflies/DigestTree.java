@@ -94,24 +94,30 @@ public class DigestTree implements Iterable<DigestTree.NodeEntry> {
     private final Node         root;
 
     public DigestTree(List<Digest> digests) {
-        if (digests.size() <= 1) {
-            throw new IllegalArgumentException("Must be at least two signatures to construct a Merkle tree");
+        if (digests.isEmpty()) {
+            throw new IllegalArgumentException("Must have at least one signature to construct a Merkle tree");
         }
         this.digests = digests;
 
-        var count = digests.size();
-        var parents = bottomLevel();
-        count += parents.size();
-        short depth = 1;
-
-        while (parents.size() > 1) {
-            parents = internalLevel(parents);
-            depth++;
+        if (digests.size() == 1) {
+            height = 1;
+            nnodes = 1;
+            root = new LeafNode(digests.get(0));
+        } else {
+            var count = digests.size();
+            var parents = bottomLevel();
             count += parents.size();
+            short depth = 1;
+
+            while (parents.size() > 1) {
+                parents = internalLevel(parents);
+                depth++;
+                count += parents.size();
+            }
+            height = depth;
+            nnodes = count;
+            root = parents.get(0);
         }
-        height = depth;
-        nnodes = count;
-        root = parents.get(0);
     }
 
     public List<Digest> getDigests() {

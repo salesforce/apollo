@@ -46,7 +46,7 @@ public class DigestTreeTest {
                 assertEquals(digests.get(i), next.leaf());
             }
         }
-        
+
         assertEquals(digests, merkle.stream().filter(e -> e.isLeaf()).map(e -> e.leaf()).toList());
     }
 
