@@ -843,7 +843,13 @@ public class View {
                 bound.members.forEach(d -> context.add(new Participant(d)));
                 bound.seeds.values().forEach(nw -> add(nw));
 
-                currentView.set(bound.view);
+                updateCurrentView();
+                if (!currentView.get().equals(bound.view)) {
+                    log.error("View crown: {} does not equal bound view: {} on: {}", currentView.get(), bound.view,
+                              node.getId());
+                    stop();
+                    throw new IllegalStateException("View crown not equal to bound view");
+                }
 
                 gossiper.reset();
                 roundTimers.setRoundDuration(context.timeToLive());
