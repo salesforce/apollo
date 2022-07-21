@@ -147,7 +147,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                 }
                 return;
             }
-            futureSailor.addListener(() -> {
+            futureSailor.addListener(Utils.wrapped(() -> {
                 final var allow = handler.handle(tally, Optional.of(futureSailor), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
@@ -155,7 +155,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                               member.getId());
                     schedule(proceed);
                 }
-            }, exec);
+            }, log), exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }

@@ -119,12 +119,14 @@ message Redirect {
     utils.Digeste view = 1;
     repeated SignedNote predecessors = 2;
     int32 cardinality = 3;
+    int32 rings = 4;
 }
 
 message Gateway { 
     utils.Digeste view = 1;
-    repeated utils.Digeste membership = 2;
+    int32 cardinality = 2;
     repeated SignedNote initialSeedSet = 3;
+    utils.Biff members = 4;
 }
 
 message Join {

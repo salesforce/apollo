@@ -213,8 +213,8 @@ public class CHOAM {
             } else {
                 final var c = current.get();
                 log.info("Synchronization failed, no quorum available, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                         activeCount, params.majority(), params.context().getRingCount(),
-                         c == null ? "no formation" : c.getClass().getSimpleName(), params.member().getId());
+                         activeCount, params.context().getRingCount(), params.majority(),
+                         c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }
         }

@@ -15,7 +15,9 @@ and synthesizes the three into a BFT stable Rapid like membership.
 ### Stable, Virtually Synchronous View Membership Service
 Apollo Fireflies provides a stable, virtually synchronous membership view in much the same fashion as the Rapid paper describes.  Membership is agreed upon across the group and changes only by consensus within the group.  This provides an incredibly stable foundation for utilizing the BFT secure overlay that Fireflies provides.
 
-Members must formally join a context.  This is a two phase protocol of first contacting a seed (any one will do) and then redirecting to further members of the context to await the next view that includes the joining member.  To join a context (cluster) of nodes, the joining member needs to know the complete membership of the context. This is transmitted in the Gateway of the join response from the redirect member for the joining view (the first phase of the Join protocol).  Currently, all view member IDs are returned, and these are at minimum 32 byte digests, so eventually scalability will play an outsized role here. The current plan is to use Merkle tree replication to obtain the membership ids and then bootstrap from there. This will take some protocol finessing which is currently scheduled for other bootstrappiping/join integration with Thoth
+Members must formally join a context.  This is a two phase protocol of first contacting a seed (any one will do) and then redirecting to further members of the context to await the next view that includes the joining member.  To join a context (cluster) of nodes, the joining member needs to know the complete membership of the context. This is transmitted in the Gateway of the join response from the redirect member for the joining view (the first phase of the Join protocol).  The Gateway of this join also contains the _crown_ of the view (see view identity below) as well as a tight Bloom Filter that defines the membership set.  This scheme is based off the most excellent paper [HEX-BLOOM: An Efficient Method for Authenticity and Integrity Verification in Privacy-preserving Computing](https://eprint.iacr.org/2021/773.pdf).
+
+This Join protocol is scalable and reuses the underlying Fireflies state reconcilliation to fill out the remaining membership.
 
 ### Gossip Optimized Join
 Apollo Fireflies does not, however, return all the _SignedNotes_ (Apollo Fireflies KERI equivalent of an X509 certificate, as in the origina FF paper) for all the members.  Rather in the Join protocol, most members in the context of the joining member have no signed notes, and thus cannot be contacted.  They are essentially in a pending state with identity only, where the joining member is awaiting the state transfer of the these members' _SignedNotes_.
@@ -35,7 +37,7 @@ Apollo also implements the same _amplification_ strategy of Rapid.  When a membe
 
 ## View Identity
 
-View identity in Apollo Fireflies is defined by the set of digest IDs of the total membership, in the order of ring 0 of the context, XORd together.  This provides a _crown_ of the membership set that is unique for the membership set.
+View identity in Apollo Fireflies is defined by the set of digest IDs of the total membership XORd together.  This provides a _crown_ of the membership set that is unique for the membership set.
 
 ## Liveness, Failure Detection and Monitoring
 

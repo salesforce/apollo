@@ -45,7 +45,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

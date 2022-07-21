@@ -126,7 +126,8 @@ public class SwarmTest {
         // Test that all views are up
         failed = views.stream()
                       .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
+                                              v.getContext().totalCount()))
                       .toList();
         assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
 

@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.membership.Context;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -104,7 +105,7 @@ public class Creator {
         }
         this.lastTiming = lastTiming;
 
-        quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
+        quorum = Context.minimalQuorum(config.nProc(), config.bias()) + 1;
     }
 
     /**

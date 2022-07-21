@@ -14,6 +14,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
+import com.salesforce.apollo.membership.Context;
 
 /**
  * Configuration for an Ethereal instantiation.
@@ -55,7 +56,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             if (pByz <= -1) {
                 pByz = 1.0 / bias;
             }
-            final var minimalQuorum = Dag.minimalQuorum(nProc, bias);
+            final var minimalQuorum = Context.minimalQuorum(nProc, bias);
             if (wtk == null) {
                 wtk = new NoOpWeakThresholdKey(minimalQuorum + 1);
             }

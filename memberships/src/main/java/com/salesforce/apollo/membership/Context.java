@@ -108,6 +108,12 @@ public interface Context<T extends Member> {
 
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
+    static short minimalQuorum(int np, double bias) {
+        var nProcesses = (double) np;
+        short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
+        return minimalQuorum;
+    }
+
     static int minMajority(double pByz, int cardinality) {
         return minMajority(pByz, cardinality, 0.99999, 2);
     }
