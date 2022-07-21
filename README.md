@@ -45,6 +45,8 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
 * [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
 * [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
+* [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
+* [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
