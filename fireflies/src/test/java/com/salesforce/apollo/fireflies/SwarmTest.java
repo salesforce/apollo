@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -193,8 +192,8 @@ public class SwarmTest {
                        .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
                        .limit(24)
                        .toList();
-        var commExec = ForkJoinPool.commonPool();
-        var viewExec = new ForkJoinPool();
+        var commExec = Executors.newFixedThreadPool(2 * CARDINALITY);
+        var viewExec = Executors.newFixedThreadPool(2 * CARDINALITY);
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
