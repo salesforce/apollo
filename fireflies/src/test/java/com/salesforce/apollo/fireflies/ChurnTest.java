@@ -93,7 +93,7 @@ public class ChurnTest {
     @Test
     public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(2);
+        final var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         Set<View> testViews = new HashSet<>();
 
@@ -227,7 +227,7 @@ public class ChurnTest {
                        .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
                        .limit(24)
                        .toList();
-        var commExec = Executors.newCachedThreadPool();
+        var commExec = ForkJoinPool.commonPool();
         var viewExec = ForkJoinPool.commonPool();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
