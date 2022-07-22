@@ -23,7 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -130,8 +129,6 @@ public class MtlsTest {
                            .toList();
 
         var scheduler = Executors.newScheduledThreadPool(10);
-        var exec = ForkJoinPool.commonPool();
-        var commExec = new ForkJoinPool();
 
         var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);
@@ -146,11 +143,11 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey), commExec,
-                                              clientContextSupplier);
+            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey),
+                                              Executors.newFixedThreadPool(2), clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, exec);
+                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(3));
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();

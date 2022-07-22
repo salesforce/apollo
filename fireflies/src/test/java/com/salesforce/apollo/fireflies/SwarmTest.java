@@ -192,8 +192,6 @@ public class SwarmTest {
                        .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
                        .limit(24)
                        .toList();
-        var commExec = Executors.newFixedThreadPool(2 * CARDINALITY);
-        var viewExec = Executors.newFixedThreadPool(2 * CARDINALITY);
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
@@ -205,12 +203,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        commExec, metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, viewExec);
+                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(3));
         }).collect(Collectors.toList());
     }
 }
