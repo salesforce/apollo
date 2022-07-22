@@ -228,7 +228,7 @@ public class ChurnTest {
                        .limit(24)
                        .toList();
         var commExec = ForkJoinPool.commonPool();
-        var viewExec = commExec;
+        var viewExec = new ForkJoinPool();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
