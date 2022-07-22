@@ -2463,16 +2463,16 @@ public class View {
 
     private void validate(Digest from, final int ring, Digest requestView) {
         if (!started.get()) {
-            log.trace("Offline from: {}  on: {}", from, node.getId());
+            log.trace("Currently offline, send unknown to: {}  on: {}", from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member: " + node.getId() + " is offline"));
         }
         if (!joined.get()) {
-            log.trace("Pending join from: {}  on: {}", from, node.getId());
+            log.trace("Currently pending join, permission denied to: {}  on: {}", from, node.getId());
             throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Member is pending join: "
             + node.getId()));
         }
         if (shunned.contains(from)) {
-            log.trace("Shunned from: {} local count: {} on: {}", from, context.allMembers().count(), node.getId());
+            log.trace("Member is shunned: {} on: {}", from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned: " + from));
         }
         if (!requestView.equals(currentView.get())) {

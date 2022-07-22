@@ -227,8 +227,8 @@ public class ChurnTest {
                        .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
                        .limit(24)
                        .toList();
-        var commExec = ForkJoinPool.commonPool();
-        var viewExec = commExec;
+        var commExec = Executors.newCachedThreadPool();
+        var viewExec = ForkJoinPool.commonPool();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
