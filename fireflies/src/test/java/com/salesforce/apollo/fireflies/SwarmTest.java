@@ -55,7 +55,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static final int                                                   CARDINALITY = 1000;
+    private static final int                                                   CARDINALITY = 100;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final double                                                P_BYZ       = 0.3;
 
