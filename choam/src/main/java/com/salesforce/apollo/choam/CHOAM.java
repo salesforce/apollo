@@ -202,12 +202,12 @@ public class CHOAM {
             if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
                 if (current.compareAndSet(null, new Formation())) {
                     log.info("Quorum achieved, triggering regeneration. have: {} desired: {} required: {} forming Genesis committe on: {}",
-                             activeCount, params.context().majority(), params.context().getRingCount(),
+                             activeCount, params.context().getRingCount(), params.context().majority(),
                              params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
-                             activeCount, params.majority(), params.context().getRingCount(),
+                             activeCount, params.context().getRingCount(), params.majority(),
                              current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {

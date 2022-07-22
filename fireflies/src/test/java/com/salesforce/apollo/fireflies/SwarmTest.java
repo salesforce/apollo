@@ -55,7 +55,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static final int                                                   CARDINALITY = 100;
+    private static final int                                                   CARDINALITY = 1000;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final double                                                P_BYZ       = 0.3;
 
@@ -137,8 +137,9 @@ public class SwarmTest {
         Thread.sleep(5_000);
 
         for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
+            final var reference = views.get(0).getContext().ring(i).getRing();
             for (View view : views) {
-                assertEquals(views.get(0).getContext().ring(i).getRing(), view.getContext().ring(i).getRing());
+                assertEquals(reference, view.getContext().ring(i).getRing());
             }
         }
 

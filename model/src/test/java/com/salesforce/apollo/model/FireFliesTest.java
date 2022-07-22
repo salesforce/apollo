@@ -27,6 +27,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
@@ -69,6 +70,7 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
+        var scheduler = Executors.newScheduledThreadPool(2);
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -96,7 +98,7 @@ public class FireFliesTest {
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                          .setScheduler(scheduler)
                                                           .setContext(context)
                                                           .setExec(ForkJoinPool.commonPool())
                                                           .setCommunications(localRouter),
@@ -108,29 +110,35 @@ public class FireFliesTest {
         });
     }
 
-//    @Test // Disable until FF is stable
+    @Test
     public void smokin() throws Exception {
+        final var gossipDuration = Duration.ofMillis(10);
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
-        final var seeds = domains.stream()
-                                 .map(n -> new Seed(n.getMember().getEvent().getCoordinates(),
-                                                    new InetSocketAddress(0)))
-                                 .limit(1)
-                                 .toList();
+        final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
+                                                             new InetSocketAddress(0)));
         domains.forEach(d -> {
             d.getFoundation().register((context, viewId, joins, leaves) -> {
-                System.out.println(String.format("Joined view: %s members: %s on: %s", viewId, context.totalCount(),
-                                                 d.getMember().getId()));
-                countdown.countDown();
+                if (context.totalCount() == CARDINALITY) {
+                    System.out.println(String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
+                                                     d.getMember().getId()));
+                    countdown.countDown();
+                } else {
+                    System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
+                                                     context.totalCount(), d.getMember().getId()));
+                }
             });
         });
         // start seed
-        domains.get(0)
-               .getFoundation()
-               .start(Duration.ofMillis(10), Collections.emptyList(), Executors.newSingleThreadScheduledExecutor());
+        final var scheduler = Executors.newScheduledThreadPool(2);
+
+        domains.get(0).getFoundation().start(gossipDuration, Collections.emptyList(), scheduler);
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
+            return domains.get(0).getFoundation().getContext().totalCount() == 1;
+        }));
 
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
+            d.getFoundation().start(gossipDuration, seeds, scheduler);
         });
         assertTrue(countdown.await(30, TimeUnit.SECONDS));
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
