@@ -93,7 +93,7 @@ public class ChurnTest {
     @Test
     public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
+        final var scheduler = Executors.newScheduledThreadPool(1);
 
         Set<View> testViews = new HashSet<>();
 

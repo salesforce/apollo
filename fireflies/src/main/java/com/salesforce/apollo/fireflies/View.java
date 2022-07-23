@@ -918,8 +918,8 @@ public class View {
                                             views.clear();
                                             cards.clear();
                                             seeds.clear();
-                                            scheduler.schedule(Utils.wrapped(() -> regate.get().run(), log),
-                                                               duration.toNanos(), TimeUnit.NANOSECONDS);
+                                            scheduler.schedule(exec(() -> regate.get().run()), duration.toNanos(),
+                                                               TimeUnit.NANOSECONDS);
                                         } else {
                                             log.error("Failed to join view: {} cannot obtain majority on: {}", view,
                                                       node.getId());
@@ -992,8 +992,7 @@ public class View {
                     return link.seed(join);
                 }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                     if (!seeding.isDone()) {
-                        scheduler.schedule(Utils.wrapped(() -> reseed.get().run(), log), duration.toNanos(),
-                                           TimeUnit.NANOSECONDS);
+                        scheduler.schedule(exec(() -> reseed.get().run()), duration.toNanos(), TimeUnit.NANOSECONDS);
                     }
                 }, scheduler, duration);
             });
@@ -1185,8 +1184,7 @@ public class View {
         node.reset();
 
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
-        scheduler.schedule(Utils.wrapped(() -> new Binding().seeding(seeds, d, scheduler), log), initial,
-                           TimeUnit.NANOSECONDS);
+        scheduler.schedule(exec(() -> new Binding().seeding(seeds, d, scheduler)), initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -1593,6 +1591,10 @@ public class View {
                       .build();
     }
 
+    private Runnable exec(Runnable action) {
+        return () -> exec.execute(Utils.wrapped(action, log));
+    }
+
     /**
      * Finalize the view change
      */
@@ -1730,10 +1732,10 @@ public class View {
             return;
         }
 
-        if (context.activeCount() == 1) {
-            roundTimers.tick();
-        }
         exec.execute(Utils.wrapped(() -> {
+            if (context.activeCount() == 1) {
+                roundTimers.tick();
+            }
             gossiper.execute((link, ring) -> gossip(link, ring),
                              (futureSailor, destination) -> gossip(futureSailor, destination, duration, scheduler));
         }, log));
