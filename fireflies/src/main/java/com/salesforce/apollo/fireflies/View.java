@@ -1968,11 +1968,13 @@ public class View {
 
         // complete all pending joins
         pending.forEach(r -> {
-            exec.execute(Utils.wrapped(() -> {
+            try {
                 final var shuffled = new ArrayList<>(joiningNotes);
                 Entropy.secureShuffle(shuffled);
                 r.accept(shuffled);
-            }, log));
+            } catch (Throwable t) {
+                log.error("Exception in pending join on: {}", node.getId(), t);
+            }
         });
 
         log.info("Installed view: {} from: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
