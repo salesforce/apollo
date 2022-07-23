@@ -26,9 +26,9 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
-        <appender-ref ref="FILE" />
+       <!-- <appender-ref ref="FILE" /> -->
     </logger>
 
     <logger name="com.salesforce.apollo.members" level="info" additivity="false">

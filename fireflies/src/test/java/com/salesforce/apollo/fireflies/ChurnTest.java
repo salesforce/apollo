@@ -93,7 +93,7 @@ public class ChurnTest {
     @Test
     public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(10);
+        final var scheduler = Executors.newScheduledThreadPool(2);
 
         Set<View> testViews = new HashSet<>();
 
@@ -105,7 +105,7 @@ public class ChurnTest {
 
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(5);
+        final var gossipDuration = Duration.ofMillis(25);
         views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
 
         var bootstrappers = views.subList(0, 25);
@@ -227,8 +227,6 @@ public class ChurnTest {
                        .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
                        .limit(24)
                        .toList();
-        var commExec = ForkJoinPool.commonPool();
-        var viewExec = ForkJoinPool.commonPool();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
@@ -240,12 +238,12 @@ public class ChurnTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        commExec, metrics.limitsMetrics());
+                                        new ForkJoinPool(), metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, viewExec);
+                            DigestAlgorithm.DEFAULT, metrics, new ForkJoinPool());
         }).collect(Collectors.toList());
     }
 }
