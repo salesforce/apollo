@@ -91,7 +91,7 @@ public class SwarmTest {
     @Test
     public void swarm() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(1);
+        final var scheduler = Executors.newScheduledThreadPool(10);
         long then = System.currentTimeMillis();
 
         // Bootstrap the kernel
