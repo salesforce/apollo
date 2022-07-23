@@ -98,7 +98,7 @@ public class SwarmTest {
 
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(25);
+        final var gossipDuration = Duration.ofMillis(5);
         views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
 
         var bootstrappers = views.subList(0, 25);
