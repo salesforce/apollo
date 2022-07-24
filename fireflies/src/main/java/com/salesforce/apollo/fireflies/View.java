@@ -598,6 +598,9 @@ public class View {
                                                                          params.fpr()))
                                     .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
                                     .build();
+                log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
+                          g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
+                          g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
                 return g;
             });
         }
@@ -2409,6 +2412,7 @@ public class View {
                    .filter(m -> m.getNote() != null)
                    .filter(m -> current.equals(m.getNote().currentView()))
                    .filter(m -> !notesBff.contains(m.getNote().getHash()))
+                   .limit(params.maximumTxfr())
                    .map(m -> m.getNote().getWrapped())
                    .forEach(n -> builder.addNotes(n));
         }
@@ -2420,6 +2424,7 @@ public class View {
                    .flatMap(m -> m.getAccusations())
                    .filter(a -> a.currentView().equals(current))
                    .filter(a -> !accBff.contains(a.getHash()))
+                   .limit(params.maximumTxfr())
                    .forEach(a -> builder.addAccusations(a.getWrapped()));
         }
 
@@ -2430,6 +2435,7 @@ public class View {
                         .stream()
                         .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                         .filter(e -> !obsvBff.contains(e.getKey()))
+                        .limit(params.maximumTxfr())
                         .forEach(e -> builder.addObservations(e.getValue()));
         }
 
@@ -2439,6 +2445,7 @@ public class View {
             joins.entrySet()
                  .stream()
                  .filter(e -> !joinBff.contains(e.getKey()))
+                 .limit(params.maximumTxfr())
                  .forEach(e -> builder.addJoins(e.getValue().getWrapped()));
         }
 
