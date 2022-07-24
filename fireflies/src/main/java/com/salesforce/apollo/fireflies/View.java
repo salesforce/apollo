@@ -619,16 +619,16 @@ public class View {
             }
             return stable(() -> {
                 var newMember = new Participant(note.getId());
-                final var predecessors = new TreeSet<>(context.predecessors(newMember, m -> context.isActive(m)));
-                log.debug("Member seeding: {} view: {} context: {} predecessors: {} on: {}", newMember.getId(),
-                          currentView.get(), context.getId(), predecessors.stream().map(e -> e.getId()).toList(),
+                final var successors = new TreeSet<>(context.successors(newMember, m -> context.isActive(m)));
+                log.debug("Member seeding: {} view: {} context: {} successors: {} on: {}", newMember.getId(),
+                          currentView.get(), context.getId(), successors.stream().map(e -> e.getId()).toList(),
                           node.getId());
                 return Redirect.newBuilder()
                                .setView(currentView.get().toDigeste())
-                               .addAllPredecessors(predecessors.stream()
-                                                               .filter(p -> p != null)
-                                                               .map(p -> p.getNote().getWrapped())
-                                                               .toList())
+                               .addAllSuccessors(successors.stream()
+                                                           .filter(p -> p != null)
+                                                           .map(p -> p.getNote().getWrapped())
+                                                           .toList())
                                .setCardinality(context.cardinality())
                                .setRings(context.getRingCount())
                                .build();
@@ -867,8 +867,8 @@ public class View {
                 context.rebalance(r.getCardinality());
                 node.nextNote(view);
 
-                log.debug("Completing redirect to view: {} context: {} predecessors: {} on: {}", view, context.getId(),
-                          r.getPredecessorsList()
+                log.debug("Completing redirect to view: {} context: {} successors: {} on: {}", view, context.getId(),
+                          r.getSuccessorsList()
                            .stream()
                            .map(sn -> new NoteWrapper(sn, digestAlgo))
                            .map(nw -> nw.getId())
@@ -883,13 +883,13 @@ public class View {
 
         private void redirect(Redirect redirect, Duration duration, ScheduledExecutorService scheduler) {
             var view = Digest.from(redirect.getView());
-            var predecessors = redirect.getPredecessorsList()
-                                       .stream()
-                                       .map(sn -> new NoteWrapper(sn, digestAlgo))
-                                       .map(nw -> new Participant(nw))
-                                       .collect(Collectors.toList());
-            log.info("Redirecting to: {} context: {} predecessors: {} on: {}", view, context.getId(),
-                     predecessors.stream().filter(p -> !node.getId().equals(p.getId())).map(p -> p.getId()).toList(),
+            var succsesors = redirect.getSuccessorsList()
+                                     .stream()
+                                     .map(sn -> new NoteWrapper(sn, digestAlgo))
+                                     .map(nw -> new Participant(nw))
+                                     .collect(Collectors.toList());
+            log.info("Redirecting to: {} context: {} successors: {} on: {}", view, context.getId(),
+                     succsesors.stream().filter(p -> !node.getId().equals(p.getId())).map(p -> p.getId()).toList(),
                      node.getId());
             var gateway = new CompletableFuture<Bound>();
             var timer = metrics == null ? null : metrics.joinDuration().time();
@@ -913,7 +913,7 @@ public class View {
                            .setNote(node.getNote().getWrapped())
                            .build();
 
-            final var redirecting = new SliceIterator<>("Gateways", node, predecessors, comm, exec);
+            final var redirecting = new SliceIterator<>("Gateways", node, succsesors, comm, exec);
             regate.set(() -> {
                 redirecting.iterate((link, m) -> {
                     log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(), node.getId());
