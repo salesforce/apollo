@@ -25,8 +25,6 @@ public interface FireflyMetrics extends EdpointMetrics {
 
     Histogram gossipResponse();
 
-    Timer gossipRoundDuration();
-
     Histogram inboundGateway();
 
     Histogram inboundGossip();

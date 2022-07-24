@@ -37,6 +37,28 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * SQL State - JDBC accessible, SQL store backed, materialized view evolved from CHOAM linear logs.  Supports DDL, DML, stored procedures, functions and triggers.
 * Delphinius - Google Zanzibar clone. Provides Relation Based Access Control hosted on CHOAM SQL state machines.
 
+## Modules
+Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse.  Each module is a Maven module under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
+
+* [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
+* [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
+* [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
+* [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
+* [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
+* [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
+* [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
+* [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
+* [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
+* [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
+* [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
+* [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.
+* [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure.  KEL, KERL and other fundamental identity, key and trust management
+* [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
+* [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing KERI decentralized identity
+* [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
+* [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
+
+
 ## Protobuf and GRPC
 Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the Eclipse IDE Maven integration. To aleviate this, _all_ grpc/proto generation occurs in one module, the aptly named _grpc_ module.
 

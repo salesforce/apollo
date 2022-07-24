@@ -259,6 +259,10 @@ abstract public class BloomFilter<T> {
         }
     }
 
+    public String biffString() {
+        return bits.toString();
+    }
+
     public void clear() {
         bits.clear();
     }

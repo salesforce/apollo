@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +15,7 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.membership.Context;
 
 /**
  * @author hal.hildebrand
@@ -156,7 +155,7 @@ public interface Unit extends PreUnit {
                 level = p.level();
             }
         }
-        if (onLevel >= minimalQuorum(nProc, bias)) {
+        if (onLevel >= Context.minimalQuorum(nProc, bias)) {
             level++;
         }
 

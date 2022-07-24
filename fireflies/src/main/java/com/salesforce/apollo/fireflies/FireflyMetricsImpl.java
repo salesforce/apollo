@@ -24,7 +24,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Meter     filteredNotes;
     private final Histogram gossipReply;
     private final Histogram gossipResponse;
-    private final Timer     gossipRoundDuration;
     private final Histogram inboundGateway;
     private final Histogram inboundGossip;
     private final Timer     inboundGossipTimer;
@@ -69,7 +68,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         gossipResponse = registry.histogram(name(context.shortString(), "ff.gossip.reply.inbound.bytes"));
         inboundGossip = registry.histogram(name(context.shortString(), "ff.gossip.inbound.bytes"));
         gossipReply = registry.histogram(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
-        gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
         accusations = registry.meter(name(context.shortString(), "ff.gossip.accusations"));
         notes = registry.meter(name(context.shortString(), "ff.gossip.notes"));
         joining = registry.meter(name(context.shortString(), "ff.joining"));
@@ -100,11 +98,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Histogram gossipResponse() {
         return gossipResponse;
-    }
-
-    @Override
-    public Timer gossipRoundDuration() {
-        return gossipRoundDuration;
     }
 
     @Override

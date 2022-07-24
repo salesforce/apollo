@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -199,7 +200,7 @@ public interface Dag {
 
         @Override
         public boolean isQuorum(short cardinality) {
-            return cardinality >= Dag.minimalQuorum(nProc(), config.bias());
+            return cardinality >= Context.minimalQuorum(nProc(), config.bias());
         }
 
         @Override
@@ -523,12 +524,6 @@ public interface Dag {
     }
 
     static final Logger log = LoggerFactory.getLogger(Dag.class);
-
-    static short minimalQuorum(int np, double bias) {
-        var nProcesses = (double) np;
-        short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
-        return minimalQuorum;
-    }
 
     static short threshold(int np) {
         var nProcesses = (double) np;

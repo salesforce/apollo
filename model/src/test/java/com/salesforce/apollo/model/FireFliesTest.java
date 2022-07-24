@@ -18,7 +18,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -67,6 +71,7 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
+        var scheduler = Executors.newScheduledThreadPool(2);
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -90,13 +95,13 @@ public class FireFliesTest {
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              ForkJoinPool.commonPool(), null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                          .setScheduler(scheduler)
                                                           .setContext(context)
-                                                          .setExec(Executors.newFixedThreadPool(3))
+                                                          .setExec(ForkJoinPool.commonPool())
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);
@@ -108,20 +113,40 @@ public class FireFliesTest {
 
     @Test
     public void smokin() throws Exception {
+        final var gossipDuration = Duration.ofMillis(10);
         long then = System.currentTimeMillis();
-        final var seeds = domains.stream()
-                                 .map(n -> new Seed(n.getMember().getEvent().getCoordinates(),
-                                                    new InetSocketAddress(0)))
-                                 .limit(1)
-                                 .toList();
+        final var countdown = new CountDownLatch(domains.size());
+        final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
+                                                             new InetSocketAddress(0)));
+        domains.forEach(d -> {
+            d.getFoundation().register((context, viewId, joins, leaves) -> {
+                if (context.totalCount() == CARDINALITY) {
+                    System.out.println(String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
+                                                     d.getMember().getId()));
+                    countdown.countDown();
+                } else {
+                    System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
+                                                     context.totalCount(), d.getMember().getId()));
+                }
+            });
+        });
         // start seed
+        final var scheduler = Executors.newScheduledThreadPool(2);
+        final var started = new AtomicReference<>(new CountDownLatch(1));
+
         domains.get(0)
                .getFoundation()
-               .start(Duration.ofMillis(10), Collections.emptyList(), Executors.newSingleThreadScheduledExecutor());
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+        assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
+        started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
+            d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds, scheduler);
         });
+        assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
+
+        assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
+
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return domains.stream()
                           .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())

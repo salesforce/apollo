@@ -22,10 +22,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -131,7 +133,7 @@ public class MtlsTest {
 
         var scheduler = Executors.newScheduledThreadPool(10);
         var exec = ForkJoinPool.commonPool();
-        var commExec = new ForkJoinPool();
+        var commExec = exec;
 
         var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);
@@ -156,24 +158,23 @@ public class MtlsTest {
         var then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
 
-        views.get(0).start(duration, Collections.emptyList(), scheduler);
+        var countdown = new AtomicReference<>(new CountDownLatch(1));
 
-        assertTrue(Utils.waitForCondition(10_000, 1_000, () -> views.get(0).getContext().activeCount() == 1),
-                   "KERNEL did not stabilize");
+        views.get(0).start(() -> countdown.get().countDown(), duration, Collections.emptyList(), scheduler);
+
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "KERNEL did not stabilize");
 
         var seedlings = views.subList(1, seeds.size());
         var kernel = seeds.subList(0, 1);
 
-        seedlings.forEach(view -> view.start(duration, kernel, scheduler));
+        countdown.set(new CountDownLatch(seedlings.size()));
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> seedlings.stream()
-                                                         .filter(view -> view.getContext()
-                                                                             .activeCount() != seeds.size())
-                                                         .count() == 0),
-                   "Seeds did not stabilize");
+        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel, scheduler));
 
-        views.forEach(view -> view.start(duration, seeds, scheduler));
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Seeds did not stabilize");
+
+        countdown.set(new CountDownLatch(views.size() - seeds.size()));
+        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()

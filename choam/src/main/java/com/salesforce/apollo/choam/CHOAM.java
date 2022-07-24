@@ -202,19 +202,19 @@ public class CHOAM {
             if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
                 if (current.compareAndSet(null, new Formation())) {
                     log.info("Quorum achieved, triggering regeneration. have: {} desired: {} required: {} forming Genesis committe on: {}",
-                             activeCount, params.context().majority(), params.context().getRingCount(),
+                             activeCount, params.context().getRingCount(), params.context().majority(),
                              params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
-                             activeCount, params.majority(), params.context().getRingCount(),
+                             activeCount, params.context().getRingCount(), params.majority(),
                              current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();
                 log.info("Synchronization failed, no quorum available, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                         activeCount, params.majority(), params.context().getRingCount(),
-                         c == null ? "no formation" : c.getClass().getSimpleName(), params.member().getId());
+                         activeCount, params.context().getRingCount(), params.majority(),
+                         c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }
         }

@@ -8,7 +8,7 @@
     <artifactId>grpc</artifactId>
     <name>Apollo GRPC/Proto</name>
     <description>Module that defines and generates all proto/grpc for Apollo</description>
-    
+
     <dependencies>
         <dependency>
             <!-- necessary for Java 9+ -->

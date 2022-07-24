@@ -254,6 +254,16 @@ public class Digest implements Comparable<Digest> {
         return prefix(prefix.getBytes());
     }
 
+    public Digest rehash() {
+        ByteBuffer buffer = ByteBuffer.allocate(hash.length * 8);
+        for (long h : hash) {
+            buffer.putLong(h);
+        }
+        buffer.flip();
+        Digest d = getAlgorithm().digest(buffer);
+        return new Digest(getAlgorithm(), d.getBytes());
+    }
+
     public String shortString() {
         String hexString = Hex.toHexString(getBytes());
         return hexString.substring(0, Math.min(hexString.length(), 16));
