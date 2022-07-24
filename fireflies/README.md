@@ -37,7 +37,7 @@ Apollo also implements the same _amplification_ strategy of Rapid.  When a membe
 
 ## View Identity
 
-View identity in Apollo Fireflies is defined by the set of digest IDs of the total membership XORd together.  This provides a _crown_ of the membership set that is unique for the membership set.
+The  _crown_  of a View in Apollo Fireflies is defined by the set of digest IDs of the total membership XORd together.  The  _identity_  of the view is the digest value of  _crown.rehash()_  .
 
 ## Liveness, Failure Detection and Monitoring
 

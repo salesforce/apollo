@@ -151,6 +151,7 @@ public abstract class Hash<M> {
             makeHash();
         }
 
+        @Override
         protected abstract Hasher<M> clone();
 
         IntStream locations(int k, M key, int m, long seed) {
@@ -283,7 +284,7 @@ public abstract class Hash<M> {
             case 10:
                 k2 ^= (long) toInt(buff.get(9)) << 8; // fall through
             case 9:
-                k2 ^= (long) toInt(buff.get(8)); // fall through
+                k2 ^= toInt(buff.get(8)); // fall through
             case 8:
                 k1 ^= buff.getLong();
                 break;
@@ -300,7 +301,7 @@ public abstract class Hash<M> {
             case 2:
                 k1 ^= (long) toInt(buff.get(1)) << 8; // fall through
             case 1:
-                k1 ^= (long) toInt(buff.get(0));
+                k1 ^= toInt(buff.get(0));
                 break;
             default:
                 throw new AssertionError("Should never get here.");
@@ -405,22 +406,22 @@ public abstract class Hash<M> {
      *         population M entries and N elements
      */
     public static double fpp(int k, int m, int n) {
-        double Kd = (double) k;
-        double Md = (double) m;
-        double Nd = (double) n;
+        double Kd = k;
+        double Md = m;
+        double Nd = n;
         return Math.pow(1 - Math.exp(-Kd / (Md / Nd)), Kd);
     }
 
     /**
      * @param m   - the number of entries (bits)
-     * @param k   - the number of hahes
+     * @param k   - the number of hashes
      * @param fpp - the false positive probability
      * @return the number of elements that a bloom filter can hold with M entries
      *         (bits) K hashes and the specified false positive rate
      */
     public static int n(int m, int k, double fpp) {
-        double Kd = (double) k;
-        double Md = (double) m;
+        double Kd = k;
+        double Md = m;
         return (int) Math.ceil(Md / (-Kd / Math.log(1 - Math.exp(Math.log(fpp) / Kd))));
     }
 
@@ -477,6 +478,7 @@ public abstract class Hash<M> {
         hasher = newHasher();
     }
 
+    @Override
     public Hash<M> clone() {
         Hasher<M> clone = hasher.clone();
         return new Hash<M>(seed, k, m) {

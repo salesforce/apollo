@@ -521,7 +521,9 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public void remove(Digest id) {
         var removed = members.remove(id);
         if (removed != null) {
-            remove(removed.member);
+            for (int i = 0; i < rings.size(); i++) {
+                rings.get(i).delete(removed.member);
+            }
         }
     }
 
@@ -530,10 +532,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public void remove(T m) {
-        members.remove(m.getId());
-        for (int i = 0; i < rings.size(); i++) {
-            rings.get(i).delete(m);
-        }
+        remove(m.getId());
     }
 
     /**

@@ -22,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -131,16 +132,21 @@ public class FireFliesTest {
         });
         // start seed
         final var scheduler = Executors.newScheduledThreadPool(2);
+        final var started = new AtomicReference<>(new CountDownLatch(1));
 
-        domains.get(0).getFoundation().start(gossipDuration, Collections.emptyList(), scheduler);
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
-            return domains.get(0).getFoundation().getContext().totalCount() == 1;
-        }));
+        domains.get(0)
+               .getFoundation()
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+        assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
+        started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation().start(gossipDuration, seeds, scheduler);
+            d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds, scheduler);
         });
-        assertTrue(countdown.await(30, TimeUnit.SECONDS));
+        assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
+
+        assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
+
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return domains.stream()
                           .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())

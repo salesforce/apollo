@@ -18,10 +18,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -74,7 +76,6 @@ public class SwarmTest {
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
-    private List<Seed>                              seeds;
     private List<View>                              views;
 
     @AfterEach
@@ -96,20 +97,27 @@ public class SwarmTest {
 
         // Bootstrap the kernel
 
+        final var seeds = members.values()
+                                 .stream()
+                                 .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                                 .limit(5)
+                                 .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
         final var gossipDuration = Duration.ofMillis(5);
-        views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
 
-        var bootstrappers = views.subList(0, 25);
-        bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
+        var countdown = new AtomicReference<>(new CountDownLatch(1));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+
+        var bootstrappers = views.subList(0, seeds.size());
+        countdown.set(new CountDownLatch(seeds.size() - 1));
+        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
+                                           scheduler));
 
         // Test that all bootstrappers up
-        var success = Utils.waitForCondition(60_000, 1_000, () -> {
-            return bootstrappers.stream()
-                                .filter(view -> view.getContext().activeCount() != bootstrappers.size())
-                                .count() == 0;
-        });
+        var success = countdown.get().await(30, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
@@ -118,7 +126,20 @@ public class SwarmTest {
         assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
 
         // Start remaining views
-        views.forEach(v -> v.start(gossipDuration, seeds, scheduler));
+        countdown.set(new CountDownLatch(views.size() - seeds.size()));
+        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
+
+        success = countdown.get().await(30, TimeUnit.SECONDS);
+
+        // Test that all views are up
+        failed = views.stream()
+                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
+                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
+                                              v.getContext().totalCount()))
+                      .toList();
+        assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
+        + failed);
+
         success = Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
@@ -129,7 +150,8 @@ public class SwarmTest {
                       .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
                                               v.getContext().totalCount()))
                       .toList();
-        assertTrue(success, " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);
+        assertTrue(success, "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size()
+        + " views: " + failed);
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + views.size() + " members");
@@ -181,20 +203,15 @@ public class SwarmTest {
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
-        seeds = new ArrayList<>();
         members = identities.values()
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
 
-        seeds = members.values()
-                       .stream()
-                       .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                       .limit(24)
-                       .toList();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var executor = new ForkJoinPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -204,12 +221,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        new ForkJoinPool(), metrics.limitsMetrics());
+                                        executor, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, new ForkJoinPool());
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toList());
     }
 }

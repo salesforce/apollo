@@ -20,10 +20,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -76,7 +78,6 @@ public class ChurnTest {
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
-    private List<Seed>                              seeds;
     private List<View>                              views;
 
     @AfterEach
@@ -101,30 +102,46 @@ public class ChurnTest {
         System.out.println("Starting views");
         System.out.println();
 
+        var seeds = members.values()
+                           .stream()
+                           .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                           .limit(25)
+                           .toList();
+
         // Bootstrap the kernel
 
         final var bootstrapSeed = seeds.subList(0, 1);
 
         final var gossipDuration = Duration.ofMillis(5);
-        views.get(0).start(gossipDuration, Collections.emptyList(), scheduler);
+        var countdown = new AtomicReference<>(new CountDownLatch(1));
+        long then = System.currentTimeMillis();
 
-        var bootstrappers = views.subList(0, 25);
-        bootstrappers.forEach(v -> v.start(gossipDuration, bootstrapSeed, scheduler));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+
+        assertTrue(countdown.get().await(10, TimeUnit.SECONDS), "Kernel did not bootstrap");
+
+        testViews.add(views.get(0));
+
+        var bootstrappers = views.subList(1, seeds.size());
+        countdown.set(new CountDownLatch(bootstrappers.size()));
+
+        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
+                                           scheduler));
 
         // Test that all bootstrappers up
-        var success = Utils.waitForCondition(30_000, 1_000, () -> {
-            return bootstrappers.stream()
-                                .filter(view -> view.getContext().activeCount() != bootstrappers.size())
-                                .count() == 0;
-        });
-        var failed = bootstrappers.stream()
-                                  .filter(e -> e.getContext().activeCount() != bootstrappers.size())
-                                  .map(v -> String.format("%s : %s ", v.getNode().getId(),
-                                                          v.getContext().activeCount()))
-                                  .toList();
-        assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
+        var success = countdown.get().await(10, TimeUnit.SECONDS);
+        testViews.addAll(bootstrappers);
 
-        for (int i = 0; i < 4; i++) {
+        var failed = testViews.stream()
+                              .filter(e -> e.getContext().activeCount() != testViews.size())
+                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                              .toList();
+        assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
+
+        System.out.println("Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + testViews.size() + " members");
+
+        for (int i = 0; i < 3; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
             for (int j = 0; j < 25; j++) {
@@ -132,8 +149,36 @@ public class ChurnTest {
                 testViews.add(v);
                 toStart.add(v);
             }
-            long then = System.currentTimeMillis();
-            toStart.forEach(view -> view.start(gossipDuration, seeds, scheduler));
+            then = System.currentTimeMillis();
+            countdown.set(new CountDownLatch(toStart.size()));
+
+            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
+
+            success = countdown.get().await(30, TimeUnit.SECONDS);
+            failed = testViews.stream()
+                              .filter(e -> e.getContext().activeCount() != testViews.size() ||
+                                           e.getContext().totalCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
+                              .toList();
+            assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
+
+            success = Utils.waitForCondition(30_000, 1_000, () -> {
+                return testViews.stream()
+                                .map(v -> v.getContext())
+                                .filter(ctx -> ctx.totalCount() != testViews.size() ||
+                                               ctx.activeCount() != testViews.size())
+                                .count() == 0;
+            });
+            failed = testViews.stream()
+                              .filter(e -> e.getContext().activeCount() != testViews.size() ||
+                                           e.getContext().totalCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
+                              .toList();
+            assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
@@ -174,7 +219,7 @@ public class ChurnTest {
             r = r.subList(0, r.size() - delta);
             final var expected = c;
 //            System.out.println("** Removed: " + removed);
-            long then = System.currentTimeMillis();
+            then = System.currentTimeMillis();
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
             });
@@ -215,20 +260,15 @@ public class ChurnTest {
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
-        seeds = new ArrayList<>();
         members = identities.values()
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
 
-        seeds = members.values()
-                       .stream()
-                       .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                       .limit(24)
-                       .toList();
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var exec = new ForkJoinPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -238,12 +278,12 @@ public class ChurnTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        new ForkJoinPool(), metrics.limitsMetrics());
+                                        exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, new ForkJoinPool());
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }
 }
