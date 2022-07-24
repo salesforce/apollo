@@ -57,9 +57,14 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static final int                                                   CARDINALITY = 100;
+    private static final int                                                   CARDINALITY;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static final double                                                P_BYZ       = 0.3;
+    private static boolean                                                     largeTests = Boolean.getBoolean("large_tests");
+    private static final double                                                P_BYZ      = 0.3;
+
+    static {
+        CARDINALITY = largeTests ? 1000 : 100;
+    }
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -100,7 +105,7 @@ public class SwarmTest {
         final var seeds = members.values()
                                  .stream()
                                  .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                                 .limit(5)
+                                 .limit(largeTests ? 100 : 10)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
@@ -129,7 +134,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-        success = countdown.get().await(30, TimeUnit.SECONDS);
+        success = countdown.get().await(60, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -180,15 +185,6 @@ public class SwarmTest {
             assertTrue(testGraph.isSC());
         }
 
-        for (View view : views) {
-            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final var deRing = view.getContext().ring(ring);
-                for (var node : members.values()) {
-                    assertTrue(deRing.contains(node.getId()));
-                }
-            }
-        }
-
         views.forEach(view -> view.stop());
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
@@ -211,7 +207,8 @@ public class SwarmTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
-        final var executor = new ForkJoinPool();
+        final var executor = ForkJoinPool.commonPool();
+        final var commExec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -221,7 +218,7 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        executor, metrics.limitsMetrics());
+                                        commExec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);

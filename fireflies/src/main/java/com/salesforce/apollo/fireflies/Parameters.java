@@ -33,7 +33,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Maximum number of elements to transfer per type per update
          */
-        private int    maximumTxfr            = 100;
+        private int    maximumTxfr            = 10;
         /**
          * Minimum cardinality for bloom filters
          */
