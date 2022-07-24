@@ -117,7 +117,7 @@ message Update {
 
 message Redirect {
     utils.Digeste view = 1;
-    repeated SignedNote predecessors = 2;
+    repeated SignedNote successors = 2;
     int32 cardinality = 3;
     int32 rings = 4;
 }
