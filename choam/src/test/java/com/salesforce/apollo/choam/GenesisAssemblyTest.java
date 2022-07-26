@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -82,11 +83,13 @@ public class GenesisAssemblyTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<Member> members = IntStream.range(0, cardinality)
-                                        .mapToObj(i -> stereotomy.newIdentifier().get())
-                                        .map(cpk -> new ControlledIdentifierMember(cpk))
-                                        .map(e -> (Member) e)
-                                        .toList();
+        List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e1) {
+                throw new IllegalStateException(e1);
+            }
+        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (Member) e).toList();
         Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);

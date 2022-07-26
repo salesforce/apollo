@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -202,10 +203,13 @@ public class DomainTest {
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
-        var identities = IntStream.range(0, CARDINALITY)
-                                  .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                            controlled -> controlled));
+        var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));

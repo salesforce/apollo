@@ -13,6 +13,7 @@ import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
@@ -109,22 +110,22 @@ public interface Stereotomy {
     /**
      * Answer the BoundIdentifier of the EventCoordinates
      */
-    <D extends Identifier> Optional<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates);
+    <D extends Identifier> CompletableFuture<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates);
 
     /**
      * Answer the Controllable identifier
      */
-    <D extends Identifier> Optional<ControlledIdentifier<D>> controlOf(D identifier);
+    <D extends Identifier> CompletableFuture<ControlledIdentifier<D>> controlOf(D identifier);
 
     /**
      * Answer the KeyState of the provided event coordinates
      */
-    Optional<KeyState> getKeyState(EventCoordinates eventCoordinates);
+    CompletableFuture<KeyState> getKeyState(EventCoordinates eventCoordinates);
 
     /**
      * Answer the KeyState of the key coordinates
      */
-    default Optional<KeyState> getKeyState(KeyCoordinates keyCoordinates) {
+    default CompletableFuture<KeyState> getKeyState(KeyCoordinates keyCoordinates) {
         return getKeyState(keyCoordinates.getEstablishmentEvent());
     }
 
@@ -138,17 +139,17 @@ public interface Stereotomy {
      * {@link SelfAddressingIdentifier} prototype and Identifier.NONE as the base
      * identifier
      */
-    Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier();
+    CompletableFuture<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier();
 
     /**
      * Answer a new delegated ControlledIdentifier
      */
-    <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(Identifier controller,
-                                                                           Builder<T> specification);
+    <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(Identifier controller,
+                                                                                    Builder<T> specification);
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification
      * prototype and Identifier.NONE as the base identifier
      */
-    <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec);
+    <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec);
 }

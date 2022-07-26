@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -62,11 +63,13 @@ public class BootstrapperTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY)
-                                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
+        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         context.activate(members);
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()

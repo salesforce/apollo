@@ -9,6 +9,7 @@ package com.salesforce.apollo.membership.stereotomy;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.ExecutionException;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -27,8 +28,8 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  */
 public class ControlledIdentifierMember implements SigningMember {
 
-    private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
     private final Digest                                         id;
+    private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
 
     public ControlledIdentifierMember(ControlledIdentifier<SelfAddressingIdentifier> identifier) {
         this.identifier = identifier;
@@ -66,6 +67,18 @@ public class ControlledIdentifierMember implements SigningMember {
             return null;
         }
         return verifier.get().filtered(threshold, signature, message);
+    }
+
+    public CertificateWithPrivateKey getCertificateWithPrivateKey(Instant validFrom, Duration valid,
+                                                                  SignatureAlgorithm signatureAlgorithm) {
+        try {
+            return identifier.provision(validFrom, valid, signatureAlgorithm).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public EstablishmentEvent getEvent() {
@@ -112,10 +125,5 @@ public class ControlledIdentifierMember implements SigningMember {
             return false;
         }
         return verifier.get().verify(threshold, signature, message);
-    }
-
-    public CertificateWithPrivateKey getCertificateWithPrivateKey(Instant validFrom, Duration valid,
-                                                                  SignatureAlgorithm signatureAlgorithm) {
-        return identifier.provision(validFrom, valid, signatureAlgorithm).get();
     }
 }

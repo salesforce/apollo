@@ -87,15 +87,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-        var fs = new CompletableFuture<Attachment>();
-        try {
-            fs.complete(kerl.getAttachment(EventCoordinates.from(coordinates))
-                            .map(attch -> attch.toAttachemente())
-                            .orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getAttachment(EventCoordinates.from(coordinates)).thenApply(attch -> attch.toAttachemente());
     }
 
     public DigestAlgorithm getDigestAlgorithm() {
@@ -104,72 +96,32 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
-        var fs = new CompletableFuture<KERL_>();
-        try {
-            fs.complete(kerl.kerl(Identifier.from(identifier)).map(kerl -> kerl(kerl)).orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.kerl(Identifier.from(identifier)).thenApply(kerl -> kerl(kerl));
     }
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-        var fs = new CompletableFuture<KeyEvent_>();
-        try {
-            fs.complete(kerl.getKeyEvent(Digest.from(digest)).map(event -> event.toKeyEvent_()).orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getKeyEvent(Digest.from(digest)).thenApply(event -> event.toKeyEvent_());
     }
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-        var fs = new CompletableFuture<KeyEvent_>();
-        try {
-            fs.complete(kerl.getKeyEvent(EventCoordinates.from(coordinates))
-                            .map(event -> event.toKeyEvent_())
-                            .orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getKeyEvent(EventCoordinates.from(coordinates)).thenApply(event -> event.toKeyEvent_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-        var fs = new CompletableFuture<KeyState_>();
-        try {
-            fs.complete(kerl.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState_()).orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getKeyState(EventCoordinates.from(coordinates)).thenApply(ks -> ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-        var fs = new CompletableFuture<KeyState_>();
-        try {
-            fs.complete(kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_()).orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getKeyState(Identifier.from(identifier)).thenApply(ks -> ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
-        var fs = new CompletableFuture<KeyStateWithAttachments_>();
-        try {
-            fs.complete(kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
-                            .map(ksa -> ksa.toEvente())
-                            .orElse(null));
-        } catch (Exception e) {
-            fs.completeExceptionally(e);
-        }
-        return fs;
+        return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords)).thenApply(ksa -> ksa.toEvente());
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

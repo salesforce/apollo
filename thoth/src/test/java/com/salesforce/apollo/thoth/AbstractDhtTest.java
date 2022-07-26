@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -78,8 +79,13 @@ public class AbstractDhtTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        identities = IntStream.range(0, getCardinality())
-                              .mapToObj(i -> stereotomy.newIdentifier().get())
+        identities = IntStream.range(0, getCardinality()).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        })
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();

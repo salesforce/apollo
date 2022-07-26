@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.joou.ULong;
@@ -257,7 +258,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<List<EventWithAttachments>> getKerl() {
+        public CompletableFuture<List<EventWithAttachments>> getKerl() {
             return kerl.kerl(getIdentifier());
         }
 
@@ -292,8 +293,9 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
-                                                             List<CertExtension> extensions, SignatureAlgorithm algo) {
+        public CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                                      List<CertExtension> extensions,
+                                                                      SignatureAlgorithm algo) {
 
             var coords = getState().getLastEstablishmentEvent();
             var lastEstablishing = kerl.getKeyEvent(coords);
@@ -370,7 +372,7 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public <D extends Identifier> Optional<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates) {
+    public <D extends Identifier> CompletableFuture<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates) {
         final var lookup = kerl.getKeyState(coordinates);
         if (lookup.isEmpty()) {
             log.warn("Identifier has no key state: {}", coordinates);
@@ -380,7 +382,7 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public <D extends Identifier> Optional<ControlledIdentifier<D>> controlOf(D identifier) {
+    public <D extends Identifier> CompletableFuture<ControlledIdentifier<D>> controlOf(D identifier) {
         final var lookup = kerl.getKeyState(identifier);
         if (lookup.isEmpty()) {
             log.warn("Identifier has no key state: {}", identifier);
@@ -390,12 +392,12 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public Optional<KeyState> getKeyState(EventCoordinates eventCoordinates) {
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates eventCoordinates) {
         return kerl.getKeyState(eventCoordinates);
     }
 
     @Override
-    public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+    public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
         var state = getKeyState(coordinates);
         if (state.isEmpty()) {
             return Optional.empty();
@@ -405,13 +407,13 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier() {
+    public CompletableFuture<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier() {
         return newIdentifier(IdentifierSpecification.newBuilder());
     }
 
     @Override
-    public <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(Identifier controller,
-                                                                                  IdentifierSpecification.Builder<T> spec) {
+    public <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(Identifier controller,
+                                                                                           IdentifierSpecification.Builder<T> spec) {
         var event = inception(controller, spec);
         KeyState state;
         try {
@@ -433,7 +435,7 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec) {
+    public <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec) {
         return newIdentifier(Identifier.NONE, spec);
     }
 

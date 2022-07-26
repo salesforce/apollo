@@ -10,6 +10,7 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
@@ -60,7 +61,7 @@ public class StereotomyTests {
     }
 
     @Test
-    public void identifierInteraction() {
+    public void identifierInteraction() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
         var i = controller.newIdentifier().get();
@@ -78,7 +79,7 @@ public class StereotomyTests {
         i.rotate();
         var opti = kel.kerl(i.getIdentifier());
         assertNotNull(opti);
-        assertFalse(opti.isEmpty());
+        assertFalse(opti.get() == null);
         var iKerl = opti.get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
@@ -91,7 +92,7 @@ public class StereotomyTests {
     }
 
     @Test
-    public void identifierRotate() {
+    public void identifierRotate() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
         var i = controller.newIdentifier().get();
@@ -107,7 +108,7 @@ public class StereotomyTests {
     }
 
     @Test
-    public void newIdentifier() {
+    public void newIdentifier() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
         ControlledIdentifier<? extends Identifier> identifier = controller.newIdentifier().get();
@@ -158,7 +159,7 @@ public class StereotomyTests {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        assertTrue(kel.getKeyEvent(identifier.getLastEvent()).isEmpty());
+        assertNull(kel.getKeyEvent(identifier.getLastEvent()).get());
 
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
@@ -219,7 +220,7 @@ public class StereotomyTests {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        assertTrue(kel.getKeyEvent(identifier.getLastEvent()).isEmpty());
+        assertNull(kel.getKeyEvent(identifier.getLastEvent()).get());
 
         // delegation
         assertTrue(identifier.getDelegatingIdentifier().isPresent());

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
@@ -81,10 +82,13 @@ public class FireFliesTest {
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
-        var identities = IntStream.range(0, CARDINALITY)
-                                  .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                            controlled -> controlled));
+        var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var foundation = Foundation.newBuilder();

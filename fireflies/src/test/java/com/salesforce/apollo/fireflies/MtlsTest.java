@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
@@ -89,14 +90,21 @@ public class MtlsTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         String localhost = InetAddress.getLocalHost().getHostName();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        identities = IntStream.range(0, CARDINALITY)
-                              .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                        controlled -> controlled));
+        identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
         identities.entrySet().forEach(e -> {
             InetSocketAddress endpoint = new InetSocketAddress(localhost, Utils.allocatePort());
-            certs.put(e.getKey(),
-                      e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT).get());
+            try {
+                certs.put(e.getKey(),
+                          e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT).get());
+            } catch (InterruptedException | ExecutionException e1) {
+                throw new IllegalStateException(e1);
+            }
             endpoints.put(e.getKey(), endpoint);
         });
     }

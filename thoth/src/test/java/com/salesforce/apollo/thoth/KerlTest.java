@@ -7,14 +7,13 @@
 package com.salesforce.apollo.thoth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -70,8 +69,7 @@ public class KerlTest extends AbstractDhtTest {
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
-        Optional<ControlledIdentifier<SelfAddressingIdentifier>> opti = controller.newIdentifier();
-        ControlledIdentifier<? extends Identifier> base = opti.get();
+        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier().get();
 
         var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());
         ControlledIdentifier<? extends Identifier> identifier = opti2.get();
@@ -122,7 +120,7 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        assertTrue(kerl.getKeyEvent(identifier.getLastEvent()).isEmpty());
+        assertNull(kerl.getKeyEvent(identifier.getLastEvent()).get());
 
         // delegation
         assertTrue(identifier.getDelegatingIdentifier().isPresent());
@@ -164,7 +162,7 @@ public class KerlTest extends AbstractDhtTest {
         i.rotate();
         var opti = kerl.kerl(i.getIdentifier());
         assertNotNull(opti);
-        assertFalse(opti.isEmpty());
+        assertNotNull(opti.get());
         var iKerl = opti.get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());

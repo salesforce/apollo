@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
@@ -39,7 +40,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * @return the KERL of the receiver identifier
      */
-    Optional<List<EventWithAttachments>> getKerl();
+    CompletableFuture<List<EventWithAttachments>> getKerl();
 
     /**
      * @return the Signer for the key state binding
@@ -82,8 +83,8 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, List<CertExtension> extensions,
-                                                  SignatureAlgorithm algo);
+    CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                           List<CertExtension> extensions, SignatureAlgorithm algo);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -109,7 +110,8 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    default Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, SignatureAlgorithm algo) {
+    default CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                                   SignatureAlgorithm algo) {
         return provision(validFrom, valid, Collections.emptyList(), algo);
     }
 
