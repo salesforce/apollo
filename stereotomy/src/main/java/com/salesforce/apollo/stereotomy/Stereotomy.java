@@ -132,7 +132,7 @@ public interface Stereotomy {
     /**
      * Answer the Verifier for the key coordinates
      */
-    Optional<Verifier> getVerifier(KeyCoordinates coordinates);
+    CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates);
 
     /**
      * Answer a new ControlledIdentifier created from the

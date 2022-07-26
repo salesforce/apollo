@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
@@ -38,11 +39,16 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public SignatureAlgorithm algorithm() {
-        var signer = identifier.getSigner();
-        if (signer.isEmpty()) {
+        Signer signer;
+        try {
+            signer = identifier.getSigner().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return SignatureAlgorithm.NULL_SIGNATURE;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e);
         }
-        return signer.get().algorithm();
+        return signer.algorithm();
     }
 
     @Override
@@ -82,7 +88,14 @@ public class ControlledIdentifierMember implements SigningMember {
     }
 
     public EstablishmentEvent getEvent() {
-        return identifier.getLastEstablishingEvent().get();
+        try {
+            return identifier.getLastEstablishingEvent().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Override
@@ -97,11 +110,16 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public JohnHancock sign(InputStream message) {
-        var signer = identifier.getSigner();
-        if (signer.isEmpty()) {
+        Signer signer;
+        try {
+            signer = identifier.getSigner().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new IllegalStateException("cannot obtain signer for: " + getId());
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("cannot obtain signer for: " + getId(), e);
         }
-        return signer.get().sign(message);
+        return signer.sign(message);
     }
 
     @Override

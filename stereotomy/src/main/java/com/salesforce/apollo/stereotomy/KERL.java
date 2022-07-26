@@ -83,6 +83,9 @@ public interface KERL extends KEL {
             return fs;
         }
         return getAttachment(c).thenCombine(getKeyEvent(c), (a, e) -> {
+            if (e == null) {
+                return null;
+            }
             result.add(new EventWithAttachments(e, a));
             return e.getPrevious();
         }).thenCompose(coords -> completeKerl(coords, result));

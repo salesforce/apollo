@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -20,15 +21,16 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface BoundIdentifier<D extends Identifier> extends KeyState {
 
+    @Override
     D getIdentifier();
+
+    /**
+     * Answer the last establishment event
+     */
+    CompletableFuture<EstablishmentEvent> getLastEstablishingEvent();
 
     /**
      * @return the Verifier for the key state binding
      */
     Optional<Verifier> getVerifier();
-
-    /**
-     * Answer the last establishment event
-     */
-    Optional<EstablishmentEvent> getLastEstablishingEvent();
 }

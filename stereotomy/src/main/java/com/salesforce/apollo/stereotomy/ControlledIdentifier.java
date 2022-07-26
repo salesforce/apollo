@@ -45,7 +45,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * @return the Signer for the key state binding
      */
-    Optional<Signer> getSigner();
+    CompletableFuture<Signer> getSigner();
 
     /**
      * 
@@ -56,7 +56,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Create a new delegated identifier using the receiver as the base.
      */
-    <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
+    <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -118,16 +118,16 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Rotate the current key state
      */
-    void rotate();
+    CompletableFuture<Void> rotate();
 
     /**
      * Rotate the current key state using the supplied specification
      */
-    void rotate(RotationSpecification.Builder spec);
+    CompletableFuture<Void> rotate(RotationSpecification.Builder spec);
 
     /**
      * Publish the SealingEvent using the supplied specification
      */
-    void seal(InteractionSpecification.Builder spec);
+    CompletableFuture<Void> seal(InteractionSpecification.Builder spec);
 
 }

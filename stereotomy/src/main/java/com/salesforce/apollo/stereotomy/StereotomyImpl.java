@@ -22,7 +22,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -194,7 +193,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<EstablishmentEvent> getLastEstablishingEvent() {
+        public CompletableFuture<EstablishmentEvent> getLastEstablishingEvent() {
             return StereotomyImpl.this.getLastEstablishingEvent(getState());
         }
 
@@ -263,7 +262,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<Signer> getSigner() {
+        public CompletableFuture<Signer> getSigner() {
             return StereotomyImpl.this.getSigner(getState());
         }
 
@@ -288,7 +287,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(IdentifierSpecification.Builder<I> spec) {
+        public <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(IdentifierSpecification.Builder<I> spec) {
             return StereotomyImpl.this.newIdentifier(this, spec);
         }
 
@@ -297,55 +296,42 @@ public class StereotomyImpl implements Stereotomy {
                                                                       List<CertExtension> extensions,
                                                                       SignatureAlgorithm algo) {
 
-            var coords = getState().getLastEstablishmentEvent();
-            var lastEstablishing = kerl.getKeyEvent(coords);
-            if (lastEstablishing.isEmpty()) {
-                log.warn("Cannot get last establishing event for: {}", getIdentifier());
-                return Optional.empty();
-            }
-            var signer = getSigner();
-            if (signer.isEmpty()) {
-                log.warn("Cannot get signer for: {}", getIdentifier());
-                return Optional.empty();
-            }
+            return getSigner().thenApply(signer -> {
+                KeyPair keyPair = algo.generateKeyPair(entropy);
 
-            KeyPair keyPair = algo.generateKeyPair(entropy);
+                var signature = signer.sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
-            var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
+                var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(getState().getIdentifier()),
+                                                            qb64(signature)));
 
-            var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(getState().getIdentifier()),
-                                                        qb64(signature)));
-
-            return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, keyPair, validFrom,
-                                                                                   validFrom.plus(valid), extensions),
-                                                             keyPair.getPrivate()));
+                return new CertificateWithPrivateKey(Certificates.selfSign(false, dn, keyPair, validFrom,
+                                                                           validFrom.plus(valid), extensions),
+                                                     keyPair.getPrivate());
+            });
         }
 
         @Override
-        public void rotate() {
-            final var rotated = StereotomyImpl.this.rotate(getState());
-            if (rotated.isEmpty()) {
-                throw new IllegalStateException("could not rotate the state for identifier: " + getIdentifier());
-            }
-            setState(rotated.get());
+        public CompletableFuture<Void> rotate() {
+            return StereotomyImpl.this.rotate(getState()).thenApply(state -> {
+                setState(state);
+                return null;
+            });
         }
 
         @Override
-        public void rotate(Builder spec) {
-            final var rotated = StereotomyImpl.this.rotate(getState(), spec);
-            if (rotated.isEmpty()) {
-                throw new IllegalStateException("could not rotate the state for identifier: " + getIdentifier());
-            }
-            setState(rotated.get());
+        public CompletableFuture<Void> rotate(Builder spec) {
+            return StereotomyImpl.this.rotate(getState(), spec).thenApply(state -> {
+                setState(state);
+                return null;
+            });
         }
 
         @Override
-        public void seal(InteractionSpecification.Builder spec) {
-            final var sealed = StereotomyImpl.this.seal(getState(), spec);
-            if (sealed.isEmpty()) {
-                throw new IllegalStateException("could not generate seal for identifier: " + getIdentifier());
-            }
-            setState(sealed.get());
+        public CompletableFuture<Void> seal(InteractionSpecification.Builder spec) {
+            return StereotomyImpl.this.seal(getState(), spec).thenApply(ks -> {
+                setState(ks);
+                return null;
+            });
         }
 
         private StereotomyImpl getEnclosingInstance() {
@@ -373,22 +359,12 @@ public class StereotomyImpl implements Stereotomy {
 
     @Override
     public <D extends Identifier> CompletableFuture<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates) {
-        final var lookup = kerl.getKeyState(coordinates);
-        if (lookup.isEmpty()) {
-            log.warn("Identifier has no key state: {}", coordinates);
-            return Optional.empty();
-        }
-        return Optional.of(new ControlledIdentifierImpl<D>(lookup.get()));
+        return kerl.getKeyState(coordinates).thenApply(lookup -> new ControlledIdentifierImpl<D>(lookup));
     }
 
     @Override
     public <D extends Identifier> CompletableFuture<ControlledIdentifier<D>> controlOf(D identifier) {
-        final var lookup = kerl.getKeyState(identifier);
-        if (lookup.isEmpty()) {
-            log.warn("Identifier has no key state: {}", identifier);
-            return Optional.empty();
-        }
-        return Optional.of(new ControlledIdentifierImpl<D>(lookup.get()));
+        return kerl.getKeyState(identifier).thenApply(lookup -> new ControlledIdentifierImpl<D>(lookup));
     }
 
     @Override
@@ -398,12 +374,8 @@ public class StereotomyImpl implements Stereotomy {
 
     @Override
     public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
-        var state = getKeyState(coordinates);
-        if (state.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
+        return getKeyState(coordinates).thenApply(state -> new Verifier.DefaultVerifier(state.getKeys()
+                                                                                             .get(coordinates.getKeyIndex())));
     }
 
     @Override
@@ -415,23 +387,7 @@ public class StereotomyImpl implements Stereotomy {
     public <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(Identifier controller,
                                                                                            IdentifierSpecification.Builder<T> spec) {
         var event = inception(controller, spec);
-        KeyState state;
-        try {
-            state = kerl.append(event).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier(), e);
-            return Optional.empty();
-        }
-
-        if (state == null) {
-            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
-            return Optional.empty();
-        }
-        ControlledIdentifier<T> cid = new ControlledIdentifierImpl<>(state);
-
-        log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
-                 cid.getIdentifier(), cid.getCoordinates());
-        return Optional.of(cid);
+        return kerl.append(event).thenApply(ks -> new ControlledIdentifierImpl<>(ks));
     }
 
     @Override
@@ -443,33 +399,33 @@ public class StereotomyImpl implements Stereotomy {
         return keyStore.getKey(keyCoords);
     }
 
-    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex,
-                                         Optional<EstablishmentEvent> lastEstablishmentEvent) {
-        if (lastEstablishmentEvent.isEmpty()) {
+    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex, EstablishmentEvent lastEstablishmentEvent) {
+        if (lastEstablishmentEvent == null) {
             return Optional.empty();
         }
-        KeyCoordinates keyCoords = KeyCoordinates.of(lastEstablishmentEvent.get(), keyIndex);
+        KeyCoordinates keyCoords = KeyCoordinates.of(lastEstablishmentEvent, keyIndex);
         return getKeyPair(keyCoords);
     }
 
-    private Optional<EstablishmentEvent> getLastEstablishingEvent(KeyState state) {
-        return kerl.getKeyEvent(state.getLastEstablishmentEvent()).map(ke -> (EstablishmentEvent) ke);
+    private CompletableFuture<EstablishmentEvent> getLastEstablishingEvent(KeyState state) {
+        return kerl.getKeyEvent(state.getLastEstablishmentEvent()).thenApply(ke -> (EstablishmentEvent) ke);
     }
 
-    private Optional<Signer> getSigner(KeyState state) {
+    private CompletableFuture<Signer> getSigner(KeyState state) {
         var identifier = state.getIdentifier();
         var signers = new PrivateKey[state.getKeys().size()];
-        var lastEstablishingEvent = getLastEstablishingEvent(state);
-        for (int i = 0; i < signers.length; i++) {
-            Optional<KeyPair> keyPair = getKeyPair(state, i, lastEstablishingEvent);
-            if (keyPair.isEmpty()) {
-                log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
-                         state.getCoordinates(), state.getLastEstablishmentEvent());
-                return Optional.empty();
+        return getLastEstablishingEvent(state).thenApply(e -> {
+            for (int i = 0; i < signers.length; i++) {
+                Optional<KeyPair> keyPair = getKeyPair(state, i, e);
+                if (keyPair.isEmpty()) {
+                    log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
+                             state.getCoordinates(), state.getLastEstablishmentEvent());
+                    return null;
+                }
+                signers[i] = keyPair.get().getPrivate();
             }
-            signers[i] = keyPair.get().getPrivate();
-        }
-        return Optional.of(new Signer.SignerImpl(signers));
+            return new Signer.SignerImpl(signers);
+        });
     }
 
     private <D extends Identifier> InceptionEvent inception(Identifier delegatingIdentifier,
@@ -500,34 +456,31 @@ public class StereotomyImpl implements Stereotomy {
         return event;
     }
 
-    private KeyEvent interaction(KeyState state, InteractionSpecification.Builder spec) {
+    private CompletableFuture<KeyEvent> interaction(KeyState state, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
-        Optional<EstablishmentEvent> lastEstablishmentEvent = getLastEstablishingEvent(state);
-        if (lastEstablishmentEvent.isEmpty()) {
-            log.warn("missing establishment event: {} can't find: {}", kerl.getKeyEvent(state.getCoordinates()).get(),
-                     state.getLastEstablishmentEvent());
-            return null;
-        }
-        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of(lastEstablishmentEvent.get(), 0);
 
-        Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
+        return getLastEstablishingEvent(state).thenApply(le -> {
+            KeyCoordinates currentKeyCoordinates = KeyCoordinates.of(le, 0);
 
-        if (keyPair.isEmpty()) {
-            log.warn("Key pair for identifier not found in keystore: {}", identifier);
-        }
+            Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
-        specification.setPriorEventDigest(state.getDigest())
-                     .setLastEvent(state.getCoordinates())
-                     .setIdentifier(identifier)
-                     .setSigner(new SignerImpl(keyPair.get().getPrivate()));
+            if (keyPair.isEmpty()) {
+                log.warn("Key pair for identifier not found in keystore: {}", identifier);
+            }
 
-        KeyEvent event = eventFactory.interaction(specification.build());
-        return event;
+            specification.setPriorEventDigest(state.getDigest())
+                         .setLastEvent(state.getCoordinates())
+                         .setIdentifier(identifier)
+                         .setSigner(new SignerImpl(keyPair.get().getPrivate()));
+
+            return eventFactory.interaction(specification.build());
+        });
     }
 
-    private <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
-                                                                                   IdentifierSpecification.Builder<I> spec) {
+    @SuppressWarnings("unchecked")
+    private <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
+                                                                                            IdentifierSpecification.Builder<I> spec) {
         // The delegated inception
         var event = inception(delegator.getIdentifier(), spec);
 
@@ -540,59 +493,52 @@ public class StereotomyImpl implements Stereotomy {
                                                                                                 .longValue())));
 
         // Interaction event with the seal
-        var interaction = interaction(delegator, seals);
+        return interaction(delegator, seals).thenCompose(interaction -> {
+            // Attachment of the interaction event, verifying the delegated inception
+            var attachment = eventFactory.attachment(event,
+                                                     new AttachmentImpl(EventSeal.construct(interaction.getIdentifier(),
+                                                                                            interaction.hash(kerl.getDigestAlgorithm()),
+                                                                                            interaction.getSequenceNumber()
+                                                                                                       .longValue())));
+            return kerl.append(Arrays.asList(event, interaction), Arrays.asList(attachment));
+        }).thenApply(states -> {
+            // The new key state for the delegated identifier
+            KeyState delegatedState = states.get(0);
 
-        // Attachment of the interaction event, verifying the delegated inception
-        var attachment = eventFactory.attachment(event,
-                                                 new AttachmentImpl(EventSeal.construct(interaction.getIdentifier(),
-                                                                                        interaction.hash(kerl.getDigestAlgorithm()),
-                                                                                        interaction.getSequenceNumber()
-                                                                                                   .longValue())));
+            if (delegatedState == null) {
+                log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
+                return Optional.empty();
+            }
 
-        // Append the states - this is direct mode, all in our local KERL for now
-        List<KeyState> states;
-        try {
-            states = kerl.append(Arrays.asList(event, interaction), Arrays.asList(attachment)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Unable to create new identifier", e);
-            return Optional.empty();
-        }
+            // Update delegating state. Bit of a hack at the moment
+            KeyState delegatingState = states.get(1);
+            if (delegator instanceof ControlledIdentifierImpl<?> controller) {
+                controller.setState(delegatingState);
+            }
 
-        // The new key state for the delegated identifier
-        KeyState delegatedState = states.get(0);
+            // Finally, the new delegated identifier
+            ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
 
-        if (delegatedState == null) {
-            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
-            return Optional.empty();
-        }
-
-        // Update delegating state. Bit of a hack at the moment
-        KeyState delegatingState = states.get(1);
-        if (delegator instanceof ControlledIdentifierImpl<?> controller) {
-            controller.setState(delegatingState);
-        }
-
-        // Finally, the new delegated identifier
-        ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
-
-        log.info("New {} delegator: {} identifier: {} coordinates: {}",
-                 spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
-                 cid.getIdentifier(), cid.getCoordinates());
-        return Optional.of(cid);
+            log.info("New {} delegator: {} identifier: {} coordinates: {}",
+                     spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
+                     cid.getIdentifier(), cid.getCoordinates());
+            return cid;
+        }).thenApply(cid -> (ControlledIdentifier<I>) cid);
     }
 
-    private Optional<KeyState> rotate(KeyState state) {
+    private CompletableFuture<KeyState> rotate(KeyState state) {
         return rotate(state, RotationSpecification.newBuilder());
     }
 
-    private Optional<KeyState> rotate(KeyState state, RotationSpecification.Builder spec) {
+    private CompletableFuture<KeyState> rotate(KeyState state, RotationSpecification.Builder spec) {
         var delegatingIdentifier = state.getDelegatingIdentifier();
         return (delegatingIdentifier.isEmpty() ||
                 delegatingIdentifier.get().equals(Identifier.NONE)) ? rotateUndelegated(state, spec)
                                                                     : rotateDelegated(state, spec);
     }
 
-    private RotationEvent rotate(RotationSpecification.Builder spec, KeyState state, boolean delegated) {
+    private CompletableFuture<RotationEvent> rotate(RotationSpecification.Builder spec, KeyState state,
+                                                    boolean delegated) {
         RotationSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
 
@@ -601,96 +547,45 @@ public class StereotomyImpl implements Stereotomy {
             return null;
         }
 
-        var lastEstablishing = getLastEstablishingEvent(state);
-        if (lastEstablishing.isEmpty()) {
-            log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
-            return null;
-        }
-        EstablishmentEvent establishing = lastEstablishing.get();
-        var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
+        return getLastEstablishingEvent(state).thenApply(establishing -> {
+            var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
 
-        KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
-                                      .orElseThrow(() -> new IllegalArgumentException("next key pair for identifier not found in keystore: "
-                                      + currentKeyCoordinates));
+            KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
+                                          .orElseThrow(() -> new IllegalArgumentException("next key pair for identifier not found in keystore: "
+                                          + currentKeyCoordinates));
 
-        KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
+            KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
 
-        specification.setSigningThreshold(unweighted(1))
-                     .setIdentifier(identifier)
-                     .setDigestAlgorithm(kerl.getDigestAlgorithm())
-                     .setCurrentCoords(state.getCoordinates())
-                     .setCurrentDigest(state.getDigest())
-                     .setKey(nextKeyPair.getPublic())
-                     .setNextKeys(List.of(newNextKeyPair.getPublic()))
-                     .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
+            specification.setSigningThreshold(unweighted(1))
+                         .setIdentifier(identifier)
+                         .setDigestAlgorithm(kerl.getDigestAlgorithm())
+                         .setCurrentCoords(state.getCoordinates())
+                         .setCurrentDigest(state.getDigest())
+                         .setKey(nextKeyPair.getPublic())
+                         .setNextKeys(List.of(newNextKeyPair.getPublic()))
+                         .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
 
-        RotationEvent event = eventFactory.rotation(specification.build(), delegated);
-        KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
+            RotationEvent event = eventFactory.rotation(specification.build(), delegated);
+            KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
 
-        keyStore.storeKey(nextKeyCoordinates, nextKeyPair);
-        keyStore.storeNextKey(nextKeyCoordinates, newNextKeyPair);
+            keyStore.storeKey(nextKeyCoordinates, nextKeyPair);
+            keyStore.storeNextKey(nextKeyCoordinates, newNextKeyPair);
 
-        keyStore.removeKey(currentKeyCoordinates);
-        keyStore.removeNextKey(currentKeyCoordinates);
-        return event;
+            keyStore.removeKey(currentKeyCoordinates);
+            keyStore.removeNextKey(currentKeyCoordinates);
+            return event;
+        });
     }
 
-    private Optional<KeyState> rotateDelegated(KeyState state, RotationSpecification.Builder spec) {
-        RotationEvent event = rotate(spec, state, true);
-        if (event == null) {
-            return Optional.empty();
-        }
-
-        KeyState newState;
-        try {
-            newState = kerl.append(event).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Identifier cannot be rotated: {} cannot append event", state.getIdentifier(), e);
-            return Optional.empty();
-        }
-
-        var delegator = newState.getDelegatingIdentifier();
-        log.info("Rotated delegator: {} identifier: {} coordinates: {} old coordinates: {}", delegator.get(),
-                 state.getIdentifier(), newState.getCoordinates(), state.getCoordinates());
-
-        return Optional.of(newState);
+    private CompletableFuture<KeyState> rotateDelegated(KeyState state, RotationSpecification.Builder spec) {
+        return rotate(spec, state, true).thenCompose(re -> kerl.append(re));
     }
 
-    private Optional<KeyState> rotateUndelegated(KeyState state, RotationSpecification.Builder spec) {
-        RotationEvent event = rotate(spec, state, false);
-        if (event == null) {
-            return Optional.empty();
-        }
-
-        KeyState newState;
-        try {
-            newState = kerl.append(event).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Identifier cannot be rotated: {} cannot append event", state.getIdentifier(), e);
-            return Optional.empty();
-        }
-
-        log.info("Rotated identifier: {} coordinates: {} old coordinates: {}", state.getIdentifier(),
-                 newState.getCoordinates(), state.getCoordinates());
-
-        return Optional.of(newState);
+    private CompletableFuture<KeyState> rotateUndelegated(KeyState state, RotationSpecification.Builder spec) {
+        return rotate(spec, state, false).thenCompose(event -> kerl.append(event));
     }
 
-    private Optional<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {
-        KeyEvent event = interaction(state, spec);
-        if (event == null) {
-            return Optional.empty();
-        }
-        KeyState newKeyState;
-        try {
-            newKeyState = kerl.append(event).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Cannot append seal event for: {}", state.getIdentifier(), e);
-            return Optional.empty();
-        }
-        if (newKeyState == null) {
-            return Optional.empty();
-        }
-        return Optional.of(newKeyState);
+    private CompletableFuture<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {
+        return interaction(state, spec).thenCompose(event -> kerl.append(event));
     }
 }

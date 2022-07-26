@@ -77,10 +77,8 @@ public class StereotomyTests {
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
         i.rotate();
         i.rotate();
-        var opti = kel.kerl(i.getIdentifier());
-        assertNotNull(opti);
-        assertFalse(opti.get() == null);
-        var iKerl = opti.get();
+        var iKerl = kel.kerl(i.getIdentifier()).get();
+        assertNotNull(iKerl);
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());
