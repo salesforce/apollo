@@ -8,7 +8,6 @@
 package com.salesforce.apollo.stereotomy.caching;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -36,12 +35,18 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
 
     @Override
     public CompletableFuture<Void> append(List<AttachmentEvent> event) {
-        return complete(kerl -> kerl.append(event));
+        try {
+            return complete(kerl -> kerl.append(event));
+        } catch (Throwable t) {
+            var fs = new CompletableFuture<Void>();
+            fs.completeExceptionally(t);
+            return fs;
+        }
     }
 
     @Override
-    public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
-        return complete(kerl -> kerl(identifier));
+    public CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
+        return complete(kerl -> kerl.kerl(identifier));
     }
 
 }

@@ -11,8 +11,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.InteractionEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 
@@ -64,11 +64,6 @@ public class InteractionEventImpl extends KeyEventImpl implements InteractionEve
     @Override
     public KeyEvent_ toKeyEvent_() {
         return KeyEvent_.newBuilder().setInteraction(event).build();
-    }
-
-    @Override
-    public String toString() {
-        return "InteractionEventImpl\n" + event + "\n";
     }
 
     @Override

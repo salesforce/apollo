@@ -9,8 +9,8 @@ package com.salesforce.apollo.stereotomy;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.crypto.Digest;
@@ -47,13 +47,9 @@ public interface KEL {
     /**
      * Answer the Verifier using key state at the supplied key coordinates
      */
-    default public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
-        var state = getKeyState(coordinates.getEstablishmentEvent());
-        if (state.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
+    default public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
+        return getKeyState(coordinates.getEstablishmentEvent()).thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()
+                                                                                                               .get(coordinates.getKeyIndex())));
     }
 
     /**
@@ -77,7 +73,7 @@ public interface KEL {
     /**
      * Answer the Attachment for the coordinates
      */
-    Optional<Attachment> getAttachment(EventCoordinates coordinates);
+    CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates);
 
     /**
      * The digest algorithm used
@@ -87,22 +83,22 @@ public interface KEL {
     /**
      * Answer the KeyEvent that has the matching digest
      */
-    Optional<KeyEvent> getKeyEvent(Digest digest);
+    CompletableFuture<KeyEvent> getKeyEvent(Digest digest);
 
     /**
      * Answer the KeyEvent of the coordinates
      */
-    Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates);
+    CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates);
 
     /**
      * Answer the KeyState of the coordinates
      */
-    Optional<KeyState> getKeyState(EventCoordinates coordinates);
+    CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates);
 
     /**
      * Answer the current KeyState of an identifier
      */
-    Optional<KeyState> getKeyState(Identifier identifier);
+    CompletableFuture<KeyState> getKeyState(Identifier identifier);
 
     /**
      * Answer the combined KeyState and Attachment for this state
@@ -110,11 +106,13 @@ public interface KEL {
      * @param coordinates
      * @return the KeyStateWithAttachments for these coordinates
      */
-    default Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        var state = getKeyState(coordinates);
-        if (state.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(new KeyStateWithAttachments(state.get(), getAttachment(coordinates).get()));
+    default CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        return getKeyState(coordinates).thenApply(ks -> {
+            try {
+                return new KeyStateWithAttachments(ks, getAttachment(coordinates).get());
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        });
     }
 }

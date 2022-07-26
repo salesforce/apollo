@@ -89,11 +89,6 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
     }
 
     @Override
-    public String toString() {
-        return "\n" + event + "\n";
-    }
-
-    @Override
     protected ByteString toByteString() {
         return event.toByteString();
     }

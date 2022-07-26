@@ -14,9 +14,9 @@ package thoth;
 
 
 service KerlDht {
-    rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
-    rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
-    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc append (stereotomy.services.KeyEventsContext) returns (stereotomy.services.KeyStates) {}
+    rpc appendKERL (stereotomy.services.KERLContext) returns (stereotomy.services.KeyStates) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (stereotomy.services.KeyStates) {}
     rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
     rpc appendValidations (ValidationsContext) returns (google.protobuf.Empty) {}
     

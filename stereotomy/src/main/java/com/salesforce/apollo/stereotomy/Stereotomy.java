@@ -26,6 +26,7 @@ import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 
 /**
  * The Controller interface
@@ -140,8 +141,14 @@ public interface Stereotomy {
     Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier();
 
     /**
+     * Answer a new delegated ControlledIdentifier
+     */
+    <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(Identifier controller,
+                                                                           Builder<T> specification);
+
+    /**
      * Answer a new ControlledIdentifier created from the supplied specification
      * prototype and Identifier.NONE as the base identifier
      */
-    Optional<ControlledIdentifier<? extends Identifier>> newIdentifier(IdentifierSpecification.Builder<? super Identifier> spec);
+    <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec);
 }

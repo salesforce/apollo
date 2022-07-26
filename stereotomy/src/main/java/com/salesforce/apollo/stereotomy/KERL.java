@@ -6,9 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -68,5 +69,39 @@ public interface KERL extends KEL {
 
     CompletableFuture<Void> append(List<AttachmentEvent> events);
 
-    Optional<List<EventWithAttachments>> kerl(Identifier identifier);
+    default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
+        // TODO use a real DB query instead of this really expensive iterative lookup
+        return getKeyState(identifier).thenApply(ks -> ks.getCoordinates())
+                                      .thenCompose(c -> getKeyEvent(c).thenCompose(ks -> kerl(ks)));
+    }
+
+    private CompletableFuture<EventWithAttachments> completeKerl(EventCoordinates c,
+                                                                 List<EventWithAttachments> result) {
+        if (c == null) {
+            var fs = new CompletableFuture<EventWithAttachments>();
+            fs.complete(null);
+            return fs;
+        }
+        return getAttachment(c).thenCombine(getKeyEvent(c), (a, e) -> {
+            result.add(new EventWithAttachments(e, a));
+            return e.getPrevious();
+        }).thenCompose(coords -> completeKerl(coords, result));
+    }
+
+    private CompletableFuture<List<EventWithAttachments>> kerl(KeyEvent event) {
+        var fs = new CompletableFuture<List<EventWithAttachments>>();
+        var result = new ArrayList<EventWithAttachments>();
+        getAttachment(event.getCoordinates()).thenApply(a -> {
+            result.add(new EventWithAttachments(event, a));
+            return event.getPrevious();
+        }).thenCompose(c -> completeKerl(c, result)).whenComplete((r, t) -> {
+            if (t != null) {
+                fs.completeExceptionally(t);
+            } else {
+                Collections.reverse(result);
+                fs.complete(result);
+            }
+        });
+        return fs;
+    }
 }

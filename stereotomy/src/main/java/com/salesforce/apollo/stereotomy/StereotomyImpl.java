@@ -404,15 +404,15 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier() {
-        return newIdentifier(IdentifierSpecification.newBuilder()).map(id -> (ControlledIdentifier<SelfAddressingIdentifier>) id);
+        return newIdentifier(IdentifierSpecification.newBuilder());
     }
 
     @Override
-    public Optional<ControlledIdentifier<? extends Identifier>> newIdentifier(IdentifierSpecification.Builder<? super Identifier> spec) {
-        var event = inception(Identifier.NONE, spec);
+    public <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(Identifier controller,
+                                                                                  IdentifierSpecification.Builder<T> spec) {
+        var event = inception(controller, spec);
         KeyState state;
         try {
             state = kerl.append(event).get();
@@ -425,11 +425,16 @@ public class StereotomyImpl implements Stereotomy {
             log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
             return Optional.empty();
         }
-        ControlledIdentifier<?> cid = new ControlledIdentifierImpl<>(state);
+        ControlledIdentifier<T> cid = new ControlledIdentifierImpl<>(state);
 
         log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
                  cid.getIdentifier(), cid.getCoordinates());
         return Optional.of(cid);
+    }
+
+    @Override
+    public <T extends Identifier> Optional<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec) {
+        return newIdentifier(Identifier.NONE, spec);
     }
 
     private Optional<KeyPair> getKeyPair(KeyCoordinates keyCoords) {

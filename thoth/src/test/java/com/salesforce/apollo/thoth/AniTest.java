@@ -19,10 +19,12 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.thoth.Ani.AniParameters;
@@ -41,7 +43,9 @@ public class AniTest extends AbstractDhtTest {
 
         Context<Member> context = Context.newBuilder().setCardinality(dhts.size()).build();
         var validator = stereotomy.newIdentifier().get();
-        Sakshi sakshi = new Sakshi(validator, validator.newEphemeral().get());
+        final var ephemeral = validator.newEphemeral().get();
+        Sakshi sakshi = new Sakshi(validator, new BasicIdentifier(ephemeral.getPublic()),
+                                   new SignerImpl(ephemeral.getPrivate()));
 
         Map<Identifier, Integer> validators = new HashMap<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);

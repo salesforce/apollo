@@ -136,7 +136,7 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
         return complete(kel -> kel.getAttachment(coordinates));
     }
 
@@ -146,32 +146,32 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
-    }
-
-    @Override
-    public Optional<KeyEvent> getKeyEvent(Digest digest) {
+    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
         return complete(kel -> kel.getKeyEvent(digest));
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
         return complete(kel -> kel.getKeyEvent(coordinates));
     }
 
     @Override
-    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
         return complete(kel -> Optional.ofNullable(ksCoords.get(coordinates)));
     }
 
     @Override
-    public Optional<KeyState> getKeyState(Identifier identifier) {
+    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
         return complete(kel -> Optional.ofNullable(ksCurrent.get(identifier)));
     }
 
     @Override
-    public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+    public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
+    }
+
+    @Override
+    public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
         return complete(kel -> kel.getVerifier(coordinates));
     }
 
@@ -186,9 +186,11 @@ public class CachingKEL<K extends KEL> implements KEL {
         return complete(kel -> {
             coords.forEach(c -> {
                 var ks = kel.getKeyState(c);
-                if (!ks.isEmpty()) {
-                    loaded.put(c, ks.get());
-                }
+                ks.whenComplete((state, t) -> {
+                    if (t != null) {
+                        loaded.put(c, state);
+                    }
+                });
             });
             return loaded;
         });
@@ -199,9 +201,11 @@ public class CachingKEL<K extends KEL> implements KEL {
         return complete(kel -> {
             ids.forEach(id -> {
                 var ks = kel.getKeyState(id);
-                if (!ks.isEmpty()) {
-                    loaded.put(id, ks.get());
-                }
+                ks.whenComplete((state, t) -> {
+                    if (t != null) {
+                        loaded.put(id, state);
+                    }
+                });
             });
             return loaded;
         });

@@ -18,6 +18,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesforce.apollo.comm.Link;
@@ -29,11 +30,11 @@ import com.salesforce.apollo.comm.Link;
 
 public interface DhtService extends Link {
 
-    ListenableFuture<Empty> append(KERL_ kerl);
+    ListenableFuture<KeyStates> append(KERL_ kerl);
 
-    ListenableFuture<Empty> append(List<KeyEvent_> events);
+    ListenableFuture<KeyStates> append(List<KeyEvent_> events);
 
-    ListenableFuture<Empty> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
+    ListenableFuture<KeyStates> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
     ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
 
@@ -51,7 +52,7 @@ public interface DhtService extends Link {
 
     ListenableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates);
 
-    ListenableFuture<Validations> getValidations(EventCoords coordinates);
-
     ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
+
+    ListenableFuture<Validations> getValidations(EventCoords coordinates);
 }

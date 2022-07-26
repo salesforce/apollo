@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -55,6 +56,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Update;
@@ -75,10 +77,13 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.grpc.Dht;
 import com.salesforce.apollo.thoth.grpc.DhtClient;
 import com.salesforce.apollo.thoth.grpc.DhtServer;
@@ -109,7 +114,7 @@ import liquibase.ui.UIService;
  * @author hal.hildebrand
  *
  */
-public class KerlDHT {
+public class KerlDHT implements ProtoKERLService {
     public static class CompletionException extends Exception {
 
         private static final long serialVersionUID = 1L;
@@ -253,6 +258,12 @@ public class KerlDHT {
         return fs;
     }
 
+    static <T> CompletableFuture<T> completeIt(T result) {
+        var fs = new CompletableFuture<T>();
+        fs.complete(result);
+        return fs;
+    }
+
     private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> complete, T result) {
         return complete.thenCompose(b -> {
             var fs = new CompletableFuture<T>();
@@ -269,9 +280,8 @@ public class KerlDHT {
     private final Context<Member>                                             context;
     private final CommonCommunications<DhtService, Dht>                       dhtComms;
     private final Executor                                                    executor;
-    private final ScheduledExecutorService                                    scheduler;
-    private final Duration                                                    frequency;
     private final double                                                      fpr;
+    private final Duration                                                    frequency;
     private final CachingKERL                                                 kerl;
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
@@ -279,6 +289,7 @@ public class KerlDHT {
     private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final Reconcile                                                   reconciliation = new Reconcile();
+    private final ScheduledExecutorService                                    scheduler;
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final TemporalAmount                                              timeout;
@@ -317,29 +328,33 @@ public class KerlDHT {
         });
     }
 
-    public CompletableFuture<Void> append(KERL_ kerl) {
+    @Override
+    public CompletableFuture<List<KeyState_>> append(KERL_ kerl) {
         if (kerl.getEventsList().isEmpty()) {
-            return complete(null);
+            return completeIt(Collections.emptyList());
         }
         final var event = kerl.getEventsList().get(0);
         Digest identifier = digestOf(event);
         if (identifier == null) {
-            return complete(null);
+            return completeIt(Collections.emptyList());
         }
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStates>();
+        HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
-                                                                                          isTimedOut, tally,
-                                                                                          destination, "append kerl"),
+                                             (tally, futureSailor,
+                                              destination) -> mutate(result, gathered, futureSailor, identifier,
+                                                                     isTimedOut, tally, destination, "append kerl"),
                                              null);
-        return complete(majority, null);
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
-    public CompletableFuture<Void> append(List<KeyEvent_> events) {
+    @Override
+    public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
         if (events.isEmpty()) {
             return complete(null);
         }
@@ -351,93 +366,114 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStates>();
+        HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
-                                                                                          isTimedOut, tally,
-                                                                                          destination, "append events"),
+                                             (tally, futureSailor,
+                                              destination) -> mutate(result, gathered, futureSailor, identifier,
+                                                                     isTimedOut, tally, destination, "append events"),
                                              null);
-        return complete(majority, null);
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
-    public CompletableFuture<Void> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
+    @Override
+    public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
         if (events.isEmpty()) {
-            return complete(null);
+            return completeIt(Collections.emptyList());
         }
         final var event = events.get(0);
         Digest identifier = digestOf(event);
         if (identifier == null) {
-            return complete(null);
+            return completeIt(Collections.emptyList());
         }
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStates>();
+        HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events, attachments),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
-                                                                                          isTimedOut, tally,
-                                                                                          destination, "append events"),
+                                             (tally, futureSailor,
+                                              destination) -> mutate(result, gathered, futureSailor, identifier,
+                                                                     isTimedOut, tally, destination, "append events"),
                                              null);
-        return complete(majority, null);
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
-    public CompletableFuture<Void> appendAttachments(List<AttachmentEvent> events) {
+    @Override
+    public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> events) {
         if (events.isEmpty()) {
-            return complete(null);
+            return completeIt(Empty.getDefaultInstance());
         }
         final var event = events.get(0);
-        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
+        Digest identifier = digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
-            return complete(null);
+            return completeIt(Empty.getDefaultInstance());
         }
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<Empty>();
+        HashMultiset<Empty> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.appendAttachments(events),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
                                              (tally, futureSailor,
-                                              destination) -> mutate(futureSailor, identifier, isTimedOut, tally,
-                                                                     destination, "append attachments"),
+                                              destination) -> mutate(result, gathered, futureSailor, identifier,
+                                                                     isTimedOut, tally, destination,
+                                                                     "append attachments"),
                                              null);
-        return complete(majority, null);
+        return result;
     }
 
     public CompletableFuture<Void> appendValidations(List<Validations> validations) {
         if (validations.isEmpty()) {
-            return complete(null);
+            return completeIt(null);
         }
         final var event = validations.get(0);
-        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
+        Digest identifier = digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
-            return complete(null);
+            return completeIt(null);
         }
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<Empty>();
+        HashMultiset<Empty> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.appendValidations(validations),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
                                              (tally, futureSailor,
-                                              destination) -> mutate(futureSailor, identifier, isTimedOut, tally,
-                                                                     destination, "append validations"),
+                                              destination) -> mutate(result, gathered, futureSailor, identifier,
+                                                                     isTimedOut, tally, destination,
+                                                                     "append validations"),
                                              null);
-        return complete(majority, null);
+        return complete(majority, (Void) null);
     }
 
+    public KERL asKERL() {
+        return new DelegatedKERL(this, digestAlgorithm());
+    }
+
+    public DigestAlgorithm digestAlgorithm() {
+        return kerlPool.getDigestAlgorithm();
+    }
+
+    @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(Attachment.getDefaultInstance());
         }
-        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
-            return complete(null);
+            return completeIt(Attachment.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -454,13 +490,14 @@ public class KerlDHT {
         return result;
     }
 
+    @Override
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
         if (identifier == null) {
-            return complete(null);
+            return completeIt(KERL_.getDefaultInstance());
         }
-        Digest digest = extracted().digest(identifier.toByteString());
+        Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KERL_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -477,13 +514,21 @@ public class KerlDHT {
         return result;
     }
 
+    @Override
+    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
+        var fs = new CompletableFuture<KeyEvent_>();
+        fs.completeExceptionally(new UnsupportedOperationException("this implementation does not support lookup by digest"));
+        return fs;
+    }
+
+    @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(KeyEvent_.getDefaultInstance());
         }
-        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KeyEvent_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -500,13 +545,14 @@ public class KerlDHT {
         return result;
     }
 
+    @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(KeyState_.getDefaultInstance());
         }
-        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KeyState_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -524,13 +570,14 @@ public class KerlDHT {
         return result;
     }
 
+    @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
         if (identifier == null) {
-            return complete(null);
+            return completeIt(KeyState_.getDefaultInstance());
         }
-        Digest digest = extracted().digest(identifier.toByteString());
+        Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KeyState_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -547,13 +594,14 @@ public class KerlDHT {
         return result;
     }
 
+    @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(KeyStateWithAttachments_.getDefaultInstance());
         }
-        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KeyStateWithAttachments_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -573,11 +621,11 @@ public class KerlDHT {
 
     public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
         }
-        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return complete(null);
+            return completeIt(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -598,11 +646,11 @@ public class KerlDHT {
 
     public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
         if (coordinates == null) {
-            return complete(null);
+            return completeIt(Validations.getDefaultInstance());
         }
-        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
-            return complete(null);
+            return completeIt(Validations.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -617,10 +665,6 @@ public class KerlDHT {
                                                                    Validations.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
-    }
-
-    private boolean completeExceptionally(CompletableFuture<?> result) {
-        return result.completeExceptionally(new CompletionException("Unable to achieve majority read"));
     }
 
     public void start(ScheduledExecutorService scheduler, Duration duration) {
@@ -642,6 +686,10 @@ public class KerlDHT {
 
     private <T> CompletableFuture<T> complete(Function<ProtoKERLAdapter, CompletableFuture<T>> func) {
         return func.apply(new ProtoKERLAdapter(kerl));
+    }
+
+    private boolean completeExceptionally(CompletableFuture<?> result) {
+        return result.completeExceptionally(new CompletionException("Unable to achieve majority read"));
     }
 
     private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
@@ -746,11 +794,11 @@ public class KerlDHT {
     }
 
     private Digest digestOf(InceptionEvent event) {
-        return extracted().digest(event.getIdentifier().toByteString());
+        return digestAlgorithm().digest(event.getIdentifier().toByteString());
     }
 
     private Digest digestOf(InteractionEvent event) {
-        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return digestAlgorithm().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private Digest digestOf(final KeyEvent_ event) {
@@ -772,11 +820,7 @@ public class KerlDHT {
     }
 
     private Digest digestOf(RotationEvent event) {
-        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
-    }
-
-    private DigestAlgorithm extracted() {
-        return kerlPool.getDigestAlgorithm();
+        return digestAlgorithm().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private void initializeSchema() {
@@ -810,8 +854,8 @@ public class KerlDHT {
             Digest end = ring.hash(member);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, extracted().getLast()));
-                intervals.add(new KeyInterval(extracted().getOrigin(), begin));
+                intervals.add(new KeyInterval(end, digestAlgorithm().getLast()));
+                intervals.add(new KeyInterval(digestAlgorithm().getOrigin(), begin));
             } else {
                 intervals.add(new KeyInterval(begin, end));
             }
@@ -819,14 +863,16 @@ public class KerlDHT {
         return new CombinedIntervals(intervals);
     }
 
-    private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,
-                           Supplier<Boolean> isTimedOut, AtomicInteger tally,
-                           Destination<Member, DhtService> destination, String action) {
+    private <T> boolean mutate(CompletableFuture<T> result, HashMultiset<T> gathered,
+                               Optional<ListenableFuture<T>> futureSailor, Digest identifier,
+                               Supplier<Boolean> isTimedOut, AtomicInteger tally,
+                               Destination<Member, DhtService> destination, String action) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
+        T content = null;
         try {
-            futureSailor.get().get();
+            content = futureSailor.get().get();
         } catch (InterruptedException e) {
             log.warn("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(), member, e);
             return !isTimedOut.get();
@@ -847,9 +893,27 @@ public class KerlDHT {
             }
             return !isTimedOut.get();
         }
-        int count = tally.incrementAndGet();
-        log.trace("{}: {} tally: {} on: {}", action, identifier, count, member.getId());
-        return !isTimedOut.get();
+        if (content != null) {
+            log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
+            gathered.add(content);
+            var max = gathered.entrySet()
+                              .stream()
+                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                              .orElse(null);
+            if (max != null) {
+                if (max.getCount() >= context.majority()) {
+                    result.complete(max.getElement());
+                    return false;
+                } else {
+                    tally.set(max.getCount());
+                }
+            }
+            return !isTimedOut.get();
+        } else {
+            log.debug("Failed {}: {} from: {}  on: {}", action, identifier, destination.member().getId(),
+                      member.getId());
+            return !isTimedOut.get();
+        }
     }
 
     private Biff populate(CombinedIntervals keyIntervals) {
@@ -969,11 +1033,5 @@ public class KerlDHT {
             return false;
         }
         return true;
-    }
-
-    static <T> CompletableFuture<T> completeIt(T result) {
-        var fs = new CompletableFuture<T>();
-        fs.complete(result);
-        return fs;
     }
 }

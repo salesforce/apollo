@@ -40,6 +40,11 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
+ * Implements the chain Reliable Broadcast of Aleph.
+ * 
+ * The public methods of the Adder correspond to the gossip replication protocol
+ * actions.
+ * 
  * @author hal.hildebrand
  *
  */
@@ -174,6 +179,11 @@ public class Adder {
         });
     }
 
+    /**
+     * Answer the Have state of the receiver - commits, prevotes, and proposed units
+     * 
+     * @return the Have state of the receiver
+     */
     public Have have() {
         return locked(() -> {
             return Have.newBuilder()
@@ -185,6 +195,11 @@ public class Adder {
         });
     }
 
+    /**
+     * Produce a Unit on this node.
+     *
+     * @param u - the Unit to produce
+     */
     public void produce(Unit u) {
         if (u.epoch() != epoch) {
             throw new IllegalStateException("incorrect epoch: " + u + " only accepting: " + epoch);
@@ -631,6 +646,9 @@ public class Adder {
         return bff.toBff();
     }
 
+    /**
+     * Answer the bloom filter with the units the receiver has
+     */
     private Biff haveUnits() {
         var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
                                         conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
@@ -639,6 +657,13 @@ public class Adder {
         return bff.toBff();
     }
 
+    /**
+     * Exclusively lock the state of the receiver
+     *
+     * @param <T>
+     * @param call
+     * @return
+     */
     private <T> T locked(Callable<T> call) {
         lock.lock();
         try {
@@ -650,6 +675,11 @@ public class Adder {
         }
     }
 
+    /**
+     * Exclusively lock the state of the receiver
+     *
+     * @param r
+     */
     private void locked(Runnable r) {
         lock.lock();
         try {
@@ -674,6 +704,11 @@ public class Adder {
         pus.values().forEach(pu -> builder.addUnits(pu));
     }
 
+    /**
+     * Terminal state. The waiting unit is output to the DAG the receiver maintains.
+     *
+     * @param wpu
+     */
     private void output(Waiting wpu) {
         boolean valid = wpu.height() == 0 || wpu.height() - 1 <= round;
         assert valid : wpu + " is not <= " + round;

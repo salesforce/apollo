@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.thoth;
 
-import java.security.KeyPair;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,7 +17,6 @@ import com.salesfoce.apollo.thoth.proto.Validated;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -32,16 +30,18 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class Sakshi {
+    private final Signer                                         signer;
     private final ControlledIdentifier<SelfAddressingIdentifier> validator;
-    private final KeyPair                                        witness;
+    private final Ident                                          witness;
 
-    public Sakshi(ControlledIdentifier<SelfAddressingIdentifier> validator, KeyPair keyPair) {
+    public Sakshi(ControlledIdentifier<SelfAddressingIdentifier> validator, BasicIdentifier witness, Signer signer) {
         this.validator = validator;
-        this.witness = keyPair;
+        this.witness = witness.toIdent();
+        this.signer = signer;
     }
 
     public Ident getWitness() {
-        return new BasicIdentifier(witness.getPublic()).toIdent();
+        return witness;
     }
 
     public Validated validate(List<KeyEventWithAttachments> events) {
@@ -58,11 +58,19 @@ public class Sakshi {
     }
 
     public Optional<Sig> witness(KeyEvent_ evente, Ident identifier) {
-        if (!getWitness().equals(identifier)) {
+        if (!witness.equals(identifier)) {
             return Optional.empty();
         }
-        var signer = new SignerImpl(witness.getPrivate());
         return Optional.of(signer.sign(evente.toByteString()).toSig());
+    }
+
+    public Signatures witness(List<KeyEvent_> events, Ident identifier) {
+        if (!witness.equals(identifier)) {
+            return Signatures.getDefaultInstance();
+        }
+        var builder = Signatures.newBuilder();
+        events.forEach(ke -> builder.addSignatures(signer.sign(ke.toByteString()).toSig()));
+        return builder.build();
     }
 
     private Optional<JohnHancock> validate(KeyEventWithAttachments kea) {
@@ -84,12 +92,6 @@ public class Sakshi {
 
     // Confirm that the attachments witness the event
     private boolean witnessed(KeyEventWithAttachments kea) {
-        // TODO
         return true;
-    }
-
-    public Signatures witness(List<KeyEvent_> keyEventList, Ident identifier) {
-        // TODO Auto-generated method stub
-        return null;
     }
 }

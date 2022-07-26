@@ -23,7 +23,6 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -41,7 +40,6 @@ public class IdentifierSpecification<D extends Identifier> {
 
         private final EnumSet<ConfigurationTrait> configurationTraits           = EnumSet.noneOf(ConfigurationTrait.class);
         private Class<? extends Identifier>       derivation                    = SelfAddressingIdentifier.class;
-        private Format                            format                        = Format.PROTOBUF;
         private DigestAlgorithm                   identifierDigestAlgorithm     = DigestAlgorithm.BLAKE3_256;
         private final List<PublicKey>             keys                          = new ArrayList<>();
         private final List<PublicKey>             nextKeys                      = new ArrayList<>();
@@ -143,8 +141,8 @@ public class IdentifierSpecification<D extends Identifier> {
             }
 
             // validation is provided by spec consumer
-            return new IdentifierSpecification<D>(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
-                                                  signer, nextKeyConfigurationDigest, witnessThreshold, witnesses,
+            return new IdentifierSpecification<D>(derivation, identifierDigestAlgorithm, signingThreshold, keys, signer,
+                                                  nextKeyConfigurationDigest, witnessThreshold, witnesses,
                                                   configurationTraits, version, selfAddressingDigestAlgorithm,
                                                   signatureAlgorithm);
         }
@@ -167,10 +165,6 @@ public class IdentifierSpecification<D extends Identifier> {
 
         public Class<? extends Identifier> getDerivation() {
             return derivation;
-        }
-
-        public Format getFormat() {
-            return format;
         }
 
         public DigestAlgorithm getIdentifierDigestAlgorithm() {
@@ -239,11 +233,6 @@ public class IdentifierSpecification<D extends Identifier> {
 
         public Builder<D> setEstablishmentEventsOnly() {
             configurationTraits.add(ConfigurationTrait.ESTABLISHMENT_EVENTS_ONLY);
-            return this;
-        }
-
-        public Builder<D> setFormat(Format format) {
-            this.format = requireNonNull(format);
             return this;
         }
 
@@ -356,7 +345,7 @@ public class IdentifierSpecification<D extends Identifier> {
     }
 
     public static <D extends Identifier> D identifier(IdentifierSpecification<D> spec, byte[] inceptionStatement) {
-        return (D) Identifier.identifier(spec, ByteBuffer.wrap(inceptionStatement));
+        return Identifier.identifier(spec, ByteBuffer.wrap(inceptionStatement));
     }
 
     public static <D extends Identifier> Builder<D> newBuilder() {
@@ -374,7 +363,6 @@ public class IdentifierSpecification<D extends Identifier> {
 
     private final Set<ConfigurationTrait>     configurationTraits;
     private final Class<? extends Identifier> derivation;
-    private final Format                      format;
     private final DigestAlgorithm             identifierDigestAlgorithm;
     private final List<PublicKey>             keys;
     private final Digest                      nextKeys;
@@ -387,14 +375,13 @@ public class IdentifierSpecification<D extends Identifier> {
     private final int                         witnessThreshold;
 
     private IdentifierSpecification(Class<? extends Identifier> derivation, DigestAlgorithm identifierDigestAlgorithm,
-                                    Format format, SigningThreshold signingThreshold, List<PublicKey> keys,
-                                    Signer signer, Digest nextKeys, int witnessThreshold,
-                                    List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-                                    Version version, DigestAlgorithm selfAddressingDigestAlgorithm,
+                                    SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer,
+                                    Digest nextKeys, int witnessThreshold, List<BasicIdentifier> witnesses,
+                                    Set<ConfigurationTrait> configurationTraits, Version version,
+                                    DigestAlgorithm selfAddressingDigestAlgorithm,
                                     SignatureAlgorithm signatureAlgorithm) {
         this.derivation = derivation;
         this.identifierDigestAlgorithm = identifierDigestAlgorithm;
-        this.format = format;
         this.signingThreshold = signingThreshold;
         this.keys = List.copyOf(keys);
         this.signer = signer;
@@ -413,10 +400,6 @@ public class IdentifierSpecification<D extends Identifier> {
 
     public Class<? extends Identifier> getDerivation() {
         return derivation;
-    }
-
-    public Format getFormat() {
-        return format;
     }
 
     public DigestAlgorithm getIdentifierDigestAlgorithm() {

@@ -29,6 +29,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
@@ -57,18 +58,20 @@ public class DhtClient implements DhtService {
         return new DhtService() {
 
             @Override
-            public ListenableFuture<Empty> append(KERL_ kerl) {
-                return wrap(service.append(kerl).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(KERL_ kerl) {
+                return wrap(service.append(kerl).thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
-            public ListenableFuture<Empty> append(List<KeyEvent_> events) {
-                return wrap(service.append(events).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(List<KeyEvent_> events) {
+                return wrap(service.append(events)
+                                   .thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
-            public ListenableFuture<Empty> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
-                return wrap(service.append(events, attachments).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
+                return wrap(service.append(events, attachments)
+                                   .thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
@@ -159,7 +162,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(KERL_ kerl) {
+    public ListenableFuture<KeyStates> append(KERL_ kerl) {
         Context timer = metrics == null ? null : metrics.appendKERLClient().time();
         var request = KERLContext.newBuilder().setContext(context).build();
         if (metrics != null) {
@@ -176,7 +179,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(List<KeyEvent_> keyEventList) {
+    public ListenableFuture<KeyStates> append(List<KeyEvent_> keyEventList) {
         Context timer = metrics == null ? null : metrics.appendEventsClient().time();
         KeyEventsContext request = KeyEventsContext.newBuilder()
                                                    .addAllKeyEvent(keyEventList)
@@ -196,7 +199,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
+    public ListenableFuture<KeyStates> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
         var request = KeyEventWithAttachmentsContext.newBuilder()
                                                     .addAllEvents(eventsList)

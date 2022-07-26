@@ -23,34 +23,35 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class DelegatedKERL implements KERL {
-    private final DigestAlgorithm algorithm;
-    private final KERLService     client;
+    private final DigestAlgorithm  algorithm;
+    private final ProtoKERLService kerl;
 
-    public DelegatedKERL(KERLService client, DigestAlgorithm algorithm) {
-        this.client = client;
+    public DelegatedKERL(ProtoKERLService kerl, DigestAlgorithm algorithm) {
+        this.kerl = kerl;
         this.algorithm = algorithm;
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
-        return client.appendAttachments(events.stream().map(e -> e.toEvent_()).toList()).thenApply(l -> null);
-    }
-
-    @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
-        return client.append(Collections.singletonList(event.toKeyEvent_()))
+        return kerl.append(Collections.singletonList(event.toKeyEvent_()))
                      .thenApply(l -> l.isEmpty() ? null : new KeyStateImpl(l.get(0)));
     }
 
     @Override
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        return kerl.appendAttachments(events.stream().map(e -> e.toEvent_()).toList()).thenApply(l -> null);
+    }
+
+    @Override
     public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
-        return client.append(events.stream().map(ke -> ke.toKeyEvent_()).toList(),
+        return kerl.append(events.stream().map(ke -> ke.toKeyEvent_()).toList(),
                              attachments.stream().map(ae -> ae.toEvent_()).toList())
                      .thenApply(l -> l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
     }
@@ -58,7 +59,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
         try {
-            return Optional.ofNullable(client.getAttachment(coordinates.toEventCoords())
+            return Optional.ofNullable(kerl.getAttachment(coordinates.toEventCoords())
                                              .thenApply(attch -> Attachment.of(attch))
                                              .get());
         } catch (InterruptedException e) {
@@ -77,7 +78,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
         try {
-            return Optional.ofNullable(client.getKeyEvent(digest.toDigeste())
+            return Optional.ofNullable(kerl.getKeyEvent(digest.toDigeste())
                                              .thenApply(event -> ProtobufEventFactory.from(event))
                                              .get());
         } catch (InterruptedException e) {
@@ -91,7 +92,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
         try {
-            return Optional.ofNullable(client.getKeyEvent(coordinates.toEventCoords())
+            return Optional.ofNullable(kerl.getKeyEvent(coordinates.toEventCoords())
                                              .thenApply(event -> ProtobufEventFactory.from(event))
                                              .get());
         } catch (InterruptedException e) {
@@ -105,7 +106,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
         try {
-            return Optional.ofNullable(client.getKeyState(coordinates.toEventCoords())
+            return Optional.ofNullable(kerl.getKeyState(coordinates.toEventCoords())
                                              .thenApply(ks -> new KeyStateImpl(ks))
                                              .get());
         } catch (InterruptedException e) {
@@ -119,7 +120,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<KeyState> getKeyState(Identifier identifier) {
         try {
-            return Optional.ofNullable(client.getKeyState(identifier.toIdent())
+            return Optional.ofNullable(kerl.getKeyState(identifier.toIdent())
                                              .thenApply(ks -> new KeyStateImpl(ks))
                                              .get());
         } catch (InterruptedException e) {
@@ -133,7 +134,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
         try {
-            return Optional.ofNullable(client.getKeyStateWithAttachments(coordinates.toEventCoords())
+            return Optional.ofNullable(kerl.getKeyStateWithAttachments(coordinates.toEventCoords())
                                              .thenApply(ksa -> KeyStateWithAttachments.from(ksa))
                                              .get());
         } catch (InterruptedException e) {
@@ -147,7 +148,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
         try {
-            return Optional.ofNullable(client.getKERL(identifier.toIdent())
+            return Optional.ofNullable(kerl.getKERL(identifier.toIdent())
                                              .thenApply(k -> k.getEventsList()
                                                               .stream()
                                                               .map(kwa -> ProtobufEventFactory.from(kwa))
