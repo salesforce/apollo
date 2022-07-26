@@ -8,9 +8,7 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -41,7 +39,7 @@ public class DelegatedKERL implements KERL {
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
         return kerl.append(Collections.singletonList(event.toKeyEvent_()))
-                     .thenApply(l -> l.isEmpty() ? null : new KeyStateImpl(l.get(0)));
+                   .thenApply(l -> l.isEmpty() ? null : new KeyStateImpl(l.get(0)));
     }
 
     @Override
@@ -52,22 +50,13 @@ public class DelegatedKERL implements KERL {
     @Override
     public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         return kerl.append(events.stream().map(ke -> ke.toKeyEvent_()).toList(),
-                             attachments.stream().map(ae -> ae.toEvent_()).toList())
-                     .thenApply(l -> l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
+                           attachments.stream().map(ae -> ae.toEvent_()).toList())
+                   .thenApply(l -> l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        try {
-            return Optional.ofNullable(kerl.getAttachment(coordinates.toEventCoords())
-                                             .thenApply(attch -> Attachment.of(attch))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        return kerl.getAttachment(coordinates.toEventCoords()).thenApply(attch -> Attachment.of(attch));
     }
 
     @Override
@@ -76,89 +65,34 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        try {
-            return Optional.ofNullable(kerl.getKeyEvent(digest.toDigeste())
-                                             .thenApply(event -> ProtobufEventFactory.from(event))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
+        return kerl.getKeyEvent(digest.toDigeste()).thenApply(event -> ProtobufEventFactory.from(event));
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        try {
-            return Optional.ofNullable(kerl.getKeyEvent(coordinates.toEventCoords())
-                                             .thenApply(event -> ProtobufEventFactory.from(event))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        return kerl.getKeyEvent(coordinates.toEventCoords()).thenApply(event -> ProtobufEventFactory.from(event));
     }
 
     @Override
-    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        try {
-            return Optional.ofNullable(kerl.getKeyState(coordinates.toEventCoords())
-                                             .thenApply(ks -> new KeyStateImpl(ks))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
+        return kerl.getKeyState(coordinates.toEventCoords()).thenApply(ks -> new KeyStateImpl(ks));
     }
 
     @Override
-    public Optional<KeyState> getKeyState(Identifier identifier) {
-        try {
-            return Optional.ofNullable(kerl.getKeyState(identifier.toIdent())
-                                             .thenApply(ks -> new KeyStateImpl(ks))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
+        return kerl.getKeyState(identifier.toIdent()).thenApply(ks -> new KeyStateImpl(ks));
     }
 
     @Override
-    public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        try {
-            return Optional.ofNullable(kerl.getKeyStateWithAttachments(coordinates.toEventCoords())
-                                             .thenApply(ksa -> KeyStateWithAttachments.from(ksa))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        return kerl.getKeyStateWithAttachments(coordinates.toEventCoords())
+                   .thenApply(ksa -> KeyStateWithAttachments.from(ksa));
     }
 
     @Override
-    public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
-        try {
-            return Optional.ofNullable(kerl.getKERL(identifier.toIdent())
-                                             .thenApply(k -> k.getEventsList()
-                                                              .stream()
-                                                              .map(kwa -> ProtobufEventFactory.from(kwa))
-                                                              .toList())
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
+        return kerl.getKERL(identifier.toIdent())
+                   .thenApply(k -> k.getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList());
     }
 }

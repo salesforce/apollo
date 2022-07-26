@@ -7,6 +7,7 @@
 package com.salesforce.apollo.thoth;
 
 import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
 
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -32,11 +33,19 @@ public class Thoth {
 
     public Thoth(Stereotomy stereotomy, SelfAddressingIdentifier controller,
                  Builder<SelfAddressingIdentifier> specification) {
-        final var id = stereotomy.newIdentifier(controller, specification);
-        if (id.isEmpty()) {
+        ControlledIdentifier<SelfAddressingIdentifier> id;
+        try {
+            id = stereotomy.newIdentifier(controller, specification).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e.getCause());
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
+        if (id == null) {
             throw new IllegalStateException("Cannot create identifier");
         }
-        identifier = id.get();
+        identifier = id;
         this.controller = controller;
         inception = InteractionSpecification.newBuilder()
                                             .addAllSeals(Arrays.asList(EventSeal.construct(identifier.getIdentifier(),

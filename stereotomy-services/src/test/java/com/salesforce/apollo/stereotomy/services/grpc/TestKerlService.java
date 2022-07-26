@@ -7,12 +7,10 @@
 package com.salesforce.apollo.stereotomy.services.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.security.SecureRandom;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -27,7 +25,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
@@ -101,7 +98,7 @@ public class TestKerlService {
 
         var opti = service.kerl(i.getIdentifier());
         assertNotNull(opti);
-        assertFalse(opti.isEmpty());
+        assertNotNull(opti.get());
         var iKerl = opti.get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
@@ -112,15 +109,13 @@ public class TestKerlService {
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(5).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(6).event().getIlk());
 
-        Optional<KeyState> keyState = service.getKeyState(i.getIdentifier());
+        var keyState = service.getKeyState(i.getIdentifier()).get();
         assertNotNull(keyState);
-        assertFalse(keyState.isEmpty());
-        assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState.get());
+        assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState);
 
-        keyState = service.getKeyState(i.getCoordinates());
+        keyState = service.getKeyState(i.getCoordinates()).get();
         assertNotNull(keyState);
-        assertFalse(keyState.isEmpty());
-        assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState.get());
+        assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState);
     }
 
     private KERLService setup(Digest context) throws Exception {
