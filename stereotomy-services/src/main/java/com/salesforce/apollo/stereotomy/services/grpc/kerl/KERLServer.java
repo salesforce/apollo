@@ -78,8 +78,11 @@ public class KERLServer extends KERLServiceImplBase {
                                                 : KeyStates.newBuilder().addAllKeyStates(ks).build();
                         responseObserver.onNext(states);
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(states.getSerializedSize());
-                        metrics.outboundAppendEventsResponse().mark(states.getSerializedSize());
+                        if (metrics != null) {
+                            final var serializedSize = states.getSerializedSize();
+                            metrics.outboundBandwidth().mark(serializedSize);
+                            metrics.outboundAppendEventsResponse().mark(serializedSize);
+                        }
                     }
                 });
             }
@@ -138,8 +141,11 @@ public class KERLServer extends KERLServiceImplBase {
                                                 : KeyStates.newBuilder().addAllKeyStates(b).build();
                         responseObserver.onNext(results);
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(results.getSerializedSize());
-                        metrics.outboundAppendKERLResponse().mark(results.getSerializedSize());
+                        if (metrics != null) {
+                            final var serializedSize = results.getSerializedSize();
+                            metrics.outboundBandwidth().mark(serializedSize);
+                            metrics.outboundAppendKERLResponse().mark(serializedSize);
+                        }
                     }
                 });
             }
@@ -171,8 +177,11 @@ public class KERLServer extends KERLServiceImplBase {
                                                 : KeyStates.newBuilder().addAllKeyStates(ks).build();
                         responseObserver.onNext(states);
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(states.getSerializedSize());
-                        metrics.outboundAppendWithAttachmentsResponse().mark(states.getSerializedSize());
+                        if (metrics != null) {
+                            final var serializedSize = states.getSerializedSize();
+                            metrics.outboundBandwidth().mark(serializedSize);
+                            metrics.outboundAppendWithAttachmentsResponse().mark(serializedSize);
+                        }
                     }
                 });
             }
@@ -244,7 +253,7 @@ public class KERLServer extends KERLServiceImplBase {
                         kerl = kerl == null ? KERL_.getDefaultInstance() : kerl;
                         responseObserver.onNext(kerl);
                         responseObserver.onCompleted();
-                        if (metrics == null) {
+                        if (metrics != null) {
                             final var serializedSize = kerl.getSerializedSize();
                             metrics.outboundBandwidth().mark(serializedSize);
                             metrics.outboundGetKERLResponse().mark(serializedSize);
@@ -357,7 +366,7 @@ public class KERLServer extends KERLServiceImplBase {
                         state = state == null ? KeyState_.getDefaultInstance() : state;
                         responseObserver.onNext(state);
                         responseObserver.onCompleted();
-                        if (metrics == null) {
+                        if (metrics != null) {
                             metrics.outboundBandwidth().mark(state.getSerializedSize());
                             metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
                         }
@@ -432,7 +441,7 @@ public class KERLServer extends KERLServiceImplBase {
                         state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
                         responseObserver.onNext(state);
                         responseObserver.onCompleted();
-                        if (metrics == null) {
+                        if (metrics != null) {
                             metrics.outboundBandwidth().mark(state.getSerializedSize());
                             metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
                         }

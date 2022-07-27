@@ -19,7 +19,6 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
@@ -58,7 +57,7 @@ public class KerlTest extends AbstractDhtTest {
         secureRandom.setSeed(new byte[] { 0 });
     }
 
-    @Test
+//    @Test
     public void delegated() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());
@@ -137,7 +136,7 @@ public class KerlTest extends AbstractDhtTest {
         identifier.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
     }
 
-    @Test
+//    @Test
     public void direct() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());

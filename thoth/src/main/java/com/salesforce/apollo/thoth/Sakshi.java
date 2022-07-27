@@ -8,6 +8,7 @@ package com.salesforce.apollo.thoth;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
@@ -77,8 +78,16 @@ public class Sakshi {
         if (!witnessed(kea)) {
             return Optional.empty();
         }
-        Optional<Signer> signer = validator.getSigner();
-        if (signer.isEmpty()) {
+        Signer signer;
+        try {
+            signer = validator.getSigner().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e);
+        }
+        if (signer == null) {
             return Optional.empty();
         }
         KeyEvent_ evente = switch (kea.getEventCase()) {
@@ -87,7 +96,7 @@ public class Sakshi {
         case ROTATION -> ProtobufEventFactory.toKeyEvent(kea.getRotation()).toKeyEvent_();
         default -> null;
         };
-        return (evente == null) ? Optional.empty() : Optional.of(signer.get().sign(evente.toByteString()));
+        return (evente == null) ? Optional.empty() : Optional.of(signer.sign(evente.toByteString()));
     }
 
     // Confirm that the attachments witness the event

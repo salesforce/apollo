@@ -328,8 +328,11 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public CompletableFuture<Void> seal(InteractionSpecification.Builder spec) {
-            return StereotomyImpl.this.seal(getState(), spec).thenApply(ks -> {
+            final var state = getState();
+            return StereotomyImpl.this.seal(state, spec).thenApply(ks -> {
                 setState(ks);
+                log.info("Seal interaction identifier: {} coordinates: {} old coordinates: {}", ks.getIdentifier(),
+                         state.getCoordinates(), ks.getCoordinates());
                 return null;
             });
         }
@@ -387,7 +390,12 @@ public class StereotomyImpl implements Stereotomy {
     public <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(Identifier controller,
                                                                                            IdentifierSpecification.Builder<T> spec) {
         var event = inception(controller, spec);
-        return kerl.append(event).thenApply(ks -> new ControlledIdentifierImpl<>(ks));
+        return kerl.append(event).thenApply(ks -> {
+            var cid = new ControlledIdentifierImpl<T>(ks);
+            log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
+                     cid.getIdentifier(), cid.getCoordinates());
+            return cid;
+        });
     }
 
     @Override
@@ -578,11 +586,21 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     private CompletableFuture<KeyState> rotateDelegated(KeyState state, RotationSpecification.Builder spec) {
-        return rotate(spec, state, true).thenCompose(re -> kerl.append(re));
+        return rotate(spec, state, true).thenCompose(re -> kerl.append(re)).thenApply(ks -> {
+            var delegator = ks.getDelegatingIdentifier();
+            log.info("Rotated delegated: {} identifier: {} coordinates: {} old coordinates: {}", delegator.get(),
+                     state.getIdentifier(), ks.getCoordinates(), state.getCoordinates());
+            return ks;
+        });
     }
 
     private CompletableFuture<KeyState> rotateUndelegated(KeyState state, RotationSpecification.Builder spec) {
-        return rotate(spec, state, false).thenCompose(event -> kerl.append(event));
+        return rotate(spec, state, false).thenCompose(event -> kerl.append(event)).thenApply(ks -> {
+
+            log.info("Rotated identifier: {} coordinates: {} old coordinates: {}", state.getIdentifier(),
+                     ks.getCoordinates(), state.getCoordinates());
+            return ks;
+        });
     }
 
     private CompletableFuture<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {

@@ -50,10 +50,8 @@ public class TestKerlService {
     KERL                     kel;
     final StereotomyKeyStore ks = new MemKeyStore();
     SecureRandom             secureRandom;
-
-    private LocalRouter clientRouter;
-
-    private LocalRouter serverRouter;
+    private LocalRouter      clientRouter;
+    private LocalRouter      serverRouter;
 
     @AfterEach
     public void after() {
@@ -89,17 +87,15 @@ public class TestKerlService {
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        i.rotate();
-        i.seal(InteractionSpecification.newBuilder());
-        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
-        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
-        i.rotate();
-        i.rotate();
+        i.rotate().get();
+        i.seal(InteractionSpecification.newBuilder()).get();
+        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
+        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
+        i.rotate().get();
+        i.rotate().get();
 
-        var opti = service.kerl(i.getIdentifier());
-        assertNotNull(opti);
-        assertNotNull(opti.get());
-        var iKerl = opti.get();
+        var iKerl = service.kerl(i.getIdentifier()).get();
+        assertNotNull(iKerl);
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());
