@@ -25,7 +25,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
@@ -90,11 +89,6 @@ public class KERLClient implements KERLService {
             @Override
             public CompletableFuture<KERL_> getKERL(Ident identifier) {
                 return service.getKERL(identifier);
-            }
-
-            @Override
-            public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-                return service.getKeyEvent(digest);
             }
 
             @Override
@@ -359,41 +353,6 @@ public class KERLClient implements KERLService {
                 f.completeExceptionally(e);
             } catch (ExecutionException e) {
                 f.completeExceptionally(e);
-            }
-        }, r -> r.run());
-        return f;
-    }
-
-    @Override
-    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-        Context timer = metrics == null ? null : metrics.getKeyEventClient().time();
-        EventDigestContext request = EventDigestContext.newBuilder().setDigest(digest).setContext(context).build();
-        final var bsize = request.getSerializedSize();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(bsize);
-            metrics.outboundGetKeyEventRequest().mark(bsize);
-        }
-        var result = client.getKeyEvent(request);
-        var f = new CompletableFuture<KeyEvent_>();
-        result.addListener(() -> {
-            if (timer != null) {
-                timer.stop();
-            }
-            KeyEvent_ ks;
-            try {
-                ks = result.get();
-            } catch (InterruptedException e) {
-                f.completeExceptionally(e);
-                return;
-            } catch (ExecutionException e) {
-                f.completeExceptionally(e.getCause());
-                return;
-            }
-            f.complete(ks.equals(KeyEvent_.getDefaultInstance()) ? null : ks);
-            if (timer != null) {
-                final var serializedSize = ks.getSerializedSize();
-                metrics.inboundBandwidth().mark(serializedSize);
-                metrics.inboundGetKeyEventResponse().mark(serializedSize);
             }
         }, r -> r.run());
         return f;

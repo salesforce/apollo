@@ -13,7 +13,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
@@ -79,11 +78,6 @@ public interface KEL {
      * The digest algorithm used
      */
     DigestAlgorithm getDigestAlgorithm();
-
-    /**
-     * Answer the KeyEvent that has the matching digest
-     */
-    CompletableFuture<KeyEvent> getKeyEvent(Digest digest);
 
     /**
      * Answer the KeyEvent of the coordinates

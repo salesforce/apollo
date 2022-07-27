@@ -16,7 +16,6 @@ import java.util.concurrent.CompletableFuture;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -88,11 +87,6 @@ public class UniKERLDirectPooled {
         @Override
         public DigestAlgorithm getDigestAlgorithm() {
             return kerl.getDigestAlgorithm();
-        }
-
-        @Override
-        public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
-            return kerl.getKeyEvent(digest);
         }
 
         @Override

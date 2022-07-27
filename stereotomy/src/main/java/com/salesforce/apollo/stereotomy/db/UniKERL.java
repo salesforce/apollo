@@ -307,7 +307,6 @@ abstract public class UniKERL implements KERL {
         return digestAlgorithm;
     }
 
-    @Override
     public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
         var fs = new CompletableFuture<KeyEvent>();
         try {

@@ -64,7 +64,6 @@ import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.thoth.proto.Validation;
 import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -188,12 +187,6 @@ public class KerlDHT implements ProtoKERLService {
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
             log.info("get kerl for identifier on: {}", member.getId());
             return complete(k -> k.getKERL(identifier));
-        }
-
-        @Override
-        public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-            log.info("get key event for digest on: {}", member.getId());
-            return complete(k -> k.getKeyEvent(digest));
         }
 
         @Override
@@ -459,7 +452,8 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public KERL asKERL() {
-        return new DelegatedKERL(this, digestAlgorithm());
+        final var delegatedKERL = new DelegatedKERL(this, digestAlgorithm());
+        return new CachingKERL(f -> f.apply(delegatedKERL));
     }
 
     public DigestAlgorithm digestAlgorithm() {
@@ -512,13 +506,6 @@ public class KerlDHT implements ProtoKERLService {
                                                                    KERL_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
-    }
-
-    @Override
-    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-        var fs = new CompletableFuture<KeyEvent_>();
-        fs.completeExceptionally(new UnsupportedOperationException("this implementation does not support lookup by digest"));
-        return fs;
     }
 
     @Override
@@ -883,13 +870,13 @@ public class KerlDHT implements ProtoKERLService {
                     log.trace("Server unavailable action: {} for: {} from: {} on: {}", action, identifier,
                               destination.member().getId(), member.getId());
                 } else {
-                    log.warn("Server status: {} : {} action: {} for: {} from: {} on: {}", sre.getStatus().getCode(),
-                             sre.getStatus().getDescription(), action, identifier, destination.member().getId(),
-                             member.getId());
+                    log.trace("Server status: {} : {} action: {} for: {} from: {} on: {}", sre.getStatus().getCode(),
+                              sre.getStatus().getDescription(), action, identifier, destination.member().getId(),
+                              member.getId());
                 }
             } else {
-                log.warn("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(),
-                         member.getId(), e.getCause());
+                log.trace("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(),
+                          member.getId(), e.getCause());
             }
             return !isTimedOut.get();
         }

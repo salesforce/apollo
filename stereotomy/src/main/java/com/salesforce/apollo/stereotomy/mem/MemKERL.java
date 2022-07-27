@@ -141,14 +141,6 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
-        var fs = new CompletableFuture<KeyEvent>();
-        String coordinates = eventsByHash.get(digest);
-        fs.complete(coordinates == null ? null : events.get(coordinates));
-        return fs;
-    }
-
-    @Override
     public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
         var fs = new CompletableFuture<KeyEvent>();
         fs.complete(events.get(coordinateOrdering(coordinates)));

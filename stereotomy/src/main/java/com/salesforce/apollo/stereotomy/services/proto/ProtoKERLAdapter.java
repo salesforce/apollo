@@ -19,8 +19,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -73,7 +71,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
                                           .map(ae -> new AttachmentEventImpl(ae))
                                           .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
                                           .toList())
-                   .thenApply(l -> l.stream().map(ks -> ks.toKeyState_()).toList());
+                   .thenApply(l -> l.stream().map(ks -> ks == null ? null : ks.toKeyState_()).toList());
     }
 
     @Override
@@ -87,7 +85,8 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-        return kerl.getAttachment(EventCoordinates.from(coordinates)).thenApply(attch -> attch.toAttachemente());
+        return kerl.getAttachment(EventCoordinates.from(coordinates))
+                   .thenApply(attch -> attch == null ? null : attch.toAttachemente());
     }
 
     public DigestAlgorithm getDigestAlgorithm() {
@@ -96,32 +95,30 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
-        return kerl.kerl(Identifier.from(identifier)).thenApply(kerl -> kerl(kerl));
-    }
-
-    @Override
-    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-        return kerl.getKeyEvent(Digest.from(digest)).thenApply(event -> event.toKeyEvent_());
+        return kerl.kerl(Identifier.from(identifier)).thenApply(kerl -> kerl == null ? null : kerl(kerl));
     }
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-        return kerl.getKeyEvent(EventCoordinates.from(coordinates)).thenApply(event -> event.toKeyEvent_());
+        return kerl.getKeyEvent(EventCoordinates.from(coordinates))
+                   .thenApply(event -> event == null ? null : event.toKeyEvent_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-        return kerl.getKeyState(EventCoordinates.from(coordinates)).thenApply(ks -> ks.toKeyState_());
+        return kerl.getKeyState(EventCoordinates.from(coordinates))
+                   .thenApply(ks -> ks == null ? null : ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-        return kerl.getKeyState(Identifier.from(identifier)).thenApply(ks -> ks.toKeyState_());
+        return kerl.getKeyState(Identifier.from(identifier)).thenApply(ks -> ks == null ? null : ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
-        return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords)).thenApply(ksa -> ksa.toEvente());
+        return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
+                   .thenApply(ksa -> ksa == null ? null : ksa.toEvente());
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

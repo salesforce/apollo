@@ -16,6 +16,7 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -29,8 +30,8 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     public CachingKERL(Function<Function<KERL, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                       Caffeine<Identifier, KeyState> curBuilder) {
-        super(kelSupplier, builder, curBuilder);
+                       Caffeine<Identifier, KeyState> curBuilder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+        super(kelSupplier, builder, curBuilder, eventBuilder);
     }
 
     @Override

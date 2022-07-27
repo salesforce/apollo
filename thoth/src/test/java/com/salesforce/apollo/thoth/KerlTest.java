@@ -19,6 +19,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
@@ -130,13 +131,13 @@ public class KerlTest extends AbstractDhtTest {
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        identifier.rotate();
-        identifier.seal(InteractionSpecification.newBuilder());
-        identifier.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
-        identifier.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
+        identifier.rotate().get();
+        identifier.seal(InteractionSpecification.newBuilder()).get();
+        identifier.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
+        identifier.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
     }
 
-//    @Test
+    @Test
     public void direct() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());
@@ -153,16 +154,19 @@ public class KerlTest extends AbstractDhtTest {
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        i.rotate();
-        i.seal(InteractionSpecification.newBuilder());
-        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
-        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
-        i.rotate();
-        i.rotate();
-        var opti = kerl.kerl(i.getIdentifier());
-        assertNotNull(opti);
-        assertNotNull(opti.get());
-        var iKerl = opti.get();
+        i.rotate().get();
+        Thread.sleep(100);
+        i.seal(InteractionSpecification.newBuilder()).get();
+        Thread.sleep(100);
+        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
+        Thread.sleep(100);
+        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
+        Thread.sleep(100);
+        i.rotate().get();
+        Thread.sleep(100);
+        i.rotate().get();
+        Thread.sleep(100);
+        var iKerl = kerl.kerl(i.getIdentifier()).get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());

@@ -12,19 +12,19 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -51,6 +51,15 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class CachingKEL<K extends KEL> implements KEL {
     private static final Logger log = LoggerFactory.getLogger(CachingKEL.class);
 
+    public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder() {
+        return Caffeine.newBuilder()
+                       .maximumSize(10_000)
+                       .expireAfterWrite(Duration.ofMinutes(10))
+                       .removalListener((EventCoordinates coords, KeyEvent e,
+                                         RemovalCause cause) -> log.trace("KeyEvent %s was removed ({}){}", coords,
+                                                                          cause));
+    }
+
     public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
@@ -69,19 +78,21 @@ public class CachingKEL<K extends KEL> implements KEL {
                                                                           cause));
     }
 
-    private final Function<Function<K, ?>, ?>              kelSupplier;
-    private final LoadingCache<EventCoordinates, KeyState> ksCoords;
-    private final LoadingCache<Identifier, KeyState>       ksCurrent;
+    private final Function<Function<K, ?>, ?>                   kelSupplier;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent> keyCoords;
+    private final AsyncLoadingCache<EventCoordinates, KeyState> ksCoords;
+    private final AsyncLoadingCache<Identifier, KeyState>       ksCurrent;
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier) {
-        this(kelSupplier, defaultKsCoordsBuilder(), defaultKsCurrentBuilder());
+        this(kelSupplier, defaultKsCoordsBuilder(), defaultKsCurrentBuilder(), defaultEventCoordsBuilder());
     }
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                      Caffeine<Identifier, KeyState> curBuilder) {
-        ksCoords = builder.build(CacheLoader.bulk(coords -> load(coords)));
-        ksCurrent = curBuilder.build(CacheLoader.bulk(ids -> loadCurrent(ids)));
+                      Caffeine<Identifier, KeyState> curBuilder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+        ksCoords = builder.buildAsync(CacheLoader.bulk(coords -> load(coords)));
+        ksCurrent = curBuilder.buildAsync(CacheLoader.bulk(ids -> loadCurrent(ids)));
         this.kelSupplier = kelSupplier;
+        this.keyCoords = eventBuilder.buildAsync(AsyncCacheLoader.bulk(coords -> loadEvents(coords)));
     }
 
     @Override
@@ -90,7 +101,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             final var fs = kel.append(event);
             fs.whenComplete((ks, t) -> {
                 if (t != null) {
-                    ksCurrent.invalidate(event.getIdentifier());
+                    ksCurrent.synchronous().invalidate(event.getIdentifier());
                 }
             });
             return fs;
@@ -108,7 +119,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             final var fs = kel.append(event);
             fs.whenComplete((ks, t) -> {
                 if (t != null) {
-                    ksCurrent.invalidate(event[0].getIdentifier());
+                    ksCurrent.synchronous().invalidate(event[0].getIdentifier());
                 }
             });
             return fs;
@@ -127,7 +138,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             if (!events.isEmpty()) {
                 fs.whenComplete((ks, t) -> {
                     if (t != null) {
-                        ksCurrent.invalidate(events.get(0).getIdentifier());
+                        ksCurrent.synchronous().invalidate(events.get(0).getIdentifier());
                     }
                 });
             }
@@ -146,23 +157,18 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
-        return complete(kel -> kel.getKeyEvent(digest));
-    }
-
-    @Override
     public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return complete(kel -> kel.getKeyEvent(coordinates));
+        return complete(kel -> keyCoords.get(coordinates));
     }
 
     @Override
     public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
-        return complete(kel -> Optional.ofNullable(ksCoords.get(coordinates)));
+        return complete(kel -> ksCoords.get(coordinates));
     }
 
     @Override
     public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
-        return complete(kel -> Optional.ofNullable(ksCurrent.get(identifier)));
+        return complete(kel -> ksCurrent.get(identifier));
     }
 
     @Override
@@ -184,30 +190,81 @@ public class CachingKEL<K extends KEL> implements KEL {
     private Map<EventCoordinates, KeyState> load(Set<? extends EventCoordinates> coords) {
         var loaded = new HashMap<EventCoordinates, KeyState>();
         return complete(kel -> {
-            coords.forEach(c -> {
-                var ks = kel.getKeyState(c);
-                ks.whenComplete((state, t) -> {
-                    if (t != null) {
-                        loaded.put(c, state);
-                    }
+            CompletableFuture<KeyState> ks = null;
+            for (var c : coords) {
+                if (ks == null) {
+                    ks = kel.getKeyState(c);
+                } else {
+                    ks = ks.thenCompose(ke -> kel.getKeyState(c));
+                }
+                ks.thenApply(state -> {
+                    loaded.put(c, state);
+                    return state;
                 });
-            });
-            return loaded;
+            }
+            try {
+                return ks.thenApply(ke -> loaded).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException e) {
+                log.error("Unable to load key state for coords: {} ", coords, e);
+                throw new IllegalStateException("Unable to load key state for coords: " + coords, e);
+            }
         });
     }
 
     private Map<Identifier, KeyState> loadCurrent(Set<? extends Identifier> ids) {
         var loaded = new HashMap<Identifier, KeyState>();
         return complete(kel -> {
-            ids.forEach(id -> {
-                var ks = kel.getKeyState(id);
-                ks.whenComplete((state, t) -> {
-                    if (t != null) {
-                        loaded.put(id, state);
-                    }
+            CompletableFuture<KeyState> ks = null;
+            for (var id : ids) {
+                if (ks == null) {
+                    ks = kel.getKeyState(id);
+                } else {
+                    ks = ks.thenCompose(ke -> kel.getKeyState(id));
+                }
+                ks.thenApply(state -> {
+                    loaded.put(id, state);
+                    return state;
                 });
-            });
-            return loaded;
+            }
+            try {
+                return ks.thenApply(ke -> loaded).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException e) {
+                log.error("Unable to load key state for ids: {} ", ids, e);
+                throw new IllegalStateException("Unable to load key state for ids: " + ids, e);
+            }
+        });
+    }
+
+    private Map<EventCoordinates, KeyEvent> loadEvents(Set<? extends EventCoordinates> coords) {
+        var loaded = new HashMap<EventCoordinates, KeyEvent>();
+        return complete(kel -> {
+            CompletableFuture<KeyEvent> ks = null;
+            for (var c : coords) {
+                if (ks == null) {
+                    ks = kel.getKeyEvent(c);
+                } else {
+                    ks = ks.thenCompose(ke -> kel.getKeyEvent(c));
+                }
+                ks.thenApply(state -> {
+                    loaded.put(c, state);
+                    return state;
+                });
+            }
+            try {
+                return ks.thenApply(ke -> loaded).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException e) {
+                log.error("Unable to load events for coordinates: {} ", coords, e);
+                throw new IllegalStateException("Unable to load events for coordinates: " + coords, e);
+            }
         });
     }
 }

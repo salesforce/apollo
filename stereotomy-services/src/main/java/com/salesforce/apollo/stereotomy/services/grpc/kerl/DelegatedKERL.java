@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -62,11 +61,6 @@ public class DelegatedKERL implements KERL {
     @Override
     public DigestAlgorithm getDigestAlgorithm() {
         return algorithm;
-    }
-
-    @Override
-    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
-        return kerl.getKeyEvent(digest.toDigeste()).thenApply(event -> ProtobufEventFactory.from(event));
     }
 
     @Override
