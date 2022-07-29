@@ -58,7 +58,7 @@ public class KerlTest extends AbstractDhtTest {
         secureRandom.setSeed(new byte[] { 0 });
     }
 
-//    @Test
+    @Test
     public void delegated() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());
@@ -155,17 +155,11 @@ public class KerlTest extends AbstractDhtTest {
                             CoordinatesSeal.construct(event));
 
         i.rotate().get();
-        Thread.sleep(100);
         i.seal(InteractionSpecification.newBuilder()).get();
-        Thread.sleep(100);
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
-        Thread.sleep(100);
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
-        Thread.sleep(100);
         i.rotate().get();
-        Thread.sleep(100);
         i.rotate().get();
-        Thread.sleep(100);
         var iKerl = kerl.kerl(i.getIdentifier()).get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());

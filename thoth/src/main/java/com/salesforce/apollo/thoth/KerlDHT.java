@@ -257,18 +257,6 @@ public class KerlDHT implements ProtoKERLService {
         return fs;
     }
 
-    private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> complete, T result) {
-        return complete.thenCompose(b -> {
-            var fs = new CompletableFuture<T>();
-            if (!b) {
-                fs.completeExceptionally(new CompletionException("Unable to complete"));
-            } else {
-                fs.complete(result);
-            }
-            return fs;
-        });
-    }
-
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
     private final CommonCommunications<DhtService, Dht>                       dhtComms;
@@ -342,7 +330,7 @@ public class KerlDHT implements ProtoKERLService {
                                              (tally, futureSailor,
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append kerl"),
-                                             null);
+                                             t -> completeIt(result, gathered));
         return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
@@ -368,7 +356,7 @@ public class KerlDHT implements ProtoKERLService {
                                              (tally, futureSailor,
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append events"),
-                                             null);
+                                             t -> completeIt(result, gathered));
         return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
@@ -394,7 +382,7 @@ public class KerlDHT implements ProtoKERLService {
                                              (tally, futureSailor,
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append events"),
-                                             null);
+                                             t -> completeIt(result, gathered));
         return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
@@ -421,7 +409,7 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination,
                                                                      "append attachments"),
-                                             null);
+                                             t -> completeIt(result, gathered));
         return result;
     }
 
@@ -447,8 +435,8 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination,
                                                                      "append validations"),
-                                             null);
-        return complete(majority, (Void) null);
+                                             t -> completeIt(result, gathered));
+        return result.thenApply(e -> null);
     }
 
     public KERL asKERL() {
@@ -679,6 +667,20 @@ public class KerlDHT implements ProtoKERLService {
         return result.completeExceptionally(new CompletionException("Unable to achieve majority read"));
     }
 
+    private <T> void completeIt(CompletableFuture<T> result, HashMultiset<T> gathered) {
+        var max = gathered.entrySet()
+                          .stream()
+                          .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                          .orElse(null);
+        if (max != null) {
+            if (max.getCount() >= context.majority()) {
+                result.complete(max.getElement());
+            } else {
+                completeExceptionally(result);
+            }
+        }
+    }
+
     private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
         Connection connection;
         try {
@@ -861,8 +863,8 @@ public class KerlDHT implements ProtoKERLService {
         try {
             content = futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.warn("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(), member, e);
-            return !isTimedOut.get();
+            Thread.currentThread().interrupt();
+            return false;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
@@ -889,8 +891,7 @@ public class KerlDHT implements ProtoKERLService {
                               .orElse(null);
             if (max != null) {
                 if (max.getCount() >= context.majority()) {
-                    result.complete(max.getElement());
-                    return false;
+                    tally.set(max.getCount());
                 } else {
                     tally.set(max.getCount());
                 }
@@ -949,6 +950,7 @@ public class KerlDHT implements ProtoKERLService {
             if (max != null) {
                 if (max.getCount() >= context.majority()) {
                     result.complete(max.getElement());
+                    tally.set(max.getCount());
                     return false;
                 } else {
                     tally.set(max.getCount());

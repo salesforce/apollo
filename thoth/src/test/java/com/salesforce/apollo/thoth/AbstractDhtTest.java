@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -128,13 +129,13 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
-                                             Executors.newFixedThreadPool(4), null);
+                                             ForkJoinPool.commonPool(), null);
         router.setMember(member);
         routers.put(member, router);
+        final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,
-                 new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2),
-                             Executors.newSingleThreadScheduledExecutor(), 0.125, null));
+                 new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
+                             ForkJoinPool.commonPool(), Duration.ofSeconds(200), scheduler, 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

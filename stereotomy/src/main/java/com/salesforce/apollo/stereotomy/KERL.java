@@ -71,8 +71,15 @@ public interface KERL extends KEL {
 
     default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
         // TODO use a real DB query instead of this really expensive iterative lookup
-        return getKeyState(identifier).thenApply(ks -> ks.getCoordinates())
-                                      .thenCompose(c -> getKeyEvent(c).thenCompose(ks -> kerl(ks)));
+        return getKeyState(identifier).thenApply(ks -> ks == null ? null : ks.getCoordinates())
+                                      .thenCompose(c -> c == null ? complete(Collections.emptyList())
+                                                                  : getKeyEvent(c).thenCompose(ks -> kerl(ks)));
+    }
+
+    private <T> CompletableFuture<T> complete(T value) {
+        var fs = new CompletableFuture<T>();
+        fs.complete(value);
+        return fs;
     }
 
     private CompletableFuture<EventWithAttachments> completeKerl(EventCoordinates c,

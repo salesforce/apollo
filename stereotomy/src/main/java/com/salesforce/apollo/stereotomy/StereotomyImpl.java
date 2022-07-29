@@ -501,7 +501,7 @@ public class StereotomyImpl implements Stereotomy {
                                                                                                 .longValue())));
 
         // Interaction event with the seal
-        return interaction(delegator, seals).thenCompose(interaction -> {
+        return kerl.append(event).thenCompose(ks -> interaction(delegator, seals)).thenCompose(interaction -> {
             // Attachment of the interaction event, verifying the delegated inception
             var attachment = eventFactory.attachment(event,
                                                      new AttachmentImpl(EventSeal.construct(interaction.getIdentifier(),
