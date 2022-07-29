@@ -75,9 +75,14 @@ abstract public class UniKERL implements KERL {
             return;
         }
         for (Seal s : attachment.attachments().seals()) {
-            dsl.insertInto(ATTACHMENT)
+            final var bytes = s.toSealed().toByteArray();
+            dsl.mergeInto(ATTACHMENT)
+               .usingDual()
+               .on(ATTACHMENT.FOR.eq(id.value1()))
+               .and(ATTACHMENT.SEAL.eq(bytes))
+               .whenNotMatchedThenInsert()
                .set(ATTACHMENT.FOR, id.value1())
-               .set(ATTACHMENT.SEAL, s.toSealed().toByteArray())
+               .set(ATTACHMENT.SEAL, bytes)
                .execute();
         }
         for (var entry : attachment.attachments().endorsements().entrySet()) {

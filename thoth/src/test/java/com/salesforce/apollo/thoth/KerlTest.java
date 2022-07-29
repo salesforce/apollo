@@ -72,69 +72,69 @@ public class KerlTest extends AbstractDhtTest {
         ControlledIdentifier<? extends Identifier> base = controller.newIdentifier().get();
 
         var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());
-        ControlledIdentifier<? extends Identifier> identifier = opti2.get();
+        ControlledIdentifier<? extends Identifier> delegated = opti2.get();
 
         // identifier
-        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
-        var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
+        assertTrue(delegated.getIdentifier() instanceof SelfAddressingIdentifier);
+        var sap = (SelfAddressingIdentifier) delegated.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
         assertEquals("2287a5841816c8c02d4e188376b1f1a50dfcdc9eaac17610deba4ae33bb617f4",
                      Hex.hex(sap.getDigest().getBytes()));
 
-        assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
+        assertEquals(1, ((Unweighted) delegated.getSigningThreshold()).getThreshold());
 
         // keys
-        assertEquals(1, identifier.getKeys().size());
-        assertNotNull(identifier.getKeys().get(0));
+        assertEquals(1, delegated.getKeys().size());
+        assertNotNull(delegated.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(identifier.getLastEstablishmentEvent())
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(delegated.getLastEstablishmentEvent())
                                                                              .get();
-        assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
+        assertEquals(delegated.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
         var keyStoreKeyPair = ks.getKey(keyCoordinates);
         assertTrue(keyStoreKeyPair.isPresent());
-        assertEquals(keyStoreKeyPair.get().getPublic(), identifier.getKeys().get(0));
+        assertEquals(keyStoreKeyPair.get().getPublic(), delegated.getKeys().get(0));
 
         // nextKeys
-        assertTrue(identifier.getNextKeyConfigurationDigest().isPresent());
+        assertTrue(delegated.getNextKeyConfigurationDigest().isPresent());
         var keyStoreNextKeyPair = ks.getNextKey(keyCoordinates);
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest()
+                                                               delegated.getNextKeyConfigurationDigest()
                                                                          .get()
                                                                          .getAlgorithm());
-        assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
+        assertEquals(expectedNextKeys, delegated.getNextKeyConfigurationDigest().get());
 
         // witnesses
-        assertEquals(0, identifier.getWitnessThreshold());
-        assertEquals(0, identifier.getWitnesses().size());
+        assertEquals(0, delegated.getWitnessThreshold());
+        assertEquals(0, delegated.getWitnesses().size());
 
         // config
-        assertEquals(0, identifier.configurationTraits().size());
+        assertEquals(0, delegated.configurationTraits().size());
 
         // lastEstablishmentEvent
-        assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
+        assertEquals(delegated.getIdentifier(), lastEstablishmentEvent.getIdentifier());
         assertEquals(ULong.valueOf(0), lastEstablishmentEvent.getSequenceNumber());
-        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
+        assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), delegated.getDigest());
 
         // lastEvent
-        assertNull(kerl.getKeyEvent(identifier.getLastEvent()).get());
+        assertNull(kerl.getKeyEvent(delegated.getLastEvent()).get());
 
         // delegation
-        assertTrue(identifier.getDelegatingIdentifier().isPresent());
-        assertTrue(identifier.isDelegated());
+        assertTrue(delegated.getDelegatingIdentifier().isPresent());
+        assertTrue(delegated.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(identifier.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()).get());
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        identifier.rotate().get();
-        identifier.seal(InteractionSpecification.newBuilder()).get();
-        identifier.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
-        identifier.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
+        delegated.rotate().get();
+        delegated.seal(InteractionSpecification.newBuilder()).get();
+        delegated.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
+        delegated.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
     }
 
     @Test
@@ -169,6 +169,5 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(KeyEvent.INTERACTION_TYPE, iKerl.get(4).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(5).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(6).event().getIlk());
-
     }
 }

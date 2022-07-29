@@ -208,9 +208,9 @@ public class CachingKEL<K extends KEL> implements KEL {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (ExecutionException e) {
-                log.error("Unable to load key state for coords: {} ", coords, e);
-                throw new IllegalStateException("Unable to load key state for coords: " + coords, e);
+                log.trace("Unable to load key state for coords: {} ", coords, e);
             }
+            return loaded;
         });
     }
 
@@ -235,9 +235,9 @@ public class CachingKEL<K extends KEL> implements KEL {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (ExecutionException e) {
-                log.error("Unable to load key state for ids: {} ", ids, e);
-                throw new IllegalStateException("Unable to load key state for ids: " + ids, e);
+                log.trace("Unable to load key state for ids: {} ", ids, e);
             }
+            return loaded;
         });
     }
 
@@ -260,11 +260,10 @@ public class CachingKEL<K extends KEL> implements KEL {
                 return ks.thenApply(ke -> loaded).get();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return null;
             } catch (ExecutionException e) {
-                log.error("Unable to load events for coordinates: {} ", coords, e);
-                throw new IllegalStateException("Unable to load events for coordinates: " + coords, e);
+                log.trace("Unable to load events for coordinates: {} ", coords, e);
             }
+            return loaded;
         });
     }
 }

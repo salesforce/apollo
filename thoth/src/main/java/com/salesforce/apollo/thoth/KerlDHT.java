@@ -331,7 +331,7 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append kerl"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(ks -> ks.getKeyStatesList());
+        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
     }
 
     @Override
@@ -357,7 +357,7 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(ks -> ks.getKeyStatesList());
+        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
     }
 
     @Override
@@ -383,7 +383,7 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> mutate(result, gathered, futureSailor, identifier,
                                                                      isTimedOut, tally, destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(ks -> ks.getKeyStatesList());
+        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
     }
 
     @Override
@@ -410,7 +410,7 @@ public class KerlDHT implements ProtoKERLService {
                                                                      isTimedOut, tally, destination,
                                                                      "append attachments"),
                                              t -> completeIt(result, gathered));
-        return result;
+        return majority.thenCompose(n -> result);
     }
 
     public CompletableFuture<Void> appendValidations(List<Validations> validations) {
@@ -436,7 +436,7 @@ public class KerlDHT implements ProtoKERLService {
                                                                      isTimedOut, tally, destination,
                                                                      "append validations"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(e -> null);
+        return majority.thenCompose(n -> result.thenApply(e -> null));
     }
 
     public KERL asKERL() {
