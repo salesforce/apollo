@@ -6,16 +6,24 @@
  */
 package com.salesforce.apollo.thoth;
 
-import java.util.Arrays;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.event.Seal.EventSeal;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
-import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
  * 
@@ -26,57 +34,100 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
  */
 public class Thoth {
 
-    @SuppressWarnings("unused")
-    private final SelfAddressingIdentifier                       controller;
-    private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
-    private final InteractionSpecification                       inception;
+    private static final Logger log = LoggerFactory.getLogger(Thoth.class);
 
-    public Thoth(Stereotomy stereotomy, SelfAddressingIdentifier controller,
-                 Builder<SelfAddressingIdentifier> specification) {
-        ControlledIdentifier<SelfAddressingIdentifier> id;
-        try {
-            id = stereotomy.newIdentifier(controller, specification).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e.getCause());
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
+    private volatile SelfAddressingIdentifier                       controller;
+    private volatile ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    private volatile Consumer<EventCoordinates>                     pending;
+    private final Stereotomy                                        stereotomy;
+
+    public Thoth(Stereotomy stereotomy) {
+        this.stereotomy = stereotomy;
+    }
+
+    public void commit(EventCoordinates coords) {
+        final var commiting = pending;
+
+        if (commiting == null) {
+            log.info("No pending commitment for delegation: {}", coords);
         }
-        if (id == null) {
-            throw new IllegalStateException("Cannot create identifier");
-        }
-        identifier = id;
-        this.controller = controller;
-        inception = InteractionSpecification.newBuilder()
-                                            .addAllSeals(Arrays.asList(EventSeal.construct(identifier.getIdentifier(),
-                                                                                           identifier.getDigest(),
-                                                                                           identifier.getSequenceNumber()
-                                                                                                     .longValue())))
-                                            .build();
+
+        commiting.accept(coords);
     }
 
     public SelfAddressingIdentifier identifier() {
+        if (identifier == null) {
+            throw new IllegalStateException("Identifier has not been established");
+        }
         return identifier.getIdentifier();
     }
 
-    public InteractionSpecification inception() {
+    public DelegatedInceptionEvent inception(SelfAddressingIdentifier controller,
+                                             IdentifierSpecification.Builder<SelfAddressingIdentifier> specification) {
+        final var inception = stereotomy.newDelegatedIdentifier(controller, specification);
+        pending = inception(inception);
         return inception;
     }
 
     public ControlledIdentifierMember member() {
-        return new ControlledIdentifierMember(identifier);
+        final var id = identifier;
+        if (id == null) {
+            throw new IllegalStateException("Inception has not been commited");
+        }
+        return new ControlledIdentifierMember(id);
     }
 
-    public InteractionSpecification rotate() {
-        identifier.rotate();
-        // Seal we need to verify the inception, based on the delegated inception
-        // location
-        return InteractionSpecification.newBuilder()
-                                       .addAllSeals(Arrays.asList(EventSeal.construct(identifier.getIdentifier(),
-                                                                                      identifier.getDigest(),
-                                                                                      identifier.getSequenceNumber()
-                                                                                                .longValue())))
-                                       .build();
+    public CompletableFuture<DelegatedRotationEvent> rotate(RotationSpecification.Builder specification) {
+        if (identifier == null) {
+            throw new IllegalStateException("Identifier has not been established");
+        }
+        if (pending != null) {
+            throw new IllegalStateException("Still pending previous commitment");
+        }
+        final var rot = identifier.delegateRotate(specification);
+        rot.whenComplete((rotation, t) -> {
+            pending = rotation(rotation);
+        });
+        return rot;
     }
 
+    private Consumer<EventCoordinates> inception(DelegatedInceptionEvent incp) {
+        return coordinates -> {
+            var commitment = ProtobufEventFactory.INSTANCE.attachment(incp,
+                                                                      new AttachmentImpl(Seal.EventSeal.construct(coordinates.getIdentifier(),
+                                                                                                                  coordinates.getDigest(),
+                                                                                                                  coordinates.getSequenceNumber()
+                                                                                                                             .longValue())));
+            stereotomy.commit(incp, commitment).whenComplete((cid, t) -> {
+                if (t != null) {
+                    log.error("Unable to commit inception: {}", incp, t);
+                    return;
+                }
+                identifier = cid;
+                controller = (SelfAddressingIdentifier) identifier.getDelegatingIdentifier().get();
+                pending = null;
+                log.info("Created delegated identifier: {} controller: {}", identifier.getIdentifier(), controller);
+            });
+        };
+    }
+
+    private Consumer<EventCoordinates> rotation(DelegatedRotationEvent rot) {
+        return coordinates -> {
+            var commitment = ProtobufEventFactory.INSTANCE.attachment(rot,
+                                                                      new AttachmentImpl(Seal.EventSeal.construct(coordinates.getIdentifier(),
+                                                                                                                  coordinates.getDigest(),
+                                                                                                                  coordinates.getSequenceNumber()
+                                                                                                                             .longValue())));
+            identifier.commit(rot, commitment).whenComplete((cid, t) -> {
+                if (t != null) {
+                    log.error("Unable to commit rotation: {} for: {} controller: {}", rot, identifier.getIdentifier(),
+                              controller, t);
+                    return;
+                }
+                pending = null;
+                log.info("Rotated delegated identifier: {} controller: {}", identifier.getCoordinates(), controller,
+                         identifier.getCoordinates());
+            });
+        };
+    }
 }

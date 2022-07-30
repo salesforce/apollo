@@ -19,6 +19,8 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -36,6 +38,22 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return the binding of the identifier to the current key state
      */
     BoundIdentifier<D> bind();
+
+    /**
+     * Commit the delegated rotation and commitment to the receiver's KERL
+     * 
+     * @param delegation - the delegated rotation event
+     * @param commitment - the event attachment that commits the delegation
+     * @return the future commitment of the keystate
+     */
+    CompletableFuture<Void> commit(DelegatedRotationEvent delegation, AttachmentEvent commitment);
+
+    /**
+     * Construct a delegated rotation event
+     *
+     * @return the future DelegatedRotation event
+     */
+    CompletableFuture<DelegatedRotationEvent> delegateRotate(RotationSpecification.Builder spec);
 
     /**
      * @return the KERL of the receiver identifier
@@ -128,6 +146,5 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Publish the SealingEvent using the supplied specification
      */
-    CompletableFuture<Void> seal(InteractionSpecification.Builder spec);
-
+    CompletableFuture<EventCoordinates> seal(InteractionSpecification.Builder spec);
 }

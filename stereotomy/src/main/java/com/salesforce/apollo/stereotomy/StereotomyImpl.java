@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -39,7 +41,10 @@ import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -245,6 +250,20 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
+        public CompletableFuture<Void> commit(DelegatedRotationEvent delegation, AttachmentEvent commitment) {
+            return kerl.append(Collections.singletonList(delegation), Collections.singletonList(commitment))
+                       .thenApply(ks -> {
+                           setState(ks.get(0));
+                           return null;
+                       });
+        }
+
+        @Override
+        public CompletableFuture<DelegatedRotationEvent> delegateRotate(Builder spec) {
+            return StereotomyImpl.this.rotate(spec, getState(), true).thenApply(rot -> (DelegatedRotationEvent) rot);
+        }
+
+        @Override
         public boolean equals(Object obj) {
             if (this == obj) {
                 return true;
@@ -327,13 +346,13 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public CompletableFuture<Void> seal(InteractionSpecification.Builder spec) {
+        public CompletableFuture<EventCoordinates> seal(InteractionSpecification.Builder spec) {
             final var state = getState();
             return StereotomyImpl.this.seal(state, spec).thenApply(ks -> {
                 setState(ks);
                 log.info("Seal interaction identifier: {} coordinates: {} old coordinates: {}", ks.getIdentifier(),
                          state.getCoordinates(), ks.getCoordinates());
-                return null;
+                return ks.getCoordinates();
             });
         }
 
@@ -366,8 +385,23 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
+    public CompletableFuture<ControlledIdentifier<SelfAddressingIdentifier>> commit(DelegatedInceptionEvent delegation,
+                                                                                    AttachmentEvent commitment) {
+        return kerl.append(Arrays.asList(delegation), Arrays.asList(commitment)).thenApply(ks -> {
+            var cid = new ControlledIdentifierImpl<SelfAddressingIdentifier>(ks.get(0));
+            log.info("New delegated identifier: {} coordinates: {}", cid.getIdentifier(), cid.getCoordinates());
+            return cid;
+        });
+    }
+
+    @Override
     public <D extends Identifier> CompletableFuture<ControlledIdentifier<D>> controlOf(D identifier) {
         return kerl.getKeyState(identifier).thenApply(lookup -> new ControlledIdentifierImpl<D>(lookup));
+    }
+
+    @Override
+    public DigestAlgorithm digestAlgorithm() {
+        return kerl.getDigestAlgorithm();
     }
 
     @Override
@@ -379,6 +413,12 @@ public class StereotomyImpl implements Stereotomy {
     public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
         return getKeyState(coordinates).thenApply(state -> new Verifier.DefaultVerifier(state.getKeys()
                                                                                              .get(coordinates.getKeyIndex())));
+    }
+
+    @Override
+    public DelegatedInceptionEvent newDelegatedIdentifier(Identifier controller,
+                                                          IdentifierSpecification.Builder<SelfAddressingIdentifier> specification) {
+        return (DelegatedInceptionEvent) inception(controller, specification);
     }
 
     @Override
