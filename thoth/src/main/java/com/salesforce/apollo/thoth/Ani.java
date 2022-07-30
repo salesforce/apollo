@@ -33,6 +33,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.Filtered;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -148,7 +149,22 @@ public class Ani {
             @Override
             public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                      InputStream message) {
-                return null; // TODO
+                try {
+                    return dht.getKeyState(coordinates.toEventCoords())
+                              .thenApply(ks -> new KeyStateImpl(ks))
+                              .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                              .thenApply(v -> v.filtered(threshold, signature, message))
+                              .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new Filtered(false, null);
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return new Filtered(false, null);
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return new Filtered(false, null);
+                }
             }
 
             @Override
@@ -169,19 +185,62 @@ public class Ani {
 
             @Override
             public boolean validate(EventCoordinates coordinates) {
-                return true; // TODO - lol
+                try {
+                    return dht.getKeyEvent(coordinates.toEventCoords())
+                              .thenApply(ke -> ProtobufEventFactory.from(ke))
+                              .thenCompose(ke -> Ani.this.validate(ke))
+                              .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
             }
 
             @Override
             public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-                return true; // TODO
+                try {
+                    return dht.getKeyState(coordinates.toEventCoords())
+                              .thenApply(ks -> new KeyStateImpl(ks))
+                              .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                              .thenApply(v -> v.verify(signature, message))
+                              .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
             }
 
             @Override
             public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                   InputStream message) {
-                // TODO Auto-generated method stub
-                return false;
+                try {
+                    return dht.getKeyState(coordinates.toEventCoords())
+                              .thenApply(ks -> new KeyStateImpl(ks))
+                              .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                              .thenApply(v -> v.verify(threshold, signature, message))
+                              .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
             }
         };
     }
