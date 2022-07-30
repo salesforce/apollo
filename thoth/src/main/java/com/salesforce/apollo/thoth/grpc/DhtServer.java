@@ -20,6 +20,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -27,10 +28,9 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
-import com.salesfoce.apollo.thoth.proto.Validations;
-import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -160,7 +160,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            CompletableFuture<Empty> result = s.appendValidations(request.getValidationsList());
+            CompletableFuture<Empty> result = s.appendValidations(request.getValidations());
             if (result == null) {
                 responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {

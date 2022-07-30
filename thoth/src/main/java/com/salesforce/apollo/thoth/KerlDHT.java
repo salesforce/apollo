@@ -7,12 +7,7 @@
 
 package com.salesforce.apollo.thoth;
 
-import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
-import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.thoth.schema.tables.Validation.VALIDATION;
-
 import java.io.PrintStream;
-import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,9 +27,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
-import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +35,6 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -56,15 +47,13 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesfoce.apollo.thoth.proto.Validation;
-import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
-import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.RingIterator;
@@ -173,8 +162,8 @@ public class KerlDHT implements ProtoKERLService {
         }
 
         @Override
-        public CompletableFuture<Empty> appendValidations(List<Validations> validations) {
-            return db_appendValidations(validations);
+        public CompletableFuture<Empty> appendValidations(Validations validations) {
+            return complete(k -> k.appendValidations(validations));
         }
 
         @Override
@@ -219,7 +208,7 @@ public class KerlDHT implements ProtoKERLService {
             return complete(k -> {
                 final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
                 k.getKeyStateWithAttachments(coordinates)
-                 .thenAcceptBoth(db_getValidations(coordinates), (ksa, validations) -> {
+                 .thenAcceptBoth(complete(ke -> ke.getValidations(coordinates)), (ksa, validations) -> {
                      var result = ksa == null ? KeyStateWithEndorsementsAndValidations.getDefaultInstance()
                                               : KeyStateWithEndorsementsAndValidations.newBuilder()
                                                                                       .setState(ksa.getState())
@@ -239,7 +228,7 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
-            return db_getValidations(coordinates);
+            return complete(k -> k.getValidations(coordinates));
         }
     }
 
@@ -413,12 +402,12 @@ public class KerlDHT implements ProtoKERLService {
         return majority.thenCompose(n -> result);
     }
 
-    public CompletableFuture<Void> appendValidations(List<Validations> validations) {
-        if (validations.isEmpty()) {
+    @Override
+    public CompletableFuture<Empty> appendValidations(Validations validations) {
+        if (validations.getValidationsCount() == 0) {
             return completeIt(null);
         }
-        final var event = validations.get(0);
-        Digest identifier = digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
+        Digest identifier = digestAlgorithm().digest(validations.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
             return completeIt(null);
         }
@@ -619,6 +608,7 @@ public class KerlDHT implements ProtoKERLService {
         return result;
     }
 
+    @Override
     public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
         if (coordinates == null) {
             return completeIt(Validations.getDefaultInstance());
@@ -679,107 +669,6 @@ public class KerlDHT implements ProtoKERLService {
                 completeExceptionally(result);
             }
         }
-    }
-
-    private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
-        Connection connection;
-        try {
-            connection = connectionPool.getConnection();
-        } catch (SQLException e) {
-            return completeExceptionally(e);
-        }
-        CompletableFuture<Empty> complete = new CompletableFuture<>();
-
-        try {
-            DSL.using(connection, SQLDialect.H2).transaction(ctx -> {
-                validations.forEach(v -> {
-                    var dsl = DSL.using(ctx);
-                    var coordinates = v.getCoordinates();
-
-                    final var id = dsl.select(COORDINATES.ID)
-                                      .from(COORDINATES)
-                                      .join(IDENTIFIER)
-                                      .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
-                                      .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                                      .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
-                                      .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
-                                      .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                                      .fetchOne();
-                    if (id == null) {
-                        return;
-                    }
-                    for (var entry : v.getValidationsList()) {
-                        dsl.mergeInto(VALIDATION)
-                           .usingDual()
-                           .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(IDENTIFIER.ID)))
-                           .whenNotMatchedThenInsert()
-                           .set(VALIDATION.FOR, id.value1())
-                           .set(VALIDATION.VALIDATOR,
-                                dsl.select(IDENTIFIER.ID)
-                                   .from(IDENTIFIER)
-                                   .where(IDENTIFIER.PREFIX.eq(entry.getValidator().toByteArray())))
-                           .set(VALIDATION.SIGNATURE, entry.getSignature().toByteArray())
-                           .execute();
-                    }
-                });
-                complete.complete(Empty.getDefaultInstance());
-            });
-        } catch (Exception e) {
-            complete.completeExceptionally(e);
-        }
-
-        return complete;
-    }
-
-    private CompletableFuture<Validations> db_getValidations(EventCoords coordinates) {
-        Connection connection;
-        try {
-            connection = connectionPool.getConnection();
-        } catch (SQLException e) {
-            return completeExceptionally(e);
-        }
-        DSLContext dsl = DSL.using(connection, SQLDialect.H2);
-        CompletableFuture<Validations> complete = new CompletableFuture<>();
-        var resolved = dsl.select(COORDINATES.ID)
-                          .from(COORDINATES)
-                          .join(IDENTIFIER)
-                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
-                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
-                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
-                          .fetchOne();
-        if (resolved == null) {
-            complete.complete(Validations.getDefaultInstance());
-            return complete;
-        }
-
-        record validation(Ident identifier, Sig signature) {}
-        var builder = Validations.newBuilder().setCoordinates(coordinates);
-
-        dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
-           .from(VALIDATION)
-           .join(IDENTIFIER)
-           .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
-           .where(VALIDATION.FOR.eq(resolved.value1()))
-           .fetch()
-           .stream()
-           .map(r -> {
-               try {
-                   return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
-               } catch (InvalidProtocolBufferException e) {
-                   log.error("Error deserializing signature witness: {}", e);
-                   return null;
-               }
-           })
-           .filter(s -> s != null)
-           .forEach(e -> builder.addValidations(Validation.newBuilder()
-                                                          .setValidator(e.identifier)
-                                                          .setSignature(e.signature)
-                                                          .build()));
-        complete.complete(builder.build());
-        return complete;
     }
 
     private Digest digestOf(InceptionEvent event) {

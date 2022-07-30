@@ -10,10 +10,12 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -68,6 +70,10 @@ public interface KERL extends KEL {
     }
 
     CompletableFuture<Void> append(List<AttachmentEvent> events);
+
+    CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> validations);
+
+    CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates);
 
     default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
         // TODO use a real DB query instead of this really expensive iterative lookup

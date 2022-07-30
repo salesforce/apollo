@@ -23,6 +23,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -30,11 +31,10 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
-import com.salesfoce.apollo.thoth.proto.Validations;
-import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -80,7 +80,7 @@ public class DhtClient implements DhtService {
             }
 
             @Override
-            public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+            public ListenableFuture<Empty> appendValidations(Validations validations) {
                 return wrap(service.appendValidations(validations));
             }
 
@@ -237,9 +237,9 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+    public ListenableFuture<Empty> appendValidations(Validations validations) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = ValidationsContext.newBuilder().addAllValidations(validations).setContext(context).build();
+        var request = ValidationsContext.newBuilder().setValidations(validations).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());

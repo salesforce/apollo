@@ -92,6 +92,9 @@ public class MemKERL implements KERL {
     // Order by <receiptOrdering>
     private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
 
+    // Order by <coordinateOrdering>
+    private final Map<String, Map<Identifier, JohnHancock>> validations = new ConcurrentHashMap<>();
+
     public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
     }
@@ -129,6 +132,14 @@ public class MemKERL implements KERL {
     }
 
     @Override
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> v) {
+        var fs = new CompletableFuture<Void>();
+        validations.put(coordinateOrdering(coordinates), v);
+        fs.complete(null);
+        return fs;
+    }
+
+    @Override
     public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
         var fs = new CompletableFuture<Attachment>();
         fs.complete(receipts.get(coordinateOrdering(coordinates)));
@@ -160,6 +171,13 @@ public class MemKERL implements KERL {
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
         fs.complete(stateHash == null ? null : keyState.get(stateHash));
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Map<Identifier, JohnHancock>>();
+        fs.complete(validations.get(coordinateOrdering(coordinates)));
         return fs;
     }
 

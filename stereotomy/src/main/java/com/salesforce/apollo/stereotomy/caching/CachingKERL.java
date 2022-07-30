@@ -8,10 +8,12 @@
 package com.salesforce.apollo.stereotomy.caching;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -43,6 +45,17 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
             fs.completeExceptionally(t);
             return fs;
         }
+    }
+
+    @Override
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                     Map<Identifier, JohnHancock> validations) {
+        return complete(kerl -> kerl.appendValidations(coordinates, validations));
+    }
+
+    @Override
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        return complete(kerl -> kerl.getValidations(coordinates));
     }
 
     @Override

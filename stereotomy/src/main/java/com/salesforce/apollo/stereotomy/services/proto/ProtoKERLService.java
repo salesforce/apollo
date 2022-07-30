@@ -14,6 +14,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 
 /**
  * @author hal.hildebrand
@@ -28,4 +29,6 @@ public interface ProtoKERLService extends ProtoKERLProvider {
     CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
     CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
+
+    CompletableFuture<Empty> appendValidations(Validations validations);
 }

@@ -12,11 +12,13 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -71,6 +73,12 @@ public class UniKERLDirectPooled {
         }
 
         @Override
+        public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                         Map<Identifier, JohnHancock> validations) {
+            return kerl.appendValidations(coordinates, validations);
+        }
+
+        @Override
         public void close() throws IOException {
             try {
                 connection.close();
@@ -107,6 +115,11 @@ public class UniKERLDirectPooled {
         @Override
         public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
             return kerl.getKeyStateWithAttachments(coordinates);
+        }
+
+        @Override
+        public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+            return kerl.getValidations(coordinates);
         }
 
         @Override

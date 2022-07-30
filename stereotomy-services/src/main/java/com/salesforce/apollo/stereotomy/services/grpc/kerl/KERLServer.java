@@ -20,6 +20,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -28,6 +29,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLS
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -145,6 +147,34 @@ public class KERLServer extends KERLServiceImplBase {
                             metrics.outboundBandwidth().mark(serializedSize);
                             metrics.outboundAppendKERLResponse().mark(serializedSize);
                         }
+                    }
+                });
+            }
+        }), log));
+    }
+
+    @Override
+    public void appendValidations(ValidationsContext request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics != null ? metrics.appendEventsService().time() : null;
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundAppendEventsRequest().mark(request.getSerializedSize());
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Empty> result = s.appendValidations(request.getValidations());
+            if (result == null) {
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } else {
+                result.whenComplete((e, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        responseObserver.onError(t);
+                    } else {
+                        responseObserver.onNext(e);
+                        responseObserver.onCompleted();
                     }
                 });
             }
@@ -405,6 +435,44 @@ public class KERLServer extends KERLServiceImplBase {
                         if (metrics != null) {
                             metrics.outboundBandwidth().mark(state.getSerializedSize());
                             metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
+                        }
+                    }
+                });
+            }
+        }), log));
+    }
+
+    @Override
+    public void getValidations(EventContext request, StreamObserver<Validations> responseObserver) {
+        Context timer = metrics != null ? metrics.getAttachmentService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetAttachmentRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Validations> response = s.getValidations(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(Validations.getDefaultInstance());
+                responseObserver.onCompleted();
+            } else {
+                response.whenComplete((validations, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        responseObserver.onError(t);
+                    } else {
+                        validations = validations == null ? Validations.getDefaultInstance() : validations;
+                        responseObserver.onNext(validations);
+                        responseObserver.onCompleted();
+                        if (metrics != null) {
+                            final var serializedSize = validations.getSerializedSize();
+                            metrics.outboundBandwidth().mark(serializedSize);
+                            metrics.outboundGetAttachmentResponse().mark(serializedSize);
                         }
                     }
                 });

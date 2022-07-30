@@ -13,12 +13,15 @@ import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CUR
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Validation.VALIDATION;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
@@ -31,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
@@ -56,8 +60,7 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  */
 abstract public class UniKERL implements KERL {
     private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
-
-    private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
+    private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
         var coordinates = attachment.coordinates();
@@ -184,6 +187,37 @@ abstract public class UniKERL implements KERL {
         final var uni = new UniKERLDirect(connection, DigestAlgorithm.fromDigestCode(digestCode));
         var result = uni.append(ProtobufEventFactory.toKeyEvent(event, ilk)).getNow(null);
         return result == null ? null : result.getBytes();
+    }
+
+    public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
+                                         Map<Identifier, JohnHancock> validations) {
+        dsl.transaction(ctx -> {
+            final var id = dsl.select(COORDINATES.ID)
+                              .from(COORDINATES)
+                              .join(IDENTIFIER)
+                              .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                              .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                              .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                              .fetchOne();
+            if (id == null) {
+                return;
+            }
+            validations.forEach((identifier, signature) -> {
+                dsl.mergeInto(VALIDATION)
+                   .usingDual()
+                   .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(IDENTIFIER.ID)))
+                   .whenNotMatchedThenInsert()
+                   .set(VALIDATION.FOR, id.value1())
+                   .set(VALIDATION.VALIDATOR,
+                        dsl.select(IDENTIFIER.ID)
+                           .from(IDENTIFIER)
+                           .where(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray())))
+                   .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
+                   .execute();
+            });
+        });
     }
 
     public static byte[] compress(byte[] input) {
@@ -409,4 +443,44 @@ abstract public class UniKERL implements KERL {
         return fs;
     }
 
+    @Override
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        CompletableFuture<Map<Identifier, JohnHancock>> complete = new CompletableFuture<>();
+        var resolved = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .fetchOne();
+        if (resolved == null) {
+            complete.complete(Collections.emptyMap());
+            return complete;
+        }
+
+        record validation(Ident identifier, Sig signature) {}
+        var validations = dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
+                             .from(VALIDATION)
+                             .join(IDENTIFIER)
+                             .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
+                             .where(VALIDATION.FOR.eq(resolved.value1()))
+                             .fetch()
+                             .stream()
+                             .map(r -> {
+                                 try {
+                                     return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
+                                 } catch (InvalidProtocolBufferException e) {
+                                     log.error("Error deserializing signature witness: {}", e);
+                                     return null;
+                                 }
+                             })
+                             .filter(s -> s != null)
+                             .collect(Collectors.toMap(v -> Identifier.from(v.identifier),
+                                                       v -> JohnHancock.from(v.signature)));
+        complete.complete(validations);
+        return complete;
+    }
 }

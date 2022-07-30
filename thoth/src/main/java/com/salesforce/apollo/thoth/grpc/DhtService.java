@@ -18,9 +18,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
-import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesforce.apollo.comm.Link;
 
 /**
@@ -38,7 +38,7 @@ public interface DhtService extends Link {
 
     ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
 
-    ListenableFuture<Empty> appendValidations(List<Validations> attachments);
+    ListenableFuture<Empty> appendValidations(Validations attachments);
 
     ListenableFuture<Attachment> getAttachment(EventCoords coordinates);
 

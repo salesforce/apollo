@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.services.proto;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -19,7 +20,10 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
@@ -84,6 +88,16 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     }
 
     @Override
+    public CompletableFuture<Empty> appendValidations(Validations validations) {
+        return kerl.appendValidations(EventCoordinates.from(validations.getCoordinates()),
+                                      validations.getValidationsList()
+                                                 .stream()
+                                                 .collect(Collectors.toMap(v -> Identifier.from(v.getValidator()),
+                                                                           v -> JohnHancock.from(v.getSignature()))))
+                   .thenApply(v -> Empty.getDefaultInstance());
+    }
+
+    @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         return kerl.getAttachment(EventCoordinates.from(coordinates))
                    .thenApply(attch -> attch == null ? null : attch.toAttachemente());
@@ -119,6 +133,22 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
         return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
                    .thenApply(ksa -> ksa == null ? null : ksa.toEvente());
+    }
+
+    @Override
+    public CompletableFuture<Validations> getValidations(EventCoords coords) {
+        return kerl.getValidations(EventCoordinates.from(coords))
+                   .thenApply(vs -> Validations.newBuilder()
+                                               .addAllValidations(vs.entrySet()
+                                                                    .stream()
+                                                                    .map(e -> Validation_.newBuilder()
+                                                                                         .setValidator(e.getKey()
+                                                                                                        .toIdent())
+                                                                                         .setSignature(e.getValue()
+                                                                                                        .toSig())
+                                                                                         .build())
+                                                                    .toList())
+                                               .build());
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

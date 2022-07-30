@@ -8,9 +8,11 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -54,6 +56,12 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                     Map<Identifier, JohnHancock> validations) {
+        return null;
+    }
+
+    @Override
     public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
         return kerl.getAttachment(coordinates.toEventCoords()).thenApply(attch -> Attachment.of(attch));
     }
@@ -82,6 +90,12 @@ public class DelegatedKERL implements KERL {
     public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
         return kerl.getKeyStateWithAttachments(coordinates.toEventCoords())
                    .thenApply(ksa -> KeyStateWithAttachments.from(ksa));
+    }
+
+    @Override
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override

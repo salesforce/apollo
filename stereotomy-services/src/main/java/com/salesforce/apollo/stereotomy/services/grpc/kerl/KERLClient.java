@@ -23,6 +23,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -32,6 +33,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLS
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -78,6 +80,11 @@ public class KERLClient implements KERLService {
             }
 
             @Override
+            public CompletableFuture<Empty> appendValidations(Validations validations) {
+                return service.appendValidations(validations);
+            }
+
+            @Override
             public void close() throws IOException {
             }
 
@@ -114,6 +121,11 @@ public class KERLClient implements KERLService {
             @Override
             public Member getMember() {
                 return member;
+            }
+
+            @Override
+            public CompletableFuture<Validations> getValidations(EventCoords coords) {
+                return service.getValidations(coords);
             }
         };
     }
@@ -280,6 +292,25 @@ public class KERLClient implements KERLService {
                 return;
             }
             f.complete(null);
+        }, r -> r.run());
+        return f;
+    }
+
+    @Override
+    public CompletableFuture<Empty> appendValidations(Validations validations) {
+        var f = new CompletableFuture<Empty>();
+        Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
+        var request = ValidationsContext.newBuilder().setValidations(validations).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        var result = client.appendValidations(request);
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            f.complete(Empty.getDefaultInstance());
         }, r -> r.run());
         return f;
     }
@@ -507,5 +538,11 @@ public class KERLClient implements KERLService {
     @Override
     public Member getMember() {
         return member;
+    }
+
+    @Override
+    public CompletableFuture<Validations> getValidations(EventCoords coords) {
+        // TODO Auto-generated method stub
+        return null;
     }
 }

@@ -11,6 +11,7 @@ import java.sql.JDBCType;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -19,13 +20,16 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine.CallResult;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -45,22 +49,6 @@ public class ShardedKERL extends UniKERL {
         this.mutator = mutator;
         this.scheduler = scheduler;
         this.timeout = timeout;
-    }
-
-    @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
-        var call = mutator.call("{ ? = call stereotomy.appendAttachements(?) }",
-                                Collections.singletonList(JDBCType.BINARY),
-                                events.stream().map(ae -> ae.getBytes()).toList());
-        CompletableFuture<CallResult> submitted;
-        try {
-            submitted = mutator.execute(exec, call, timeout, scheduler);
-        } catch (InvalidTransaction e) {
-            var f = new CompletableFuture<Void>();
-            f.completeExceptionally(e);
-            return f;
-        }
-        return submitted.thenApply(r -> null);
     }
 
     @Override
@@ -84,6 +72,22 @@ public class ShardedKERL extends UniKERL {
                 return null;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        var call = mutator.call("{ ? = call stereotomy.appendAttachements(?) }",
+                                Collections.singletonList(JDBCType.BINARY),
+                                events.stream().map(ae -> ae.getBytes()).toList());
+        CompletableFuture<CallResult> submitted;
+        try {
+            submitted = mutator.execute(exec, call, timeout, scheduler);
+        } catch (InvalidTransaction e) {
+            var f = new CompletableFuture<Void>();
+            f.completeExceptionally(e);
+            return f;
+        }
+        return submitted.thenApply(r -> null);
     }
 
     @Override
@@ -114,6 +118,13 @@ public class ShardedKERL extends UniKERL {
             return f;
         }
 
+    }
+
+    @Override
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                     Map<Identifier, JohnHancock> validations) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private KeyState_ keyStateOf(byte[] b) throws InvalidProtocolBufferException {

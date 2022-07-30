@@ -145,6 +145,16 @@ message Attachment {
     repeated Sealed seals = 2;
 }
 
+message Validation_ {
+    stereotomy.Ident validator = 1;
+    utils.Sig signature = 2;
+}
+
+message Validations {
+    stereotomy.EventCoords coordinates = 1;
+    repeated Validation_ validations = 2;
+}
+
 message KERL_ {
     repeated KeyEventWithAttachments events = 1;
 }
