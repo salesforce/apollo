@@ -28,15 +28,11 @@ import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.Filtered;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -47,9 +43,6 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.thoth.grpc.ValidatorClient;
-import com.salesforce.apollo.thoth.grpc.ValidatorServer;
-import com.salesforce.apollo.thoth.grpc.ValidatorService;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -59,9 +52,9 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  *
  */
 public class Ani {
-    public record AniParameters(SigningMember member, Context<Member> context, SigningThreshold threshold,
-                                Map<Identifier, Integer> validators, Duration validationTimeout, Sakshi sakshi,
-                                Executor executor, KerlDHT dht, Router communications, StereotomyMetrics metrics) {}
+    public record AniParameters(SigningMember member, SigningThreshold threshold, Map<Identifier, Integer> validators,
+                                Duration validationTimeout, Executor executor, KerlDHT dht,
+                                StereotomyMetrics metrics) {}
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
@@ -92,18 +85,13 @@ public class Ani {
                                                                           cause));
     }
 
-    @SuppressWarnings("unused")
-    private final CommonCommunications<ValidatorService, Sakshi> comms;
-    @SuppressWarnings("unused")
-    private final Context<Member>                                context;
-    private final KerlDHT                                        dht;
-    private final AsyncLoadingCache<EventCoordinates, KeyEvent>  events;
-    private final AsyncLoadingCache<Identifier, KeyState>        keyStates;
-    private final SigningMember                                  member;
-    private final Sakshi                                         sakshi;
-    private final SigningThreshold                               threshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean>   validated;
-    private final Map<Identifier, Integer>                       validators;
+    private final KerlDHT                                       dht;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
+    private final AsyncLoadingCache<Identifier, KeyState>       keyStates;
+    private final SigningMember                                 member;
+    private final SigningThreshold                              threshold;
+    private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
+    private final Map<Identifier, Integer>                      validators;
 
     public Ani(AniParameters parameters) {
         this(parameters, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
@@ -135,13 +123,6 @@ public class Ani {
         this.dht = parameters.dht;
         this.validators = parameters.validators;
         this.threshold = parameters.threshold;
-        this.sakshi = parameters.sakshi;
-        comms = parameters.communications.create(member, parameters.context.getId(), this.sakshi,
-                                                 r -> new ValidatorServer(r, parameters.executor, parameters.metrics),
-                                                 ValidatorClient.getCreate(parameters.context.getId(),
-                                                                           parameters.metrics),
-                                                 ValidatorClient.getLocalLoopback(this.sakshi, member));
-        this.context = parameters.context;
     }
 
     public EventValidation eventValidation(Duration timeout) {

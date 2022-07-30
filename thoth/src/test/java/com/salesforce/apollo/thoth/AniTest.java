@@ -19,12 +19,8 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.thoth.Ani.AniParameters;
@@ -41,25 +37,17 @@ public class AniTest extends AbstractDhtTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
-        Context<Member> context = Context.newBuilder().setCardinality(dhts.size()).build();
-        var validator = stereotomy.newIdentifier().get();
-        final var ephemeral = validator.newEphemeral().get();
-        Sakshi sakshi = new Sakshi(validator, new BasicIdentifier(ephemeral.getPublic()),
-                                   new SignerImpl(ephemeral.getPrivate()));
-
         Map<Identifier, Integer> validators = new HashMap<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(new AniParameters(e.getKey(), context,
+                                                                     e -> new Ani(new AniParameters(e.getKey(),
                                                                                                     threshold,
                                                                                                     validators, timeout,
-                                                                                                    sakshi,
                                                                                                     Executors.newSingleThreadExecutor(),
                                                                                                     dhts.get(e.getKey()),
-                                                                                                    routers.get(e.getKey()),
                                                                                                     null))));
         routers.values().forEach(lr -> lr.start());
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
