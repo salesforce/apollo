@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
-import com.salesforce.apollo.thoth.Ani.AniParameters;
 
 /**
  * @author hal.hildebrand
@@ -40,12 +39,8 @@ public class AniTest extends AbstractDhtTest {
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(new AniParameters(e.getKey(),
-                                                                                                    threshold, timeout,
-                                                                                                    Executors.newSingleThreadExecutor(),
-                                                                                                    dhts.get(e.getKey())
-                                                                                                        .asKERL(),
-                                                                                                    null))));
+                                                                     e -> new Ani(e.getKey(), threshold, timeout,
+                                                                                  dhts.get(e.getKey()).asKERL())));
         routers.values().forEach(lr -> lr.start());
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 
@@ -63,5 +58,6 @@ public class AniTest extends AbstractDhtTest {
         final var success = ani.validate(inception).get(10, TimeUnit.SECONDS);
         assertTrue(success);
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
+
     }
 }

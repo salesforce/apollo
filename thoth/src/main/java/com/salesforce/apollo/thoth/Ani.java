@@ -40,7 +40,6 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -50,8 +49,6 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  *
  */
 public class Ani {
-    public record AniParameters(SigningMember member, SigningThreshold threshold, Duration validationTimeout,
-                                Executor executor, KERL kerl, StereotomyMetrics metrics) {}
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
@@ -88,17 +85,19 @@ public class Ani {
     private final SigningThreshold                              threshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
 
-    public Ani(AniParameters parameters) {
-        this(parameters, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
+    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl) {
+        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder(), defaultEventsBuilder(),
+             defaultKeyStatesBuilder());
     }
 
-    public Ani(AniParameters parameters, Caffeine<EventCoordinates, Boolean> validatedBuilder,
-               Caffeine<EventCoordinates, KeyEvent> eventsBuilder, Caffeine<Identifier, KeyState> keyStatesBuilder) {
+    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
+               Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
+               Caffeine<Identifier, KeyState> keyStatesBuilder) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
                                                                   Executor executor) throws Exception {
-                return performValidation(key, parameters.validationTimeout);
+                return performValidation(key, validationTimeout);
             }
         });
         events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
@@ -108,9 +107,9 @@ public class Ani {
                 return kerl.getKeyEvent(key);
             }
         });
-        this.member = parameters.member;
-        this.kerl = parameters.kerl;
-        this.threshold = parameters.threshold;
+        this.member = member;
+        this.kerl = kerl;
+        this.threshold = threshold;
     }
 
     public EventValidation eventValidation(Duration timeout) {
