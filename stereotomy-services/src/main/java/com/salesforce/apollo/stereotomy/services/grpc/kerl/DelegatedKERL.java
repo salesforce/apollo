@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -94,8 +95,11 @@ public class DelegatedKERL implements KERL {
 
     @Override
     public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
-        // TODO Auto-generated method stub
-        return null;
+        return kerl.getValidations(coordinates.toEventCoords())
+                   .thenApply(v -> v.getValidationsList()
+                                    .stream()
+                                    .collect(Collectors.toMap(val -> Identifier.from(val.getValidator()),
+                                                              val -> JohnHancock.from(val.getSignature()))));
     }
 
     @Override

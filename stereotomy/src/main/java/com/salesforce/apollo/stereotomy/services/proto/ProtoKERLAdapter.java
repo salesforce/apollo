@@ -19,6 +19,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
@@ -133,6 +134,12 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
         return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
                    .thenApply(ksa -> ksa == null ? null : ksa.toEvente());
+    }
+
+    @Override
+    public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        return kerl.getKeyStateWithEndorsementsAndValidations(EventCoordinates.from(coordinates))
+                   .thenApply(ks -> ks.toKS());
     }
 
     @Override

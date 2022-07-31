@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +178,7 @@ public class MemKERL implements KERL {
     @Override
     public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
         var fs = new CompletableFuture<Map<Identifier, JohnHancock>>();
-        fs.complete(validations.get(coordinateOrdering(coordinates)));
+        fs.complete(validations.computeIfAbsent(coordinateOrdering(coordinates), k -> Collections.emptyMap()));
         return fs;
     }
 

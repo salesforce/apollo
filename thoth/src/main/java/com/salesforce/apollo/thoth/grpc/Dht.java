@@ -10,8 +10,8 @@ import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**
@@ -22,7 +22,7 @@ public interface Dht extends ProtoKERLService {
     @Override
     CompletableFuture<Empty> appendValidations(Validations validations);
 
-    CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
+    CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
 
     @Override
     CompletableFuture<Validations> getValidations(EventCoords coordinates);

@@ -22,6 +22,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
@@ -34,7 +35,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
-import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -119,7 +119,7 @@ public class DhtClient implements DhtService {
             }
 
             @Override
-            public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            public ListenableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
                 return wrap(service.getKeyStateWithEndorsementsAndValidations(coordinates));
             }
 
@@ -432,14 +432,14 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+    public ListenableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
         EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
         }
-        ListenableFuture<KeyStateWithEndorsementsAndValidations> complete = client.getKeyStateWithEndorsementsAndValidations(request);
+        ListenableFuture<KeyStateWithEndorsementsAndValidations_> complete = client.getKeyStateWithEndorsementsAndValidations(request);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();

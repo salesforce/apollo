@@ -19,6 +19,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -72,6 +73,15 @@ public interface KERL extends KEL {
     CompletableFuture<Void> append(List<AttachmentEvent> events);
 
     CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> validations);
+
+    default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
+        return getKeyStateWithAttachments(coordinates).thenCombine(getValidations(coordinates), (ksa, validations) -> {
+            return ksa == null ? null
+                               : new KeyStateWithEndorsementsAndValidations(ksa.state(),
+                                                                            ksa.attachments().endorsements(),
+                                                                            validations);
+        });
+    }
 
     CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates);
 

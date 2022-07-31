@@ -56,7 +56,7 @@
             referencedTableSchemaName="stereotomy" />
 
         <addUniqueConstraint
-            columnNames="identifier, digest, sequence_number, ilk"
+            columnNames="identifier, sequence_number, digest, ilk"
             tableName="coordinates" schemaName="stereotomy"  constraintName="unique_id_dig_seq_ilk"/>
 
         <createTable tableName="event"

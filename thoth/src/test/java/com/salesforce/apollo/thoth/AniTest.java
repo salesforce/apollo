@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.thoth.Ani.AniParameters;
 
@@ -37,17 +35,16 @@ public class AniTest extends AbstractDhtTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
-        Map<Identifier, Integer> validators = new HashMap<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(new AniParameters(e.getKey(),
-                                                                                                    threshold,
-                                                                                                    validators, timeout,
+                                                                                                    threshold, timeout,
                                                                                                     Executors.newSingleThreadExecutor(),
-                                                                                                    dhts.get(e.getKey()),
+                                                                                                    dhts.get(e.getKey())
+                                                                                                        .asKERL(),
                                                                                                     null))));
         routers.values().forEach(lr -> lr.start());
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
@@ -62,7 +59,9 @@ public class AniTest extends AbstractDhtTest {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
-        assertTrue(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        ani.validate(inception).get();
+        final var success = ani.validate(inception).get(10, TimeUnit.SECONDS);
+        assertTrue(success);
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 }

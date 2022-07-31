@@ -45,6 +45,11 @@
             referencedTableName="identifier" referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
+        <createIndex indexName="pending_coordinates_digest"
+            schemaName="thoth" tableName="pending_coordinates">
+            <column name="digest" />
+        </createIndex>
+
         <createTable tableName="pending_event"
             schemaName="thoth">
             <column name="pending_coordinates" type="INT8">

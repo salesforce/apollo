@@ -10,7 +10,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -38,8 +38,7 @@ public interface KEL {
         }
 
         public static KeyStateWithAttachments from(KeyStateWithAttachments_ ksa) {
-            // TODO Auto-generated method stub
-            return null;
+            return new KeyStateWithAttachments(new KeyStateImpl(ksa.getState()), Attachment.of(ksa.getAttachment()));
         }
     }
 
@@ -101,12 +100,7 @@ public interface KEL {
      * @return the KeyStateWithAttachments for these coordinates
      */
     default CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        return getKeyState(coordinates).thenApply(ks -> {
-            try {
-                return new KeyStateWithAttachments(ks, getAttachment(coordinates).get());
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        });
+        return getKeyState(coordinates).thenCombine(getAttachment(coordinates),
+                                                    (ks, a) -> new KeyStateWithAttachments(ks, a));
     }
 }

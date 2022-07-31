@@ -45,12 +45,12 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
-import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.utils.proto.Biff;
@@ -203,19 +203,19 @@ public class KerlDHT implements ProtoKERLService {
         }
 
         @Override
-        public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
             log.info("get key state with endorsements and attachments for coordinates on: {}", member.getId());
             return complete(k -> {
-                final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
+                final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
                 k.getKeyStateWithAttachments(coordinates)
                  .thenAcceptBoth(complete(ke -> ke.getValidations(coordinates)), (ksa, validations) -> {
-                     var result = ksa == null ? KeyStateWithEndorsementsAndValidations.getDefaultInstance()
-                                              : KeyStateWithEndorsementsAndValidations.newBuilder()
-                                                                                      .setState(ksa.getState())
-                                                                                      .putAllEndorsements(ksa.getAttachment()
-                                                                                                             .getEndorsementsMap())
-                                                                                      .addAllValidations(validations.getValidationsList())
-                                                                                      .build();
+                     var result = ksa == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance()
+                                              : KeyStateWithEndorsementsAndValidations_.newBuilder()
+                                                                                       .setState(ksa.getState())
+                                                                                       .putAllEndorsements(ksa.getAttachment()
+                                                                                                              .getEndorsementsMap())
+                                                                                       .addAllValidations(validations.getValidationsList())
+                                                                                       .build();
                      fs.complete(result);
                  })
                  .exceptionally(t -> {
@@ -583,18 +583,18 @@ public class KerlDHT implements ProtoKERLService {
         return result;
     }
 
-    public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+    public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
         if (coordinates == null) {
-            return completeIt(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
+            return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
         }
         Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return completeIt(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
+            return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
         }
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
-        HashMultiset<KeyStateWithEndorsementsAndValidations> gathered = HashMultiset.create();
+        var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
+        HashMultiset<KeyStateWithEndorsementsAndValidations_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null,
                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
@@ -603,7 +603,7 @@ public class KerlDHT implements ProtoKERLService {
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination,
                                                                    "get key state with endorsements",
-                                                                   KeyStateWithEndorsementsAndValidations.getDefaultInstance()),
+                                                                   KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }

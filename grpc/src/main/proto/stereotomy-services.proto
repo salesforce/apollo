@@ -85,6 +85,7 @@ service KERLService {
     rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKeyStateWithEndorsementsAndValidations (EventContext) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
     rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
     rpc getValidations (EventContext) returns (stereotomy.Validations) {}
 }

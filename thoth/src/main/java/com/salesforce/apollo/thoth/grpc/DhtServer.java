@@ -19,6 +19,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
@@ -30,7 +31,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
-import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -443,7 +443,7 @@ public class DhtServer extends KerlDhtImplBase {
 
     @Override
     public void getKeyStateWithEndorsementsAndValidations(EventContext request,
-                                                          StreamObserver<KeyStateWithEndorsementsAndValidations> responseObserver) {
+                                                          StreamObserver<KeyStateWithEndorsementsAndValidations_> responseObserver) {
         Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
         if (metrics != null) {
             final var serializedSize = request.getSerializedSize();
@@ -451,12 +451,12 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
         exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            CompletableFuture<KeyStateWithEndorsementsAndValidations> response = s.getKeyStateWithEndorsementsAndValidations(request.getCoordinates());
+            CompletableFuture<KeyStateWithEndorsementsAndValidations_> response = s.getKeyStateWithEndorsementsAndValidations(request.getCoordinates());
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
                 }
-                responseObserver.onNext(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
+                responseObserver.onNext(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
                 responseObserver.onCompleted();
             }
             response.whenComplete((state, t) -> {
@@ -466,7 +466,7 @@ public class DhtServer extends KerlDhtImplBase {
                 if (t != null) {
                     responseObserver.onError(t);
                 } else {
-                    state = state == null ? KeyStateWithEndorsementsAndValidations.getDefaultInstance() : state;
+                    state = state == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance() : state;
                     responseObserver.onNext(state);
                     responseObserver.onCompleted();
                     if (metrics != null) {
@@ -481,7 +481,39 @@ public class DhtServer extends KerlDhtImplBase {
 
     @Override
     public void getValidations(EventContext request, StreamObserver<Validations> responseObserver) {
-        // TODO Auto-generated method stub
-        super.getValidations(request, responseObserver);
+        Context timer = metrics != null ? metrics.getAttachmentService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetAttachmentRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Validations> response = s.getValidations(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(Validations.getDefaultInstance());
+                responseObserver.onCompleted();
+            } else {
+                response.whenComplete((attachment, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        responseObserver.onError(t);
+                    } else {
+                        attachment = attachment == null ? Validations.getDefaultInstance() : attachment;
+                        responseObserver.onNext(attachment);
+                        responseObserver.onCompleted();
+                        if (metrics != null) {
+                            final var serializedSize = attachment.getSerializedSize();
+                            metrics.outboundBandwidth().mark(serializedSize);
+                            metrics.outboundGetAttachmentResponse().mark(serializedSize);
+                        }
+                    }
+                });
+            }
+        }), log));
     }
 }

@@ -22,6 +22,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
@@ -116,6 +117,12 @@ public class KERLClient implements KERLService {
             @Override
             public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
                 return service.getKeyStateWithAttachments(coords);
+            }
+
+            @Override
+            public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+                // TODO Auto-generated method stub
+                return null;
             }
 
             @Override
@@ -536,13 +543,76 @@ public class KERLClient implements KERLService {
     }
 
     @Override
+    public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coords) {
+        Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
+        if (metrics != null) {
+            final var bs = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateCoordsRequest().mark(bs);
+        }
+        var result = client.getKeyStateWithEndorsementsAndValidations(request);
+        var f = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyStateWithEndorsementsAndValidations_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyStateWithEndorsementsAndValidations_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                timer.stop();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
+    }
+
+    @Override
     public Member getMember() {
         return member;
     }
 
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coords) {
-        // TODO Auto-generated method stub
-        return null;
+        Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
+        if (metrics != null) {
+            final var bsize = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bsize);
+            metrics.outboundGetAttachmentRequest().mark(bsize);
+        }
+        var f = new CompletableFuture<Validations>();
+        ListenableFuture<Attachment> complete = client.getAttachment(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var validations = client.getValidations(request).get();
+                final var serializedSize = validations.getSerializedSize();
+                f.complete(validations.equals(Validations.getDefaultInstance()) ? null : validations);
+                if (metrics != null) {
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                f.completeExceptionally(e);
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e);
+            }
+        }, r -> r.run());
+        return f;
     }
 }
