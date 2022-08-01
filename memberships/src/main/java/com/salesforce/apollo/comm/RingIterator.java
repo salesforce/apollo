@@ -9,6 +9,8 @@ package com.salesforce.apollo.comm;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -84,7 +86,9 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                             Runnable failedMajority, PredicateHandler<T, Q, Comm> handler,
                             Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
+        var traversed = new TreeSet<Member>();
+        exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                           traversed));
 
     }
 
@@ -102,17 +106,24 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     private <Q> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, ListenableFuture<Q>> round, Runnable failedMajority,
                                      PredicateHandler<T, Q, Comm> handler, Consumer<Integer> onComplete,
-                                     AtomicInteger tally) {
+                                     AtomicInteger tally, Set<Member> traversed) {
 
-        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
+        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                                 traversed);
         int ringCount = context.getRingCount();
-
         final var next = nextRing(digest, m -> {
             if (ignoreSelf && member.equals(m)) {
                 return IterateResult.CONTINUE;
             }
             if (!context.isActive(m)) {
                 return IterateResult.CONTINUE;
+            }
+            if (noDuplicates) {
+                if (traversed.add(m)) {
+                    return IterateResult.SUCCESS;
+                } else {
+                    return IterateResult.CONTINUE;
+                }
             }
             return IterateResult.SUCCESS;
         });

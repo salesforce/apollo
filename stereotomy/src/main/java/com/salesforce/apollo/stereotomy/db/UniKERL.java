@@ -210,14 +210,15 @@ abstract public class UniKERL implements KERL {
                                  .where(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray()))
                                  .fetchOne();
                 if (v != null) {
-                    dsl.mergeInto(VALIDATION)
-                       .usingDual()
-                       .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(v.value1())))
-                       .whenNotMatchedThenInsert()
-                       .set(VALIDATION.FOR, id.value1())
-                       .set(VALIDATION.VALIDATOR, v.value1())
-                       .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
-                       .execute();
+                    var result = dsl.mergeInto(VALIDATION)
+                                    .usingDual()
+                                    .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(v.value1())))
+                                    .whenNotMatchedThenInsert()
+                                    .set(VALIDATION.FOR, id.value1())
+                                    .set(VALIDATION.VALIDATOR, v.value1())
+                                    .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
+                                    .execute();
+                    System.out.println("Updated: " + result);
                 }
             });
         });

@@ -125,9 +125,9 @@ public class AbstractDhtTest {
     protected void instantiate(SigningMember member, Context<Member> context, String prefix) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
-//        System.out.println("URL: " + url);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        connectionPool.setMaxConnections(1);
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
                                              ForkJoinPool.commonPool(), null);
         router.setMember(member);

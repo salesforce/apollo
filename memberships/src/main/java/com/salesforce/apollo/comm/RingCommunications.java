@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -70,14 +71,15 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
+    protected boolean                            noDuplicates   = false;
     final Context<T>                             context;
     final Executor                               exec;
+    volatile int                                 lastRingIndex  = -1;
     final SigningMember                          member;
     private final CommonCommunications<Comm, ?>  comm;
     private final Direction                      direction;
-    private volatile int                         lastRingIndex  = -1;
-    private boolean                              noDuplicates   = false;
     private final AtomicReference<List<Integer>> traversalOrder = new AtomicReference<>();
+    private final Set<Member>                    traversed      = new TreeSet<>();
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                               Executor exec) {
@@ -101,7 +103,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     }
 
     public <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<T, Q, Comm> handler) {
-        final var next = nextRing(null);
+        final var next = nextRing(null, traversed);
         try (Comm link = next.link) {
             execute(round, handler, next);
         } catch (IOException e) {
@@ -151,13 +153,14 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return linkFor(digest, current, test);
     }
 
-    Destination<T, Comm> nextRing(T member) {
+    Destination<T, Comm> nextRing(T member, Set<Member> traversed) {
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         if (current == 0) {
             final var order = getTraversalOrder();
             Entropy.secureShuffle(order);
+            traversed.clear();
             traversalOrder.set(order);
         }
         lastRingIndex = current;
@@ -212,7 +215,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     private Destination<T, Comm> linkFor(int index) {
         int r = getTraversalOrder().get(index);
         Ring<T> ring = context.ring(r);
-        var traversed = new TreeSet<Member>();
 
         @SuppressWarnings("unchecked")
         T successor = direction.retrieve(ring, (T) member, m -> {
