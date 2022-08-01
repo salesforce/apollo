@@ -70,12 +70,15 @@ public class UniKERLDirect extends UniKERL {
         return fs;
     }
 
+    @Override
     public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
                                                      Map<Identifier, JohnHancock> validations) {
         CompletableFuture<Void> complete = new CompletableFuture<>();
 
         try {
-            appendValidations(dsl, coordinates, validations);
+            dsl.transaction(ctx -> {
+                appendValidations(DSL.using(ctx), coordinates, validations);
+            });
             complete.complete(null);
         } catch (Exception e) {
             complete.completeExceptionally(e);

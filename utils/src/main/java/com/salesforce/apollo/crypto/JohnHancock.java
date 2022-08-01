@@ -6,11 +6,15 @@
  */
 package com.salesforce.apollo.crypto;
 
+import java.io.BufferedInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
+
+import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.Sig;
@@ -33,8 +37,8 @@ public class JohnHancock {
         return new JohnHancock(signature);
     }
 
-    private final byte[][]           bytes;
     private final SignatureAlgorithm algorithm;
+    private final byte[][]           bytes;
 
     public JohnHancock(Sig sig) {
         this.algorithm = SignatureAlgorithm.fromSignatureCode(sig.getCode());
@@ -62,6 +66,29 @@ public class JohnHancock {
         }
         JohnHancock other = (JohnHancock) obj;
         return algorithm == other.algorithm && Arrays.equals(bytes, other.bytes);
+    }
+
+    public Filtered filter(SigningThreshold threshold, PublicKey[] keys, InputStream message) {
+        if (keys.length != bytes.length) {
+            throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
+                                                             keys.length));
+        }
+
+        var verifiedSignatures = new ArrayList<Integer>();
+        byte[][] filtered = new byte[bytes.length][];
+        var keyIndex = 0;
+        for (byte[] signature : bytes) {
+            var publicKey = keys[keyIndex];
+            var ops = SignatureAlgorithm.lookup(publicKey);
+            if (ops.verify(publicKey, signature, message)) {
+                verifiedSignatures.add(keyIndex);
+                filtered[keyIndex] = signature;
+            }
+            keyIndex++;
+        }
+
+        int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
+        return new Filtered(SigningThreshold.thresholdMet(threshold, arrIndexes), new JohnHancock(algorithm, filtered));
     }
 
     public SignatureAlgorithm getAlgorithm() {
@@ -114,16 +141,24 @@ public class JohnHancock {
         + "]";
     }
 
-    public boolean verify(SigningThreshold threshold, PublicKey[] keys, InputStream message) {
+    public boolean verify(SigningThreshold threshold, PublicKey[] keys, InputStream input) {
         if (keys.length != bytes.length) {
             throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
                                                              keys.length));
         }
 
+        var message = new BufferedInputStream(input);
+        message.mark(Integer.MAX_VALUE);
         var verifiedSignatures = new ArrayList<Integer>();
         var keyIndex = 0;
         for (var signature : bytes) {
             var publicKey = keys[keyIndex];
+            try {
+                message.reset();
+            } catch (IOException e) {
+                LoggerFactory.getLogger(JohnHancock.class).error("Cannot reset message input", e);
+                return false;
+            }
             if (algorithm.verify(publicKey, signature, message)) {
                 verifiedSignatures.add(keyIndex);
             }
@@ -132,28 +167,5 @@ public class JohnHancock {
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
         return SigningThreshold.thresholdMet(threshold, arrIndexes);
-    }
-
-    public Filtered filter(SigningThreshold threshold, PublicKey[] keys, InputStream message) {
-        if (keys.length != bytes.length) {
-            throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
-                                                             keys.length));
-        }
-
-        var verifiedSignatures = new ArrayList<Integer>();
-        byte[][] filtered = new byte[bytes.length][];
-        var keyIndex = 0;
-        for (byte[] signature : bytes) {
-            var publicKey = keys[keyIndex];
-            var ops = SignatureAlgorithm.lookup(publicKey);
-            if (ops.verify(publicKey, signature, message)) {
-                verifiedSignatures.add(keyIndex);
-                filtered[keyIndex] = signature;
-            }
-            keyIndex++;
-        }
-
-        int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
-        return new Filtered(SigningThreshold.thresholdMet(threshold, arrIndexes), new JohnHancock(algorithm, filtered));
     }
 }

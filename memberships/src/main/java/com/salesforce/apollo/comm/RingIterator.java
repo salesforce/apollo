@@ -89,6 +89,12 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     }
 
     @Override
+    public RingIterator<T, Comm> noDuplicates() {
+        super.noDuplicates();
+        return this;
+    }
+
+    @Override
     protected Logger getLog() {
         return log;
     }

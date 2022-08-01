@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,6 +36,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class RingCommunications<T extends Member, Comm extends Link> {
+
     public enum Direction {
         PREDECESSOR {
             @Override
@@ -68,13 +70,13 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
-    final Context<T>    context;
-    final Executor      exec;
-    final SigningMember member;
-
+    final Context<T>                             context;
+    final Executor                               exec;
+    final SigningMember                          member;
     private final CommonCommunications<Comm, ?>  comm;
     private final Direction                      direction;
     private volatile int                         lastRingIndex  = -1;
+    private boolean                              noDuplicates   = false;
     private final AtomicReference<List<Integer>> traversalOrder = new AtomicReference<>();
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
@@ -105,6 +107,11 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
+    }
+
+    public RingCommunications<T, Comm> noDuplicates() {
+        noDuplicates = true;
+        return this;
     }
 
     public void reset() {
@@ -205,10 +212,19 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     private Destination<T, Comm> linkFor(int index) {
         int r = getTraversalOrder().get(index);
         Ring<T> ring = context.ring(r);
+        var traversed = new TreeSet<Member>();
+
         @SuppressWarnings("unchecked")
         T successor = direction.retrieve(ring, (T) member, m -> {
             if (!context.isActive(m)) {
                 return IterateResult.CONTINUE;
+            }
+            if (noDuplicates) {
+                if (traversed.add(m)) {
+                    return IterateResult.SUCCESS;
+                } else {
+                    return IterateResult.CONTINUE;
+                }
             }
             return IterateResult.SUCCESS;
         });

@@ -12,6 +12,11 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -30,6 +35,8 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
  *
  */
 public class DelegatedKERL implements KERL {
+    private final static Logger log = LoggerFactory.getLogger(DelegatedKERL.class);
+
     private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;
 
@@ -59,7 +66,19 @@ public class DelegatedKERL implements KERL {
     @Override
     public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
                                                      Map<Identifier, JohnHancock> validations) {
-        return null;
+        return kerl.appendValidations(Validations.newBuilder()
+                                                 .setCoordinates(coordinates.toEventCoords())
+                                                 .addAllValidations(validations.entrySet()
+                                                                               .stream()
+                                                                               .map(e -> Validation_.newBuilder()
+                                                                                                    .setValidator(e.getKey()
+                                                                                                                   .toIdent())
+                                                                                                    .setSignature(e.getValue()
+                                                                                                                   .toSig())
+                                                                                                    .build())
+                                                                               .toList())
+                                                 .build())
+                   .thenApply(e -> null);
     }
 
     @Override

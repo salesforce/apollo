@@ -205,17 +205,20 @@ abstract public class UniKERL implements KERL {
                 return;
             }
             validations.forEach((identifier, signature) -> {
-                dsl.mergeInto(VALIDATION)
-                   .usingDual()
-                   .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(IDENTIFIER.ID)))
-                   .whenNotMatchedThenInsert()
-                   .set(VALIDATION.FOR, id.value1())
-                   .set(VALIDATION.VALIDATOR,
-                        dsl.select(IDENTIFIER.ID)
-                           .from(IDENTIFIER)
-                           .where(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray())))
-                   .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
-                   .execute();
+                final var v = dsl.select(IDENTIFIER.ID)
+                                 .from(IDENTIFIER)
+                                 .where(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray()))
+                                 .fetchOne();
+                if (v != null) {
+                    dsl.mergeInto(VALIDATION)
+                       .usingDual()
+                       .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(v.value1())))
+                       .whenNotMatchedThenInsert()
+                       .set(VALIDATION.FOR, id.value1())
+                       .set(VALIDATION.VALIDATOR, v.value1())
+                       .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
+                       .execute();
+                }
             });
         });
     }

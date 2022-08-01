@@ -8,6 +8,7 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -144,7 +145,10 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coords) {
-        return kerl.getValidations(EventCoordinates.from(coords))
+        return kerl.getValidations(EventCoordinates.from(coords)).thenApply(m -> new TreeMap<>(m)).handle((v, t) -> {
+            System.out.println("Validations: " + v);
+            return v;
+        })
                    .thenApply(vs -> Validations.newBuilder()
                                                .addAllValidations(vs.entrySet()
                                                                     .stream()

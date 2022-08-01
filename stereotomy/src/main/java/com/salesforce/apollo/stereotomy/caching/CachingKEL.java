@@ -56,7 +56,7 @@ public class CachingKEL<K extends KEL> implements KEL {
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
                        .removalListener((EventCoordinates coords, KeyEvent e,
-                                         RemovalCause cause) -> log.trace("KeyEvent %s was removed ({}){}", coords,
+                                         RemovalCause cause) -> log.trace("KeyEvent {} was removed ({})", coords,
                                                                           cause));
     }
 
@@ -65,47 +65,28 @@ public class CachingKEL<K extends KEL> implements KEL {
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
                        .removalListener((EventCoordinates coords, KeyState ks,
-                                         RemovalCause cause) -> log.trace("KeyState %s was removed ({}){}", coords,
-                                                                          cause));
-    }
-
-    public static Caffeine<Identifier, KeyState> defaultKsCurrentBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((Identifier id, KeyState ks,
-                                         RemovalCause cause) -> log.trace("Current KeyState %s was removed ({}){}", id,
+                                         RemovalCause cause) -> log.trace("KeyState {} was removed ({})", coords,
                                                                           cause));
     }
 
     private final Function<Function<K, ?>, ?>                   kelSupplier;
     private final AsyncLoadingCache<EventCoordinates, KeyEvent> keyCoords;
     private final AsyncLoadingCache<EventCoordinates, KeyState> ksCoords;
-    private final AsyncLoadingCache<Identifier, KeyState>       ksCurrent;
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier) {
-        this(kelSupplier, defaultKsCoordsBuilder(), defaultKsCurrentBuilder(), defaultEventCoordsBuilder());
+        this(kelSupplier, defaultKsCoordsBuilder(), defaultEventCoordsBuilder());
     }
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                      Caffeine<Identifier, KeyState> curBuilder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+                      Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
         ksCoords = builder.buildAsync(CacheLoader.bulk(coords -> load(coords)));
-        ksCurrent = curBuilder.buildAsync(CacheLoader.bulk(ids -> loadCurrent(ids)));
         this.kelSupplier = kelSupplier;
         this.keyCoords = eventBuilder.buildAsync(AsyncCacheLoader.bulk(coords -> loadEvents(coords)));
     }
 
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
-        return complete(kel -> {
-            final var fs = kel.append(event);
-            fs.whenComplete((ks, t) -> {
-                if (t != null) {
-                    ksCurrent.synchronous().invalidate(event.getIdentifier());
-                }
-            });
-            return fs;
-        });
+        return complete(kel -> kel.append(event));
     }
 
     @Override
@@ -115,15 +96,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             fs.complete(Collections.emptyList());
             return fs;
         }
-        return complete(kel -> {
-            final var fs = kel.append(event);
-            fs.whenComplete((ks, t) -> {
-                if (t != null) {
-                    ksCurrent.synchronous().invalidate(event[0].getIdentifier());
-                }
-            });
-            return fs;
-        });
+        return complete(kel -> kel.append(event));
     }
 
     @Override
@@ -133,17 +106,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             fs.complete(Collections.emptyList());
             return fs;
         }
-        return complete(kel -> {
-            final var fs = kel.append(events, attachments);
-            if (!events.isEmpty()) {
-                fs.whenComplete((ks, t) -> {
-                    if (t != null) {
-                        ksCurrent.synchronous().invalidate(events.get(0).getIdentifier());
-                    }
-                });
-            }
-            return fs;
-        });
+        return complete(kel -> kel.append(events, attachments));
     }
 
     @Override
@@ -168,7 +131,7 @@ public class CachingKEL<K extends KEL> implements KEL {
 
     @Override
     public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
-        return complete(kel -> ksCurrent.get(identifier));
+        return complete(kel -> kel.getKeyState(identifier));
     }
 
     @Override
@@ -209,33 +172,6 @@ public class CachingKEL<K extends KEL> implements KEL {
                 return null;
             } catch (ExecutionException e) {
                 log.trace("Unable to load key state for coords: {} ", coords, e);
-            }
-            return loaded;
-        });
-    }
-
-    private Map<Identifier, KeyState> loadCurrent(Set<? extends Identifier> ids) {
-        var loaded = new HashMap<Identifier, KeyState>();
-        return complete(kel -> {
-            CompletableFuture<KeyState> ks = null;
-            for (var id : ids) {
-                if (ks == null) {
-                    ks = kel.getKeyState(id);
-                } else {
-                    ks = ks.thenCompose(ke -> kel.getKeyState(id));
-                }
-                ks.thenApply(state -> {
-                    loaded.put(id, state);
-                    return state;
-                });
-            }
-            try {
-                return ks.thenApply(ke -> loaded).get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return null;
-            } catch (ExecutionException e) {
-                log.trace("Unable to load key state for ids: {} ", ids, e);
             }
             return loaded;
         });

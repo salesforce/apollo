@@ -7,8 +7,6 @@
 
 package com.salesforce.apollo.thoth;
 
-import static com.salesforce.apollo.thoth.KerlDHT.completeIt;
-
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
@@ -39,7 +37,6 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -52,47 +49,26 @@ public class Ani {
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
-    public static Caffeine<EventCoordinates, KeyEvent> defaultEventsBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((EventCoordinates coords, KeyEvent event,
-                                         RemovalCause cause) -> log.trace("Event %s was removed ({}){}", coords,
-                                                                          cause));
-    }
-
-    public static Caffeine<Identifier, KeyState> defaultKeyStatesBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((Identifier coords, KeyState ks,
-                                         RemovalCause cause) -> log.trace("Key state %s was removed ({}){}", coords,
-                                                                          cause));
-    }
-
     public static Caffeine<EventCoordinates, Boolean> defaultValidatedBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
                        .removalListener((EventCoordinates coords, Boolean validated,
-                                         RemovalCause cause) -> log.trace("Validation %s was removed ({}){}", coords,
+                                         RemovalCause cause) -> log.trace("Validation {} was removed ({})", coords,
                                                                           cause));
     }
 
-    private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
-    private final KERL                                          kerl;
-    private final SigningMember                                 member;
-    private final SigningThreshold                              threshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
+    private final KERL                                         kerl;
+    private final SigningMember                                member;
+    private final SigningThreshold                             threshold;
+    private final AsyncLoadingCache<EventCoordinates, Boolean> validated;
 
     public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl) {
-        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder(), defaultEventsBuilder(),
-             defaultKeyStatesBuilder());
+        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder());
     }
 
     public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
-               Caffeine<Identifier, KeyState> keyStatesBuilder) {
+               Caffeine<EventCoordinates, Boolean> validatedBuilder) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
@@ -100,16 +76,13 @@ public class Ani {
                 return performValidation(key, validationTimeout);
             }
         });
-        events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
-            @Override
-            public CompletableFuture<? extends KeyEvent> asyncLoad(EventCoordinates key,
-                                                                   Executor executor) throws Exception {
-                return kerl.getKeyEvent(key);
-            }
-        });
         this.member = member;
         this.kerl = kerl;
         this.threshold = threshold;
+    }
+
+    public void clearValidations() {
+        validated.synchronous().invalidateAll();
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -210,16 +183,30 @@ public class Ani {
     }
 
     public CompletableFuture<Boolean> validate(KeyEvent event) {
-        events.put(event.getCoordinates(), completeIt(event));
         return validated.get(event.getCoordinates());
     }
 
-    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord, Duration timeout) {
+    KERL getKerl() {
+        return kerl;
+    }
+
+    private CompletableFuture<Boolean> complete(boolean result) {
         var fs = new CompletableFuture<Boolean>();
-        events.get(coord)
-              .thenAcceptBoth(kerl.getKeyStateWithEndorsementsAndValidations(coord),
-                              (event, ksa) -> validate(timeout, ksa, event).thenAccept(b -> fs.complete(b)));
+        fs.complete(result);
         return fs;
+    }
+
+    private CompletableFuture<Boolean> performValidation(EventCoordinates coord, Duration timeout) {
+        return kerl.getKeyEvent(coord)
+                   .thenCombine(kerl.getKeyStateWithEndorsementsAndValidations(coord), (event, ksa) -> {
+                       try {
+                           return validate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                       } catch (InterruptedException | TimeoutException e) {
+                           throw new IllegalStateException(e);
+                       } catch (ExecutionException e) {
+                           throw new IllegalStateException(e.getCause());
+                       }
+                   });
     }
 
     private CompletableFuture<Boolean> validate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
@@ -246,45 +233,49 @@ public class Ani {
                                                                                                     .toByteString()));
         }
 
-        if (!witnessed || ksAttach.validations().isEmpty()) {
-            var fs = new CompletableFuture<Boolean>();
-            fs.complete(witnessed);
-            return fs;
-        } else {
-            CompletableFuture<?> head = null;
-            record resolved(KeyState state, JohnHancock signature) {}
-
-            var mapped = new ArrayList<resolved>();
-            for (var entry : ksAttach.validations().entrySet()) {
-                if (head == null) {
-                    head = kerl.getKeyState(entry.getKey()).thenApply(ks -> {
-                        mapped.add(new resolved(ks, entry.getValue()));
-                        return ks;
-                    });
-                } else {
-                    head = head.thenApply(prev -> kerl.getKeyState(entry.getKey()).thenApply(ks -> {
-                        mapped.add(new resolved(ks, entry.getValue()));
-                        return ks;
-                    }));
-                }
-            }
-            return head.thenApply(o -> {
-                var validations = new PublicKey[mapped.size()];
-                byte[][] signatures = new byte[mapped.size()][];
-
-                int index = 0;
-                for (var r : mapped) {
-                    validations[index] = r.state.getKeys().get(0);
-                    signatures[index++] = r.signature.getBytes()[0];
-                }
-
-                SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
-                var validated = new JohnHancock(algo,
-                                                signatures).verify(threshold, validations,
-                                                                   BbBackedInputStream.aggregate(event.toKeyEvent_()
-                                                                                                      .toByteString()));
-                return validated;
-            });
+        if (!witnessed) {
+            return complete(witnessed);
         }
+
+        CompletableFuture<?> head = null;
+        record resolved(KeyState state, JohnHancock signature) {}
+
+        var mapped = new ArrayList<resolved>();
+        for (var entry : ksAttach.validations().entrySet()) {
+            if (head == null) {
+                head = kerl.getKeyState(entry.getKey()).thenApply(ks -> {
+                    mapped.add(new resolved(ks, entry.getValue()));
+                    return ks;
+                });
+            } else {
+                head = head.thenApply(prev -> kerl.getKeyState(entry.getKey()).thenApply(ks -> {
+                    mapped.add(new resolved(ks, entry.getValue()));
+                    return ks;
+                }));
+            }
+        }
+        if (head == null) {
+            return complete(SigningThreshold.thresholdMet(threshold, new int[] {}));
+        }
+        return head.thenApply(o -> {
+            var validations = new PublicKey[mapped.size()];
+            byte[][] signatures = new byte[mapped.size()][];
+
+            int index = 0;
+            for (var r : mapped) {
+                validations[index] = r.state.getKeys().get(0);
+                signatures[index++] = r.signature.getBytes()[0];
+            }
+
+            SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
+            var validated = new JohnHancock(algo,
+                                            signatures).verify(threshold, validations,
+                                                               BbBackedInputStream.aggregate(event.toKeyEvent_()
+                                                                                                  .toByteString()));
+            return validated;
+        }).exceptionally(t -> {
+            log.error("Error in validating {} on: {}", ksAttach.state().getCoordinates(), member.getId(), t);
+            return false;
+        });
     }
 }

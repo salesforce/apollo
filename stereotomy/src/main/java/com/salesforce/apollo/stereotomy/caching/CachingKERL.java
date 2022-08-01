@@ -32,8 +32,8 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     public CachingKERL(Function<Function<KERL, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                       Caffeine<Identifier, KeyState> curBuilder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
-        super(kelSupplier, builder, curBuilder, eventBuilder);
+                       Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+        super(kelSupplier, builder, eventBuilder);
     }
 
     @Override

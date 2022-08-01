@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy.event;
 
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
@@ -20,20 +21,27 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  * @author hal.hildebrand
  *
  */
-public record KeyStateWithEndorsementsAndValidations(KeyState state, Map<Integer, JohnHancock> endorsements,
-                                                     Map<Identifier, JohnHancock> validations) {
+public record KeyStateWithEndorsementsAndValidations(KeyState state, TreeMap<Integer, JohnHancock> endorsements,
+                                                     TreeMap<Identifier, JohnHancock> validations) {
+
+    public static KeyStateWithEndorsementsAndValidations create(KeyState state, Map<Integer, JohnHancock> endorsements,
+                                                                Map<Identifier, JohnHancock> validations) {
+        return new KeyStateWithEndorsementsAndValidations(state, new TreeMap<>(endorsements),
+                                                          new TreeMap<>(validations));
+
+    }
 
     public static KeyStateWithEndorsementsAndValidations from(KeyStateWithEndorsementsAndValidations_ ks) {
         return new KeyStateWithEndorsementsAndValidations(new KeyStateImpl(ks.getState()),
-                                                          ks.getEndorsementsMap()
-                                                            .entrySet()
-                                                            .stream()
-                                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                      e -> JohnHancock.from(e.getValue()))),
-                                                          ks.getValidationsList()
-                                                            .stream()
-                                                            .collect(Collectors.toMap(e -> Identifier.from(e.getValidator()),
-                                                                                      e -> JohnHancock.from(e.getSignature()))));
+                                                          new TreeMap<>(ks.getEndorsementsMap()
+                                                                          .entrySet()
+                                                                          .stream()
+                                                                          .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                                    e -> JohnHancock.from(e.getValue())))),
+                                                          new TreeMap<>(ks.getValidationsList()
+                                                                          .stream()
+                                                                          .collect(Collectors.toMap(e -> Identifier.from(e.getValidator()),
+                                                                                                    e -> JohnHancock.from(e.getSignature())))));
     }
 
     public KeyStateWithEndorsementsAndValidations_ toKS() {

@@ -77,9 +77,9 @@ public interface KERL extends KEL {
     default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
         return getKeyStateWithAttachments(coordinates).thenCombine(getValidations(coordinates), (ksa, validations) -> {
             return ksa == null ? null
-                               : new KeyStateWithEndorsementsAndValidations(ksa.state(),
-                                                                            ksa.attachments().endorsements(),
-                                                                            validations);
+                               : KeyStateWithEndorsementsAndValidations.create(ksa.state(),
+                                                                               ksa.attachments().endorsements(),
+                                                                               validations);
         });
     }
 
