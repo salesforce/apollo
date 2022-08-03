@@ -308,20 +308,18 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return completeIt(Collections.emptyList());
         }
-        CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
-                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor,
-                                              destination) -> mutate(result, gathered, futureSailor, identifier,
-                                                                     isTimedOut, tally, destination, "append kerl"),
+                                    .iterate(identifier, null, (link, r) -> link.append(kerl), null,
+                                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
+                                                                                          identifier, isTimedOut, tally,
+                                                                                          destination, "append kerl"),
                                              t -> completeIt(result, gathered));
-        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
     @Override
@@ -334,21 +332,18 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return complete(null);
         }
-        CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.append(events),
-                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor,
-                                              destination) -> mutate(result, gathered, futureSailor, identifier,
-                                                                     isTimedOut, tally, destination, "append events"),
+                                    .iterate(identifier, null, (link, r) -> link.append(events), null,
+                                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
+                                                                                          identifier, isTimedOut, tally,
+                                                                                          destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
     @Override
@@ -361,21 +356,18 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return completeIt(Collections.emptyList());
         }
-        CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.append(events, attachments),
-                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor,
-                                              destination) -> mutate(result, gathered, futureSailor, identifier,
-                                                                     isTimedOut, tally, destination, "append events"),
+                                    .iterate(identifier, null, (link, r) -> link.append(events, attachments), null,
+                                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
+                                                                                          identifier, isTimedOut, tally,
+                                                                                          destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return majority.thenCompose(n -> result.thenApply(ks -> ks.getKeyStatesList()));
+        return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
     @Override
@@ -388,22 +380,18 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return completeIt(Empty.getDefaultInstance());
         }
-        CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.appendAttachments(events),
-                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                    .iterate(identifier, null, (link, r) -> link.appendAttachments(events), null,
                                              (tally, futureSailor,
-                                              destination) -> mutate(result, gathered, futureSailor, identifier,
-                                                                     isTimedOut, tally, destination,
-                                                                     "append attachments"),
+                                              destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                     tally, destination, "append attachments"),
                                              t -> completeIt(result, gathered));
-        return majority.thenCompose(n -> result);
+        return result;
     }
 
     @Override
@@ -415,22 +403,18 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return completeIt(null);
         }
-        CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.appendValidations(validations),
-                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                    .iterate(identifier, null, (link, r) -> link.appendValidations(validations), null,
                                              (tally, futureSailor,
-                                              destination) -> mutate(result, gathered, futureSailor, identifier,
-                                                                     isTimedOut, tally, destination,
-                                                                     "append validations"),
+                                              destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                     tally, destination, "append validations"),
                                              t -> completeIt(result, gathered));
-        return majority.thenCompose(n -> result.thenApply(e -> null));
+        return result;
     }
 
     public KERL asKERL() {
@@ -751,8 +735,7 @@ public class KerlDHT implements ProtoKERLService {
         return new CombinedIntervals(intervals);
     }
 
-    private <T> boolean mutate(CompletableFuture<T> result, HashMultiset<T> gathered,
-                               Optional<ListenableFuture<T>> futureSailor, Digest identifier,
+    private <T> boolean mutate(HashMultiset<T> gathered, Optional<ListenableFuture<T>> futureSailor, Digest identifier,
                                Supplier<Boolean> isTimedOut, AtomicInteger tally,
                                Destination<Member, DhtService> destination, String action) {
         if (futureSailor.isEmpty()) {
@@ -789,11 +772,7 @@ public class KerlDHT implements ProtoKERLService {
                               .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                               .orElse(null);
             if (max != null) {
-                if (max.getCount() >= context.majority()) {
-                    tally.set(max.getCount());
-                } else {
-                    tally.set(max.getCount());
-                }
+                tally.set(max.getCount());
             }
             return !isTimedOut.get();
         } else {

@@ -9,11 +9,9 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
@@ -35,7 +33,6 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
  *
  */
 public class DelegatedKERL implements KERL {
-    private final static Logger log = LoggerFactory.getLogger(DelegatedKERL.class);
 
     private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;
@@ -64,8 +61,8 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<Identifier, JohnHancock> validations) {
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> v) {
+        var validations = new TreeMap<>(v);
         return kerl.appendValidations(Validations.newBuilder()
                                                  .setCoordinates(coordinates.toEventCoords())
                                                  .addAllValidations(validations.entrySet()
@@ -115,10 +112,10 @@ public class DelegatedKERL implements KERL {
     @Override
     public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
         return kerl.getValidations(coordinates.toEventCoords())
-                   .thenApply(v -> v.getValidationsList()
-                                    .stream()
-                                    .collect(Collectors.toMap(val -> Identifier.from(val.getValidator()),
-                                                              val -> JohnHancock.from(val.getSignature()))));
+                   .thenApply(v -> new TreeMap<>(v.getValidationsList()
+                                                  .stream()
+                                                  .collect(Collectors.toMap(val -> Identifier.from(val.getValidator()),
+                                                                            val -> JohnHancock.from(val.getSignature())))));
     }
 
     @Override

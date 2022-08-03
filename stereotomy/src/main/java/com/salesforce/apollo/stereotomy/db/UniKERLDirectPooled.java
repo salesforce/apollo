@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -83,7 +84,7 @@ public class UniKERLDirectPooled {
             try {
                 connection.close();
             } catch (SQLException e) {
-                throw new IOException("Error closing connection", e);
+                LoggerFactory.getLogger(ClosableKERL.class).error("Error closing connection", e);
             }
         }
 

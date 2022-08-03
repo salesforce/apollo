@@ -204,7 +204,11 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             return new Destination<>(null, null, r);
         }
         try {
-            return new Destination<>(successor, comm.apply(successor, member), r);
+            final var link = comm.apply(successor, member);
+            if (link == null) {
+                System.out.println("FOOOOOOOOOO");
+            }
+            return new Destination<>(successor, link, r);
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {} on: {}", successor.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());

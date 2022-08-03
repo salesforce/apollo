@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -77,17 +78,23 @@ abstract public class UniKERL implements KERL {
         if (id == null) {
             return;
         }
+        var count = new AtomicInteger();
         for (Seal s : attachment.attachments().seals()) {
             final var bytes = s.toSealed().toByteArray();
-            dsl.mergeInto(ATTACHMENT)
-               .usingDual()
-               .on(ATTACHMENT.FOR.eq(id.value1()))
-               .and(ATTACHMENT.SEAL.eq(bytes))
-               .whenNotMatchedThenInsert()
-               .set(ATTACHMENT.FOR, id.value1())
-               .set(ATTACHMENT.SEAL, bytes)
-               .execute();
+            count.accumulateAndGet(dsl.mergeInto(ATTACHMENT)
+                                      .usingDual()
+                                      .on(ATTACHMENT.FOR.eq(id.value1()))
+                                      .and(ATTACHMENT.SEAL.eq(bytes))
+                                      .whenNotMatchedThenInsert()
+                                      .set(ATTACHMENT.FOR, id.value1())
+                                      .set(ATTACHMENT.SEAL, bytes)
+                                      .execute(),
+                                   (a, b) -> a + b);
         }
+        log.info("appended: {} seals out of: {} coords: {}", count.get(), attachment.attachments().seals().size(),
+                 coordinates);
+
+        count.set(0);
         for (var entry : attachment.attachments().endorsements().entrySet()) {
             dsl.mergeInto(RECEIPT)
                .usingDual()
@@ -98,6 +105,8 @@ abstract public class UniKERL implements KERL {
                .set(RECEIPT.SIGNATURE, entry.getValue().toSig().toByteArray())
                .execute();
         }
+        log.info("appended: {} endorsements out of: {} coords: {}", count.get(),
+                 attachment.attachments().endorsements().size(), coordinates);
     }
 
     public static void append(DSLContext context, KeyEvent event, KeyState newState, DigestAlgorithm digestAlgorithm) {
@@ -125,17 +134,10 @@ abstract public class UniKERL implements KERL {
                                       .fetchOne();
 
         final var identBytes = event.getIdentifier().toIdent().toByteArray();
-        context.mergeInto(IDENTIFIER)
-               .using(context.selectOne())
-               .on(IDENTIFIER.PREFIX.eq(identBytes))
-               .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
-               .values(identBytes)
-               .execute();
-        final var identifierId = context.select(IDENTIFIER.ID)
-                                        .from(IDENTIFIER)
-                                        .where(IDENTIFIER.PREFIX.eq(identBytes))
-                                        .fetchOne()
-                                        .value1();
+
+        var idRec = context.newRecord(IDENTIFIER);
+        idRec.setPrefix(identBytes);
+        idRec.merge();
 
         final long id;
         try {
@@ -149,25 +151,23 @@ abstract public class UniKERL implements KERL {
                         .fetchOne()
                         .value1();
         } catch (DataAccessException e) {
-            return; // already present
+            log.error("Error inserting event coordinates: {}", event, e);
+            return;
         }
 
         final var digest = event.hash(digestAlgorithm);
-        context.insertInto(EVENT)
-               .set(EVENT.COORDINATES, id)
-               .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
-               .set(EVENT.CONTENT, compress(event.getBytes()))
-               .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
-               .execute();
-
-        context.mergeInto(CURRENT_KEY_STATE)
-               .using(context.selectOne())
-               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId))
-               .whenMatchedThenUpdate()
-               .set(CURRENT_KEY_STATE.CURRENT, id)
-               .whenNotMatchedThenInsert(CURRENT_KEY_STATE.IDENTIFIER, CURRENT_KEY_STATE.CURRENT)
-               .values(identifierId, id)
-               .execute();
+        var count = context.insertInto(EVENT)
+                           .set(EVENT.COORDINATES, id)
+                           .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
+                           .set(EVENT.CONTENT, compress(event.getBytes()))
+                           .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
+                           .execute();
+        log.trace("Inserted event: {} count: {} events", event, count);
+        final var rec = context.newRecord(CURRENT_KEY_STATE);
+        rec.setIdentifier(idRec.getId());
+        rec.setCurrent(id);
+        count = rec.merge();
+        log.trace("Inserted current key state: {} count: {} events", event, count);
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
@@ -186,42 +186,38 @@ abstract public class UniKERL implements KERL {
     public static byte[] appendEvent(Connection connection, byte[] event, String ilk, int digestCode) {
         final var uni = new UniKERLDirect(connection, DigestAlgorithm.fromDigestCode(digestCode));
         var result = uni.append(ProtobufEventFactory.toKeyEvent(event, ilk)).getNow(null);
+
         return result == null ? null : result.getBytes();
     }
 
     public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
                                          Map<Identifier, JohnHancock> validations) {
-        dsl.transaction(ctx -> {
-            final var id = dsl.select(COORDINATES.ID)
-                              .from(COORDINATES)
-                              .join(IDENTIFIER)
-                              .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                              .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                              .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                              .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                              .fetchOne();
-            if (id == null) {
-                return;
-            }
-            validations.forEach((identifier, signature) -> {
-                final var v = dsl.select(IDENTIFIER.ID)
-                                 .from(IDENTIFIER)
-                                 .where(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray()))
-                                 .fetchOne();
-                if (v != null) {
-                    var result = dsl.mergeInto(VALIDATION)
-                                    .usingDual()
-                                    .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(v.value1())))
-                                    .whenNotMatchedThenInsert()
-                                    .set(VALIDATION.FOR, id.value1())
-                                    .set(VALIDATION.VALIDATOR, v.value1())
-                                    .set(VALIDATION.SIGNATURE, signature.toSig().toByteArray())
-                                    .execute();
-                    System.out.println("Updated: " + result);
-                }
-            });
+
+        final var id = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .fetchOne();
+        if (id == null) {
+            return;
+        }
+        var result = new AtomicInteger();
+        validations.forEach((identifier, signature) -> {
+            var idRec = dsl.newRecord(IDENTIFIER);
+            idRec.setPrefix(identifier.toIdent().toByteArray());
+            idRec.merge();
+            var vRec = dsl.newRecord(VALIDATION);
+            vRec.setFor(id.value1());
+            vRec.setValidator(idRec.getId());
+            vRec.setSignature(signature.toSig().toByteArray());
+            vRec.merge();
+            result.accumulateAndGet(vRec.changed() ? 1 : 0, (a, b) -> a + b);
         });
+        log.info("Updated validations: {} count: {} out of: {} ", coordinates, result.get(), validations.size());
     }
 
     public static byte[] compress(byte[] input) {

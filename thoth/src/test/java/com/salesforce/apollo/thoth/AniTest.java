@@ -21,14 +21,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.h2.jdbc.JdbcConnection;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.db.UniKERLDirect;
+import com.salesforce.apollo.stereotomy.caching.CachingKERL;
+import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -52,7 +55,7 @@ public class AniTest extends AbstractDhtTest {
         SigningThreshold threshold = SigningThreshold.unweighted(3);
 
         final var url = "jdbc:h2:mem:test_engine-smoke;DB_CLOSE_DELAY=-1";
-        var connection = new JdbcConnection(url, new Properties(), "", "", false);
+        JdbcConnection connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
@@ -60,8 +63,16 @@ public class AniTest extends AbstractDhtTest {
                                                  database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "", false);
-        var kerl = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        connectionPool.setMaxConnections(10);
+        final var pooled = new UniKERLDirectPooled(connectionPool, DigestAlgorithm.DEFAULT);
+        KERL kerl = new CachingKERL(f -> {
+            try (var k = pooled.create()) {
+                return f.apply(k);
+            } catch (Throwable e) {
+                throw new IllegalStateException(e);
+            }
+        });
         var ani = new Ani(identities.keySet().stream().findFirst().get(), threshold, timeout, kerl);
         var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
 
@@ -107,7 +118,7 @@ public class AniTest extends AbstractDhtTest {
 
     @Test
     public void smokin() throws Exception {
-        var timeout = Duration.ofSeconds(10);
+        var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
@@ -137,7 +148,7 @@ public class AniTest extends AbstractDhtTest {
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 
-//    @Test
+    @Test
     public void threshold() throws Exception {
         var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
@@ -161,8 +172,8 @@ public class AniTest extends AbstractDhtTest {
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
+        assertFalse(ani.validate(inception).get(120, TimeUnit.MINUTES));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
 
         var v1 = controller.newIdentifier().get();
         var v2 = controller.newIdentifier().get();
@@ -176,8 +187,8 @@ public class AniTest extends AbstractDhtTest {
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
+        assertFalse(ani.validate(inception).get(120, TimeUnit.SECONDS));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
 
         ani.clearValidations();
         validations.put(v2.getIdentifier(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
@@ -186,14 +197,15 @@ public class AniTest extends AbstractDhtTest {
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(2, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
+        assertFalse(ani.validate(inception).get(120, TimeUnit.SECONDS));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
 
         ani.clearValidations();
         validations.put(v3.getIdentifier(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
-        assertTrue(ani.validate(inception).get(10, TimeUnit.SECONDS));
-        assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
+        var condition = ani.validate(inception).get();
+        assertTrue(condition);
+        assertTrue(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
     }
 }

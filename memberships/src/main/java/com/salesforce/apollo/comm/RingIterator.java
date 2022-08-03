@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -86,7 +86,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                             Runnable failedMajority, PredicateHandler<T, Q, Comm> handler,
                             Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        var traversed = new TreeSet<Member>();
+        var traversed = new ConcurrentSkipListSet<Member>();
         exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
                                            traversed));
 
@@ -140,11 +140,12 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         }
 
         try (Comm link = next.link()) {
-            log.trace("Iteration: {} tally: {} for: {} on: {} iteration: {} complete: {} on: {}", current, tally.get(),
+            log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} complete: {} on: {}", current, tally.get(),
                       digest, context.getId(), next.ring(), completed, member.getId());
             if (link == null) {
-                log.trace("No successor found of: {} on: {} iteration: {}  on: {}", digest, context.getId(), current,
-                          member);
+                log.trace("No successor found of: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
+                          context.getId(), current, traversed,
+                          context.ring(lastRingIndex).getRing().keySet().stream().toList(), member);
                 final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {

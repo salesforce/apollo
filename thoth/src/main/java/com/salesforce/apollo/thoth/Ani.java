@@ -258,6 +258,8 @@ public class Ani {
             return complete(SigningThreshold.thresholdMet(threshold, new int[] {}));
         }
         return head.thenApply(o -> {
+            log.error("Evaluating validation {} mapped: {} on: {}", ksAttach.state().getCoordinates(), mapped.size(),
+                      member.getId());
             var validations = new PublicKey[mapped.size()];
             byte[][] signatures = new byte[mapped.size()][];
 
