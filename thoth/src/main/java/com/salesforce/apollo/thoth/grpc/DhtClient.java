@@ -22,18 +22,19 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
-import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
-import com.salesfoce.apollo.thoth.proto.Validations;
-import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -57,18 +58,20 @@ public class DhtClient implements DhtService {
         return new DhtService() {
 
             @Override
-            public ListenableFuture<Empty> append(KERL_ kerl) {
-                return wrap(service.append(kerl).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(KERL_ kerl) {
+                return wrap(service.append(kerl).thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
-            public ListenableFuture<Empty> append(List<KeyEvent_> events) {
-                return wrap(service.append(events).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(List<KeyEvent_> events) {
+                return wrap(service.append(events)
+                                   .thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
-            public ListenableFuture<Empty> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
-                return wrap(service.append(events, attachments).thenApply(ks -> Empty.getDefaultInstance()));
+            public ListenableFuture<KeyStates> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
+                return wrap(service.append(events, attachments)
+                                   .thenApply(lks -> KeyStates.newBuilder().addAllKeyStates(lks).build()));
             }
 
             @Override
@@ -77,7 +80,7 @@ public class DhtClient implements DhtService {
             }
 
             @Override
-            public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+            public ListenableFuture<Empty> appendValidations(Validations validations) {
                 return wrap(service.appendValidations(validations));
             }
 
@@ -116,7 +119,7 @@ public class DhtClient implements DhtService {
             }
 
             @Override
-            public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            public ListenableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
                 return wrap(service.getKeyStateWithEndorsementsAndValidations(coordinates));
             }
 
@@ -159,7 +162,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(KERL_ kerl) {
+    public ListenableFuture<KeyStates> append(KERL_ kerl) {
         Context timer = metrics == null ? null : metrics.appendKERLClient().time();
         var request = KERLContext.newBuilder().setContext(context).build();
         if (metrics != null) {
@@ -176,7 +179,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(List<KeyEvent_> keyEventList) {
+    public ListenableFuture<KeyStates> append(List<KeyEvent_> keyEventList) {
         Context timer = metrics == null ? null : metrics.appendEventsClient().time();
         KeyEventsContext request = KeyEventsContext.newBuilder()
                                                    .addAllKeyEvent(keyEventList)
@@ -196,7 +199,7 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
+    public ListenableFuture<KeyStates> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
         var request = KeyEventWithAttachmentsContext.newBuilder()
                                                     .addAllEvents(eventsList)
@@ -234,9 +237,9 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+    public ListenableFuture<Empty> appendValidations(Validations validations) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = ValidationsContext.newBuilder().addAllValidations(validations).setContext(context).build();
+        var request = ValidationsContext.newBuilder().setValidations(validations).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
@@ -429,14 +432,14 @@ public class DhtClient implements DhtService {
     }
 
     @Override
-    public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+    public ListenableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
         EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
         }
-        ListenableFuture<KeyStateWithEndorsementsAndValidations> complete = client.getKeyStateWithEndorsementsAndValidations(request);
+        ListenableFuture<KeyStateWithEndorsementsAndValidations_> complete = client.getKeyStateWithEndorsementsAndValidations(request);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();

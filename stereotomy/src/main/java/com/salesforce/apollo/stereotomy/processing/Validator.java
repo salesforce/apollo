@@ -12,8 +12,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -62,23 +62,30 @@ public interface Validator {
     }
 
     default boolean validate(Identifier identifier, JohnHancock signature, InputStream message, KEL kel) {
-        KeyState currentState = kel.getKeyState(identifier).orElse(null);
-        if (currentState == null) {
-            log.debug("Identifier: {} not found in KeyState", identifier);
-            return false;
-        }
-        for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent()).orElse(null); lee != null;
-        lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
-            var lastEstablishment = (EstablishmentEvent) lee;
-            lastEstablishment.getKeys();
-
-            if (new DefaultVerifier(lastEstablishment.getKeys()).verify(lastEstablishment.getSigningThreshold(),
-                                                                        signature, message)) {
-                return true;
+        try {
+            KeyState currentState = kel.getKeyState(identifier).get();
+            if (currentState == null) {
+                log.debug("Identifier: {} not found in KeyState", identifier);
+                return false;
             }
+            for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent()).get(); lee != null;
+            lee = kel.getKeyEvent(lee.getPrevious()).get()) {
+                var lastEstablishment = (EstablishmentEvent) lee;
+                lastEstablishment.getKeys();
+
+                if (new DefaultVerifier(lastEstablishment.getKeys()).verify(lastEstablishment.getSigningThreshold(),
+                                                                            signature, message)) {
+                    return true;
+                }
+            }
+            log.debug("Unable to traverse establistment event chain for: {}", identifier);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException e) {
+            throw new InvalidKeyEventException(String.format("Error validating: " + identifier), e.getCause());
         }
-        log.debug("Unable to traverse establistment event chain for: {}", identifier);
-        return false;
     }
 
     default void validateKeyEventData(KeyState state, KeyEvent event, KEL kel) {
@@ -104,11 +111,20 @@ public interface Validator {
                 validate(event.getIdentifier().isTransferable(),
                          "only transferable identifiers can have rotation events");
 
-                Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
-                if (lookup.isEmpty()) {
+                KeyEvent lookup;
+                try {
+                    lookup = kel.getKeyEvent(state.getLastEstablishmentEvent()).get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (ExecutionException e) {
+                    throw new InvalidKeyEventException(String.format("Error retrieving previous establishment event: "
+                    + state.getLastEstablishmentEvent()), e.getCause());
+                }
+                if (lookup == null) {
                     throw new InvalidKeyEventException(String.format("previous establishment event does not exist"));
                 }
-                EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup.get();
+                EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) lookup;
                 validate(lastEstablishmentEvent.getNextKeysDigest().isPresent(),
                          "previous establishment event must have a next key configuration for rotation");
 

@@ -15,12 +15,17 @@ import com.salesforce.apollo.crypto.Digest;
  * @author hal.hildebrand
  *
  */
-public class SelfAddressingIdentifier implements Identifier {
+public class SelfAddressingIdentifier implements Identifier, Comparable<SelfAddressingIdentifier> {
 
     private final Digest digest;
 
     public SelfAddressingIdentifier(Digest digest) {
         this.digest = digest;
+    }
+
+    @Override
+    public int compareTo(SelfAddressingIdentifier o) {
+        return digest.compareTo(o.digest);
     }
 
     @Override
@@ -40,11 +45,6 @@ public class SelfAddressingIdentifier implements Identifier {
     }
 
     @Override
-    public Ident toIdent() {
-        return Ident.newBuilder().setSelfAddressing(digest.toDigeste()).build();
-    }
-
-    @Override
     public int hashCode() {
         return Objects.hash(digest);
     }
@@ -57,6 +57,11 @@ public class SelfAddressingIdentifier implements Identifier {
     @Override
     public boolean isTransferable() {
         return true;
+    }
+
+    @Override
+    public Ident toIdent() {
+        return Ident.newBuilder().setSelfAddressing(digest.toDigeste()).build();
     }
 
     @Override

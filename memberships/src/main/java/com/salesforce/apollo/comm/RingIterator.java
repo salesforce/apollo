@@ -9,6 +9,8 @@ package com.salesforce.apollo.comm;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -84,8 +86,16 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                             Runnable failedMajority, PredicateHandler<T, Q, Comm> handler,
                             Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
+        var traversed = new ConcurrentSkipListSet<Member>();
+        exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                           traversed));
 
+    }
+
+    @Override
+    public RingIterator<T, Comm> noDuplicates() {
+        super.noDuplicates();
+        return this;
     }
 
     @Override
@@ -96,11 +106,11 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     private <Q> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, ListenableFuture<Q>> round, Runnable failedMajority,
                                      PredicateHandler<T, Q, Comm> handler, Consumer<Integer> onComplete,
-                                     AtomicInteger tally) {
+                                     AtomicInteger tally, Set<Member> traversed) {
 
-        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
+        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                                 traversed);
         int ringCount = context.getRingCount();
-
         final var next = nextRing(digest, m -> {
             if (ignoreSelf && member.equals(m)) {
                 return IterateResult.CONTINUE;
@@ -108,26 +118,43 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             if (!context.isActive(m)) {
                 return IterateResult.CONTINUE;
             }
+            if (noDuplicates) {
+                if (traversed.add(m)) {
+                    return IterateResult.SUCCESS;
+                } else {
+                    return IterateResult.CONTINUE;
+                }
+            }
             return IterateResult.SUCCESS;
         });
+
+        boolean completed = complete;
+        final int current = lastRingIndex();
+        complete = current == ringCount - 1;
+        Consumer<Boolean> allowed = allow -> proceed(current, digest, allow, onMajority, failedMajority, tally,
+                                                     completed, onComplete);
+
+        if (completed) {
+            allowed.accept(true);
+            return;
+        }
+
         try (Comm link = next.link()) {
-            final int current = lastRingIndex();
-            boolean completed = complete;
-            complete = current == ringCount - 1;
             log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} complete: {} on: {}", current, tally.get(),
                       digest, context.getId(), next.ring(), completed, member.getId());
-
-            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally, completed,
-                                                         onComplete);
             if (link == null) {
-                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
-                          member);
+                log.trace("No successor found of: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
+                          context.getId(), current, traversed,
+                          context.ring(lastRingIndex).getRing().keySet().stream().toList(), member);
                 final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
                               member.getId());
                     schedule(proceed);
+                } else {
+                    log.trace("Complete on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
+                              member.getId());
                 }
                 return;
             }
@@ -136,14 +163,18 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                       member.getId());
             ListenableFuture<Q> futureSailor = round.apply(link, next.ring());
             if (futureSailor == null) {
-                log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
-                          current, link.getMember() == null ? null : link.getMember().getId(), member.getId());
+                log.trace("No asynchronous response for: {} on: {} iteration: {} from: {} on: {}", digest,
+                          context.getId(), current, link.getMember() == null ? null : link.getMember().getId(),
+                          member.getId());
                 final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
-                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
-                              member.getId());
+                    log.trace("Proceeding: {} on: {} for: {} tally: {} on: {}", current, digest, context.getId(),
+                              tally.get(), member.getId());
                     schedule(proceed);
+                } else {
+                    log.trace("Complete: {} on: {} for: {} tally: {} on: {}", current, digest, context.getId(),
+                              tally.get(), member.getId());
                 }
                 return;
             }
@@ -151,9 +182,12 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                 final var allow = handler.handle(tally, Optional.of(futureSailor), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
-                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
-                              member.getId());
+                    log.trace("Proceeding: {} on: {} for: {} tally: {} on: {}", current, digest, context.getId(),
+                              tally.get(), member.getId());
                     schedule(proceed);
+                } else {
+                    log.trace("Complete: {} on: {} for: {} tally: {} on: {}", current, digest, context.getId(),
+                              tally.get(), member.getId());
                 }
             }, log), exec);
         } catch (IOException e) {
@@ -161,20 +195,15 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         }
     }
 
-    private void proceed(Digest key, final boolean allow, Runnable onMajority, Runnable failedMajority,
+    private void proceed(int iteration, Digest key, final boolean allow, Runnable onMajority, Runnable failedMajority,
                          AtomicInteger tally, boolean finalIteration, Consumer<Integer> onComplete) {
-        log.trace("Determining continuation of: {} for: {} tally: {} majority: {} final itr: {} allow: {} on: {}", key,
-                  context.getId(), tally.get(), context.majority(), finalIteration, allow, member.getId());
-        if (onMajority != null && !majoritySucceed) {
-            if (tally.get() >= context.majority()) {
-                majoritySucceed = true;
-                log.debug("Obtained majority of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                          member.getId());
-                onMajority.run();
-            }
+        if (!finalIteration) {
+            log.trace("Determining: {} continuation of: {} for: {} tally: {} majority: {} final itr: {} allow: {} on: {}",
+                      iteration, key, context.getId(), tally.get(), context.majority(), finalIteration, allow,
+                      member.getId());
         }
         if (finalIteration && allow) {
-            log.trace("Final iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
+            log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
                       member.getId());
             if (failedMajority != null && !majorityFailed) {
                 if (tally.get() < context.majority()) {
@@ -185,12 +214,19 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                 }
             }
             if (onComplete != null) {
-                log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                          member.getId());
                 onComplete.accept(tally.get());
             }
         } else if (!allow) {
-            log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member.getId());
+            log.trace("Termination of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member.getId());
+        } else {
+            if (onMajority != null && !majoritySucceed) {
+                if (tally.get() >= context.majority()) {
+                    majoritySucceed = true;
+                    log.debug("Obtained: {} majority of: {} for: {} tally: {} on: {}", iteration, key, context.getId(),
+                              tally.get(), member.getId());
+                    onMajority.run();
+                }
+            }
         }
     }
 

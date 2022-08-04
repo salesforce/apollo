@@ -16,7 +16,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -78,8 +80,13 @@ public class AbstractDhtTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        identities = IntStream.range(0, getCardinality())
-                              .mapToObj(i -> stereotomy.newIdentifier().get())
+        identities = IntStream.range(0, getCardinality()).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        })
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();
@@ -118,17 +125,17 @@ public class AbstractDhtTest {
     protected void instantiate(SigningMember member, Context<Member> context, String prefix) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
-//        System.out.println("URL: " + url);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        connectionPool.setMaxConnections(2);
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
-                                             Executors.newFixedThreadPool(4), null);
+                                             ForkJoinPool.commonPool(), null);
         router.setMember(member);
         routers.put(member, router);
+        final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,
-                 new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2),
-                             Executors.newSingleThreadScheduledExecutor(), 0.125, null));
+                 new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
+                             ForkJoinPool.commonPool(), Duration.ofSeconds(200), scheduler, 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

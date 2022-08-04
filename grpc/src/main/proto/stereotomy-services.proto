@@ -77,6 +77,7 @@ service KERLService {
     rpc appendKERL (KERLContext) returns(KeyStates) {}
     rpc appendWithAttachments (KeyEventWithAttachmentsContext) returns(KeyStates) {}
     rpc appendAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+    rpc appendValidations (ValidationsContext) returns (google.protobuf.Empty) {}
 
     rpc getAttachment (EventContext) returns(Attachment) {}
     rpc getKeyEvent (EventDigestContext) returns(KeyEvent_) {}
@@ -84,7 +85,14 @@ service KERLService {
     rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKeyStateWithEndorsementsAndValidations (EventContext) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
     rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
+    rpc getValidations (EventContext) returns (stereotomy.Validations) {}
+}
+
+message ValidationsContext {
+    utils.Digeste context = 1;
+    stereotomy.Validations validations = 2;
 }
 
 service EventObserver { 

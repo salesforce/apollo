@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -42,7 +43,7 @@ public interface AttachmentEvent {
                                                 .stream()
                                                 .collect(Collectors.toMap(e -> e.getKey(),
                                                                           e -> JohnHancock.of(e.getValue()))));
-        };
+        }
 
         Map<Integer, JohnHancock> endorsements();
 
@@ -70,12 +71,12 @@ public interface AttachmentEvent {
 
         public AttachmentImpl(List<Seal> seals, Map<Integer, JohnHancock> endorsements) {
             this.seals = seals;
-            this.endorsements = endorsements;
+            this.endorsements = new TreeMap<>(endorsements);
         }
 
         public AttachmentImpl(Map<Integer, JohnHancock> endorsements) {
             this.seals = Collections.emptyList();
-            this.endorsements = endorsements;
+            this.endorsements = new TreeMap<>(endorsements);
         }
 
         public AttachmentImpl(Seal... seals) {

@@ -12,12 +12,15 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -37,14 +40,30 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     BoundIdentifier<D> bind();
 
     /**
+     * Commit the delegated rotation and commitment to the receiver's KERL
+     * 
+     * @param delegation - the delegated rotation event
+     * @param commitment - the event attachment that commits the delegation
+     * @return the future commitment of the keystate
+     */
+    CompletableFuture<Void> commit(DelegatedRotationEvent delegation, AttachmentEvent commitment);
+
+    /**
+     * Construct a delegated rotation event
+     *
+     * @return the future DelegatedRotation event
+     */
+    CompletableFuture<DelegatedRotationEvent> delegateRotate(RotationSpecification.Builder spec);
+
+    /**
      * @return the KERL of the receiver identifier
      */
-    Optional<List<EventWithAttachments>> getKerl();
+    CompletableFuture<List<EventWithAttachments>> getKerl();
 
     /**
      * @return the Signer for the key state binding
      */
-    Optional<Signer> getSigner();
+    CompletableFuture<Signer> getSigner();
 
     /**
      * 
@@ -55,7 +74,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Create a new delegated identifier using the receiver as the base.
      */
-    <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
+    <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -82,8 +101,8 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, List<CertExtension> extensions,
-                                                  SignatureAlgorithm algo);
+    CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                           List<CertExtension> extensions, SignatureAlgorithm algo);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -109,23 +128,23 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    default Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, SignatureAlgorithm algo) {
+    default CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                                   SignatureAlgorithm algo) {
         return provision(validFrom, valid, Collections.emptyList(), algo);
     }
 
     /**
      * Rotate the current key state
      */
-    void rotate();
+    CompletableFuture<Void> rotate();
 
     /**
      * Rotate the current key state using the supplied specification
      */
-    void rotate(RotationSpecification.Builder spec);
+    CompletableFuture<Void> rotate(RotationSpecification.Builder spec);
 
     /**
      * Publish the SealingEvent using the supplied specification
      */
-    void seal(InteractionSpecification.Builder spec);
-
+    CompletableFuture<EventCoordinates> seal(InteractionSpecification.Builder spec);
 }

@@ -6,16 +6,20 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -68,5 +72,62 @@ public interface KERL extends KEL {
 
     CompletableFuture<Void> append(List<AttachmentEvent> events);
 
-    Optional<List<EventWithAttachments>> kerl(Identifier identifier);
+    CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> validations);
+
+    default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
+        return getKeyStateWithAttachments(coordinates).thenCombine(getValidations(coordinates), (ksa, validations) -> {
+            return ksa == null ? null
+                               : KeyStateWithEndorsementsAndValidations.create(ksa.state(),
+                                                                               ksa.attachments().endorsements(),
+                                                                               validations);
+        });
+    }
+
+    CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates);
+
+    default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
+        // TODO use a real DB query instead of this really expensive iterative lookup
+        return getKeyState(identifier).thenApply(ks -> ks == null ? null : ks.getCoordinates())
+                                      .thenCompose(c -> c == null ? complete(Collections.emptyList())
+                                                                  : getKeyEvent(c).thenCompose(ks -> kerl(ks)));
+    }
+
+    private <T> CompletableFuture<T> complete(T value) {
+        var fs = new CompletableFuture<T>();
+        fs.complete(value);
+        return fs;
+    }
+
+    private CompletableFuture<EventWithAttachments> completeKerl(EventCoordinates c,
+                                                                 List<EventWithAttachments> result) {
+        if (c == null) {
+            var fs = new CompletableFuture<EventWithAttachments>();
+            fs.complete(null);
+            return fs;
+        }
+        return getAttachment(c).thenCombine(getKeyEvent(c), (a, e) -> {
+            if (e == null) {
+                return null;
+            }
+            result.add(new EventWithAttachments(e, a));
+            return e.getPrevious();
+        }).thenCompose(coords -> completeKerl(coords, result));
+    }
+
+    private CompletableFuture<List<EventWithAttachments>> kerl(KeyEvent event) {
+        var fs = new CompletableFuture<List<EventWithAttachments>>();
+        var result = new ArrayList<EventWithAttachments>();
+        getAttachment(event.getCoordinates()).thenApply(a -> {
+            result.add(new EventWithAttachments(event, a));
+            return event.getPrevious();
+        }).thenCompose(c -> completeKerl(c, result)).whenComplete((r, t) -> {
+            if (t != null) {
+                fs.completeExceptionally(t);
+            } else {
+                Collections.reverse(result);
+                fs.complete(result);
+            }
+        });
+        return fs;
+    }
 }

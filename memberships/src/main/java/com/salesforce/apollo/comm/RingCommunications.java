@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,6 +37,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class RingCommunications<T extends Member, Comm extends Link> {
+
     public enum Direction {
         PREDECESSOR {
             @Override
@@ -68,14 +71,15 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
-    final Context<T>    context;
-    final Executor      exec;
-    final SigningMember member;
-
+    protected boolean                            noDuplicates   = false;
+    final Context<T>                             context;
+    final Executor                               exec;
+    volatile int                                 lastRingIndex  = -1;
+    final SigningMember                          member;
     private final CommonCommunications<Comm, ?>  comm;
     private final Direction                      direction;
-    private volatile int                         lastRingIndex  = -1;
     private final AtomicReference<List<Integer>> traversalOrder = new AtomicReference<>();
+    private final Set<Member>                    traversed      = new TreeSet<>();
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                               Executor exec) {
@@ -99,12 +103,17 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     }
 
     public <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<T, Q, Comm> handler) {
-        final var next = nextRing(null);
+        final var next = nextRing(null, traversed);
         try (Comm link = next.link) {
             execute(round, handler, next);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
+    }
+
+    public RingCommunications<T, Comm> noDuplicates() {
+        noDuplicates = true;
+        return this;
     }
 
     public void reset() {
@@ -144,13 +153,14 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return linkFor(digest, current, test);
     }
 
-    Destination<T, Comm> nextRing(T member) {
+    Destination<T, Comm> nextRing(T member, Set<Member> traversed) {
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         if (current == 0) {
             final var order = getTraversalOrder();
             Entropy.secureShuffle(order);
+            traversed.clear();
             traversalOrder.set(order);
         }
         lastRingIndex = current;
@@ -194,7 +204,11 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             return new Destination<>(null, null, r);
         }
         try {
-            return new Destination<>(successor, comm.apply(successor, member), r);
+            final var link = comm.apply(successor, member);
+            if (link == null) {
+                log.trace("No connection to {} on: {}", successor.getId(), member.getId());
+            }
+            return new Destination<>(successor, link, r);
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {} on: {}", successor.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
@@ -205,10 +219,18 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     private Destination<T, Comm> linkFor(int index) {
         int r = getTraversalOrder().get(index);
         Ring<T> ring = context.ring(r);
+
         @SuppressWarnings("unchecked")
         T successor = direction.retrieve(ring, (T) member, m -> {
             if (!context.isActive(m)) {
                 return IterateResult.CONTINUE;
+            }
+            if (noDuplicates) {
+                if (traversed.add(m)) {
+                    return IterateResult.SUCCESS;
+                } else {
+                    return IterateResult.CONTINUE;
+                }
             }
             return IterateResult.SUCCESS;
         });

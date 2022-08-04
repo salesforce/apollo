@@ -56,7 +56,7 @@
             referencedTableSchemaName="stereotomy" />
 
         <addUniqueConstraint
-            columnNames="identifier, digest, sequence_number, ilk"
+            columnNames="identifier, sequence_number, digest, ilk"
             tableName="coordinates" schemaName="stereotomy"  constraintName="unique_id_dig_seq_ilk"/>
 
         <createTable tableName="event"
@@ -151,6 +151,35 @@
 
         <addUniqueConstraint columnNames="for, seal"
             tableName="attachment" schemaName="stereotomy" />
+
+        <createTable tableName="validation"
+            schemaName="stereotomy">
+            <column name="for" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+            <column name="validator" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+            <column name="signature" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="for"
+            baseTableName="validation" baseTableSchemaName="stereotomy"
+            constraintName="validation_for_fk" referencedTableName="event"
+            referencedColumnNames="coordinates"
+            referencedTableSchemaName="stereotomy" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="validator"
+            baseTableName="validation" baseTableSchemaName="stereotomy"
+            constraintName="validation_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
 
     </changeSet>
 </databaseChangeLog>

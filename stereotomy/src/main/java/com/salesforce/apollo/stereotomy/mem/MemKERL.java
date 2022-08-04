@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -94,16 +93,11 @@ public class MemKERL implements KERL {
     // Order by <receiptOrdering>
     private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
 
+    // Order by <coordinateOrdering>
+    private final Map<String, Map<Identifier, JohnHancock>> validations = new ConcurrentHashMap<>();
+
     public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
-    }
-
-    @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
-        events.forEach(event -> appendAttachments(event.coordinates(), event.attachments()));
-        var returned = new CompletableFuture<Void>();
-        returned.complete(null);
-        return returned;
     }
 
     @Override
@@ -113,6 +107,14 @@ public class MemKERL implements KERL {
         var f = new CompletableFuture<KeyState>();
         f.complete(newState);
         return f;
+    }
+
+    @Override
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        events.forEach(event -> appendAttachments(event.coordinates(), event.attachments()));
+        var returned = new CompletableFuture<Void>();
+        returned.complete(null);
+        return returned;
     }
 
     @Override
@@ -131,8 +133,18 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> v) {
+        var fs = new CompletableFuture<Void>();
+        validations.put(coordinateOrdering(coordinates), v);
+        fs.complete(null);
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Attachment>();
+        fs.complete(receipts.get(coordinateOrdering(coordinates)));
+        return fs;
     }
 
     @Override
@@ -141,40 +153,33 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        String coordinates = eventsByHash.get(digest);
-        return coordinates == null ? Optional.empty() : Optional.of(events.get(coordinates));
+    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<KeyEvent>();
+        fs.complete(events.get(coordinateOrdering(coordinates)));
+        return fs;
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<KeyState>();
+        fs.complete(keyState.get(coordinateOrdering(coordinates)));
+        return fs;
     }
 
     @Override
-    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
-    }
-
-    @Override
-    public Optional<KeyState> getKeyState(Identifier identifier) {
+    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
+        var fs = new CompletableFuture<KeyState>();
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
-        return stateHash == null ? Optional.empty() : Optional.ofNullable(keyState.get(stateHash));
+        fs.complete(stateHash == null ? null : keyState.get(stateHash));
+        return fs;
     }
 
     @Override
-    public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
-        var current = getKeyState(identifier);
-        if (current.isEmpty()) {
-            return Optional.empty();
-        }
-        var coordinates = current.get().getCoordinates();
-        var keyEvent = getKeyEvent(coordinates);
-        if (keyEvent.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(kerl(keyEvent.get()));
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Map<Identifier, JohnHancock>>();
+        fs.complete(validations.computeIfAbsent(coordinateOrdering(coordinates), k -> Collections.emptyMap()));
+        return fs;
     }
 
     private void append(KeyEvent event, KeyState newState) {
@@ -213,17 +218,5 @@ public class MemKERL implements KERL {
                 return seals;
             }
         };
-    }
-
-    private List<EventWithAttachments> kerl(KeyEvent event) {
-        var current = event;
-        var result = new ArrayList<EventWithAttachments>();
-        while (current != null) {
-            final var attachment = getAttachment(current.getCoordinates());
-            result.add(new EventWithAttachments(current, attachment.orElse(null)));
-            current = getKeyEvent(current.getPrevious()).orElse(null);
-        }
-        Collections.reverse(result);
-        return result;
     }
 }

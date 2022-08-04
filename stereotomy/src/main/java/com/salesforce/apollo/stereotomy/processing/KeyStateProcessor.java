@@ -3,6 +3,7 @@ package com.salesforce.apollo.stereotomy.processing;
 import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 
 import com.salesforce.apollo.stereotomy.KEL;
@@ -33,8 +34,15 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
         } else if (event instanceof EstablishmentEvent) {
             lastEstablishmentEvent = (EstablishmentEvent) event;
         } else {
-            lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent())
-                                                                .get();
+            try {
+                lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent())
+                                                                    .get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException e) {
+                throw new InvalidKeyEventException(String.format("Error processing: " + event), e.getCause());
+            }
         }
 
         requireNonNull(currentState, "currentState is required");

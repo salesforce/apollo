@@ -13,6 +13,7 @@ import java.security.SecureRandom;
 import java.sql.Connection;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,7 +35,9 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -78,12 +81,19 @@ public class Emulator {
             throw new IllegalStateException(e);
         }
         entropy.setSeed(new byte[] { 6, 6, 6 });
+        ControlledIdentifier<SelfAddressingIdentifier> identifier;
+        try {
+            identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
+                                            entropy).newIdentifier().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
         params = Parameters.newBuilder()
                            .build(RuntimeParameters.newBuilder()
-                                                   .setMember(new ControlledIdentifierMember(new StereotomyImpl(new MemKeyStore(),
-                                                                                                                new MemKERL(DigestAlgorithm.DEFAULT),
-                                                                                                                entropy).newIdentifier()
-                                                                                                                        .get()))
+                                                   .setMember(new ControlledIdentifierMember(identifier))
                                                    .setContext(new ContextImpl<>(base, 5, 0.01, 3))
                                                    .build());
         var algorithm = base.getAlgorithm();

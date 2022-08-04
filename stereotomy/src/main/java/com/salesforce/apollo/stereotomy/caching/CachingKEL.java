@@ -9,22 +9,18 @@ package com.salesforce.apollo.stereotomy.caching;
 
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.benmanes.caffeine.cache.CacheLoader;
+import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -51,50 +47,56 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class CachingKEL<K extends KEL> implements KEL {
     private static final Logger log = LoggerFactory.getLogger(CachingKEL.class);
 
+    public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder() {
+        return Caffeine.newBuilder()
+                       .maximumSize(10_000)
+                       .expireAfterWrite(Duration.ofMinutes(10))
+                       .removalListener((EventCoordinates coords, KeyEvent e,
+                                         RemovalCause cause) -> log.trace("KeyEvent {} was removed ({})", coords,
+                                                                          cause));
+    }
+
     public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
                        .removalListener((EventCoordinates coords, KeyState ks,
-                                         RemovalCause cause) -> log.trace("KeyState %s was removed ({}){}", coords,
+                                         RemovalCause cause) -> log.trace("KeyState {} was removed ({})", coords,
                                                                           cause));
     }
 
-    public static Caffeine<Identifier, KeyState> defaultKsCurrentBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((Identifier id, KeyState ks,
-                                         RemovalCause cause) -> log.trace("Current KeyState %s was removed ({}){}", id,
-                                                                          cause));
-    }
-
-    private final Function<Function<K, ?>, ?>              kelSupplier;
-    private final LoadingCache<EventCoordinates, KeyState> ksCoords;
-    private final LoadingCache<Identifier, KeyState>       ksCurrent;
+    private final Function<Function<K, ?>, ?>                   kelSupplier;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent> keyCoords;
+    private final AsyncLoadingCache<EventCoordinates, KeyState> ksCoords;
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier) {
-        this(kelSupplier, defaultKsCoordsBuilder(), defaultKsCurrentBuilder());
+        this(kelSupplier, defaultKsCoordsBuilder(), defaultEventCoordsBuilder());
     }
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                      Caffeine<Identifier, KeyState> curBuilder) {
-        ksCoords = builder.build(CacheLoader.bulk(coords -> load(coords)));
-        ksCurrent = curBuilder.build(CacheLoader.bulk(ids -> loadCurrent(ids)));
+                      Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+        ksCoords = builder.buildAsync(new AsyncCacheLoader<>() {
+
+            @Override
+            public CompletableFuture<? extends KeyState> asyncLoad(EventCoordinates key,
+                                                                   Executor executor) throws Exception {
+                return complete(kel -> kel.getKeyState(key));
+            }
+        });
         this.kelSupplier = kelSupplier;
+        this.keyCoords = eventBuilder.buildAsync(new AsyncCacheLoader<>() {
+
+            @Override
+            public CompletableFuture<? extends KeyEvent> asyncLoad(EventCoordinates key,
+                                                                   Executor executor) throws Exception {
+                return complete(kel -> kel.getKeyEvent(key));
+            }
+        });
     }
 
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
-        return complete(kel -> {
-            final var fs = kel.append(event);
-            fs.whenComplete((ks, t) -> {
-                if (t != null) {
-                    ksCurrent.invalidate(event.getIdentifier());
-                }
-            });
-            return fs;
-        });
+        return complete(kel -> kel.append(event));
     }
 
     @Override
@@ -104,15 +106,7 @@ public class CachingKEL<K extends KEL> implements KEL {
             fs.complete(Collections.emptyList());
             return fs;
         }
-        return complete(kel -> {
-            final var fs = kel.append(event);
-            fs.whenComplete((ks, t) -> {
-                if (t != null) {
-                    ksCurrent.invalidate(event[0].getIdentifier());
-                }
-            });
-            return fs;
-        });
+        return complete(kel -> kel.append(event));
     }
 
     @Override
@@ -122,21 +116,11 @@ public class CachingKEL<K extends KEL> implements KEL {
             fs.complete(Collections.emptyList());
             return fs;
         }
-        return complete(kel -> {
-            final var fs = kel.append(events, attachments);
-            if (!events.isEmpty()) {
-                fs.whenComplete((ks, t) -> {
-                    if (t != null) {
-                        ksCurrent.invalidate(events.get(0).getIdentifier());
-                    }
-                });
-            }
-            return fs;
-        });
+        return complete(kel -> kel.append(events, attachments));
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
         return complete(kel -> kel.getAttachment(coordinates));
     }
 
@@ -146,32 +130,27 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        return keyCoords.get(coordinates);
+    }
+
+    @Override
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
+        return ksCoords.get(coordinates);
+    }
+
+    @Override
+    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
+        return complete(kel -> kel.getKeyState(identifier));
+    }
+
+    @Override
+    public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
         return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
     }
 
     @Override
-    public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        return complete(kel -> kel.getKeyEvent(digest));
-    }
-
-    @Override
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return complete(kel -> kel.getKeyEvent(coordinates));
-    }
-
-    @Override
-    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return complete(kel -> Optional.ofNullable(ksCoords.get(coordinates)));
-    }
-
-    @Override
-    public Optional<KeyState> getKeyState(Identifier identifier) {
-        return complete(kel -> Optional.ofNullable(ksCurrent.get(identifier)));
-    }
-
-    @Override
-    public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+    public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
         return complete(kel -> kel.getVerifier(coordinates));
     }
 
@@ -179,31 +158,5 @@ public class CachingKEL<K extends KEL> implements KEL {
         @SuppressWarnings("unchecked")
         final var result = (T) kelSupplier.apply(func);
         return result;
-    }
-
-    private Map<EventCoordinates, KeyState> load(Set<? extends EventCoordinates> coords) {
-        var loaded = new HashMap<EventCoordinates, KeyState>();
-        return complete(kel -> {
-            coords.forEach(c -> {
-                var ks = kel.getKeyState(c);
-                if (!ks.isEmpty()) {
-                    loaded.put(c, ks.get());
-                }
-            });
-            return loaded;
-        });
-    }
-
-    private Map<Identifier, KeyState> loadCurrent(Set<? extends Identifier> ids) {
-        var loaded = new HashMap<Identifier, KeyState>();
-        return complete(kel -> {
-            ids.forEach(id -> {
-                var ks = kel.getKeyState(id);
-                if (!ks.isEmpty()) {
-                    loaded.put(id, ks.get());
-                }
-            });
-            return loaded;
-        });
     }
 }

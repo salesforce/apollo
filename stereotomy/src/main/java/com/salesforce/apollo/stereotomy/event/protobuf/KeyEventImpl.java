@@ -101,5 +101,10 @@ abstract public class KeyEventImpl implements KeyEvent {
         return new Digest(digest, digest.hashOf(toByteString()));
     }
 
+    @Override
+    public String toString() {
+        return String.format("%s[%s, %s]", getIlk(), getIdentifier(), getSequenceNumber());
+    }
+
     protected abstract ByteString toByteString();
 }

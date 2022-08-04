@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.processing;
 
+import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 
 import com.salesforce.apollo.stereotomy.KERL;
@@ -33,21 +34,40 @@ public class KeyEventProcessor implements Validator, KeyEventVerifier {
     }
 
     public Attachment process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
-        KeyEvent event = kerl.getKeyEvent(attachmentEvent.coordinates())
-                             .orElseThrow(() -> new MissingAttachmentEventException(attachmentEvent,
-                                                                                    attachmentEvent.coordinates()));
-        var state = kerl.getKeyState(attachmentEvent.coordinates())
-                        .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
-                                                                               attachmentEvent.coordinates()));
-        return verify(state, event, attachmentEvent.attachments());
+        KeyEvent event;
+        try {
+            event = kerl.getKeyEvent(attachmentEvent.coordinates()).get();
+            if (event == null) {
+                throw new MissingAttachmentEventException(attachmentEvent, attachmentEvent.coordinates());
+            }
+            var state = kerl.getKeyState(attachmentEvent.coordinates()).get();
+            if (state == null) {
+                throw new MissingAttachmentEventException(attachmentEvent, attachmentEvent.coordinates());
+            }
+            return verify(state, event, attachmentEvent.attachments());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new InvalidKeyEventException(String.format("Error processing: " + attachmentEvent), e.getCause());
+        }
     }
 
     public KeyState process(KeyEvent event) throws KeyEventProcessingException {
         KeyState previousState = null;
 
-        if (!(event instanceof InceptionEvent)) {
-            previousState = kerl.getKeyState(event.getPrevious())
-                                .orElseThrow(() -> new MissingEventException(event, event.getPrevious()));
+        try {
+            if (!(event instanceof InceptionEvent)) {
+                previousState = kerl.getKeyState(event.getPrevious()).get();
+                if (previousState == null) {
+                    throw new MissingEventException(event, event.getPrevious());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new InvalidKeyEventException(String.format("Error processing: " + event), e.getCause());
         }
 
         return process(previousState, event);

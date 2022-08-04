@@ -8,7 +8,7 @@ package com.salesforce.apollo.stereotomy.processing;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +29,19 @@ public interface KeyEventVerifier {
     static final Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
 
     default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
-        Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
-        if (lookup.isEmpty()) {
+        KeyEvent lookup;
+        try {
+            lookup = kel.getKeyEvent(state.getLastEstablishmentEvent()).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new InvalidKeyEventException(String.format("Error processing: " + event), e.getCause());
+        }
+        if (lookup == null) {
             throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
         }
-        var kee = (EstablishmentEvent) lookup.get();
+        var kee = (EstablishmentEvent) lookup;
         var filtered = new DefaultVerifier(kee.getKeys()).filtered(kee.getSigningThreshold(), signatures,
                                                                    event.getBytes());
         if (!filtered.verified()) {

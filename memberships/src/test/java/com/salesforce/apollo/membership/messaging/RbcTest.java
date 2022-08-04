@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -126,11 +127,13 @@ public class RbcTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, 100)
-                                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
+        List<SigningMember> members = IntStream.range(0, 100).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);

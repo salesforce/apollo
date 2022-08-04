@@ -14,20 +14,20 @@ package thoth;
 
 
 service KerlDht {
-    rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
-    rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
-    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc append (stereotomy.services.KeyEventsContext) returns (stereotomy.services.KeyStates) {}
+    rpc appendKERL (stereotomy.services.KERLContext) returns (stereotomy.services.KeyStates) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (stereotomy.services.KeyStates) {}
     rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
-    rpc appendValidations (ValidationsContext) returns (google.protobuf.Empty) {}
+    rpc appendValidations (stereotomy.services.ValidationsContext) returns (google.protobuf.Empty) {}
     
     rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
     rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
     rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
-    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.services.EventContext) returns (KeyStateWithEndorsementsAndValidations) {}
+    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
     rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
-    rpc getValidations (stereotomy.services.EventContext) returns (Validations) {}
+    rpc getValidations (stereotomy.services.EventContext) returns (stereotomy.Validations) {}
 }
 
 service Reconciliation {
@@ -73,32 +73,6 @@ message Interval {
         utils.Digeste end = 2;
 }
 
-message ValidationsContext {
-	utils.Digeste context = 1;
-	repeated Validations validations = 2;
-}
-
-message Validations {
-	stereotomy.EventCoords coordinates = 1;
-	repeated Validation validations = 2;
-}
-
-message Validation {
-	stereotomy.Ident validator = 1;
-	utils.Sig signature = 2;
-}
-
-message KeyStateWithEndorsementsAndValidations {
-	stereotomy.KeyState_ state = 1;
-    map<int32, utils.Sig> endorsements = 2;
-    repeated Validation validations = 3;
-}
-
-message Validated {
-	stereotomy.Ident validator = 1;
-	repeated utils.Sig signatures = 2;
-}
-
 message Signatures {
 	repeated utils.Sig signatures = 1;
 }
@@ -112,4 +86,9 @@ message WitnessContext {
 message ValidateContext {
     utils.Digeste context = 1;
     repeated stereotomy.KeyEventWithAttachments events = 2;
+}
+
+message Validated {
+    stereotomy.Ident validator = 1;
+    repeated utils.Sig signatures = 2;
 }

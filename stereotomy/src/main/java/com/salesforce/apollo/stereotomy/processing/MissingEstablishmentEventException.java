@@ -18,13 +18,13 @@ public class MissingEstablishmentEventException extends KeyEventProcessingExcept
     private static final long      serialVersionUID = 1L;
     private final EventCoordinates missing;
 
-    public EventCoordinates getMissing() {
-        return missing;
+    public MissingEstablishmentEventException(KeyEvent keyEvent, EventCoordinates missing) {
+        super(keyEvent, String.format("Missing establishment event: %s for: %s", missing, keyEvent));
+        this.missing = missing;
     }
 
-    public MissingEstablishmentEventException(KeyEvent keyEvent, EventCoordinates missing) {
-        super(keyEvent);
-        this.missing = missing;
+    public EventCoordinates getMissing() {
+        return missing;
     }
 
 }

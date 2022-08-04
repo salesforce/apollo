@@ -13,15 +13,17 @@ import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CUR
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Validation.VALIDATION;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -33,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
@@ -58,8 +61,7 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  */
 abstract public class UniKERL implements KERL {
     private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
-
-    private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
+    private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
         var coordinates = attachment.coordinates();
@@ -76,12 +78,23 @@ abstract public class UniKERL implements KERL {
         if (id == null) {
             return;
         }
+        var count = new AtomicInteger();
         for (Seal s : attachment.attachments().seals()) {
-            dsl.insertInto(ATTACHMENT)
-               .set(ATTACHMENT.FOR, id.value1())
-               .set(ATTACHMENT.SEAL, s.toSealed().toByteArray())
-               .execute();
+            final var bytes = s.toSealed().toByteArray();
+            count.accumulateAndGet(dsl.mergeInto(ATTACHMENT)
+                                      .usingDual()
+                                      .on(ATTACHMENT.FOR.eq(id.value1()))
+                                      .and(ATTACHMENT.SEAL.eq(bytes))
+                                      .whenNotMatchedThenInsert()
+                                      .set(ATTACHMENT.FOR, id.value1())
+                                      .set(ATTACHMENT.SEAL, bytes)
+                                      .execute(),
+                                   (a, b) -> a + b);
         }
+        log.info("appended: {} seals out of: {} coords: {}", count.get(), attachment.attachments().seals().size(),
+                 coordinates);
+
+        count.set(0);
         for (var entry : attachment.attachments().endorsements().entrySet()) {
             dsl.mergeInto(RECEIPT)
                .usingDual()
@@ -92,6 +105,8 @@ abstract public class UniKERL implements KERL {
                .set(RECEIPT.SIGNATURE, entry.getValue().toSig().toByteArray())
                .execute();
         }
+        log.info("appended: {} endorsements out of: {} coords: {}", count.get(),
+                 attachment.attachments().endorsements().size(), coordinates);
     }
 
     public static void append(DSLContext context, KeyEvent event, KeyState newState, DigestAlgorithm digestAlgorithm) {
@@ -119,18 +134,18 @@ abstract public class UniKERL implements KERL {
                                       .fetchOne();
 
         final var identBytes = event.getIdentifier().toIdent().toByteArray();
+
         context.mergeInto(IDENTIFIER)
                .using(context.selectOne())
                .on(IDENTIFIER.PREFIX.eq(identBytes))
                .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
                .values(identBytes)
                .execute();
-        final var identifierId = context.select(IDENTIFIER.ID)
-                                        .from(IDENTIFIER)
-                                        .where(IDENTIFIER.PREFIX.eq(identBytes))
-                                        .fetchOne()
-                                        .value1();
 
+        var identifierId = context.select(IDENTIFIER.ID)
+                                  .from(IDENTIFIER)
+                                  .where(IDENTIFIER.PREFIX.eq(identBytes))
+                                  .fetchOne();
         final long id;
         try {
             id = context.insertInto(COORDINATES)
@@ -143,25 +158,33 @@ abstract public class UniKERL implements KERL {
                         .fetchOne()
                         .value1();
         } catch (DataAccessException e) {
-            return; // already present
+            // Already exists
+            log.trace("Duplicate inserting event coordinates: {}", event);
+            return;
         }
 
         final var digest = event.hash(digestAlgorithm);
-        context.insertInto(EVENT)
-               .set(EVENT.COORDINATES, id)
-               .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
-               .set(EVENT.CONTENT, compress(event.getBytes()))
-               .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
-               .execute();
-
+        try {
+            context.insertInto(EVENT)
+                   .set(EVENT.COORDINATES, id)
+                   .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
+                   .set(EVENT.CONTENT, compress(event.getBytes()))
+                   .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
+                   .execute();
+        } catch (DataAccessException e) {
+            log.error("Error inserting event coordinates: {}", event, e);
+            return;
+        }
         context.mergeInto(CURRENT_KEY_STATE)
                .using(context.selectOne())
-               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId))
+               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
                .whenMatchedThenUpdate()
                .set(CURRENT_KEY_STATE.CURRENT, id)
-               .whenNotMatchedThenInsert(CURRENT_KEY_STATE.IDENTIFIER, CURRENT_KEY_STATE.CURRENT)
-               .values(identifierId, id)
+               .whenNotMatchedThenInsert()
+               .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
+               .set(CURRENT_KEY_STATE.CURRENT, id)
                .execute();
+
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
@@ -180,7 +203,37 @@ abstract public class UniKERL implements KERL {
     public static byte[] appendEvent(Connection connection, byte[] event, String ilk, int digestCode) {
         final var uni = new UniKERLDirect(connection, DigestAlgorithm.fromDigestCode(digestCode));
         var result = uni.append(ProtobufEventFactory.toKeyEvent(event, ilk)).getNow(null);
+
         return result == null ? null : result.getBytes();
+    }
+
+    public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
+                                         Map<Identifier, JohnHancock> validations) {
+
+        final var id = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .fetchOne();
+        if (id == null) {
+            return;
+        }
+        var result = new AtomicInteger();
+        validations.forEach((identifier, signature) -> {
+            var idRec = dsl.newRecord(IDENTIFIER);
+            idRec.setPrefix(identifier.toIdent().toByteArray());
+            idRec.merge();
+            var vRec = dsl.newRecord(VALIDATION);
+            vRec.setFor(id.value1());
+            vRec.setValidator(idRec.getId());
+            vRec.setSignature(signature.toSig().toByteArray());
+            vRec.merge();
+            result.accumulateAndGet(vRec.changed() ? 1 : 0, (a, b) -> a + b);
+        });
     }
 
     public static byte[] compress(byte[] input) {
@@ -247,7 +300,168 @@ abstract public class UniKERL implements KERL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Attachment>();
+        try {
+            var resolved = dsl.select(COORDINATES.ID)
+                              .from(COORDINATES)
+                              .join(IDENTIFIER)
+                              .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                              .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                              .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .fetchOne();
+            if (resolved == null) {
+                fs.complete(null);
+                return fs;
+            }
+
+            var seals = dsl.select(ATTACHMENT.SEAL)
+                           .from(ATTACHMENT)
+                           .where(ATTACHMENT.FOR.eq(resolved.value1()))
+                           .fetch()
+                           .stream()
+                           .map(r -> {
+                               try {
+                                   return Seal.from(Sealed.parseFrom(r.value1()));
+                               } catch (InvalidProtocolBufferException e) {
+                                   log.error("Error deserializing seal: {}", e);
+                                   return null;
+                               }
+                           })
+                           .filter(s -> s != null)
+                           .toList();
+
+            record receipt(int witness, Sig signature) {}
+            var receipts = dsl.select(RECEIPT.WITNESS, RECEIPT.SIGNATURE)
+                              .from(RECEIPT)
+                              .where(RECEIPT.FOR.eq(resolved.value1()))
+                              .fetch()
+                              .stream()
+                              .map(r -> {
+                                  try {
+                                      return new receipt(r.value1(), Sig.parseFrom(r.value2()));
+                                  } catch (InvalidProtocolBufferException e) {
+                                      log.error("Error deserializing signature witness: {}", e);
+                                      return null;
+                                  }
+                              })
+                              .filter(s -> s != null)
+                              .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
+            fs.complete(new AttachmentImpl(seals, receipts));
+        } catch (Throwable t) {
+            fs.completeExceptionally(t);
+        }
+        return fs;
+    }
+
+    @Override
+    public DigestAlgorithm getDigestAlgorithm() {
+        return digestAlgorithm;
+    }
+
+    public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
+        var fs = new CompletableFuture<KeyEvent>();
+        try {
+            var result = dsl.select(EVENT.CONTENT, COORDINATES.ILK)
+                            .from(EVENT)
+                            .join(COORDINATES)
+                            .on(COORDINATES.ID.eq(EVENT.COORDINATES))
+                            .where(EVENT.DIGEST.eq(digest.toDigeste().toByteString().toByteArray()))
+                            .fetchOptional()
+                            .map(r -> toKeyEvent(decompress(r.value1()), r.value2()));
+            fs.complete(result.orElse(null));
+        } catch (Throwable t) {
+            fs.completeExceptionally(t);
+        }
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<KeyEvent>();
+        try {
+            var result = dsl.select(EVENT.CONTENT, COORDINATES.ILK)
+                            .from(EVENT)
+                            .join(COORDINATES)
+                            .on(EVENT.COORDINATES.eq(COORDINATES.ID))
+                            .join(IDENTIFIER)
+                            .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                            .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                            .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .fetchOptional()
+                            .map(r -> toKeyEvent(decompress(r.value1()), r.value2()));
+            fs.complete(result.orElse(null));
+        } catch (Throwable t) {
+            fs.completeExceptionally(t);
+        }
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<KeyState>();
+        try {
+            var result = dsl.select(EVENT.CURRENT_STATE)
+                            .from(EVENT)
+                            .join(COORDINATES)
+                            .on(EVENT.COORDINATES.eq(COORDINATES.ID))
+                            .join(IDENTIFIER)
+                            .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                            .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                            .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .fetchOptional()
+                            .map(r -> {
+                                try {
+                                    return new KeyStateImpl(decompress(r.value1()));
+                                } catch (InvalidProtocolBufferException e) {
+                                    return null;
+                                }
+                            });
+            fs.complete(result.orElse(null));
+        } catch (Throwable t) {
+            fs.completeExceptionally(t);
+        }
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
+        var fs = new CompletableFuture<KeyState>();
+        try {
+            var result = dsl.select(EVENT.CURRENT_STATE)
+                            .from(EVENT)
+                            .join(CURRENT_KEY_STATE)
+                            .on(EVENT.COORDINATES.eq(CURRENT_KEY_STATE.CURRENT))
+                            .join(IDENTIFIER)
+                            .on(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray()))
+                            .where(CURRENT_KEY_STATE.IDENTIFIER.eq(IDENTIFIER.ID))
+                            .fetchOptional()
+                            .map(r -> {
+                                try {
+                                    return new KeyStateImpl(decompress(r.value1()));
+                                } catch (InvalidProtocolBufferException e) {
+                                    return null;
+                                }
+                            });
+            fs.complete(result.orElse(null));
+        } catch (Throwable t) {
+            fs.completeExceptionally(t);
+        }
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        CompletableFuture<Map<Identifier, JohnHancock>> complete = new CompletableFuture<>();
         var resolved = dsl.select(COORDINATES.ID)
                           .from(COORDINATES)
                           .join(IDENTIFIER)
@@ -259,144 +473,30 @@ abstract public class UniKERL implements KERL {
                           .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                           .fetchOne();
         if (resolved == null) {
-            return Optional.empty();
+            complete.complete(Collections.emptyMap());
+            return complete;
         }
 
-        var seals = dsl.select(ATTACHMENT.SEAL)
-                       .from(ATTACHMENT)
-                       .where(ATTACHMENT.FOR.eq(resolved.value1()))
-                       .fetch()
-                       .stream()
-                       .map(r -> {
-                           try {
-                               return Seal.from(Sealed.parseFrom(r.value1()));
-                           } catch (InvalidProtocolBufferException e) {
-                               log.error("Error deserializing seal: {}", e);
-                               return null;
-                           }
-                       })
-                       .filter(s -> s != null)
-                       .toList();
-
-        record receipt(int witness, Sig signature) {}
-        var receipts = dsl.select(RECEIPT.WITNESS, RECEIPT.SIGNATURE)
-                          .from(RECEIPT)
-                          .where(RECEIPT.FOR.eq(resolved.value1()))
-                          .fetch()
-                          .stream()
-                          .map(r -> {
-                              try {
-                                  return new receipt(r.value1(), Sig.parseFrom(r.value2()));
-                              } catch (InvalidProtocolBufferException e) {
-                                  log.error("Error deserializing signature witness: {}", e);
-                                  return null;
-                              }
-                          })
-                          .filter(s -> s != null)
-                          .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
-        return Optional.of(new AttachmentImpl(seals, receipts));
+        record validation(Ident identifier, Sig signature) {}
+        var validations = dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
+                             .from(VALIDATION)
+                             .join(IDENTIFIER)
+                             .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
+                             .where(VALIDATION.FOR.eq(resolved.value1()))
+                             .fetch()
+                             .stream()
+                             .map(r -> {
+                                 try {
+                                     return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
+                                 } catch (InvalidProtocolBufferException e) {
+                                     log.error("Error deserializing signature witness: {}", e);
+                                     return null;
+                                 }
+                             })
+                             .filter(s -> s != null)
+                             .collect(Collectors.toMap(v -> Identifier.from(v.identifier),
+                                                       v -> JohnHancock.from(v.signature)));
+        complete.complete(validations);
+        return complete;
     }
-
-    @Override
-    public DigestAlgorithm getDigestAlgorithm() {
-        return digestAlgorithm;
-    }
-
-    @Override
-    public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        return dsl.select(EVENT.CONTENT, COORDINATES.ILK)
-                  .from(EVENT)
-                  .join(COORDINATES)
-                  .on(COORDINATES.ID.eq(EVENT.COORDINATES))
-                  .where(EVENT.DIGEST.eq(digest.toDigeste().toByteString().toByteArray()))
-                  .fetchOptional()
-                  .map(r -> toKeyEvent(decompress(r.value1()), r.value2()));
-    }
-
-    @Override
-    public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return dsl.select(EVENT.CONTENT, COORDINATES.ILK)
-                  .from(EVENT)
-                  .join(COORDINATES)
-                  .on(EVENT.COORDINATES.eq(COORDINATES.ID))
-                  .join(IDENTIFIER)
-                  .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                  .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                  .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .fetchOptional()
-                  .map(r -> toKeyEvent(decompress(r.value1()), r.value2()));
-    }
-
-    @Override
-    public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return dsl.select(EVENT.CURRENT_STATE)
-                  .from(EVENT)
-                  .join(COORDINATES)
-                  .on(EVENT.COORDINATES.eq(COORDINATES.ID))
-                  .join(IDENTIFIER)
-                  .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                  .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                  .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .fetchOptional()
-                  .map(r -> {
-                      try {
-                          return new KeyStateImpl(decompress(r.value1()));
-                      } catch (InvalidProtocolBufferException e) {
-                          return null;
-                      }
-                  });
-    }
-
-    @Override
-    public Optional<KeyState> getKeyState(Identifier identifier) {
-        return dsl.select(EVENT.CURRENT_STATE)
-                  .from(EVENT)
-                  .join(CURRENT_KEY_STATE)
-                  .on(EVENT.COORDINATES.eq(CURRENT_KEY_STATE.CURRENT))
-                  .join(IDENTIFIER)
-                  .on(IDENTIFIER.PREFIX.eq(identifier.toIdent().toByteArray()))
-                  .where(CURRENT_KEY_STATE.IDENTIFIER.eq(IDENTIFIER.ID))
-                  .fetchOptional()
-                  .map(r -> {
-                      try {
-                          return new KeyStateImpl(decompress(r.value1()));
-                      } catch (InvalidProtocolBufferException e) {
-                          return null;
-                      }
-                  });
-    }
-
-    @Override
-    public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
-        // TODO use a real DB query instead of this really expensive iterative lookup
-        var current = getKeyState(identifier);
-        if (current.isEmpty()) {
-            return Optional.empty();
-        }
-        var coordinates = current.get().getCoordinates();
-        var keyEvent = getKeyEvent(coordinates);
-        if (keyEvent.isEmpty()) {
-            throw new IllegalStateException("The KEL is in a corrupted state, cannot find key event for "
-            + coordinates);
-        }
-        return Optional.of(kerl(keyEvent.get()));
-    }
-
-    private List<EventWithAttachments> kerl(KeyEvent event) {
-        var current = event;
-        var result = new ArrayList<EventWithAttachments>();
-        while (current != null) {
-            result.add(new EventWithAttachments(current, getAttachment(current.getCoordinates()).orElse(null)));
-            current = getKeyEvent(current.getPrevious()).orElse(null);
-        }
-        Collections.reverse(result);
-        return result;
-    }
-
 }

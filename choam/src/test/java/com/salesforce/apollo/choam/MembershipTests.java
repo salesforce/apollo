@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -159,8 +160,13 @@ public class MembershipTests {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, cardinality)
-                           .mapToObj(i -> stereotomy.newIdentifier().get())
+        members = IntStream.range(0, cardinality).mapToObj(i -> {
+            try {
+                return stereotomy.newIdentifier().get();
+            } catch (InterruptedException | ExecutionException e1) {
+                throw new IllegalStateException(e1);
+            }
+        })
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))

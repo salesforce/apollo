@@ -11,8 +11,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -74,7 +74,8 @@ public class ProcessDomain extends Domain {
         return foundation;
     }
 
-    public Optional<CertificateWithPrivateKey> provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {
+    public CompletableFuture<CertificateWithPrivateKey> provision(Duration duration,
+                                                                  SignatureAlgorithm signatureAlgorithm) {
         return identifier.provision(Instant.now(), duration, signatureAlgorithm);
     }
 

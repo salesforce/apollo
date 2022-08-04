@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -59,6 +60,7 @@ import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -283,12 +285,20 @@ abstract public class Domain {
 
     // Answer the KERL of this node
     private KERL_ kerl() {
-        var kerl = identifier.getKerl();
-        if (kerl.isEmpty()) {
+        List<EventWithAttachments> kerl;
+        try {
+            kerl = identifier.getKerl().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
+        if (kerl == null) {
             return KERL_.getDefaultInstance();
         }
         var b = KERL_.newBuilder();
-        kerl.get().stream().map(ewa -> ewa.toKeyEvente()).forEach(ke -> b.addEvents(ke));
+        kerl.stream().map(ewa -> ewa.toKeyEvente()).forEach(ke -> b.addEvents(ke));
         return b.build();
     }
 

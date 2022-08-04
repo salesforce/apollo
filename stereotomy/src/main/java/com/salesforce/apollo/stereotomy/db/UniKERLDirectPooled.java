@@ -12,13 +12,14 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -73,16 +74,22 @@ public class UniKERLDirectPooled {
         }
 
         @Override
+        public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                         Map<Identifier, JohnHancock> validations) {
+            return kerl.appendValidations(coordinates, validations);
+        }
+
+        @Override
         public void close() throws IOException {
             try {
                 connection.close();
             } catch (SQLException e) {
-                throw new IOException("Error closing connection", e);
+                LoggerFactory.getLogger(ClosableKERL.class).error("Error closing connection", e);
             }
         }
 
         @Override
-        public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
             return kerl.getAttachment(coordinates);
         }
 
@@ -92,37 +99,37 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public Optional<KeyEvent> getKeyEvent(Digest digest) {
-            return kerl.getKeyEvent(digest);
-        }
-
-        @Override
-        public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
+        public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
             return kerl.getKeyEvent(coordinates);
         }
 
         @Override
-        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+        public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
             return kerl.getKeyState(coordinates);
         }
 
         @Override
-        public Optional<KeyState> getKeyState(Identifier identifier) {
+        public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
             return kerl.getKeyState(identifier);
         }
 
         @Override
-        public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
             return kerl.getKeyStateWithAttachments(coordinates);
         }
 
         @Override
-        public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+        public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+            return kerl.getValidations(coordinates);
+        }
+
+        @Override
+        public CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates) {
             return kerl.getVerifier(coordinates);
         }
 
         @Override
-        public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
+        public CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
             return kerl.kerl(identifier);
         }
     }

@@ -9,7 +9,7 @@ public class MissingEventException extends KeyEventProcessingException {
     private final EventCoordinates missingEvent;
 
     public MissingEventException(KeyEvent dependingEvent, EventCoordinates missingEvent) {
-        super(dependingEvent);
+        super(dependingEvent, String.format("Missing event: %s for: %s", missingEvent, dependingEvent));
         this.missingEvent = missingEvent;
     }
 

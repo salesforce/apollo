@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
@@ -17,7 +16,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -39,10 +37,6 @@ public class EventCoordinates {
 
     public static EventCoordinates of(EventCoordinates event, Digest digest) {
         return new EventCoordinates(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
-    }
-
-    public static EventCoordinates of(Identifier identifier) {
-        return new EventCoordinates(identifier, ULong.valueOf(0), Digest.NONE, INCEPTION_TYPE);
     }
 
     public static EventCoordinates of(KeyEvent event) {
@@ -68,27 +62,16 @@ public class EventCoordinates {
         return of(event, digest);
     }
 
-    private final Digest digest;
-
+    private final Digest     digest;
     private final Identifier identifier;
-
-    private final String ilk;
-
-    private final ULong sequenceNumber;
-
-    public EventCoordinates(EventCoordinates event, Digest digest) {
-        this(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
-    }
+    private final String     ilk;
+    private final ULong      sequenceNumber;
 
     public EventCoordinates(EventCoords coordinates) {
         digest = Digest.from(coordinates.getDigest());
         ilk = coordinates.getIlk();
         identifier = Identifier.from(coordinates.getIdentifier());
         sequenceNumber = ULong.valueOf(coordinates.getSequenceNumber());
-    }
-
-    public EventCoordinates(String ilk, BasicIdentifier identifier) {
-        this(identifier, ULong.valueOf(0), Digest.NONE, ilk);
     }
 
     public EventCoordinates(Identifier identifier, ULong sequenceNumber, Digest digest, String ilk) {
@@ -151,4 +134,4 @@ public class EventCoordinates {
     public String toString() {
         return "[" + identifier + ":" + this.sequenceNumber + ":" + this.getDigest() + ":" + ilk + "]";
     }
-};
+}
