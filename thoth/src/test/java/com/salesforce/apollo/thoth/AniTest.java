@@ -172,8 +172,8 @@ public class AniTest extends AbstractDhtTest {
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validate(inception).get(120, TimeUnit.MINUTES));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
+        assertFalse(ani.validate(inception).get(5, TimeUnit.SECONDS));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         var v1 = controller.newIdentifier().get();
         var v2 = controller.newIdentifier().get();
@@ -187,8 +187,8 @@ public class AniTest extends AbstractDhtTest {
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(120, TimeUnit.SECONDS));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
+        assertFalse(ani.validate(inception).get(5, TimeUnit.SECONDS));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
         validations.put(v2.getIdentifier(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
@@ -198,7 +198,7 @@ public class AniTest extends AbstractDhtTest {
         assertEquals(2, retrieved.size());
 
         assertFalse(ani.validate(inception).get(120, TimeUnit.SECONDS));
-        assertFalse(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
+        assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
         validations.put(v3.getIdentifier(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
@@ -206,6 +206,6 @@ public class AniTest extends AbstractDhtTest {
 
         var condition = ani.validate(inception).get();
         assertTrue(condition);
-        assertTrue(ani.eventValidation(Duration.ofSeconds(120)).validate(inception));
+        assertTrue(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
     }
 }
