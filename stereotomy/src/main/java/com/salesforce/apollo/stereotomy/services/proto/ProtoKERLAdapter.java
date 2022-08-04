@@ -145,10 +145,8 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coords) {
-        return kerl.getValidations(EventCoordinates.from(coords)).thenApply(m -> new TreeMap<>(m)).handle((v, t) -> {
-            System.out.println("Validations: " + v);
-            return v;
-        })
+        return kerl.getValidations(EventCoordinates.from(coords))
+                   .thenApply(m -> new TreeMap<>(m))
                    .thenApply(vs -> Validations.newBuilder()
                                                .addAllValidations(vs.entrySet()
                                                                     .stream()

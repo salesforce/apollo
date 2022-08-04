@@ -234,7 +234,6 @@ abstract public class UniKERL implements KERL {
             vRec.merge();
             result.accumulateAndGet(vRec.changed() ? 1 : 0, (a, b) -> a + b);
         });
-        log.info("Updated validations: {} count: {} out of: {} ", coordinates, result.get(), validations.size());
     }
 
     public static byte[] compress(byte[] input) {

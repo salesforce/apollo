@@ -237,28 +237,20 @@ public class Ani {
             return complete(witnessed);
         }
 
-        CompletableFuture<?> head = null;
         record resolved(KeyState state, JohnHancock signature) {}
-
         var mapped = new ArrayList<resolved>();
-        for (var entry : ksAttach.validations().entrySet()) {
-            if (head == null) {
-                head = kerl.getKeyState(entry.getKey()).thenApply(ks -> {
-                    mapped.add(new resolved(ks, entry.getValue()));
-                    return ks;
-                });
-            } else {
-                head = head.thenApply(prev -> kerl.getKeyState(entry.getKey()).thenApply(ks -> {
-                    mapped.add(new resolved(ks, entry.getValue()));
-                    return ks;
-                }));
-            }
-        }
-        if (head == null) {
+        var last = ksAttach.validations().entrySet().stream().map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
+            mapped.add(new resolved(ks, e.getValue()));
+            return ks;
+        })).reduce((a, b) -> a.thenCompose(ks -> b));
+
+        if (last.isEmpty()) {
+            log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
             return complete(SigningThreshold.thresholdMet(threshold, new int[] {}));
         }
-        return head.thenApply(o -> {
-            log.error("Evaluating validation {} mapped: {} on: {}", ksAttach.state().getCoordinates(), mapped.size(),
+
+        return last.get().thenApply(o -> {
+            log.trace("Evaluating validation {} mapped: {} on: {}", ksAttach.state().getCoordinates(), mapped.size(),
                       member.getId());
             var validations = new PublicKey[mapped.size()];
             byte[][] signatures = new byte[mapped.size()][];
