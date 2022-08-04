@@ -135,10 +135,17 @@ abstract public class UniKERL implements KERL {
 
         final var identBytes = event.getIdentifier().toIdent().toByteArray();
 
-        var idRec = context.newRecord(IDENTIFIER);
-        idRec.setPrefix(identBytes);
-        idRec.merge();
+        context.mergeInto(IDENTIFIER)
+               .using(context.selectOne())
+               .on(IDENTIFIER.PREFIX.eq(identBytes))
+               .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
+               .values(identBytes)
+               .execute();
 
+        var identifierId = context.select(IDENTIFIER.ID)
+                                  .from(IDENTIFIER)
+                                  .where(IDENTIFIER.PREFIX.eq(identBytes))
+                                  .fetchOne();
         final long id;
         try {
             id = context.insertInto(COORDINATES)
@@ -151,23 +158,33 @@ abstract public class UniKERL implements KERL {
                         .fetchOne()
                         .value1();
         } catch (DataAccessException e) {
-            log.error("Error inserting event coordinates: {}", event, e);
+            // Already exists
+            log.trace("Duplicate inserting event coordinates: {}", event);
             return;
         }
 
         final var digest = event.hash(digestAlgorithm);
-        var count = context.insertInto(EVENT)
-                           .set(EVENT.COORDINATES, id)
-                           .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
-                           .set(EVENT.CONTENT, compress(event.getBytes()))
-                           .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
-                           .execute();
-        log.trace("Inserted event: {} count: {} events", event, count);
-        final var rec = context.newRecord(CURRENT_KEY_STATE);
-        rec.setIdentifier(idRec.getId());
-        rec.setCurrent(id);
-        count = rec.merge();
-        log.trace("Inserted current key state: {} count: {} events", event, count);
+        try {
+            context.insertInto(EVENT)
+                   .set(EVENT.COORDINATES, id)
+                   .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
+                   .set(EVENT.CONTENT, compress(event.getBytes()))
+                   .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
+                   .execute();
+        } catch (DataAccessException e) {
+            log.error("Error inserting event coordinates: {}", event, e);
+            return;
+        }
+        context.mergeInto(CURRENT_KEY_STATE)
+               .using(context.selectOne())
+               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
+               .whenMatchedThenUpdate()
+               .set(CURRENT_KEY_STATE.CURRENT, id)
+               .whenNotMatchedThenInsert()
+               .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
+               .set(CURRENT_KEY_STATE.CURRENT, id)
+               .execute();
+
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
