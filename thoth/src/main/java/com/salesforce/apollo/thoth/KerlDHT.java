@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
+import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -298,6 +299,28 @@ public class KerlDHT implements ProtoKERLService {
         });
     }
 
+    public CompletableFuture<KeyState_> append(AttachmentEvent event) {
+        Digest identifier = digestOf(event);
+        if (identifier == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStates>();
+        HashMultiset<KeyStates> gathered = HashMultiset.create();
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).noDuplicates()
+                                    .iterate(identifier, null,
+                                             (link, r) -> link.append(Collections.emptyList(),
+                                                                      Collections.singletonList(event)),
+                                             null,
+                                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
+                                                                                          identifier, isTimedOut, tally,
+                                                                                          destination, "append events"),
+                                             t -> completeIt(result, gathered));
+        return result.thenApply(ks -> null);
+    }
+
     @Override
     public CompletableFuture<List<KeyState_>> append(KERL_ kerl) {
         if (kerl.getEventsList().isEmpty()) {
@@ -322,12 +345,7 @@ public class KerlDHT implements ProtoKERLService {
         return result.thenApply(ks -> ks.getKeyStatesList());
     }
 
-    @Override
-    public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
-        if (events.isEmpty()) {
-            return complete(null);
-        }
-        final var event = events.get(0);
+    public CompletableFuture<KeyState_> append(KeyEvent_ event) {
         Digest identifier = digestOf(event);
         if (identifier == null) {
             return complete(null);
@@ -338,12 +356,26 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
-                                    .iterate(identifier, null, (link, r) -> link.append(events), null,
+                                    .iterate(identifier, null,
+                                             (link, r) -> link.append(Collections.singletonList(event)), null,
                                              (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
                                                                                           identifier, isTimedOut, tally,
                                                                                           destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(ks -> ks.getKeyStatesList());
+        return result.thenApply(ks -> ks.getKeyStatesList().get(0));
+    }
+
+    @Override
+    public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
+        if (events.isEmpty()) {
+            return completeIt(Collections.emptyList());
+        }
+        List<KeyState_> states = new ArrayList<>();
+        var futures = events.stream().map(e -> append(e).thenApply(ks -> {
+            states.add(ks);
+            return ks;
+        })).toList();
+        return futures.stream().reduce((a, b) -> a.thenCompose(ks -> b)).get().thenApply(ks -> states);
     }
 
     @Override
@@ -351,23 +383,16 @@ public class KerlDHT implements ProtoKERLService {
         if (events.isEmpty()) {
             return completeIt(Collections.emptyList());
         }
-        final var event = events.get(0);
-        Digest identifier = digestOf(event);
-        if (identifier == null) {
-            return completeIt(Collections.emptyList());
-        }
-        Instant timedOut = Instant.now().plus(timeout);
-        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        var result = new CompletableFuture<KeyStates>();
-        HashMultiset<KeyStates> gathered = HashMultiset.create();
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).noDuplicates()
-                                    .iterate(identifier, null, (link, r) -> link.append(events, attachments), null,
-                                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor,
-                                                                                          identifier, isTimedOut, tally,
-                                                                                          destination, "append events"),
-                                             t -> completeIt(result, gathered));
-        return result.thenApply(ks -> ks.getKeyStatesList());
+        List<KeyState_> states = new ArrayList<>();
+        var futures = events.stream().map(e -> append(e).thenApply(ks -> {
+            states.add(ks);
+            return ks;
+        }));
+
+        return Streams.concat(futures, attachments.stream().map(a -> append(a)))
+                      .reduce((a, b) -> a.thenCompose(ks -> b))
+                      .get()
+                      .thenApply(ks -> states);
     }
 
     @Override
@@ -659,10 +684,14 @@ public class KerlDHT implements ProtoKERLService {
         if (max != null) {
             if (max.getCount() >= context.majority()) {
                 result.complete(max.getElement());
-            } else {
-                completeExceptionally(result);
+                return;
             }
         }
+        completeExceptionally(result);
+    }
+
+    private Digest digestOf(AttachmentEvent event) {
+        return digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
     }
 
     private Digest digestOf(InceptionEvent event) {

@@ -76,6 +76,7 @@ abstract public class UniKERL implements KERL {
                           .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                           .fetchOne();
         if (id == null) {
+            log.info("Cannot find coordinates: {} for attachements", coordinates);
             return;
         }
         var count = new AtomicInteger();
@@ -96,14 +97,15 @@ abstract public class UniKERL implements KERL {
 
         count.set(0);
         for (var entry : attachment.attachments().endorsements().entrySet()) {
-            dsl.mergeInto(RECEIPT)
-               .usingDual()
-               .on(RECEIPT.FOR.eq(id.value1()).and(RECEIPT.WITNESS.eq(entry.getKey())))
-               .whenNotMatchedThenInsert()
-               .set(RECEIPT.FOR, id.value1())
-               .set(RECEIPT.WITNESS, entry.getKey())
-               .set(RECEIPT.SIGNATURE, entry.getValue().toSig().toByteArray())
-               .execute();
+            count.accumulateAndGet(dsl.mergeInto(RECEIPT)
+                                      .usingDual()
+                                      .on(RECEIPT.FOR.eq(id.value1()).and(RECEIPT.WITNESS.eq(entry.getKey())))
+                                      .whenNotMatchedThenInsert()
+                                      .set(RECEIPT.FOR, id.value1())
+                                      .set(RECEIPT.WITNESS, entry.getKey())
+                                      .set(RECEIPT.SIGNATURE, entry.getValue().toSig().toByteArray())
+                                      .execute(),
+                                   (a, b) -> a + b);
         }
         log.info("appended: {} endorsements out of: {} coords: {}", count.get(),
                  attachment.attachments().endorsements().size(), coordinates);
@@ -175,6 +177,7 @@ abstract public class UniKERL implements KERL {
             log.error("Error inserting event coordinates: {}", event, e);
             return;
         }
+        log.trace("Inserted event: {}", event);
         context.mergeInto(CURRENT_KEY_STATE)
                .using(context.selectOne())
                .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
@@ -184,7 +187,6 @@ abstract public class UniKERL implements KERL {
                .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
                .set(CURRENT_KEY_STATE.CURRENT, id)
                .execute();
-
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
@@ -234,6 +236,7 @@ abstract public class UniKERL implements KERL {
             vRec.merge();
             result.accumulateAndGet(vRec.changed() ? 1 : 0, (a, b) -> a + b);
         });
+        log.trace("Inserted validations: {} out of : {} for event: ", result.get(), validations.size(), coordinates);
     }
 
     public static byte[] compress(byte[] input) {

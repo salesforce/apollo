@@ -154,7 +154,7 @@ public class ReliableBroadcaster {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
-                         context.getId(), member, from, request.getRing(), predecessor);
+                         context.getId(), member.getId(), from, request.getRing(), predecessor.getId());
                 return Reconcile.getDefaultInstance();
             }
             return Reconcile.newBuilder()
@@ -167,7 +167,7 @@ public class ReliableBroadcaster {
             Member predecessor = context.ring(reconcile.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages reconcile on {}:{} from: {} on ring: {} - not predecessor: {}",
-                         context.getId(), member, from, reconcile.getRing(), predecessor);
+                         context.getId(), member.getId(), from, reconcile.getRing(), predecessor.getId());
                 return;
             }
             buffer.receive(reconcile.getUpdatesList());
@@ -427,7 +427,7 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return;
         }
-        log.debug("publishing message on: {}", member);
+        log.debug("publishing message on: {}", member.getId());
         AgedMessage m = buffer.send(message, member);
         if (notifyLocal) {
             deliver(Collections.singletonList(new Msg(member.getId(), m.getContent(),
@@ -501,7 +501,8 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return null;
         }
-        log.trace("rbc gossiping[{}] from {} with {} on {}", buffer.round(), member, link.getMember(), ring);
+        log.trace("rbc gossiping[{}] from {} with {} on {}", buffer.round(), member.getId(), link.getMember().getId(),
+                  ring);
         try {
             return link.gossip(MessageBff.newBuilder()
                                          .setContext(context.getId().toDigeste())
