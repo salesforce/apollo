@@ -73,14 +73,13 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
-import com.salesforce.apollo.thoth.grpc.Dht;
-import com.salesforce.apollo.thoth.grpc.DhtClient;
-import com.salesforce.apollo.thoth.grpc.DhtServer;
-import com.salesforce.apollo.thoth.grpc.DhtService;
-import com.salesforce.apollo.thoth.grpc.Reconciliation;
-import com.salesforce.apollo.thoth.grpc.ReconciliationClient;
-import com.salesforce.apollo.thoth.grpc.ReconciliationServer;
-import com.salesforce.apollo.thoth.grpc.ReconciliationService;
+import com.salesforce.apollo.thoth.grpc.dht.DhtClient;
+import com.salesforce.apollo.thoth.grpc.dht.DhtServer;
+import com.salesforce.apollo.thoth.grpc.dht.DhtService;
+import com.salesforce.apollo.thoth.grpc.reconciliation.Reconciliation;
+import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationClient;
+import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationServer;
+import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.LoggingOutputStream;
 import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
@@ -136,7 +135,7 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    private class Service implements Dht {
+    private class Service implements ProtoKERLService {
 
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
@@ -249,7 +248,7 @@ public class KerlDHT implements ProtoKERLService {
 
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
-    private final CommonCommunications<DhtService, Dht>                       dhtComms;
+    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
     private final Executor                                                    executor;
     private final double                                                      fpr;
     private final Duration                                                    frequency;

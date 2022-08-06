@@ -24,6 +24,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
+import com.salesforce.apollo.thoth.grpc.delegation.Delegation;
 
 /**
  * 
@@ -32,7 +33,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  * @author hal.hildebrand
  *
  */
-public class Thoth {
+public class Thoth implements Delegation {
 
     private static final Logger log = LoggerFactory.getLogger(Thoth.class);
 
@@ -62,6 +63,7 @@ public class Thoth {
         return identifier.getIdentifier();
     }
 
+    @Override
     public DelegatedInceptionEvent inception(SelfAddressingIdentifier controller,
                                              IdentifierSpecification.Builder<SelfAddressingIdentifier> specification) {
         final var inception = stereotomy.newDelegatedIdentifier(controller, specification);

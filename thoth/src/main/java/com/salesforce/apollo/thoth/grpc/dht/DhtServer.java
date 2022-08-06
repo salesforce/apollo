@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.thoth.grpc;
+package com.salesforce.apollo.thoth.grpc.dht;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +34,7 @@ import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.Status;
@@ -47,12 +48,11 @@ import io.grpc.stub.StreamObserver;
 public class DhtServer extends KerlDhtImplBase {
     private final static Logger log = LoggerFactory.getLogger(DhtServer.class);
 
-    private final Executor exec;
+    private final Executor                          exec;
+    private final StereotomyMetrics                 metrics;
+    private final RoutableService<ProtoKERLService> routing;
 
-    private final StereotomyMetrics    metrics;
-    private final RoutableService<Dht> routing;
-
-    public DhtServer(RoutableService<Dht> router, Executor exec, StereotomyMetrics metrics) {
+    public DhtServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
         this.exec = exec;

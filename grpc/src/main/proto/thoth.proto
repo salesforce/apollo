@@ -30,6 +30,11 @@ service KerlDht {
     rpc getValidations (stereotomy.services.EventContext) returns (stereotomy.Validations) {}
 }
 
+service Delegated {
+    rpc reconcile ( Intervals ) returns (Update) {}
+    rpc update (Updating) returns (google.protobuf.Empty) {}
+}
+
 service Reconciliation {
     rpc reconcile ( Intervals ) returns (Update) {}
     rpc update (Updating) returns (google.protobuf.Empty) {}

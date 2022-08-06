@@ -134,7 +134,7 @@ public class ChurnTest {
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
                                            scheduler));
 
-        // Test that all bootstrappers up
+        // Test that all seeds up
         var success = countdown.get().await(10, TimeUnit.SECONDS);
         testViews.addAll(bootstrappers);
 
@@ -147,6 +147,7 @@ public class ChurnTest {
         System.out.println("Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + testViews.size() + " members");
 
+        // Bring up the remaining members step wise
         for (int i = 0; i < 3; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
