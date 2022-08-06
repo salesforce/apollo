@@ -47,7 +47,6 @@ import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -75,11 +74,6 @@ public class StereotomyImpl implements Stereotomy {
         @Override
         public Set<ConfigurationTrait> configurationTraits() {
             return getState().configurationTraits();
-        }
-
-        @Override
-        public <T> T convertTo(Format format) {
-            return getState().convertTo(format);
         }
 
         @Override

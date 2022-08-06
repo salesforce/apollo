@@ -23,7 +23,6 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -40,7 +39,6 @@ public class RotationSpecification {
         private Digest                      currentDigest;
         private final List<BasicIdentifier> currentWitnesses   = new ArrayList<>();
         private DigestAlgorithm             digestAlgorithm    = DigestAlgorithm.DEFAULT;
-        private Format                      format             = Format.PROTOBUF;
         private Identifier                  identifier;
         private final List<PublicKey>       keys               = new ArrayList<>();
         private final List<PublicKey>       nextKeys           = new ArrayList<>();
@@ -147,8 +145,8 @@ public class RotationSpecification {
             var removed = new ArrayList<>(currentWitnesses);
             removed.removeAll(witnesses);
 
-            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber().add(1),
-                                             currentCoords, signingThreshold, keys, signer, nextKeyConfigurationDigest,
+            return new RotationSpecification(identifier, currentCoords.getSequenceNumber().add(1), currentCoords,
+                                             signingThreshold, keys, signer, nextKeyConfigurationDigest,
                                              witnessThreshold, removed, added, seals, version, currentDigest);
         }
 
@@ -175,22 +173,12 @@ public class RotationSpecification {
             return digestAlgorithm;
         }
 
-        public Format getFormat() {
-            return format;
-        }
-
         public Identifier getIdentifier() {
             return identifier;
         }
 
         public List<PublicKey> getKeys() {
             return keys;
-        }
-
-        public Builder setNextKeys(List<PublicKey> nextKeys) {
-            this.nextKeys.clear();
-            this.nextKeys.addAll(nextKeys);
-            return this;
         }
 
         public List<PublicKey> getNextKeys() {
@@ -254,11 +242,6 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setCbor() {
-            format = Format.CBOR;
-            return this;
-        }
-
         public Builder setCurrentCoords(EventCoordinates currentCoords) {
             this.currentCoords = currentCoords;
             return this;
@@ -279,11 +262,6 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setJson() {
-            format = Format.JSON;
-            return this;
-        }
-
         public Builder setKey(PublicKey publicKey) {
             keys.add(publicKey);
             return this;
@@ -294,8 +272,9 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setMessagePack() {
-            format = Format.MESSAGE_PACK;
+        public Builder setNextKeys(List<PublicKey> nextKeys) {
+            this.nextKeys.clear();
+            this.nextKeys.addAll(nextKeys);
             return this;
         }
 
@@ -359,7 +338,6 @@ public class RotationSpecification {
     }
 
     private final List<BasicIdentifier> addedWitnesses;
-    private final Format                format;
     private final Identifier            identifier;
     private final List<PublicKey>       keys;
     private final Digest                nextKeys;
@@ -373,12 +351,11 @@ public class RotationSpecification {
     private final Version               version;
     private final int                   witnessThreshold;
 
-    public RotationSpecification(Format format, Identifier identifier, ULong uLong, EventCoordinates previousEvent,
+    public RotationSpecification(Identifier identifier, ULong uLong, EventCoordinates previousEvent,
                                  SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer,
                                  Digest nextKeys, int witnessThreshold, List<BasicIdentifier> removedWitnesses,
                                  List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version,
                                  Digest priorEventDigest) {
-        this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = uLong;
         this.previous = previousEvent;
@@ -396,10 +373,6 @@ public class RotationSpecification {
 
     public List<BasicIdentifier> getAddedWitnesses() {
         return addedWitnesses;
-    }
-
-    public Format getFormat() {
-        return format;
     }
 
     public Identifier getIdentifier() {

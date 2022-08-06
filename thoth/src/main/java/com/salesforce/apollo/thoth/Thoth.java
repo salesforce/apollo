@@ -79,6 +79,7 @@ public class Thoth implements Delegation {
         return new ControlledIdentifierMember(id);
     }
 
+    @Override
     public CompletableFuture<DelegatedRotationEvent> rotate(RotationSpecification.Builder specification) {
         if (identifier == null) {
             throw new IllegalStateException("Identifier has not been established");

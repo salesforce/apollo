@@ -179,10 +179,9 @@ message SigningThreshold {
     repeated Weights weights = 2;
 }
 
-message Version {
-    string format = 1;
-    int32 major = 2;
-    int32 minor = 3;
+message Version { 
+    int32 major = 1;
+    int32 minor = 2;
 }
 
 // KeyState represents the materialized state of an identifier

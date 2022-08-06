@@ -19,7 +19,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -48,11 +47,6 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public final byte[] getBytes() {
         return toByteString().toByteArray();
-    }
-
-    @Override
-    public Format getFormat() {
-        return Format.valueOf(header.getVersion().getFormat());
     }
 
     @Override

@@ -28,7 +28,6 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -97,15 +96,6 @@ public class KeyStateImpl implements KeyState {
                     .stream()
                     .map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> T convertTo(Format format) {
-        if (format == Format.PROTOBUF) {
-            return (T) state;
-        }
-        throw new IllegalArgumentException("Cannot transform into format: " + format);
     }
 
     @Override

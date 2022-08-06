@@ -39,8 +39,6 @@ public interface KeyEvent {
         return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPriorEventDigest(), getIlk());
     }
 
-    Format getFormat();
-
     Identifier getIdentifier();
 
     String getIlk();
