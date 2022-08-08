@@ -15,12 +15,15 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
-import com.google.protobuf.Any;
-import com.salesfoce.apollo.pal.proto.PalDGrpc;
-import com.salesfoce.apollo.pal.proto.PalDGrpc.PalDBlockingStub;
+import com.salesfoce.apollo.pal.proto.PalGrpc;
+import com.salesfoce.apollo.pal.proto.PalGrpc.PalBlockingStub;
+import com.salesfoce.apollo.pal.proto.PalSecrets;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
+import io.netty.channel.epoll.EpollDomainSocketChannel;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.kqueue.KQueue;
 import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
@@ -37,19 +40,21 @@ public class PalDaemonTest {
         Files.deleteIfExists(socketPath);
 
         var target = socketPath.toFile().getPath();
-        var server = new PalDaemon(socketPath);
+        var server = new PalDaemon(socketPath, s -> null);
         server.start();
 
         ManagedChannel channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(target))
-                                                    .eventLoopGroup(new KQueueEventLoopGroup())
-                                                    .channelType(KQueueDomainSocketChannel.class)
+                                                    .eventLoopGroup(KQueue.isAvailable() ? new KQueueEventLoopGroup()
+                                                                                         : new EpollEventLoopGroup())
+                                                    .channelType(KQueue.isAvailable() ? KQueueDomainSocketChannel.class
+                                                                                      : EpollDomainSocketChannel.class)
                                                     .keepAliveTime(1, TimeUnit.MILLISECONDS)
                                                     .usePlaintext()
                                                     .build();
         assertFalse(channel.isShutdown());
-        PalDBlockingStub stub = PalDGrpc.newBlockingStub(channel);
+        PalBlockingStub stub = PalGrpc.newBlockingStub(channel);
 
-        var result = stub.ping(Any.newBuilder().build());
+        var result = stub.decrypt(PalSecrets.getDefaultInstance());
         assertNotNull(result);
     }
 }
