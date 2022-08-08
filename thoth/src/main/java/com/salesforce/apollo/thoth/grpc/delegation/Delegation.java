@@ -8,10 +8,10 @@ package com.salesforce.apollo.thoth.grpc.delegation;
 
 import java.util.concurrent.CompletableFuture;
 
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
@@ -19,8 +19,8 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  *
  */
 public interface Delegation {
-    DelegatedInceptionEvent inception(SelfAddressingIdentifier controller,
-                                      IdentifierSpecification.Builder<SelfAddressingIdentifier> specification);
+    DelegatedInceptionEvent inception(SelfAddressingIdentifier controller, SigningThreshold signingThreshold,
+                                      SigningThreshold witnessThreshold);
 
     CompletableFuture<DelegatedRotationEvent> rotate(RotationSpecification.Builder specification);
 }

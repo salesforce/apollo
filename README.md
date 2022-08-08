@@ -105,6 +105,10 @@ This modules must be built, so please run once from the top level of the reposit
 
 from the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding this module will have no adverse effect on the rest of the build.
 
+### Eclipse M2E issues with ${os.detected.classifier}
+
+This is a known weirdness with Eclipse M2E with the [os-maven-plugin build extension](https://github.com/trustin/os-maven-plugin).  I've been fine with this, but ran into another project that Eclipse just kept refusing to resolve.  I solved this by downloading the supplied maven plugin](https://repo1.maven.org/maven2/kr/motd/maven/os-maven-plugin/1.7.0/os-maven-plugin-1.7.0.jar) and adding this to the `<ECLIPSE_HOME>/dropins` directory.  This works because the plugin is also an Eclipse plugin, which is nice.
+
 ### Your IDE and Maven code generation
 
 Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.pal.proto";
+option java_outer_classname = "ApolloPalProto";
+option objc_class_prefix = "Ap";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+package pal;
+
+service PalD {
+    rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
+}
