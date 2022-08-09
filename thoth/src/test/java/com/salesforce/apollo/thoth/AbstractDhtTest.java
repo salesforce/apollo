@@ -131,7 +131,7 @@ public class AbstractDhtTest {
         final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,
                  new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             ForkJoinPool.commonPool(), Duration.ofSeconds(200), scheduler, 0.125, null));
+                             ForkJoinPool.commonPool(), Duration.ofSeconds(10), scheduler, 0.0125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

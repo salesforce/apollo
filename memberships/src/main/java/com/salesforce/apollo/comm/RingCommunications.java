@@ -175,6 +175,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         }
         final var current = currentIndex;
         if (current == traversalOrder.size() - 1) {
+            traversalOrder.addAll(calculateTraversal(digest));
             Entropy.secureShuffle(traversalOrder);
             log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
         }

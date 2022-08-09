@@ -275,7 +275,7 @@ public class ChurnTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
-        final var exec = new ForkJoinPool();
+        final var exec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
