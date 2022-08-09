@@ -162,6 +162,14 @@ public class Digest implements Comparable<Digest> {
         return false;
     }
 
+    public long fold() {
+        long folded = 0;
+        for (var l : hash) {
+            folded ^= BUZ.buzhash(l) % Hash.MERSENNE_31;
+        }
+        return folded;
+    }
+
     public DigestAlgorithm getAlgorithm() {
         return algorithm;
     }
@@ -292,10 +300,9 @@ public class Digest implements Comparable<Digest> {
             throw new IllegalArgumentException("Cannot xor digests of different algorithms");
         }
         long[] xord = new long[hash.length];
-        long[] bHash = b.hash;
 
         for (int i = 0; i < hash.length; i++) {
-            xord[i] = hash[i] ^ bHash[i];
+            xord[i] = hash[i] ^ b.hash[i];
         }
         return new Digest(algorithm, xord);
     }

@@ -1905,10 +1905,10 @@ public class View {
         context.rebalance(context.totalCount() + view.joining.size());
 
         // Compute the new membership
-        membership = new DigestBloomFilter(currentView.get().getLongs()[0],
+        membership = new DigestBloomFilter(currentView.get().fold(),
                                            Math.max(params.minimumBiffCardinality(),
                                                     (context.memberCount() + view.joining.size())),
-                                           0.0001);
+                                           0.00125);
         context.allMembers().forEach(p -> membership.add(p.getId()));
         view.joining().forEach(id -> membership.add(id));
 
@@ -2205,6 +2205,9 @@ public class View {
         }
         if (context.activate(member)) {
             log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+                      context.totalCount(), node.getId());
+        } else {
+            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
                       context.totalCount(), node.getId());
         }
     }
