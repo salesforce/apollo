@@ -11,13 +11,18 @@ import static org.junit.Assert.assertNotNull;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.junit.Test;
 
+import com.salesfoce.apollo.pal.proto.Decrypted;
+import com.salesfoce.apollo.pal.proto.Encrypted;
 import com.salesfoce.apollo.pal.proto.PalGrpc;
 import com.salesfoce.apollo.pal.proto.PalGrpc.PalBlockingStub;
-import com.salesfoce.apollo.pal.proto.PalSecrets;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
@@ -27,6 +32,7 @@ import io.netty.channel.kqueue.KQueue;
 import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import io.netty.channel.unix.PeerCredentials;
 
 /**
  * @author hal.hildebrand
@@ -40,7 +46,20 @@ public class PalDaemonTest {
         Files.deleteIfExists(socketPath);
 
         var target = socketPath.toFile().getPath();
-        var server = new PalDaemon(socketPath, s -> null);
+        Function<PeerCredentials, CompletableFuture<Set<String>>> retriever = principal -> {
+            var fs = new CompletableFuture<Set<String>>();
+            fs.complete(Set.of("TEST_LABEL"));
+            return fs;
+        };
+        var decrypters = new HashMap<String, Function<Encrypted, CompletableFuture<Decrypted>>>();
+
+        decrypters.put("nb", e -> {
+            var fs = new CompletableFuture<Decrypted>();
+            fs.complete(Decrypted.getDefaultInstance());
+            return fs;
+        });
+
+        var server = new PalDaemon(socketPath, retriever, decrypters);
         server.start();
 
         ManagedChannel channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(target))
@@ -48,13 +67,13 @@ public class PalDaemonTest {
                                                                                          : new EpollEventLoopGroup())
                                                     .channelType(KQueue.isAvailable() ? KQueueDomainSocketChannel.class
                                                                                       : EpollDomainSocketChannel.class)
-                                                    .keepAliveTime(1, TimeUnit.MILLISECONDS)
+                                                    .keepAliveTime(1000, TimeUnit.SECONDS)
                                                     .usePlaintext()
                                                     .build();
         assertFalse(channel.isShutdown());
         PalBlockingStub stub = PalGrpc.newBlockingStub(channel);
 
-        var result = stub.decrypt(PalSecrets.getDefaultInstance());
+        var result = stub.decrypt(Encrypted.getDefaultInstance());
         assertNotNull(result);
     }
 }

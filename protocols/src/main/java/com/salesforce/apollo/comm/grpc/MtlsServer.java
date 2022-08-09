@@ -74,19 +74,19 @@ public class MtlsServer implements ClientIdentity {
 
     public static final String TL_SV1_3 = "TLSv1.3";
 
-    private static final Provider PROVIDER_BCJSSE = Security.getProvider("SunJSSE");
+    private static final Provider PROVIDER_JSSE = Security.getProvider("SunJSSE");
 
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
-                                                     .sslContextProvider(PROVIDER_BCJSSE)
+                                                     .sslContextProvider(PROVIDER_JSSE)
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                                                            privateKey,
-                                                                                           PROVIDER_BCJSSE));
+                                                                                           PROVIDER_JSSE));
         GrpcSslContexts.configure(builder, SslProvider.JDK);
         builder.protocols(TL_SV1_3)
-               .sslContextProvider(PROVIDER_BCJSSE)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .sslContextProvider(PROVIDER_JSSE)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_JSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                                                                         // NO_ADVERTISE is currently the only mode
@@ -110,11 +110,11 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
-                                                                                          privateKey, PROVIDER_BCJSSE));
+                                                                                          privateKey, PROVIDER_JSSE));
         GrpcSslContexts.configure(builder, SslProvider.JDK);
         builder.protocols(TL_SV1_3)
-               .sslContextProvider(PROVIDER_BCJSSE)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .sslContextProvider(PROVIDER_JSSE)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_JSSE))
                .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                                                                         // NO_ADVERTISE is currently the only mode
@@ -154,7 +154,7 @@ public class MtlsServer implements ClientIdentity {
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
                                                        .withOption(ChannelOption.SO_REUSEADDR, true)
                                                        .sslContext(supplier.forServer(clientAuth, alias, validator,
-                                                                                      PROVIDER_BCJSSE, TL_SV1_3))
+                                                                                      PROVIDER_JSSE, TL_SV1_3))
                                                        .fallbackHandlerRegistry(registry)
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)
