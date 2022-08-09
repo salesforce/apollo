@@ -77,7 +77,7 @@ public class KerlTest extends AbstractDhtTest {
         // identifier
         assertTrue(delegated.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) delegated.getIdentifier();
-        assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
+        assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
         assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
                      Hex.hex(sap.getDigest().getBytes()));
 

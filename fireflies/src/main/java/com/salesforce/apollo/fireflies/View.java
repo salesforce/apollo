@@ -1369,15 +1369,11 @@ public class View {
         }
         final var current = membership;
         if (!current.contains(note.getId())) {
-            // For some reason I have not discovered, this second check puzzlingly succeeds.
-            // My locking is weak
-            if (!current.contains(note.getId())) {
-                log.trace("Note: {} is not a member  on: {}", note.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
-                return false;
+            log.warn("Note: {} is not a member  on: {}", note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
             }
+            return false;
         }
 
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
