@@ -209,7 +209,8 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         try {
             final Comm link = comm.apply(successor.m, member);
             if (link == null) {
-                log.trace("No connection to {} on: {}", successor.m.getId(), member.getId());
+                log.trace("No connection to {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
+                          member.getId());
             }
             return new Destination<>(successor.m, link, successor.ring);
         } catch (Throwable e) {

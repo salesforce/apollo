@@ -7,9 +7,9 @@
 package com.salesforce.apollo.utils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -59,7 +59,9 @@ public class RoundScheduler extends AtomicInteger {
             if (isCancelled) {
                 return;
             }
-            timers.remove(label);
+            if (label != null) {
+                timers.remove(label);
+            }
             try {
                 action.run();
             } catch (Throwable t) {
@@ -82,7 +84,7 @@ public class RoundScheduler extends AtomicInteger {
     private final String                       label;
     private volatile int                       roundDuration;
     private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
-    private final Map<String, Timer>           timers    = new HashMap<>();
+    private final Map<String, Timer>           timers    = new ConcurrentHashMap<>();
 
     public RoundScheduler(String label, int roundDuration) {
         this.roundDuration = roundDuration;
@@ -97,7 +99,11 @@ public class RoundScheduler extends AtomicInteger {
     }
 
     public void cancelAll() {
-        new ArrayList<>(timers.values()).forEach(e -> e.cancel());
+        new ArrayList<>(timers.values()).forEach(e -> {
+            if (e != null) {
+                e.cancel();
+            }
+        });
     }
 
     public void reset() {
@@ -111,7 +117,8 @@ public class RoundScheduler extends AtomicInteger {
 
     public Timer schedule(String timerLabel, Runnable action, int delayRounds) {
         final var current = get();
-        final var target = current + (delayRounds * roundDuration);
+        final var duration = roundDuration;
+        final var target = current + (delayRounds * duration);
         Timer timer = new Timer(timerLabel, target, action);
         if (delayRounds == 0) {
             return timer;
