@@ -598,9 +598,12 @@ public class View {
                                                                          params.fpr()))
                                     .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
                                     .build();
-                log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
-                          g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
-                          g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
+                if (g.getNotes().getUpdatesCount() != 0 || g.getAccusations().getUpdatesCount() != 0 ||
+                    g.getObservations().getUpdatesCount() != 0 || g.getJoins().getUpdatesCount() != 0) {
+                    log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
+                              g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
+                              g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
+                }
                 return g;
             });
         }

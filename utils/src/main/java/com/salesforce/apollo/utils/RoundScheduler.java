@@ -135,7 +135,10 @@ public class RoundScheduler extends AtomicInteger {
         int current = incrementAndGet();
         List<Timer> drained = new ArrayList<>();
         while (!scheduled.isEmpty() && scheduled.peek() != null && scheduled.peek().deadline <= current) {
-            drained.add(scheduled.poll());
+            final var t = scheduled.poll();
+            if (t != null) {
+                drained.add(t);
+            }
         }
         drained.forEach(e -> {
             log.trace("Firing: {} target: {} current: {} on: {}", e.label, e.deadline, current, label);

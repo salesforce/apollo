@@ -124,7 +124,7 @@ public class ChurnTest {
 
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(10, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         testViews.add(views.get(0));
 
@@ -135,7 +135,7 @@ public class ChurnTest {
                                            scheduler));
 
         // Test that all seeds up
-        var success = countdown.get().await(10, TimeUnit.SECONDS);
+        var success = countdown.get().await(30, TimeUnit.SECONDS);
         testViews.addAll(bootstrappers);
 
         var failed = testViews.stream()
