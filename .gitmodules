@@ -1,3 +1,0 @@
-[submodule "java-ext-wasm"]
-	path = java-ext-wasm
-	url = https://github.com/wasmerio/java-ext-wasm.git

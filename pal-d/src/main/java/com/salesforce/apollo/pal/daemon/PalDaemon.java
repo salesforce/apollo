@@ -62,13 +62,11 @@ public class PalDaemon {
 
     }
 
-    public static final Metadata.Key<String>                                     PRINCIPAL_METADATA_KEY       = Metadata.Key.of("Principal",
-                                                                                                                                Metadata.ASCII_STRING_MARSHALLER);
-    private static final Context.Key<PeerCredentials>                            PEER_CREDENTIALS_CONTEXT_KEY = Context.key("from.peer.credentials");
+    private static final Context.Key<PeerCredentials> PEER_CREDENTIALS_CONTEXT_KEY = Context.key("com.salesforce.apollo.PEER_CREDENTIALS");
+
     private final Map<String, Function<Encrypted, CompletableFuture<Decrypted>>> decrypters;
     private final Function<PeerCredentials, CompletableFuture<Set<String>>>      labelsRetriever;
-
-    private final Server server;
+    private final Server                                                         server;
 
     public PalDaemon(Path socketPath, Function<PeerCredentials, CompletableFuture<Set<String>>> labelsRetriever,
                      Map<String, Function<Encrypted, CompletableFuture<Decrypted>>> decrypters) {
@@ -135,13 +133,10 @@ public class PalDaemon {
 
     private ServerInterceptor interceptor() {
         return new ServerInterceptor() {
-
             @Override
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-
-                call.getAttributes().get(null);
                 var principal = call.getAttributes().get(TRANSPORT_ATTR_PEER_CREDENTIALS);
                 if (principal == null) {
                     call.close(Status.INTERNAL.withCause(new NullPointerException("Principal is missing"))
