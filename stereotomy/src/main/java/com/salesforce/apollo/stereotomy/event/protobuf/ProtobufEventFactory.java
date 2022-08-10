@@ -276,8 +276,7 @@ public class ProtobufEventFactory implements EventFactory {
         Header header = Header.newBuilder()
                               .setSequenceNumber(specification.getSequenceNumber().longValue())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
-                              .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
-                                                                                                       .name()))
+                              .setVersion(toVersion(specification.getVersion()))
                               .setIdentifier(specification.getIdentifier().toIdent())
                               .setIlk(INTERACTION_TYPE)
                               .build();
@@ -300,8 +299,7 @@ public class ProtobufEventFactory implements EventFactory {
                                          .setWitnessThreshold(specification.getWitnessThreshold());
         var header = Header.newBuilder()
                            .setSequenceNumber(specification.getSequenceNumber().longValue())
-                           .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
-                                                                                                    .name()))
+                           .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
                            .setIdentifier(identifier.toIdent())
                            .setIlk(delegated ? DELEGATED_ROTATION_TYPE : ROTATION_TYPE);

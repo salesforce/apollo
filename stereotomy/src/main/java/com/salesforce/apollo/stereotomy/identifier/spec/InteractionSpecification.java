@@ -17,7 +17,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -29,7 +28,6 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class InteractionSpecification {
 
     public static class Builder implements Cloneable {
-        private Format           format  = Format.PROTOBUF;
         private Identifier       identifier;
         private EventCoordinates lastEvent;
         private Digest           priorEventDigest;
@@ -46,8 +44,8 @@ public class InteractionSpecification {
         }
 
         public InteractionSpecification build() {
-            return new InteractionSpecification(this.format, identifier, lastEvent.getSequenceNumber().add(1),
-                                                lastEvent, signer, seals, version, priorEventDigest);
+            return new InteractionSpecification(identifier, lastEvent.getSequenceNumber().add(1), lastEvent, signer,
+                                                seals, version, priorEventDigest);
         }
 
         @Override
@@ -59,10 +57,6 @@ public class InteractionSpecification {
                 throw new IllegalStateException(e);
             }
             return clone;
-        }
-
-        public Format getFormat() {
-            return format;
         }
 
         public Identifier getIdentifier() {
@@ -89,28 +83,13 @@ public class InteractionSpecification {
             return version;
         }
 
-        public Builder setCbor() {
-            format = Format.CBOR;
-            return this;
-        }
-
         public Builder setIdentifier(Identifier identifier) {
             this.identifier = identifier;
             return this;
         }
 
-        public Builder setJson() {
-            format = Format.JSON;
-            return this;
-        }
-
         public Builder setLastEvent(EventCoordinates lastEvent) {
             this.lastEvent = lastEvent;
-            return this;
-        }
-
-        public Builder setMessagePack() {
-            format = Format.MESSAGE_PACK;
             return this;
         }
 
@@ -139,7 +118,6 @@ public class InteractionSpecification {
         return new Builder();
     }
 
-    private final Format           format;
     private final Identifier       identifier;
     private final EventCoordinates previous;
     private final Digest           priorEventDigest;
@@ -148,9 +126,8 @@ public class InteractionSpecification {
     private final Signer           signer;
     private final Version          version;
 
-    public InteractionSpecification(Format format, Identifier identifier, ULong uLong, EventCoordinates previous,
-                                    Signer signer, List<Seal> seals, Version version, Digest priorEventDigest) {
-        this.format = format;
+    public InteractionSpecification(Identifier identifier, ULong uLong, EventCoordinates previous, Signer signer,
+                                    List<Seal> seals, Version version, Digest priorEventDigest) {
         this.identifier = identifier;
         this.sequenceNumber = uLong;
         this.previous = previous;
@@ -158,10 +135,6 @@ public class InteractionSpecification {
         this.seals = List.copyOf(seals);
         this.version = version;
         this.priorEventDigest = priorEventDigest;
-    }
-
-    public Format getFormat() {
-        return format;
     }
 
     public Identifier getIdentifier() {

@@ -124,7 +124,8 @@ public class SwarmTest {
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
-        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
+        bootstrappers.subList(1, bootstrappers.size())
+                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
                                            scheduler));
 
         // Test that all bootstrappers up

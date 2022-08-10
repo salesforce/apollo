@@ -598,9 +598,12 @@ public class View {
                                                                          params.fpr()))
                                     .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
                                     .build();
-                log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
-                          g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
-                          g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
+                if (g.getNotes().getUpdatesCount() != 0 || g.getAccusations().getUpdatesCount() != 0 ||
+                    g.getObservations().getUpdatesCount() != 0 || g.getJoins().getUpdatesCount() != 0) {
+                    log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
+                              g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
+                              g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
+                }
                 return g;
             });
         }
@@ -1366,15 +1369,11 @@ public class View {
         }
         final var current = membership;
         if (!current.contains(note.getId())) {
-            // For some reason I have not discovered, this second check puzzlingly succeeds.
-            // My locking is weak
-            if (!current.contains(note.getId())) {
-                log.trace("Note: {} is not a member  on: {}", note.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
-                return false;
+            log.warn("Note: {} is not a member  on: {}", note.getId(), node.getId());
+            if (metrics != null) {
+                metrics.filteredNotes().mark();
             }
+            return false;
         }
 
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
@@ -1902,10 +1901,10 @@ public class View {
         context.rebalance(context.totalCount() + view.joining.size());
 
         // Compute the new membership
-        membership = new DigestBloomFilter(currentView.get().getLongs()[0],
+        membership = new DigestBloomFilter(currentView.get().fold(),
                                            Math.max(params.minimumBiffCardinality(),
                                                     (context.memberCount() + view.joining.size())),
-                                           0.0001);
+                                           0.00125);
         context.allMembers().forEach(p -> membership.add(p.getId()));
         view.joining().forEach(id -> membership.add(id));
 
@@ -2202,6 +2201,9 @@ public class View {
         }
         if (context.activate(member)) {
             log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+                      context.totalCount(), node.getId());
+        } else {
+            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
                       context.totalCount(), node.getId());
         }
     }

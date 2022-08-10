@@ -77,8 +77,8 @@ public class KerlTest extends AbstractDhtTest {
         // identifier
         assertTrue(delegated.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) delegated.getIdentifier();
-        assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
-        assertEquals("2287a5841816c8c02d4e188376b1f1a50dfcdc9eaac17610deba4ae33bb617f4",
+        assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
+        assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) delegated.getSigningThreshold()).getThreshold());
@@ -103,8 +103,8 @@ public class KerlTest extends AbstractDhtTest {
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
                                                                delegated.getNextKeyConfigurationDigest()
-                                                                         .get()
-                                                                         .getAlgorithm());
+                                                                        .get()
+                                                                        .getAlgorithm());
         assertEquals(expectedNextKeys, delegated.getNextKeyConfigurationDigest().get());
 
         // witnesses

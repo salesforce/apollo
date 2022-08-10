@@ -5,23 +5,19 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-package com.salesforce.apollo.thoth.grpc;
+package com.salesforce.apollo.thoth.grpc.reconciliation;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ReconciliationService extends Link {
+public interface Reconciliation {
+    Update reconcile(Intervals intervals, Digest member);
 
-    ListenableFuture<Update> reconcile(Intervals intervals);
-
-    ListenableFuture<Empty> update(Updating update);
-
+    void update(Updating update, Digest member);
 }

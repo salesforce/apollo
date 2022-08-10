@@ -124,7 +124,7 @@ public class ChurnTest {
 
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(10, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         testViews.add(views.get(0));
 
@@ -134,8 +134,8 @@ public class ChurnTest {
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
                                            scheduler));
 
-        // Test that all bootstrappers up
-        var success = countdown.get().await(10, TimeUnit.SECONDS);
+        // Test that all seeds up
+        var success = countdown.get().await(30, TimeUnit.SECONDS);
         testViews.addAll(bootstrappers);
 
         var failed = testViews.stream()
@@ -147,6 +147,7 @@ public class ChurnTest {
         System.out.println("Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + testViews.size() + " members");
 
+        // Bring up the remaining members step wise
         for (int i = 0; i < 3; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
@@ -274,7 +275,7 @@ public class ChurnTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
-        final var exec = new ForkJoinPool();
+        final var exec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),

@@ -5,7 +5,7 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-package com.salesforce.apollo.thoth.grpc;
+package com.salesforce.apollo.thoth.grpc.reconciliation;
 
 import java.util.concurrent.Executor;
 

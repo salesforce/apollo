@@ -26,6 +26,8 @@
         <module>thoth</module>
         <module>liquibase-deterministic</module>
         <module>grpc</module>
+        <module>pal-d</module>
+        <module>pal</module>
     </modules>
 
     <properties>
@@ -35,10 +37,11 @@
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.71</bc.version>
         <logback.version>1.2.11</logback.version>
-        <grpc.version>1.48.0</grpc.version>
-        <protobuf.version>3.21.3</protobuf.version>
+        <grpc.version>1.48.1</grpc.version>
+        <protobuf.version>3.21.4</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
+        <netty.version>4.1.77.Final</netty.version>
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -196,6 +199,17 @@
             </dependency>
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
+                <artifactId>pal-d</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>pal</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
                 <artifactId>h2-deterministic</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -312,7 +326,6 @@
                 <artifactId>RoaringBitmap</artifactId>
                 <version>0.9.30</version>
             </dependency>
-
             <dependency>
                 <groupId>org.jooq</groupId>
                 <artifactId>joou</artifactId>
@@ -323,17 +336,20 @@
                 <artifactId>jool</artifactId>
                 <version>0.9.14</version>
             </dependency>
-
             <dependency>
                 <groupId>org.knowm.xchart</groupId>
                 <artifactId>xchart</artifactId>
                 <version>3.8.1</version>
             </dependency>
-
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
                 <version>3.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-transport-native-unix-common</artifactId>
+                <version>${netty.version}</version>
             </dependency>
 
             <!-- Test dependencies only below this line! -->

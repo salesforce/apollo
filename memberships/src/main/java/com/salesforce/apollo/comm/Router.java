@@ -47,6 +47,9 @@ abstract public class Router {
 
         @Override
         public Client apply(Member to, SigningMember from) {
+            if (to == null) {
+                return null;
+            }
             return started.get() ? to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction) : null;
         }
 
@@ -61,10 +64,19 @@ abstract public class Router {
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
+    public static Limit defaultClientLimit() {
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
+    }
+
+    public static Limit defaultServerLimit() {
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
+    }
+
     protected final MutableHandlerRegistry registry;
     protected final AtomicBoolean          started = new AtomicBoolean();
 
-    private final ServerConnectionCache             cache;
+    private final ServerConnectionCache cache;
+
     private final Map<Class<?>, RoutableService<?>> services = new ConcurrentHashMap<>();
 
     public Router(ServerConnectionCache cache, MutableHandlerRegistry registry) {
@@ -100,12 +112,4 @@ abstract public class Router {
     abstract public ClientIdentity getClientIdentityProvider();
 
     abstract public void start();
-
-    public static Limit defaultServerLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
-    }
-
-    public static Limit defaultClientLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
-    }
 }

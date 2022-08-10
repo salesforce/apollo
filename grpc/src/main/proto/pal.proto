@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.pal.proto";
+option java_outer_classname = "ApolloPalProto";
+option objc_class_prefix = "Ap";
+
+package pal;
+
+service Pal {
+    rpc decrypt ( Encrypted ) returns (Decrypted) {}
+}
+
+message Decrypted {
+    map<string, bytes> secrets = 1;
+    string error = 2;
+}
+
+message Encrypted {
+    map<string, Secret> secrets = 1;
+}
+
+message Secret {
+    repeated string labels = 1;
+    string decryptor = 2;
+    bytes encrypted = 3;
+}

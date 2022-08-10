@@ -173,11 +173,13 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             traversalOrder.addAll(calculateTraversal(digest));
             Entropy.secureShuffle(traversalOrder);
         }
-        if (currentIndex == traversalOrder.size() - 1) {
+        final var current = currentIndex;
+        if (current == traversalOrder.size() - 1) {
+            traversalOrder.addAll(calculateTraversal(digest));
             Entropy.secureShuffle(traversalOrder);
             log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
         }
-        int next = (currentIndex + 1) % traversalOrder.size();
+        int next = (current + 1) % traversalOrder.size();
         currentIndex = next;
         return linkFor(digest);
     }
@@ -203,11 +205,13 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     }
 
     private Destination<T, Comm> linkFor(Digest digest) {
-        var successor = traversalOrder.get(currentIndex);
+        final var current = currentIndex;
+        var successor = traversalOrder.get(current);
         try {
             final Comm link = comm.apply(successor.m, member);
             if (link == null) {
-                log.trace("No connection to {} on: {}", successor.m.getId(), member.getId());
+                log.trace("No connection to {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
+                          member.getId());
             }
             return new Destination<>(successor.m, link, successor.ring);
         } catch (Throwable e) {
