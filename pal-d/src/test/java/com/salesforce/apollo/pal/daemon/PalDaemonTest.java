@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.pal.daemon;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -19,10 +21,12 @@ import java.util.function.Function;
 
 import org.junit.Test;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.pal.proto.Decrypted;
 import com.salesfoce.apollo.pal.proto.Encrypted;
 import com.salesfoce.apollo.pal.proto.PalGrpc;
 import com.salesfoce.apollo.pal.proto.PalGrpc.PalBlockingStub;
+import com.salesfoce.apollo.pal.proto.Secret;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
@@ -46,16 +50,17 @@ public class PalDaemonTest {
         Files.deleteIfExists(socketPath);
 
         var target = socketPath.toFile().getPath();
+        final var testLabel = "TEST_LABEL";
         Function<PeerCredentials, CompletableFuture<Set<String>>> retriever = principal -> {
             var fs = new CompletableFuture<Set<String>>();
-            fs.complete(Set.of("TEST_LABEL"));
+            fs.complete(Set.of(testLabel));
             return fs;
         };
         var decrypters = new HashMap<String, Function<Encrypted, CompletableFuture<Decrypted>>>();
 
         decrypters.put("nb", e -> {
             var fs = new CompletableFuture<Decrypted>();
-            fs.complete(Decrypted.getDefaultInstance());
+            fs.complete(Decrypted.newBuilder().putSecrets("foo", ByteString.copyFromUtf8("bar")).build());
             return fs;
         });
 
@@ -73,7 +78,11 @@ public class PalDaemonTest {
         assertFalse(channel.isShutdown());
         PalBlockingStub stub = PalGrpc.newBlockingStub(channel);
 
-        var result = stub.decrypt(Encrypted.getDefaultInstance());
+        var secrets = new HashMap<String, Secret>();
+        secrets.put("test",
+                    Secret.newBuilder().addLabels(testLabel).setDecryptor("nb").setEncrypted(ByteString.EMPTY).build());
+        var result = stub.decrypt(Encrypted.newBuilder().putAllSecrets(secrets).build());
         assertNotNull(result);
+        assertEquals("bar", result.getSecretsMap().get("foo").toString(Charset.defaultCharset()));
     }
 }

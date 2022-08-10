@@ -523,6 +523,7 @@ public class StereotomyImpl implements Stereotomy {
     @SuppressWarnings("unchecked")
     private <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
                                                                                             IdentifierSpecification.Builder<I> spec) {
+        log.warn("New identifier, controller: {}", delegator);
         // The delegated inception
         var event = inception(delegator.getIdentifier(), spec);
 
@@ -562,7 +563,7 @@ public class StereotomyImpl implements Stereotomy {
             ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
 
             log.info("New {} delegator: {} identifier: {} coordinates: {}",
-                     spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
+                     spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier().get(),
                      cid.getIdentifier(), cid.getCoordinates());
             return cid;
         }).thenApply(cid -> (ControlledIdentifier<I>) cid);

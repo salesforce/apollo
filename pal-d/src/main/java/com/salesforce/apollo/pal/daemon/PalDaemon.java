@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.pal.proto.Decrypted;
 import com.salesfoce.apollo.pal.proto.Encrypted;
@@ -61,13 +62,13 @@ public class PalDaemon {
 
     }
 
-    public static final Metadata.Key<String>                                     PRINCIPAL_METADATA_KEY = Metadata.Key.of("Principal",
-                                                                                                                          Metadata.ASCII_STRING_MARSHALLER);
-    private static final Context.Key<PeerCredentials>                            CLIENT_ID_CONTEXT_KEY  = Context.key("domain.principal");
+    public static final Metadata.Key<String>                                     PRINCIPAL_METADATA_KEY       = Metadata.Key.of("Principal",
+                                                                                                                                Metadata.ASCII_STRING_MARSHALLER);
+    private static final Context.Key<PeerCredentials>                            PEER_CREDENTIALS_CONTEXT_KEY = Context.key("from.peer.credentials");
     private final Map<String, Function<Encrypted, CompletableFuture<Decrypted>>> decrypters;
     private final Function<PeerCredentials, CompletableFuture<Set<String>>>      labelsRetriever;
-    private final ThreadLocal<PeerCredentials>                                   peerCredentials        = new ThreadLocal<>();
-    private final Server                                                         server;
+
+    private final Server server;
 
     public PalDaemon(Path socketPath, Function<PeerCredentials, CompletableFuture<Set<String>>> labelsRetriever,
                      Map<String, Function<Encrypted, CompletableFuture<Decrypted>>> decrypters) {
@@ -91,30 +92,45 @@ public class PalDaemon {
 
     private CompletableFuture<Decrypted> decrypt(Encrypted secrets) {
         var fs = new CompletableFuture<Decrypted>();
-        if (true) {
-            fs.complete(Decrypted.getDefaultInstance());
-            return fs;
-        }
-        final var credentials = getCredentials();
+        final var credentials = PEER_CREDENTIALS_CONTEXT_KEY.get();
         if (credentials == null) {
             fs.completeExceptionally(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("No credentials available")));
         }
-        labelsRetriever.apply(credentials).thenAccept(validLabels -> {
-            secrets.getSecretsMap().forEach((environment, secret) -> {
-                for (var label : secret.getLabelsList()) {
-                    if (!validLabels.contains(label)) {
-                        fs.completeExceptionally(new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("No permission for label")));
-                        break;
-                    }
-                }
-            });
-        });
 
-        return fs;
-    }
+        return labelsRetriever.apply(credentials).thenCompose(validLabels -> {
+            var decrypted = Decrypted.newBuilder();
+            var grouped = secrets.getSecretsMap()
+                                 .entrySet()
+                                 .stream()
+                                 .filter(e -> decrypters.containsKey(e.getValue().getDecryptor()))
+                                 .filter(e -> {
+                                     for (var label : e.getValue().getLabelsList()) {
+                                         if (!validLabels.contains(label)) {
+                                             return false;
+                                         }
+                                     }
+                                     return true;
+                                 })
+                                 .collect(Collectors.groupingBy(e -> e.getValue().getDecryptor()));
 
-    private PeerCredentials getCredentials() {
-        return peerCredentials.get();
+            var binned = grouped.entrySet()
+                                .stream()
+                                .collect(Collectors.toMap(e -> e.getKey(),
+                                                          e -> Encrypted.newBuilder()
+                                                                        .putAllSecrets(e.getValue()
+                                                                                        .stream()
+                                                                                        .collect(Collectors.toMap(en -> en.getKey(),
+                                                                                                                  en -> en.getValue())))
+                                                                        .build()))
+                                .entrySet()
+                                .stream()
+                                .map(e -> decrypters.get(e.getKey())
+                                                    .apply(e.getValue())
+                                                    .thenAccept(d -> decrypted.putAllSecrets(d.getSecretsMap())))
+                                .toList();
+            return CompletableFuture.allOf(binned.toArray(new CompletableFuture[binned.size()]))
+                                    .thenApply(n -> fs.complete(decrypted.build()));
+        }).thenCompose(n -> fs);
     }
 
     private ServerInterceptor interceptor() {
@@ -134,10 +150,9 @@ public class PalDaemon {
                     return new ServerCall.Listener<ReqT>() {
                     };
                 }
-                peerCredentials.set(principal);
-                return Contexts.interceptCall(Context.current(), call, requestHeaders, next);
+                Context ctx = Context.current().withValue(PEER_CREDENTIALS_CONTEXT_KEY, principal);
+                return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
-
         };
     }
 }
