@@ -27,6 +27,7 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Stereotomy - Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
+* PAL - Permissive Action Link implementation for boostrapping secrets
 * MTLS network communication - Can use KERI for certificate authentication and generation.  Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay providing virtually synchronous, stable membership views.
@@ -49,6 +50,8 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
+* [PAL](pal/README.md) - Permissive Action Link GRPC client, for secure bootstrapping of secets over unix domain sockets.
+* [PAL-D](pal-d/README.md) - Permissive Action Link GRPC server, for secure bootstrapping of secets over unix domain sockets.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
 * [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
 * [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.
