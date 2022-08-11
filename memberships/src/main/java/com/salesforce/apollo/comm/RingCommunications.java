@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.TreeSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -85,6 +87,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     private final CommonCommunications<Comm, ?> comm;
     private final Direction                     direction;
     private final boolean                       ignoreSelf;
+    private final Lock                          lock           = new ReentrantLock();
     private final List<iteration<T>>            traversalOrder = new ArrayList<>();
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
@@ -168,20 +171,25 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return traversal;
     }
 
-    Destination<T, Comm> next(Digest digest) {
-        if (traversalOrder.isEmpty()) {
-            traversalOrder.addAll(calculateTraversal(digest));
-            Entropy.secureShuffle(traversalOrder);
+    final Destination<T, Comm> next(Digest digest) {
+        lock.lock();
+        try {
+            if (traversalOrder.isEmpty()) {
+                traversalOrder.addAll(calculateTraversal(digest));
+                Entropy.secureShuffle(traversalOrder);
+            }
+            final var current = currentIndex;
+            if (current == traversalOrder.size() - 1) {
+                traversalOrder.addAll(calculateTraversal(digest));
+                Entropy.secureShuffle(traversalOrder);
+                log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
+            }
+            int next = (current + 1) % traversalOrder.size();
+            currentIndex = next;
+            return linkFor(digest);
+        } finally {
+            lock.unlock();
         }
-        final var current = currentIndex;
-        if (current == traversalOrder.size() - 1) {
-            traversalOrder.addAll(calculateTraversal(digest));
-            Entropy.secureShuffle(traversalOrder);
-            log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
-        }
-        int next = (current + 1) % traversalOrder.size();
-        currentIndex = next;
-        return linkFor(digest);
     }
 
     private <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<T, Q, Comm> handler,
