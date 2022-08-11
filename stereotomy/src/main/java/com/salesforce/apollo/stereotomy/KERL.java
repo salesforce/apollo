@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
@@ -75,11 +76,17 @@ public interface KERL extends KEL {
     CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> validations);
 
     default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
-        return getKeyStateWithAttachments(coordinates).thenCombine(getValidations(coordinates), (ksa, validations) -> {
-            return ksa == null ? null
-                               : KeyStateWithEndorsementsAndValidations.create(ksa.state(),
-                                                                               ksa.attachments().endorsements(),
-                                                                               validations);
+        var ksa = new AtomicReference<KeyStateWithAttachments>();
+        return getKeyStateWithAttachments(coordinates).thenApply(k -> {
+            ksa.set(k);
+            return k;
+        }).thenCompose(k -> getValidations(coordinates)).thenApply(validations -> {
+            return ksa.get() == null ? null
+                                     : KeyStateWithEndorsementsAndValidations.create(ksa.get().state(),
+                                                                                     ksa.get()
+                                                                                        .attachments()
+                                                                                        .endorsements(),
+                                                                                     validations);
         });
     }
 

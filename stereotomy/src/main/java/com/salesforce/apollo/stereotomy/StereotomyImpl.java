@@ -553,12 +553,6 @@ public class StereotomyImpl implements Stereotomy {
                 return Optional.empty();
             }
 
-            // Update delegating state. Bit of a hack at the moment
-            KeyState delegatingState = states.get(1);
-            if (delegator instanceof ControlledIdentifierImpl<?> controller) {
-                controller.setState(delegatingState);
-            }
-
             // Finally, the new delegated identifier
             ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
 

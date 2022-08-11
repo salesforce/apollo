@@ -7,6 +7,7 @@
 package com.salesforce.apollo.thoth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -124,6 +125,7 @@ public class KerlTest extends AbstractDhtTest {
 
         // delegation
         assertTrue(delegated.getDelegatingIdentifier().isPresent());
+        assertNotEquals(Identifier.NONE, delegated.getDelegatingIdentifier().get());
         assertTrue(delegated.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());

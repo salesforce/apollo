@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -100,7 +101,10 @@ public interface KEL {
      * @return the KeyStateWithAttachments for these coordinates
      */
     default CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        return getKeyState(coordinates).thenCombine(getAttachment(coordinates),
-                                                    (ks, a) -> new KeyStateWithAttachments(ks, a));
+        var ks = new AtomicReference<KeyState>();
+        return getKeyState(coordinates).thenApply(k -> {
+            ks.set(k);
+            return k;
+        }).thenCompose(k -> getAttachment(coordinates)).thenApply(a -> new KeyStateWithAttachments(ks.get(), a));
     }
 }
