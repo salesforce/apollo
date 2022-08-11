@@ -122,8 +122,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Identifier> getDelegatingIdentifier() {
-        Identifier identifier = identifier(state.getDelegatingIdentifier());
-        return identifier.isNone() ? Optional.empty() : Optional.of(identifier);
+        return Optional.of(identifier(state.getDelegatingIdentifier()));
     }
 
     @Override

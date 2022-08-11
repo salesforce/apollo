@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -159,8 +160,8 @@ public class StereotomyTests {
         // lastEvent
         assertNull(kel.getKeyEvent(identifier.getLastEvent()).get());
 
-        // delegation
-        assertFalse(identifier.getDelegatingIdentifier().isPresent());
+        assertTrue(identifier.getDelegatingIdentifier().isPresent());
+        assertEquals(Identifier.NONE, identifier.getDelegatingIdentifier().get());
         assertFalse(identifier.isDelegated());
     }
 
@@ -222,6 +223,7 @@ public class StereotomyTests {
 
         // delegation
         assertTrue(identifier.getDelegatingIdentifier().isPresent());
+        assertNotEquals(Identifier.NONE, identifier.getDelegatingIdentifier().get());
         assertTrue(identifier.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());

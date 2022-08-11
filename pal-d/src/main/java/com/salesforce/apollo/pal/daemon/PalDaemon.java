@@ -93,6 +93,7 @@ public class PalDaemon {
         final var credentials = PEER_CREDENTIALS_CONTEXT_KEY.get();
         if (credentials == null) {
             fs.completeExceptionally(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("No credentials available")));
+            return fs;
         }
 
         return labelsRetriever.apply(credentials).thenCompose(validLabels -> {

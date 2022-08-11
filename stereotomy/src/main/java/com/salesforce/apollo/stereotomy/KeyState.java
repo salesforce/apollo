@@ -62,7 +62,8 @@ public interface KeyState {
     int getWitnessThreshold();
 
     default boolean isDelegated() {
-        return this.getDelegatingIdentifier().isPresent();
+        return this.getDelegatingIdentifier().isPresent() &&
+               !this.getDelegatingIdentifier().get().equals(Identifier.NONE);
     }
 
     default boolean isTransferable() {

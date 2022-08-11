@@ -523,7 +523,7 @@ public class StereotomyImpl implements Stereotomy {
     @SuppressWarnings("unchecked")
     private <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
                                                                                             IdentifierSpecification.Builder<I> spec) {
-        log.warn("New identifier, controller: {}", delegator);
+        log.warn("New identifier, controller: {}", delegator.getIdentifier());
         // The delegated inception
         var event = inception(delegator.getIdentifier(), spec);
 
@@ -551,12 +551,6 @@ public class StereotomyImpl implements Stereotomy {
             if (delegatedState == null) {
                 log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
                 return Optional.empty();
-            }
-
-            // Update delegating state. Bit of a hack at the moment
-            KeyState delegatingState = states.get(1);
-            if (delegator instanceof ControlledIdentifierImpl<?> controller) {
-                controller.setState(delegatingState);
             }
 
             // Finally, the new delegated identifier

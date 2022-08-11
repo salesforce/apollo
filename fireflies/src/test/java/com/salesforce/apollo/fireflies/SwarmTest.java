@@ -120,7 +120,7 @@ public class SwarmTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(largeTests ? 120 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -129,7 +129,7 @@ public class SwarmTest {
                                            scheduler));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 120 : 30, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
@@ -141,7 +141,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-        success = countdown.get().await(60, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 240 : 60, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -167,8 +167,6 @@ public class SwarmTest {
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + views.size() + " members");
-
-        Thread.sleep(5_000);
 
         for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
             final var reference = views.get(0).getContext().ring(i).getRing();

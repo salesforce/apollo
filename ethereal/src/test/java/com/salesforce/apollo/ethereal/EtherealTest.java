@@ -82,7 +82,7 @@ public class EtherealTest {
 
     static {
         LARGE_TESTS = Boolean.getBoolean("large_tests");
-        DELAY_MS = LARGE_TESTS ? 500 : 5;
+        DELAY_MS = LARGE_TESTS ? 5 : 5;
         NPROC = LARGE_TESTS ? 7 : 4;
     }
 
@@ -104,7 +104,7 @@ public class EtherealTest {
         for (var i = 0; i < NPROC; i++) {
             consumers.add(Ethereal.consumer(Integer.toString(i)));
         }
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 10; i++) {
             System.out.println("Iteration: " + i);
             one(i, consumers);
             System.out.println();

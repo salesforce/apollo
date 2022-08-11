@@ -163,6 +163,7 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Empty> appendValidations(Validations validations) {
+            log.info("append validations on: {}", member.getId());
             return complete(k -> k.appendValidations(validations));
         }
 
@@ -228,6 +229,7 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+            log.info("get validations for coordinates on: {}", member.getId());
             return complete(k -> k.getValidations(coordinates));
         }
     }
@@ -686,7 +688,7 @@ public class KerlDHT implements ProtoKERLService {
                 return;
             }
         }
-        completeExceptionally(result);
+        result.completeExceptionally(new CompletionException("Unable to achieve majority write"));
     }
 
     private Digest digestOf(AttachmentEvent event) {
