@@ -10,8 +10,8 @@ package com.salesforce.apollo.thoth;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -238,7 +238,7 @@ public class Ani {
         }
 
         record resolved(KeyState state, JohnHancock signature) {}
-        var mapped = new ArrayList<resolved>();
+        var mapped = new CopyOnWriteArrayList<resolved>();
         var last = ksAttach.validations().entrySet().stream().map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
             mapped.add(new resolved(ks, e.getValue()));
             return ks;
@@ -250,8 +250,8 @@ public class Ani {
         }
 
         return last.get().thenApply(o -> {
-            log.trace("Evaluating validation {} mapped: {} on: {}", ksAttach.state().getCoordinates(), mapped.size(),
-                      member.getId());
+            log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
+                      ksAttach.validations().size(), mapped.size(), member.getId());
             var validations = new PublicKey[mapped.size()];
             byte[][] signatures = new byte[mapped.size()][];
 

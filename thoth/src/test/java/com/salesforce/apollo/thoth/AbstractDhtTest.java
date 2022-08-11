@@ -120,7 +120,7 @@ public class AbstractDhtTest {
 
     protected void instantiate(SigningMember member, Context<Member> context, String prefix) {
         context.activate(member);
-        final var url = String.format("jdbc:h2:mem:%s-%s", member.getId(), prefix);
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);

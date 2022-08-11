@@ -233,10 +233,9 @@ abstract public class UniKERL implements KERL {
             vRec.setFor(id.value1());
             vRec.setValidator(idRec.getId());
             vRec.setSignature(signature.toSig().toByteArray());
-            vRec.merge();
-            result.accumulateAndGet(vRec.changed() ? 1 : 0, (a, b) -> a + b);
+            result.accumulateAndGet(vRec.merge(), (a, b) -> a + b);
         });
-        log.trace("Inserted validations: {} out of : {} for event: ", result.get(), validations.size(), coordinates);
+        log.trace("Inserted validations: {} out of : {} for event: {}", result.get(), validations.size(), coordinates);
     }
 
     public static byte[] compress(byte[] input) {
