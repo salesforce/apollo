@@ -1,0 +1,31 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.salesforce.apollo</groupId>
+        <artifactId>apollo.app</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+    <artifactId>gorgoneion</artifactId>
+    <name>Apollo Gorgoneioon</name>
+    <description>Apollow software based two-person rule stype encryption and decryption server</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>stereotomy</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>grpc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.perfmark</groupId>
+            <artifactId>perfmark-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

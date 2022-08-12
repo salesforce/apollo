@@ -28,6 +28,9 @@ public class FileKeyStore extends JksKeyStore {
 
     private final File file;
 
+    /**
+     * Provided KeyStore is assumed to be loaded
+     */
     public FileKeyStore(KeyStore keyStore, Supplier<char[]> passwordProvider, File file) {
         super(keyStore, passwordProvider);
         this.file = file;
