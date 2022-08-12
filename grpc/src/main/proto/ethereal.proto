@@ -94,7 +94,3 @@ message Crown_s {
     repeated int32 heights = 1;
     utils.Digeste controlHash = 2;
 }
-
-message ByteMessage {
-    bytes contents = 1;
-}
