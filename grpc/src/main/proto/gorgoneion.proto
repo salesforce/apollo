@@ -5,6 +5,7 @@ option java_package = "com.salesfoce.apollo.gorgoneion.proto";
 option java_outer_classname = "ApolloGorgoneionProto";
 option objc_class_prefix = "Ag";
 
+import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/duration.proto";  
 import "google/protobuf/timestamp.proto";
@@ -22,9 +23,10 @@ service Gorgoneion {
     rpc encrypt ( EncryptionRequest ) returns (EncryptionResponse) {}
     rpc reencrypt ( EncryptionRequest ) returns (EncryptionResponse) {}
     rpc decryption ( DecryptRequest ) returns (DecryptResponse) {}
-    rpc owners ( Data ) returns (Owners) {}
+    rpc owners ( google.protobuf.Any ) returns (Owners) {}
     rpc modify ( Modify ) returns (google.protobuf.Empty) {}
     rpc export ( UsernamePassword ) returns (Export) {}
+    rpc create ( UsernamePassword ) returns (google.protobuf.Empty) {}
 }
 
 message Export {
@@ -40,11 +42,7 @@ message Modify {
     UsernamePassword credentials = 1;
     string toModify = 2;
     COMMAND command = 3;
-}
-
-message Data {
-    bytes data = 1;
-}
+} 
 
 message Owners {
     repeated string owners = 1;
@@ -99,11 +97,11 @@ message ChangePassword {
 
 message DecryptRequest {
     UsernamePassword credentials = 1;
-    bytes data = 2;
+    google.protobuf.Any data = 2;
 }
 
 message DecryptResponse {
-    bytes data = 1;
+    google.protobuf.Any data = 1;
     bool secure = 2;
     repeated string delegates = 3;
 }
@@ -115,12 +113,12 @@ message EncryptionRequest {
     repeated string leftOwners = 4;
     repeated string rightOwners = 5;
     string predicate = 6;
-    bytes data = 7;
+    google.protobuf.Any data = 7;
     repeated string labels = 8;
     repeated string usages = 9;
 }
 
 message EncryptionResponse {
-    bytes encrypted = 1;
+    google.protobuf.Any encrypted = 1;
     bytes signature = 2;
 }

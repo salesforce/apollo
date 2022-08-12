@@ -4,114 +4,47 @@
     <changeSet author="hhildebrand" id="gorgoneion-1">
         <sql>create schema if not exists gorgoneion</sql>
 
-        <createTable tableName="identifier" schemaName="gorgoneion">
+        <createTable tableName="passwords" schemaName="gorgoneion">
             <column generationType="ALWAYS" name="id" type="IDENTITY">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="passwords_pkey" />
+            </column>
+            <column name="username" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+            <column name="passwordSalt" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="hashedPassword" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="keySalt" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="key" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="admin" type="BOOLEAN">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <createTable tableName="alias" schemaName="gorgoneion">
+            <column name="user" type="INT8">
                 <constraints nullable="false" primaryKey="true" primaryKeyName="identifier_pkey" />
             </column>
-            <column name="prefix" type="VARBINARY">
+            <column name="alias" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
 
-        <addUniqueConstraint columnNames="prefix" tableName="identifier" schemaName="gorgoneion" />
+        <addUniqueConstraint columnNames="alias" tableName="alias" schemaName="gorgoneion" />
 
-        <createTable tableName="coordinates" schemaName="gorgoneion">
-            <column generationType="ALWAYS" name="id" type="IDENTITY">
-                <constraints nullable="false" primaryKey="true" primaryKeyName="coordinates_pkey" />
-            </column>
-            <column name="identifier" type="INT8">
-                <constraints nullable="false" />
-            </column>
-            <column name="digest" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="sequence_number" type="BIGINT">
-                <constraints nullable="false" />
-            </column>
-            <column name="ilk" type="VARCHAR(3)">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <sql>alter table gorgoneion.coordinates add constraint
-            coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
-            'ixn', 'nan', 'rct', 'vrc', 'rot'))
-        </sql>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="identifier" baseTableName="coordinates" baseTableSchemaName="gorgoneion" constraintName="coordinates_identifier_fk" referencedTableName="identifier" referencedColumnNames="id" referencedTableSchemaName="gorgoneion" />
-
-        <addUniqueConstraint columnNames="identifier, sequence_number, digest, ilk" tableName="coordinates" schemaName="gorgoneion" constraintName="unique_id_dig_seq_ilk" />
-
-        <createTable tableName="event" schemaName="gorgoneion">
-            <column name="coordinates" type="INT8">
-                <constraints nullable="false" primaryKey="true" /> 
-            </column>
-            <column name="digest" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="content" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="current_state" type="VARBINARY" />
-        </createTable>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="coordinates" baseTableName="event" baseTableSchemaName="gorgoneion" constraintName="event_coordinates_fk" referencedTableName="coordinates" referencedColumnNames="id" referencedTableSchemaName="gorgoneion" />
-
-        <createTable tableName="current_key_state" schemaName="gorgoneion">
-            <column name="identifier" type="INT8">
-                <constraints nullable="false" primaryKey="true" />
-            </column>
-            <column name="current" type="INT8">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="identifier" baseTableName="current_key_state" baseTableSchemaName="gorgoneion" constraintName="current_key_state_identifier_fk" referencedTableName="identifier" referencedColumnNames="id" referencedTableSchemaName="gorgoneion" />
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="current" baseTableName="current_key_state" baseTableSchemaName="gorgoneion" constraintName="current_key_state_current_fk" referencedTableName="event" referencedColumnNames="coordinates" referencedTableSchemaName="gorgoneion" />
-
-        <createTable tableName="receipt" schemaName="gorgoneion">
-            <column name="for" type="INT8">
-                <constraints nullable="false" primaryKey="true" />
-            </column>
-            <column name="witness" type="INT">
-                <constraints nullable="false" primaryKey="true" />
-            </column>
-            <column name="signature" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="for" baseTableName="receipt" baseTableSchemaName="gorgoneion" constraintName="receipt_for_fk" referencedTableName="event" referencedColumnNames="coordinates" referencedTableSchemaName="gorgoneion" />
-
-        <createTable tableName="attachment" schemaName="gorgoneion">
-            <column name="for" type="INT8">
-                <constraints nullable="false" />
-            </column>
-            <column name="seal" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="for" baseTableName="attachment" baseTableSchemaName="gorgoneion" constraintName="attachment_for_fk" referencedTableName="event" referencedColumnNames="coordinates" referencedTableSchemaName="gorgoneion" />
-
-        <addUniqueConstraint columnNames="for, seal" tableName="attachment" schemaName="gorgoneion" />
-
-        <createTable tableName="validation" schemaName="gorgoneion">
-            <column name="for" type="INT8">
-                <constraints nullable="false" primaryKey="true" />
-            </column>
-            <column name="validator" type="INT8">
-                <constraints nullable="false" primaryKey="true" />
-            </column>
-            <column name="signature" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="for" baseTableName="validation" baseTableSchemaName="gorgoneion" constraintName="validation_for_fk" referencedTableName="event" referencedColumnNames="coordinates" referencedTableSchemaName="gorgoneion" />
-
-        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="validator" baseTableName="validation" baseTableSchemaName="gorgoneion" constraintName="validation_identifier_fk" referencedTableName="identifier" referencedColumnNames="id" referencedTableSchemaName="gorgoneion" />
-
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="user"
+            baseTableName="alias" baseTableSchemaName="gorgoneion"
+            constraintName="user_passwords_fk"
+            referencedTableName="passwords" referencedColumnNames="id"
+            referencedTableSchemaName="gorgoneion" />
+        
     </changeSet>
 </databaseChangeLog>

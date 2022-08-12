@@ -22,6 +22,8 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -56,6 +58,8 @@ public class JksKeyStore implements StereotomyKeyStore {
 
     protected final KeyStore         keyStore;
     protected final Supplier<char[]> passwordProvider;
+
+    private final Lock lock = new ReentrantLock();
 
     public JksKeyStore(KeyStore keyStore, Supplier<char[]> passwordProvider) {
         this.keyStore = keyStore;
@@ -92,13 +96,22 @@ public class JksKeyStore implements StereotomyKeyStore {
 
     @Override
     public void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair) {
-        final var alias = current(keyCoordinates);
-        store(alias, keyPair);
+        lock.lock();
+        try {
+            store(current(keyCoordinates), keyPair);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public void storeNextKey(KeyCoordinates keyCoordinates, KeyPair keyPair) {
-        store(next(keyCoordinates), keyPair);
+        lock.lock();
+        try {
+            store(next(keyCoordinates), keyPair);
+        } finally {
+            lock.unlock();
+        }
     }
 
     protected void store(final String alias, KeyPair keyPair) {
