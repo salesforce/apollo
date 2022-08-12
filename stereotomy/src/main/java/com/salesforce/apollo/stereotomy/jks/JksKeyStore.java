@@ -105,7 +105,7 @@ public class JksKeyStore implements StereotomyKeyStore {
         BcX500NameDnImpl dn = new BcX500NameDnImpl("CN=noop");
         BigInteger sn = BigInteger.valueOf(Long.MAX_VALUE);
         var notBefore = Instant.now();
-        var notAfter = Instant.now().plusSeconds(1);
+        var notAfter = Instant.now().plusSeconds(Long.MAX_VALUE);
         List<CertExtension> extensions = Collections.emptyList();
         X509Certificate selfSignedCert = Certificates.selfSign(true, dn, sn, keyPair, notBefore, notAfter, extensions);
         try {

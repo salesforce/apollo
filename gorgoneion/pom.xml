@@ -7,7 +7,7 @@
     </parent>
     <artifactId>gorgoneion</artifactId>
     <name>Apollo Gorgoneioon</name>
-    <description>Apollow software based two-person rule stype encryption and decryption server</description>
+    <description>Apollow software based two-person rule type encryption and decryption server</description>
 
     <dependencies>
         <dependency>
