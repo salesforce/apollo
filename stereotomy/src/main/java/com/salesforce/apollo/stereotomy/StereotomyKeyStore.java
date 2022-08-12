@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy;
 
 import java.security.KeyPair;
-import java.security.PublicKey;
 import java.util.Optional;
 
 /**
@@ -23,11 +22,9 @@ public interface StereotomyKeyStore {
 
     Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
 
-    Optional<PublicKey> getPublicKey(KeyCoordinates keyCoordinates);
+    void removeKey(KeyCoordinates keyCoordinates);
 
-    Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates);
-
-    Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates);
+    void removeNextKey(KeyCoordinates keyCoordinates);
 
     void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
 

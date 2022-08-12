@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy.mem;
 
 import java.security.KeyPair;
-import java.security.PublicKey;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,18 +34,13 @@ public class MemKeyStore implements StereotomyKeyStore {
     }
 
     @Override
-    public Optional<PublicKey> getPublicKey(KeyCoordinates keyCoordinates) {
-        return getKey(keyCoordinates).stream().map(kp -> kp.getPublic()).findFirst();
+    public void removeKey(KeyCoordinates keyCoordinates) {
+        this.keys.remove(keyCoordinates);
     }
 
     @Override
-    public Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates) {
-        return Optional.ofNullable(this.keys.remove(keyCoordinates));
-    }
-
-    @Override
-    public Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates) {
-        return Optional.ofNullable(this.nextKeys.remove(keyCoordinates));
+    public void removeNextKey(KeyCoordinates keyCoordinates) {
+        this.nextKeys.remove(keyCoordinates);
     }
 
     @Override
