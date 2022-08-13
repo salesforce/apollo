@@ -20,7 +20,13 @@
             <column name="keySalt" type="VARBINARY">
                 <constraints nullable="false" />
             </column>
-            <column name="key" type="VARBINARY">
+            <column name="publicKey" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="privateKey" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="iv" type="VARBINARY">
                 <constraints nullable="false" />
             </column>
             <column name="admin" type="BOOLEAN">

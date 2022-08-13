@@ -14,4 +14,10 @@ package com.salesforce.apollo.gorgoneion;
  */
 public interface Vault {
 
+    void add(String name, byte[] password, boolean admin);
+
+    void changePassword(String name, byte[] password, byte[] newPassword);
+
+    boolean contains(String name);
+
 }

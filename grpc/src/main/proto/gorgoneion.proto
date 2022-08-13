@@ -15,7 +15,7 @@ package gorgoneion;
 
 service Gorgoneion {
     rpc decrypt ( pal.Encrypted ) returns (pal.Decrypted) {}
-    rpc createUser ( CreateUser ) returns (google.protobuf.Empty) {}
+    rpc createUser ( UsernamePassword ) returns (google.protobuf.Empty) {}
     rpc summary ( UsernamePassword ) returns (Summary) {}
     rpc delegate ( Delegation ) returns (google.protobuf.Empty) {}
     rpc purge ( UsernamePassword ) returns (google.protobuf.Empty) {}
@@ -48,13 +48,7 @@ message Owners {
     repeated string owners = 1;
     repeated string labels = 2;
     string predicate = 3;
-}
-
-message CreateUser {
-    string name = 1;
-    string password = 2;
-    string userType = 3;
-}
+} 
 
 message UsernamePassword {
     string name = 1;

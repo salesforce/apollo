@@ -6,11 +6,10 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import org.bouncycastle.crypto.generators.SCrypt;
+import java.nio.charset.StandardCharsets;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.gorgoneion.proto.ChangePassword;
-import com.salesfoce.apollo.gorgoneion.proto.CreateUser;
 import com.salesfoce.apollo.gorgoneion.proto.DecryptRequest;
 import com.salesfoce.apollo.gorgoneion.proto.DecryptResponse;
 import com.salesfoce.apollo.gorgoneion.proto.Delegation;
@@ -22,27 +21,48 @@ import com.salesfoce.apollo.gorgoneion.proto.Owners;
 import com.salesfoce.apollo.gorgoneion.proto.Summary;
 import com.salesfoce.apollo.gorgoneion.proto.UsernamePassword;
 
+import io.grpc.Status;
+import io.grpc.StatusException;
+
 /**
  * @author hal.hildebrand
  *
  */
 public class WingedGorgoneion {
-    private final SCrypt scrypt;
+    private final Vault vault;
 
-    public WingedGorgoneion(SCrypt scrypt) {
-        this.scrypt = scrypt;
+    public WingedGorgoneion(Vault vault) {
+        this.vault = vault;
     }
 
-    public void changePassword(ChangePassword request) {
-
+    public void changePassword(ChangePassword request) throws StatusException {
+        if (!validate(request.getCredentials())) {
+            throw new StatusException(Status.INVALID_ARGUMENT.withDescription("Username or Password invalid"));
+        }
+        if (!vault.contains(request.getCredentials().getName())) {
+            throw new StatusException(Status.NOT_FOUND.withDescription("Username: " + request.getCredentials().getName()
+            + " does not exist"));
+        }
+        vault.changePassword(request.getCredentials().getName(),
+                             request.getCredentials().getPassword().getBytes(StandardCharsets.UTF_8),
+                             request.getNewPassword().getBytes(StandardCharsets.UTF_8));
     }
 
-    public void create(UsernamePassword up) {
-
+    public void create(UsernamePassword up) throws StatusException {
+        if (!validate(up)) {
+            throw new StatusException(Status.INVALID_ARGUMENT.withDescription("Username or Password invalid"));
+        }
     }
 
-    public void createUser(CreateUser user) {
-
+    public void createUser(UsernamePassword up) throws StatusException {
+        if (!validate(up)) {
+            throw new StatusException(Status.INVALID_ARGUMENT.withDescription("Username or Password invalid"));
+        }
+        if (vault.contains(up.getName())) {
+            throw new StatusException(Status.ALREADY_EXISTS.withDescription("Username: " + up.getName()
+            + " already exists"));
+        }
+        vault.add(up.getName(), up.getPassword().getBytes(StandardCharsets.UTF_8), false);
     }
 
     public DecryptResponse decrypt(DecryptRequest request) {
@@ -79,5 +99,13 @@ public class WingedGorgoneion {
 
     public Summary summary() {
         return null;
+    }
+
+    private boolean validate(UsernamePassword up) {
+        if (up.getName().isBlank() || up.getName().isEmpty() || up.getPassword().isBlank() ||
+            up.getPassword().isEmpty()) {
+            return false;
+        }
+        return true;
     }
 }
