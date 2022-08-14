@@ -43,7 +43,8 @@ public class TestWingedGorgoneion {
         }
         connection = new JdbcConnection(url, new Properties(), "", "", false);
 
-        var gorgoneion = new WingedGorgoneion(new SqlVault(DSL.using(connection, SQLDialect.H2), secureRandom));
+        var gorgoneion = new WingedGorgoneion(new SqlVault(DSL.using(connection, SQLDialect.H2), secureRandom),
+                                              secureRandom);
 
         final var up = UsernamePassword.newBuilder()
                                        .setName("J.R. Bob Dobbs")

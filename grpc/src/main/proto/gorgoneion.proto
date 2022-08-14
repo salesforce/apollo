@@ -9,7 +9,9 @@ import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/duration.proto";  
 import "google/protobuf/timestamp.proto";
+
 import "pal.proto";
+import "util.proto";
 
 package gorgoneion;
 
@@ -102,17 +104,50 @@ message DecryptResponse {
 
 message EncryptionRequest {
     UsernamePassword credentials = 1;
-    int32 minimum = 2;
-    repeated string owners = 3;
-    repeated string leftOwners = 4;
-    repeated string rightOwners = 5;
-    string predicate = 6;
-    google.protobuf.Any data = 7;
-    repeated string labels = 8;
-    repeated string usages = 9;
+    Access access = 2;
+    google.protobuf.Any data = 3;
+    repeated string labels = 4;
+    repeated string usages = 5;
 }
+
+message Access {
+    int32 minimum = 1;
+    repeated string owners = 2;
+    repeated string leftOwners = 3;
+    repeated string rightOwners = 4;
+    string predicate = 5;
+}
+
 
 message EncryptionResponse {
     google.protobuf.Any encrypted = 1;
     bytes signature = 2;
+}
+
+message EncryptedData {
+    int32 version = 1;
+    utils.Digeste vaultId = 2;
+    repeated string labels = 3;
+    repeated string usages = 4;
+    string predicate = 5;
+    repeated MultiWrappedKey keySet = 6;
+    map<string, SingleWrappedKey> keySetRsa = 7;
+    map<string, Share> shareSet = 8;
+    bytes iv = 9;
+    bytes data = 10;
+    bytes signature = 11;
+}
+
+message MultiWrappedKey {
+    repeated string name = 1;
+    bytes aesKey = 2;
+}
+
+message SingleWrappedKey {
+    bytes key = 1;
+    bytes aesKey = 2;
+}
+
+message Share {
+    repeated bytes share = 1;
 }

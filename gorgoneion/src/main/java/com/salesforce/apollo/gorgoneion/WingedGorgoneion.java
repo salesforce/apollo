@@ -7,17 +7,25 @@
 package com.salesforce.apollo.gorgoneion;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.function.Function;
+
+import javax.crypto.spec.IvParameterSpec;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.gorgoneion.proto.Access;
 import com.salesfoce.apollo.gorgoneion.proto.ChangePassword;
 import com.salesfoce.apollo.gorgoneion.proto.DecryptRequest;
 import com.salesfoce.apollo.gorgoneion.proto.DecryptResponse;
 import com.salesfoce.apollo.gorgoneion.proto.Delegation;
+import com.salesfoce.apollo.gorgoneion.proto.EncryptedData;
 import com.salesfoce.apollo.gorgoneion.proto.EncryptionRequest;
 import com.salesfoce.apollo.gorgoneion.proto.EncryptionResponse;
 import com.salesfoce.apollo.gorgoneion.proto.Export;
 import com.salesfoce.apollo.gorgoneion.proto.Modify;
 import com.salesfoce.apollo.gorgoneion.proto.Owners;
+import com.salesfoce.apollo.gorgoneion.proto.SingleWrappedKey;
 import com.salesfoce.apollo.gorgoneion.proto.Summary;
 import com.salesfoce.apollo.gorgoneion.proto.UsernamePassword;
 
@@ -29,10 +37,13 @@ import io.grpc.StatusException;
  *
  */
 public class WingedGorgoneion {
-    private final Vault vault;
+    private final SecureRandom entropy;
+    private int                keyLength = 16;
+    private final Vault        vault;
 
-    public WingedGorgoneion(Vault vault) {
+    public WingedGorgoneion(Vault vault, SecureRandom entropy) {
         this.vault = vault;
+        this.entropy = entropy;
     }
 
     public void changePassword(ChangePassword request) throws StatusException {
@@ -73,7 +84,18 @@ public class WingedGorgoneion {
 
     }
 
+    @SuppressWarnings("unused")
     public EncryptionResponse encrypt(EncryptionRequest request) {
+        var iv = new byte[keyLength];
+        entropy.nextBytes(iv);
+        IvParameterSpec ivParams = new IvParameterSpec(iv);
+
+        var clearKey = new byte[keyLength];
+        entropy.nextBytes(clearKey);
+        wrapKey(clearKey, request.getAccess());
+
+        var encrypted = EncryptedData.newBuilder().setVersion(1).setIv(ByteString.copyFrom(iv)).build();
+
         return null;
     }
 
@@ -107,5 +129,12 @@ public class WingedGorgoneion {
             return false;
         }
         return true;
+    }
+
+    @SuppressWarnings("unused")
+    private void wrapKey(byte[] clearKey, Access access) {
+        Function<String, SingleWrappedKey> generateRandomKey = name -> {
+            return null;
+        };
     }
 }
