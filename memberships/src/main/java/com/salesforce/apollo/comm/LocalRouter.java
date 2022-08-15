@@ -95,7 +95,8 @@ public class LocalRouter extends Router {
             builder = InProcessChannelBuilder.forName(name)
                                              .directExecutor()
                                              .intercept(clientInterceptor,
-                                                        new ConcurrencyLimitClientInterceptor(limitBuilder.build()));
+                                                        new ConcurrencyLimitClientInterceptor(limitBuilder.build(),
+                                                                                              () -> Status.RESOURCE_EXHAUSTED.withDescription("Client concurrency limit reached")));
             disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
@@ -212,6 +213,7 @@ public class LocalRouter extends Router {
                                        .executor(executor)
                                        .intercept(interceptor())
                                        .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
+                                                                                   .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                    .build())
                                        .fallbackHandlerRegistry(registry)
                                        .build();

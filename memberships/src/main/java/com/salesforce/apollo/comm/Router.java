@@ -65,11 +65,11 @@ abstract public class Router {
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
     public static Limit defaultClientLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(100).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
     public static Limit defaultServerLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(1000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
     protected final MutableHandlerRegistry registry;

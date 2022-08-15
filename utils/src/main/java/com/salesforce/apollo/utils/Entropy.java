@@ -70,6 +70,10 @@ final public class Entropy {
         return func.apply(secureRandomPool.get());
     }
 
+    public static BitsStreamGenerator bitsStream() {
+        return bitsStreamPool.get();
+    }
+
     public static void nextBitsStreamBytes(byte[] bytes) {
         acceptBitsStream(entropy -> entropy.nextBytes(bytes));
     }

@@ -72,7 +72,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
         @Override
         public String toString() {
-            return String.format("[%s,%s]", m.getId(), ring);
+            return String.format("[%s,%s]", m == null ? "<null>" : m.getId(), ring);
         }
 
     }
@@ -134,7 +134,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     public void reset() {
         currentIndex = 0;
         traversalOrder.clear();
-        log.trace("Reset on: {}", traversalOrder, member.getId());
+        log.trace("Reset on: {}", member.getId());
     }
 
     @Override
@@ -177,14 +177,16 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             if (traversalOrder.isEmpty()) {
                 traversalOrder.addAll(calculateTraversal(digest));
                 Entropy.secureShuffle(traversalOrder);
-                log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
+                log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
             final var current = currentIndex;
             if (current == traversalOrder.size() - 1) {
                 traversalOrder.clear();
                 traversalOrder.addAll(calculateTraversal(digest));
+                assert traversalOrder.size() == context.getRingCount() : "Invalid traversal order size: "
+                + traversalOrder.size() + " expected: " + context.getRingCount();
                 Entropy.secureShuffle(traversalOrder);
-                log.trace("New traversal order: {} on: {}", traversalOrder, member.getId());
+                log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
             int next = (current + 1) % traversalOrder.size();
             currentIndex = next;

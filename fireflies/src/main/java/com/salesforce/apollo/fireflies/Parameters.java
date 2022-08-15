@@ -6,12 +6,14 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import java.time.Duration;
+
 /**
  * @author hal.hildebrand
  *
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
-                         int finalizeViewRounds, double fpr, int maximumTxfr) {
+                         int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -21,35 +23,45 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Number of TTL rounds to wait before finalizing a view change
          */
-        private int    finalizeViewRounds     = 3;
+        private int    finalizeViewRounds = 3;
         /**
          * False positive rate for bloom filter state replication (high fpr is good)
          */
-        private double fpr                    = 0.0125;
+        private double fpr                = 0.0125;
         /**
          * Number of retries when joining until giving up
          */
-        private int    joinRetries            = 3;
+        private int    joinRetries        = 500;
+
         /**
          * Maximum number of elements to transfer per type per update
          */
-        private int    maximumTxfr            = 10;
+        private int      maximumTxfr            = 10;
+        /**
+         * Maximum pending joins
+         * 
+         */
+        private int      maxPending             = 100;
         /**
          * Minimum cardinality for bloom filters
          */
-        private int    minimumBiffCardinality = 128;
+        private int      minimumBiffCardinality = 128;
         /**
          * Number of TTL rounds an accussed has to rebut the accusation
          */
-        private int    rebuttalTimeout        = 2;
+        private int      rebuttalTimeout        = 2;
+        /**
+         * Max duration to delay retrying join operations
+         */
+        private Duration retryDelay             = Duration.ofSeconds(1);
         /**
          * Minimum number of rounds to check for view change
          */
-        private int    viewChangeRounds       = 7;
+        private int      viewChangeRounds       = 7;
 
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
-                                  finalizeViewRounds, fpr, maximumTxfr);
+                                  finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending);
         }
 
         public int getFinalizeViewRounds() {
@@ -68,12 +80,20 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return maximumTxfr;
         }
 
+        public int getMaxPending() {
+            return maxPending;
+        }
+
         public int getMinimumBiffCardinality() {
             return minimumBiffCardinality;
         }
 
         public int getRebuttalTimeout() {
             return rebuttalTimeout;
+        }
+
+        public Duration getRetryDelay() {
+            return retryDelay;
         }
 
         public int getViewChangeRounds() {
@@ -100,6 +120,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
+        public Builder setMaxPending(int maxPending) {
+            this.maxPending = maxPending;
+            return this;
+        }
+
         public Builder setMinimumBiffCardinality(int minimumBiffCardinality) {
             this.minimumBiffCardinality = minimumBiffCardinality;
             return this;
@@ -107,6 +132,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setRebuttalTimeout(int rebuttalTimeout) {
             this.rebuttalTimeout = rebuttalTimeout;
+            return this;
+        }
+
+        public Builder setRetryDelay(Duration retryDelay) {
+            this.retryDelay = retryDelay;
             return this;
         }
 

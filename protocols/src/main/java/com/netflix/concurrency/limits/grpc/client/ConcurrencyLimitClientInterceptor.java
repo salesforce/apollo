@@ -16,6 +16,7 @@
 package com.netflix.concurrency.limits.grpc.client;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
@@ -39,13 +40,15 @@ import io.grpc.Status.Code;
  * reached.
  */
 public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
-    private static final Status LIMIT_EXCEEDED_STATUS = Status.UNAVAILABLE.withDescription("Client concurrency limit reached");
 
     private final Limiter<GrpcClientRequestContext> grpcLimiter;
+    private final Supplier<Status>                  statusSupplier;
 
-    public ConcurrencyLimitClientInterceptor(final Limiter<GrpcClientRequestContext> grpcLimiter) {
+    public ConcurrencyLimitClientInterceptor(final Limiter<GrpcClientRequestContext> grpcLimiter,
+                                             Supplier<Status> statusSupplier) {
         Preconditions.checkArgument(grpcLimiter != null, "GrpcLimiter cannot not be null");
         this.grpcLimiter = grpcLimiter;
+        this.statusSupplier = statusSupplier;
     }
 
     @Override
@@ -114,7 +117,7 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
 
                               @Override
                               public void halfClose() {
-                                  responseListener.onClose(LIMIT_EXCEEDED_STATUS, new Metadata());
+                                  responseListener.onClose(statusSupplier.get(), new Metadata());
                               }
 
                               @Override

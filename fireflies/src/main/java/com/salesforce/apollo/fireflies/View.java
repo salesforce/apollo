@@ -92,6 +92,7 @@ import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.fireflies.communications.Fireflies;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -520,6 +521,10 @@ public class View {
                 return;
             }
             stable(() -> {
+                if (pendingJoins.size() >= params.maxPending()) {
+                    responseObserver.onNext(Gateway.getDefaultInstance());
+                    return;
+                }
                 var note = new NoteWrapper(request.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
                     responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
@@ -528,8 +533,8 @@ public class View {
                 var requestView = Digest.from(request.getView());
                 final var current = membership;
                 if (current.contains(from)) {
-                    log.info("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from,
-                             currentView.get(), context.getId(), context.cardinality(), node.getId());
+                    log.trace("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from,
+                              currentView.get(), context.getId(), context.cardinality(), node.getId());
                     joined(Collections.emptyList(), from, responseObserver, timer);
                     return;
                 }
@@ -598,8 +603,8 @@ public class View {
                                                                          params.fpr()))
                                     .setJoins(processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
                                     .build();
-                if (g.getNotes().getUpdatesCount() != 0 || g.getAccusations().getUpdatesCount() != 0 ||
-                    g.getObservations().getUpdatesCount() != 0 || g.getJoins().getUpdatesCount() != 0) {
+                if (g.getNotes().getUpdatesCount() + g.getAccusations().getUpdatesCount()
+                + g.getObservations().getUpdatesCount() + g.getJoins().getUpdatesCount() != 0) {
                     log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
                               g.getNotes().getUpdatesCount(), g.getAccusations().getUpdatesCount(),
                               g.getJoins().getUpdatesCount(), g.getObservations().getUpdatesCount(), node.getId());
@@ -669,8 +674,10 @@ public class View {
                     return;
                 }
                 final var update = request.getUpdate();
-                processUpdates(update.getNotesList(), update.getAccusationsList(), update.getObservationsList(),
-                               update.getJoinsList());
+                if (!update.equals(Update.getDefaultInstance())) {
+                    processUpdates(update.getNotesList(), update.getAccusationsList(), update.getObservationsList(),
+                                   update.getJoinsList());
+                }
             });
         }
 
@@ -681,10 +688,15 @@ public class View {
             final var current = View.this.membership;
             var gateway = Gateway.newBuilder()
                                  .setView(currentView.get().toDigeste())
-                                 .addAllInitialSeedSet(seedSet.stream().map(p -> p.getNote().getWrapped()).toList())
+                                 .addAllInitialSeedSet(seedSet.stream()
+                                                              .map(p -> p.getNote().getWrapped())
+                                                              .collect(new ReservoirSampler<>(params.maximumTxfr(),
+                                                                                              Entropy.bitsStream())))
                                  .setMembers(current.toBff())
                                  .setCardinality(context.totalCount())
-                                 .addAllJoining(joined)
+                                 .addAllJoining(joined.stream()
+                                                      .collect(new ReservoirSampler<>(params.maximumTxfr(),
+                                                                                      Entropy.bitsStream())))
                                  .build();
             responseObserver.onNext(gateway);
             responseObserver.onCompleted();
@@ -718,7 +730,17 @@ public class View {
         private record Bound(Digest view, List<NoteWrapper> seeds, int cardinality, Set<SignedNote> joined,
                              BloomFilter<Digest> bff) {}
 
-        private void bootstrap(ScheduledExecutorService scheduler, Duration duration) {
+        private final Duration                 duration;
+        private final ScheduledExecutorService scheduler;
+        private final List<Seed>               seeds;
+
+        public Binding(List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler) {
+            this.duration = duration;
+            this.seeds = new ArrayList<>(seeds);
+            this.scheduler = scheduler;
+        }
+
+        private void bootstrap() {
             log.info("Bootstrapping seed node view: {} context: {} on: {}", currentView.get(), context.getId(),
                      node.getId());
 
@@ -753,8 +775,18 @@ public class View {
                              context.getId(), m.getId(), node.getId());
                 }
                 return false;
-            } catch (ExecutionException e) {
-                log.error("Error in redirect: {} on: {}", e.getCause(), node.getId());
+            } catch (ExecutionException ex) {
+                if (ex.getCause() instanceof StatusRuntimeException sre) {
+                    switch (sre.getStatus().getCode()) {
+                    case RESOURCE_EXHAUSTED:
+                        log.trace("SRE in redirect: {} on: {}", sre.getStatus(), node.getId());
+                        break;
+                    default:
+                        log.trace("SRE in redirect: {} on: {}", sre.getStatus(), node.getId());
+                    }
+                } else {
+                    log.error("Error in redirect: {} on: {}", ex.getCause(), node.getId());
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (CancellationException e) {
@@ -780,8 +812,20 @@ public class View {
                 g = futureSailor.get().get();
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    log.warn("Failure in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
-                             node.getId());
+                    switch (sre.getStatus().getCode()) {
+                    case RESOURCE_EXHAUSTED:
+                        break;
+                    case OUT_OF_RANGE:
+                        log.warn("View change in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
+                                 node.getId());
+                        resetBootstrapView();
+                        node.reset();
+                        seeding();
+                        return false;
+                    default:
+                        log.warn("Failure in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
+                                 node.getId());
+                    }
                 } else {
                     log.error("Failure in join: {} with: {} on: {}", view, member.getId(), node.getId(), e.getCause());
                 }
@@ -793,6 +837,9 @@ public class View {
                 return true;
             }
 
+            if (!g.isInitialized()) {
+                return true;
+            }
             var gatewayView = Digest.from(g.getView());
             views.add(gatewayView);
             cards.add(g.getCardinality());
@@ -811,13 +858,13 @@ public class View {
                     return false;
                 }
             }
-            log.info("Gateway received, views: {} cardinality: {} memberships: {} majority: {} from: {} view: {} context: {} on: {}",
-                     views.size(), cards.size(), memberships.size(), majority, member.getId(), gatewayView,
-                     context.getId(), node.getId());
+            log.debug("Gateway received, views: {} cardinality: {} memberships: {} majority: {} from: {} view: {} context: {} on: {}",
+                      views.size(), cards.size(), memberships.size(), majority, member.getId(), gatewayView,
+                      context.getId(), node.getId());
             return true;
         }
 
-        private BiConsumer<? super Bound, ? super Throwable> join(Duration duration, ScheduledExecutorService scheduler,
+        private BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
                                                                   Timer.Context timer) {
             return (bound, t) -> {
                 viewChange(() -> {
@@ -845,7 +892,7 @@ public class View {
                     scheduleViewChange();
 
                     futureGossip = scheduler.schedule(() -> gossip(duration, scheduler),
-                                                      Entropy.nextBitsStreamLong(duration.toNanos()),
+                                                      Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
                                                       TimeUnit.NANOSECONDS);
 
                     if (timer != null) {
@@ -899,7 +946,7 @@ public class View {
                      node.getId());
             var gateway = new CompletableFuture<Bound>();
             var timer = metrics == null ? null : metrics.joinDuration().time();
-            gateway.whenComplete(join(duration, scheduler, timer));
+            gateway.whenComplete(join(scheduler, duration, timer));
 
             var regate = new AtomicReference<Runnable>();
             var retries = new AtomicInteger();
@@ -935,24 +982,23 @@ public class View {
                                             views.clear();
                                             cards.clear();
                                             seeds.clear();
-                                            scheduler.schedule(exec(() -> regate.get().run()), duration.toNanos(),
-                                                               TimeUnit.NANOSECONDS);
+                                            scheduler.schedule(exec(() -> regate.get().run()),
+                                                               params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
                                         } else {
                                             log.error("Failed to join view: {} cannot obtain majority on: {}", view,
                                                       node.getId());
                                             stop();
                                         }
-                                    }, scheduler, duration);
+                                    }, scheduler, params.retryDelay());
             });
             regate.get().run();
         }
 
-        private void seeding(List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler) {
+        private void seeding() {
             if (seeds.isEmpty()) {// This node is the bootstrap seed
-                bootstrap(scheduler, duration);
+                bootstrap();
                 return;
             }
-            seeds = new ArrayList<>(seeds);
             Entropy.secureShuffle(seeds);
             log.info("Seeding view: {} context: {} with: {} started on: {}", currentView.get(), context.getId(),
                      seeds.stream()
@@ -983,9 +1029,10 @@ public class View {
                     return link.seed(join);
                 }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                     if (!seeding.isDone()) {
-                        scheduler.schedule(exec(() -> reseed.get().run()), duration.toNanos(), TimeUnit.NANOSECONDS);
+                        scheduler.schedule(exec(() -> reseed.get().run()), params.retryDelay().toNanos(),
+                                           TimeUnit.NANOSECONDS);
                     }
-                }, scheduler, duration);
+                }, scheduler, params.retryDelay());
             });
             reseed.get().run();
         }
@@ -1052,8 +1099,10 @@ public class View {
         }
     }
 
-    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
+
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final double MEMBERSHIP_FPR        = 0.00125;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     /**
@@ -1072,6 +1121,7 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
+    private final AtomicInteger                               attempt             = new AtomicInteger();
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     crown;
@@ -1117,7 +1167,7 @@ public class View {
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
-        this.membership = new DigestBloomFilter(0x666, params.minimumBiffCardinality(), 0.0001);
+        this.membership = new DigestBloomFilter(0x666, params.minimumBiffCardinality(), MEMBERSHIP_FPR);
     }
 
     /**
@@ -1170,13 +1220,14 @@ public class View {
                       .map(sai -> sai.getDigest())
                       .toList(),
                  node.getId());
+        resetBootstrapView();
         roundTimers.reset();
         comm.register(context.getId(), service);
         context.clear();
         node.reset();
 
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
-        scheduler.schedule(exec(() -> new Binding().seeding(seeds, d, scheduler)), initial, TimeUnit.NANOSECONDS);
+        scheduler.schedule(exec(() -> new Binding(seeds, d, scheduler).seeding()), initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -1369,7 +1420,7 @@ public class View {
         }
         final var current = membership;
         if (!current.contains(note.getId())) {
-            log.warn("Note: {} is not a member  on: {}", note.getId(), node.getId());
+            log.debug("Note: {} is not a member  on: {}", note.getId(), node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
@@ -1401,6 +1452,15 @@ public class View {
                       node.getId());
             return false;
         }
+        var currentObservation = observations.get(observer);
+        if (currentObservation != null) {
+            if (observation.getChange().getAttempt() <= currentObservation.getChange().getAttempt()) {
+                log.trace("Stale observation: {} current: {} view change: {} current: {} offline: {} on: {}",
+                          observation.getChange().getAttempt(), currentObservation.getChange().getAttempt(), inView,
+                          currentView.get(), observer, node.getId());
+                return false;
+            }
+        }
         final var member = context.getActiveMember(observer);
         if (member == null) {
             log.trace("Cannot validate view change: {} current: {} offline: {} on: {}", inView, currentView.get(),
@@ -1411,7 +1471,7 @@ public class View {
         if (!member.verify(signature, observation.getChange().toByteString())) {
             return false;
         }
-        return observations.put(observer, observation) == null;
+        return observations.put(observer.prefix(observation.getChange().getAttempt()), observation) == null;
     }
 
     private boolean addJoin(SignedNote sn) {
@@ -1462,6 +1522,7 @@ public class View {
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
+            log.trace("Note shunned: {} on: {}", note.getId(), node.getId());
             return false;
         }
         return add(note);
@@ -1488,6 +1549,11 @@ public class View {
                 long nextEpoch = note.getEpoch();
                 long currentEpoch = current.getEpoch();
                 if (nextEpoch <= currentEpoch) {
+//                    log.trace("Note: {} epoch out of date: {} current: {} on: {}", note.getId(), nextEpoch,
+//                              currentEpoch, node.getId());
+                    if (metrics != null) {
+                        metrics.filteredNotes().mark();
+                    }
                     return false;
                 }
             }
@@ -1765,6 +1831,10 @@ public class View {
                     log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView.get(),
                               p.getId(), node.getId());
                     break;
+                case RESOURCE_EXHAUSTED:
+                    log.trace("Unavailable for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView.get(),
+                              p.getId(), node.getId());
+                    break;
                 default:
                     log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), p.getId(),
                               currentView.get(), node.getId());
@@ -1821,15 +1891,15 @@ public class View {
                                                     .build());
                         }
                     } catch (StatusRuntimeException e) {
-                        handleSRE(destination, member, e);
+                        handleSRE("update", destination, member, e);
                     }
                 }
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    handleSRE(destination, member, sre);
-                    return;
+                    handleSRE("gossip", destination, member, sre);
+                } else {
+                    accuse(member, destination.ring(), e);
                 }
-                accuse(member, destination.ring(), e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -1840,15 +1910,19 @@ public class View {
         }
     }
 
-    private void handleSRE(Destination<Participant, Fireflies> destination, final Participant member,
+    private void handleSRE(String type, Destination<Participant, Fireflies> destination, final Participant member,
                            StatusRuntimeException sre) {
         switch (sre.getStatus().getCode()) {
         case PERMISSION_DENIED:
-            log.trace("Rejected update: {} view: {} from: {} on: {}", sre.getStatus(), currentView.get(),
+            log.trace("Rejected {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView.get(),
+                      member.getId(), node.getId());
+            break;
+        case RESOURCE_EXHAUSTED:
+            log.trace("Unavailable for {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView.get(),
                       member.getId(), node.getId());
             break;
         default:
-            log.debug("Error updating: {} from: {} on: {}", sre.getStatus(), member.getId(), node.getId());
+            log.debug("Error {}: {} from: {} on: {}", type, sre.getStatus(), member.getId(), node.getId());
             accuse(member, destination.ring(), sre);
             break;
         }
@@ -1874,6 +1948,7 @@ public class View {
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView.get().toDigeste())
+                                          .setAttempt(attempt.getAndIncrement())
                                           .addAllLeaves(shunned.stream()
                                                                .map(id -> id.toDigeste())
                                                                .collect(Collectors.toSet()))
@@ -1897,6 +1972,7 @@ public class View {
         log.debug("View change: {}, pending: {} joining: {} leaving: {} local joins: {} leaving: {} on: {}",
                   currentView.get(), pendingJoins.keySet().stream().toList(), view.joining, view.leaving,
                   joins.keySet(), context.getOffline().stream().map(p -> p.getId()).toList(), node.getId());
+        attempt.set(0);
         view.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> remove(p));
         context.rebalance(context.totalCount() + view.joining.size());
 
@@ -1904,7 +1980,7 @@ public class View {
         membership = new DigestBloomFilter(currentView.get().fold(),
                                            Math.max(params.minimumBiffCardinality(),
                                                     (context.memberCount() + view.joining.size())),
-                                           0.00125);
+                                           MEMBERSHIP_FPR);
         context.allMembers().forEach(p -> membership.add(p.getId()));
         view.joining().forEach(id -> membership.add(id));
 
@@ -2057,7 +2133,7 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
-               .limit(params.maximumTxfr())
+               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
@@ -2083,8 +2159,8 @@ public class View {
         joins.entrySet()
              .stream()
              .filter(m -> !bff.contains(m.getKey()))
-             .limit(params.maximumTxfr())
              .map(m -> m.getValue())
+             .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
              .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
         JoinGossip gossip = builder.build();
@@ -2115,8 +2191,8 @@ public class View {
                .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
-               .limit(params.maximumTxfr())
                .map(m -> m.getNote())
+               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
@@ -2145,7 +2221,7 @@ public class View {
                     .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
-                    .limit(params.maximumTxfr())
+                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                     .forEach(n -> builder.addUpdates(n));
         builder.setBff(getObservationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
@@ -2182,10 +2258,10 @@ public class View {
                                 .count();
         var oCount = observe.stream().filter(observation -> add(observation)).count();
         var jCount = joins.stream().filter(j -> addJoin(j)).count();
-        if (nCount + aCount + oCount + jCount != 0) {
-            log.trace("Updating notes: {}:{} accusations: {}:{} observations: {}:{} joins: {}:{} on: {}", nCount,
-                      notes.size(), aCount, accusations.size(), oCount, observe.size(), jCount, joins.size(),
-                      node.getId());
+        if (notes.size() + accusations.size() + observe.size() + joins.size() != 0) {
+            log.trace("Updating, members: {} notes: {}:{} accusations: {}:{} observations: {}:{} joins: {}:{} on: {}",
+                      context.totalCount(), nCount, notes.size(), aCount, accusations.size(), oCount, observe.size(),
+                      jCount, joins.size(), node.getId());
         }
     }
 
@@ -2200,11 +2276,11 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
                       context.totalCount(), node.getId());
         } else {
-            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-                      context.totalCount(), node.getId());
+//            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+//                      context.totalCount(), node.getId());
         }
     }
 
@@ -2226,8 +2302,8 @@ public class View {
             addToCurrentView(note);
             final Participant redirect = context.getActiveMember(note.getId());
             if (redirect == null) {
-                log.trace("Ignored redirect from: {} to: {} ring: {} not currently a member on ring: {} on: {}",
-                          member.getId(), note.getId(), ring, node.getId());
+                log.trace("Ignored redirect from: {} to: {} ring: {} not currently a member on: {}", member.getId(),
+                          note.getId(), ring, node.getId());
                 return;
             }
             if (gossip.getAccusations().getUpdatesCount() > 0) {
@@ -2414,8 +2490,8 @@ public class View {
                    .filter(m -> m.getNote() != null)
                    .filter(m -> current.equals(m.getNote().currentView()))
                    .filter(m -> !notesBff.contains(m.getNote().getHash()))
-                   .limit(params.maximumTxfr())
                    .map(m -> m.getNote().getWrapped())
+                   .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                    .forEach(n -> builder.addNotes(n));
         }
 
@@ -2426,7 +2502,7 @@ public class View {
                    .flatMap(m -> m.getAccusations())
                    .filter(a -> a.currentView().equals(current))
                    .filter(a -> !accBff.contains(a.getHash()))
-                   .limit(params.maximumTxfr())
+                   .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                    .forEach(a -> builder.addAccusations(a.getWrapped()));
         }
 
@@ -2437,7 +2513,7 @@ public class View {
                         .stream()
                         .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                         .filter(e -> !obsvBff.contains(e.getKey()))
-                        .limit(params.maximumTxfr())
+                        .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                         .forEach(e -> builder.addObservations(e.getValue()));
         }
 
@@ -2447,7 +2523,7 @@ public class View {
             joins.entrySet()
                  .stream()
                  .filter(e -> !joinBff.contains(e.getKey()))
-                 .limit(params.maximumTxfr())
+                 .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                  .forEach(e -> builder.addJoins(e.getValue().getWrapped()));
         }
 
