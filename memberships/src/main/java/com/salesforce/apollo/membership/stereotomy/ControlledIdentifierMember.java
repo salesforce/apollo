@@ -103,6 +103,10 @@ public class ControlledIdentifierMember implements SigningMember {
         return id;
     }
 
+    public ControlledIdentifier<SelfAddressingIdentifier> getIdentifier() {
+        return identifier;
+    }
+
     @Override
     public int hashCode() {
         return id.hashCode();

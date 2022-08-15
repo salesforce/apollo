@@ -10,11 +10,11 @@ import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -79,7 +79,7 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gateway> join(Join join) {
+    public ListenableFuture<Gateway> join(Credentials join) {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
@@ -105,7 +105,7 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Redirect> seed(Join join) {
+    public ListenableFuture<Redirect> seed(Credentials join) {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);

@@ -27,6 +27,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -138,14 +140,17 @@ public class FireFliesTest {
         final var scheduler = Executors.newScheduledThreadPool(2);
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
+        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
+
         domains.get(0)
                .getFoundation()
-               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+               .start(authentication, () -> started.get().countDown(), gossipDuration, Collections.emptyList(),
+                      scheduler);
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds, scheduler);
+            d.getFoundation().start(authentication, () -> started.get().countDown(), gossipDuration, seeds, scheduler);
         });
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
 

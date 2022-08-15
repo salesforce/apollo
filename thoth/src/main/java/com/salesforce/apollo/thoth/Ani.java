@@ -10,6 +10,7 @@ package com.salesforce.apollo.thoth;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -104,6 +105,22 @@ public class Ani {
                 } catch (TimeoutException e) {
                     log.error("Timeout validating: {} on: {} ", coordinates, member);
                     return new Filtered(false, null);
+                }
+            }
+
+            @Override
+            public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+                try {
+                    return Optional.of(kerl.getKeyState(coordinates).get(timeout.toNanos(), TimeUnit.NANOSECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                } catch (ExecutionException e) {
+                    log.error("Unable to retrieve keystate: {} on: {}", coordinates, member, e.getCause());
+                    return Optional.empty();
+                } catch (TimeoutException e) {
+                    log.error("Timeout retrieving keystate: {} on: {} ", coordinates, member);
+                    return Optional.empty();
                 }
             }
 

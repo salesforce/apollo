@@ -13,10 +13,10 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -84,7 +84,7 @@ public class FfServer extends FirefliesImplBase {
     }
 
     @Override
-    public void join(Join request, StreamObserver<Gateway> responseObserver) {
+    public void join(Credentials request, StreamObserver<Gateway> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundJoinDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
@@ -103,7 +103,7 @@ public class FfServer extends FirefliesImplBase {
     }
 
     @Override
-    public void seed(Join request, StreamObserver<Redirect> responseObserver) {
+    public void seed(Credentials request, StreamObserver<Redirect> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundSeedDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();

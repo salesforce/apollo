@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import java.io.InputStream;
+import java.util.Optional;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -28,6 +29,11 @@ public interface EventValidation {
         public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                  InputStream message) {
             return null;
+        }
+
+        @Override
+        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+            return Optional.empty();
         }
 
         @Override
@@ -54,6 +60,8 @@ public interface EventValidation {
 
     Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                       InputStream message);
+
+    Optional<KeyState> getKeyState(EventCoordinates coordinates);
 
     /**
      * Answer true if the event is validated. This means that thresholds have been

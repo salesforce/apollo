@@ -9,9 +9,9 @@ package com.salesforce.apollo.fireflies.communications;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -43,12 +43,12 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gateway> join(Join join) {
+            public ListenableFuture<Gateway> join(Credentials join) {
                 return null;
             }
 
             @Override
-            public ListenableFuture<Redirect> seed(Join join) {
+            public ListenableFuture<Redirect> seed(Credentials join) {
                 return null;
             }
 
@@ -60,9 +60,9 @@ public interface Fireflies extends Link {
 
     ListenableFuture<Gossip> gossip(SayWhat sw);
 
-    ListenableFuture<Gateway> join(Join join);
+    ListenableFuture<Gateway> join(Credentials join);
 
-    ListenableFuture<Redirect> seed(Join join);
+    ListenableFuture<Redirect> seed(Credentials join);
 
     void update(State state);
 
