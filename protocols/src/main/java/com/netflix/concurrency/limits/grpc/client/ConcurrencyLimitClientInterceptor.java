@@ -32,7 +32,6 @@ import io.grpc.ForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.Status.Code;
 
 /**
  * ClientInterceptor that enforces per service and/or per method concurrent
@@ -96,7 +95,7 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
                                               if (done.compareAndSet(false, true)) {
                                                   if (status.isOk()) {
                                                       listener.onSuccess();
-                                                  } else if (Code.UNAVAILABLE == status.getCode()) {
+                                                  } else if (statusSupplier.get().getCode() == status.getCode()) {
                                                       listener.onDropped();
                                                   } else {
                                                       listener.onIgnore();

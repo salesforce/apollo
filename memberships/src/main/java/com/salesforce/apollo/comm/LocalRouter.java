@@ -61,15 +61,18 @@ public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
+        private final Executor           executor;
         private GrpcClientLimiterBuilder limitBuilder;
         private final String             prefix;
 
-        public LocalServerConnectionFactory(String prefix, Supplier<Limit> clientLimit, LimitsRegistry limitsRegistry) {
+        public LocalServerConnectionFactory(String prefix, Supplier<Limit> clientLimit, LimitsRegistry limitsRegistry,
+                                            Executor executor) {
             this.prefix = prefix;
             limitBuilder = new GrpcClientLimiterBuilder().limit(clientLimit.get()).blockOnLimit(false);
             if (limitsRegistry != null) {
                 limitBuilder.metricRegistry(limitsRegistry);
             }
+            this.executor = executor;
         }
 
         @Override
@@ -93,7 +96,7 @@ public class LocalRouter extends Router {
             final InProcessChannelBuilder builder;
             limitBuilder.named(name(from.getId().shortString(), "to", to.getId().shortString()));
             builder = InProcessChannelBuilder.forName(name)
-                                             .directExecutor()
+                                             .executor(executor)
                                              .intercept(clientInterceptor,
                                                         new ConcurrencyLimitClientInterceptor(limitBuilder.build(),
                                                                                               () -> Status.RESOURCE_EXHAUSTED.withDescription("Client concurrency limit reached")));
@@ -147,7 +150,8 @@ public class LocalRouter extends Router {
     public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
                        MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor,
                        LimitsRegistry limitsRegistry) {
-        super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit, limitsRegistry)).build(),
+        super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit, limitsRegistry, executor))
+                     .build(),
               registry);
 
         limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());

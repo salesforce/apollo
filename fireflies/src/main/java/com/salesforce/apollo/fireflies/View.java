@@ -106,7 +106,6 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
@@ -666,8 +665,7 @@ public class View {
                 final var successors = new TreeSet<Participant>(context.successors(newMember,
                                                                                    m -> context.isActive(m)));
                 log.debug("Member seeding: {} view: {} context: {} successors: {} on: {}", newMember.getId(),
-                          currentView.get(), context.getId(), successors.stream().map(e -> e.getId()).toList(),
-                          node.getId());
+                          currentView.get(), context.getId(), successors.size(), node.getId());
                 return Redirect.newBuilder()
                                .setView(currentView.get().toDigeste())
                                .addAllSuccessors(successors.stream()
@@ -1043,11 +1041,8 @@ public class View {
                 return;
             }
             Entropy.secureShuffle(seeds);
-            log.info("Seeding view: {} context: {} with: {} started on: {}", currentView.get(), context.getId(),
-                     seeds.stream()
-                          .map(s -> ((SelfAddressingIdentifier) s.coordinates().getIdentifier()).getDigest())
-                          .toList(),
-                     node.getId());
+            log.info("Seeding view: {} context: {} with seeds: {} started on: {}", currentView.get(), context.getId(),
+                     seeds.size(), node.getId());
 
             var seeding = new CompletableFuture<Redirect>();
             var timer = metrics == null ? null : metrics.seedDuration().time();
@@ -1254,13 +1249,7 @@ public class View {
         Entropy.secureShuffle(seeds);
 
         log.info("Starting: {} cardinality: {} tolerance: {} seeds: {} on: {}", context.getId(), context.cardinality(),
-                 context.toleranceLevel(),
-                 seeds.stream()
-                      .map(s -> s.coordinates.getIdentifier())
-                      .map(i -> (SelfAddressingIdentifier) i)
-                      .map(sai -> sai.getDigest())
-                      .toList(),
-                 node.getId());
+                 context.toleranceLevel(), seeds.size(), node.getId());
         resetBootstrapView();
         roundTimers.reset();
         comm.register(context.getId(), service);
@@ -2028,8 +2017,8 @@ public class View {
      */
     private void install(Ballot view) {
         log.debug("View change: {}, pending: {} joining: {} leaving: {} local joins: {} leaving: {} on: {}",
-                  currentView.get(), pendingJoins.keySet().stream().toList(), view.joining, view.leaving,
-                  joins.keySet(), context.getOffline().stream().map(p -> p.getId()).toList(), node.getId());
+                  currentView.get(), pendingJoins.size(), view.joining.size(), view.leaving.size(), joins.keySet(),
+                  context.offlineCount(), node.getId());
         attempt.set(0);
         view.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> remove(p));
         context.rebalance(context.totalCount() + view.joining.size());
@@ -2334,8 +2323,8 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-                      context.totalCount(), node.getId());
+//            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+//                      context.totalCount(), node.getId());
         } else {
 //            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
 //                      context.totalCount(), node.getId());
@@ -2349,11 +2338,11 @@ public class View {
      * @param gossip
      * @param ring
      */
-    private void redirect(Participant member, Gossip gossip, int ring) {
+    private boolean redirect(Participant member, Gossip gossip, int ring) {
         if (gossip.getNotes().getUpdatesCount() != 1) {
             log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
                      node.getId());
-            return;
+            return false;
         }
         if (gossip.getNotes().getUpdatesCount() == 1) {
             var note = new NoteWrapper(gossip.getNotes().getUpdatesList().get(0), digestAlgo);
@@ -2362,7 +2351,7 @@ public class View {
             if (redirect == null) {
                 log.trace("Ignored redirect from: {} to: {} ring: {} not currently a member on: {}", member.getId(),
                           note.getId(), ring, node.getId());
-                return;
+                return false;
             }
             if (gossip.getAccusations().getUpdatesCount() > 0) {
                 gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
@@ -2379,8 +2368,10 @@ public class View {
                 node.clearAccusations();
             }
             log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring, node.getId());
+            return true;
         } else {
             log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
+            return false;
         }
     }
 
