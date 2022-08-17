@@ -66,7 +66,7 @@ public class SwarmTest {
     private static final double                                                P_BYZ      = 0.3;
 
     static {
-        CARDINALITY = largeTests ? 800 : 100;
+        CARDINALITY = largeTests ? 1000 : 100;
     }
 
     @BeforeAll
@@ -213,7 +213,7 @@ public class SwarmTest {
 
     private void initialize() {
         var parameters = Parameters.newBuilder()
-                                   .setMaxPending(largeTests ? 100 : 10)
+                                   .setMaxPending(largeTests ? 3 : 10)
                                    .setMaximumTxfr(largeTests ? 100 : 20)
                                    .build();
         registry = new MetricRegistry();

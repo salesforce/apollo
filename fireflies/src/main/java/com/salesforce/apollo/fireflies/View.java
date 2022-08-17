@@ -547,8 +547,8 @@ public class View {
             }
             final var join = credentials.getJoin();
             if (!joined.get()) {
-                log.warn("Not joined, ignored join of view: {} from: {} on: {}", Digest.from(join.getView()), from,
-                         node.getId());
+                log.trace("Not joined, ignored join of view: {} from: {} on: {}", Digest.from(join.getView()), from,
+                          node.getId());
                 responseObserver.onNext(Gateway.getDefaultInstance());
                 responseObserver.onCompleted();
                 return;
@@ -897,7 +897,7 @@ public class View {
             }
             var gatewayView = Digest.from(g.getView());
             if (gatewayView.equals(Digest.NONE)) {
-                log.warn("Empty view in join returned from: {} on: {}", member.getId(), node.getId());
+                log.trace("Empty view in join returned from: {} on: {}", member.getId(), node.getId());
                 return true;
             }
             views.add(gatewayView);
@@ -962,8 +962,6 @@ public class View {
                     node.nextNote();
 
                     context.allMembers().forEach(p -> p.clearAccusations());
-
-                    scheduleViewChange();
 
                     futureGossip = scheduler.schedule(() -> gossip(duration, scheduler),
                                                       Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
@@ -1165,7 +1163,7 @@ public class View {
     private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
 
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
-    private static final double MEMBERSHIP_FPR        = 0.00125;
+    private static final double MEMBERSHIP_FPR        = 0.0000125;
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     /**
@@ -2172,6 +2170,8 @@ public class View {
         notifyListeners(context.allMembers().map(p -> p.getId()).toList(), Collections.emptyList());
         onJoined.complete(null);
         joined.set(true);
+
+        scheduleViewChange();
 
         log.info("Joined view: {} cardinality: {} count: {} on: {}", currentView.get(), context.cardinality(),
                  context.totalCount(), node.getId());
