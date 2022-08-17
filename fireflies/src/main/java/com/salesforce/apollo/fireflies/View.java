@@ -747,6 +747,8 @@ public class View {
                                                       .collect(new ReservoirSampler<>(params.maximumTxfr(),
                                                                                       Entropy.bitsStream())))
                                  .build();
+            assert gateway.getInitialSeedSetCount() != 0;
+            assert !gateway.getMembers().equals(Biff.getDefaultInstance());
             responseObserver.onNext(gateway);
             responseObserver.onCompleted();
             if (timer != null) {
@@ -847,8 +849,8 @@ public class View {
         private boolean completeGateway(Participant member, CompletableFuture<Bound> gateway,
                                         Optional<ListenableFuture<Gateway>> futureSailor,
                                         HashMultiset<Biff> memberships, HashMultiset<Digest> views,
-                                        HashMultiset<Integer> cards, HashMultiset<SignedNote> seeds, Digest view,
-                                        int majority, Set<SignedNote> joined) {
+                                        HashMultiset<Integer> cards, Set<SignedNote> seeds, Digest view, int majority,
+                                        Set<SignedNote> joined) {
             if (futureSailor.isEmpty()) {
                 return true;
             }
@@ -892,7 +894,15 @@ public class View {
                 return true;
             }
 
-            if (!g.isInitialized()) {
+            if (g.equals(Gateway.getDefaultInstance())) {
+                return true;
+            }
+            if (g.getInitialSeedSetCount() == 0) {
+                log.warn("No seeds in join returned from: {} on: {}", member.getId(), node.getId());
+                return true;
+            }
+            if (g.getMembers().equals(Biff.getDefaultInstance())) {
+                log.warn("No membership in join returned from: {} on: {}", member.getId(), node.getId());
                 return true;
             }
             var gatewayView = Digest.from(g.getView());
@@ -903,7 +913,7 @@ public class View {
             views.add(gatewayView);
             cards.add(g.getCardinality());
             memberships.add(g.getMembers());
-            g.getInitialSeedSetList().forEach(nw -> seeds.add(nw));
+            seeds.addAll(g.getInitialSeedSetList());
             joined.addAll(g.getJoiningList());
 
             var v = views.entrySet()
@@ -1023,7 +1033,7 @@ public class View {
             var retries = new AtomicInteger();
 
             HashMultiset<Biff> biffs = HashMultiset.create();
-            HashMultiset<SignedNote> seeds = HashMultiset.create();
+            HashSet<SignedNote> seeds = new HashSet<>();
             HashMultiset<Digest> views = HashMultiset.create();
             HashMultiset<Integer> cards = HashMultiset.create();
             Set<SignedNote> joined = new HashSet<>();
@@ -1097,8 +1107,8 @@ public class View {
         }
 
         private boolean validate(Gateway g, Digest view, CompletableFuture<Bound> gateway,
-                                 HashMultiset<Biff> memberships, HashMultiset<Integer> cards,
-                                 HashMultiset<SignedNote> seeds, int majority, Set<SignedNote> joined) {
+                                 HashMultiset<Biff> memberships, HashMultiset<Integer> cards, Set<SignedNote> seeds,
+                                 int majority, Set<SignedNote> joined) {
             final var max = cards.entrySet()
                                  .stream()
                                  .filter(e -> e.getCount() >= majority)
@@ -1113,14 +1123,9 @@ public class View {
                                          .findFirst()
                                          .orElse(null);
                 if (members != null) {
-                    var initialSeedSet = seeds.entrySet()
-                                              .stream()
-                                              .filter(e -> e.getCount() >= majority)
-                                              .map(e -> e.getElement())
-                                              .map(sn -> new NoteWrapper(sn, digestAlgo))
-                                              .toList();
-                    if (gateway.complete(new Bound(view, initialSeedSet, cardinality, joined,
-                                                   BloomFilter.from(g.getMembers())))) {
+                    if (gateway.complete(new Bound(view,
+                                                seeds.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
+                                                cardinality, joined, BloomFilter.from(g.getMembers())))) {
                         log.info("Gateway acquired: {} context: {} on: {}", view, context.getId(), node.getId());
                     }
                     return true;

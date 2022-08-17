@@ -228,8 +228,9 @@ public class SwarmTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var executor = ForkJoinPool.commonPool();
-        final var commExec = new ForkJoinPool();
+        final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
+        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
+        final var gatewayExec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -245,7 +246,7 @@ public class SwarmTest {
                                                                .setTarget(200)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                        : registry)),
-                                          commExec, metrics.limitsMetrics());
+                                          gatewayExec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
