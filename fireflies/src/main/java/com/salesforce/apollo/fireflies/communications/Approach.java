@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, salesforce.com, inc.
+ * Copyright (c) 2022, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -7,11 +7,12 @@
 package com.salesforce.apollo.fireflies.communications;
 
 import java.io.IOException;
+import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.SayWhat;
-import com.salesfoce.apollo.fireflies.proto.State;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
+import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
@@ -20,10 +21,10 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public interface Fireflies extends Link {
+public interface Approach extends Link {
 
-    static Fireflies getLocalLoopback(Node node) {
-        return new Fireflies() {
+    static Approach getLocalLoopback(Node node) {
+        return new Approach() {
 
             @Override
             public void close() throws IOException {
@@ -35,18 +36,18 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(SayWhat sw) {
+            public ListenableFuture<Gateway> join(Credentials join, Duration timeout) {
                 return null;
             }
 
             @Override
-            public void update(State state) {
+            public ListenableFuture<Redirect> seed(Credentials join) {
+                return null;
             }
         };
     }
 
-    ListenableFuture<Gossip> gossip(SayWhat sw);
+    ListenableFuture<Gateway> join(Credentials join, Duration timeout);
 
-    void update(State state);
-
+    ListenableFuture<Redirect> seed(Credentials join);
 }

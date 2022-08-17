@@ -29,6 +29,7 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.Router.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Processor;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
@@ -57,7 +58,7 @@ public class ChRbcGossip {
      * The Service implementing the 3 phase gossip
      *
      */
-    private class Terminal implements GossiperService {
+    private class Terminal implements GossiperService, ServiceRouting {
         @Override
         public Update gossip(Gossip request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
@@ -103,7 +104,7 @@ public class ChRbcGossip {
         this.member = member;
         this.metrics = m;
         this.exec = exec;
-        comm = communications.create((Member) member, context.getId(), new Terminal(),
+        comm = communications.create((Member) member, context.getId(), new Terminal(), getClass().getCanonicalName(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r,
                                                              exec),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));

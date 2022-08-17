@@ -62,6 +62,12 @@ abstract public class Router {
         }
     }
 
+    public interface ServiceRouting {
+        default String routing() {
+            return getClass().getCanonicalName();
+        }
+    }
+
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
     public static Limit defaultClientLimit() {
@@ -77,7 +83,7 @@ abstract public class Router {
 
     private final ServerConnectionCache cache;
 
-    private final Map<Class<?>, RoutableService<?>> services = new ConcurrentHashMap<>();
+    private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
 
     public Router(ServerConnectionCache cache, MutableHandlerRegistry registry) {
         this.cache = cache;
@@ -91,19 +97,28 @@ abstract public class Router {
         cache.close();
     }
 
+    public <Client extends Link, Service extends ServiceRouting> CommonCommunications<Client, Service> create(Member member,
+                                                                                                              Digest context,
+                                                                                                              Service service,
+                                                                                                              Function<RoutableService<Service>, BindableService> factory,
+                                                                                                              CreateClientCommunications<Client> createFunction,
+                                                                                                              Client localLoopback) {
+        return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
+    }
+
     public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                        Service service,
+                                                                                       String routingLabel,
                                                                                        Function<RoutableService<Service>, BindableService> factory,
                                                                                        CreateClientCommunications<Client> createFunction,
                                                                                        Client localLoopback) {
         @SuppressWarnings("unchecked")
-        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(service.getClass(),
-                                                                                               c -> {
-                                                                                                   RoutableService<Service> route = new RoutableService<Service>();
-                                                                                                   BindableService bindableService = factory.apply(route);
-                                                                                                   registry.addService(bindableService);
-                                                                                                   return route;
-                                                                                               });
+        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
+            RoutableService<Service> route = new RoutableService<Service>();
+            BindableService bindableService = factory.apply(route);
+            registry.addService(bindableService);
+            return route;
+        });
         routing.bind(context, service);
         log.info("Communications created for: " + member.getId());
         return new CommonCommunications<Client, Service>(routing, createFunction, localLoopback);

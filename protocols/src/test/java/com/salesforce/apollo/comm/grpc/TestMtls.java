@@ -90,7 +90,7 @@ public class TestMtls {
         CertificateWithPrivateKey clientCert = clientIdentity();
 
         MtlsClient client = new MtlsClient(serverAddress, ClientAuth.REQUIRE, "foo", clientCert.getX509Certificate(),
-                                           clientCert.getPrivateKey(), validator());
+                                           clientCert.getPrivateKey(), validator(), r -> r.run());
         return client;
     }
 

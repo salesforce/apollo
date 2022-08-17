@@ -142,8 +142,8 @@ public class MtlsTest {
                            .toList();
 
         var scheduler = Executors.newScheduledThreadPool(10);
-        var exec = ForkJoinPool.commonPool();
-        var commExec = exec;
+        var exec = new ForkJoinPool();
+        var commExec = ForkJoinPool.commonPool();
 
         var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);

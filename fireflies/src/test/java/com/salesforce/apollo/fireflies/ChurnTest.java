@@ -83,6 +83,7 @@ public class ChurnTest {
     }
 
     private List<Router>                            communications = new ArrayList<>();
+    private List<Router>                            gateways       = new ArrayList<>();
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
@@ -97,6 +98,9 @@ public class ChurnTest {
 
         communications.forEach(e -> e.close());
         communications.clear();
+
+        gateways.forEach(e -> e.close());
+        gateways.clear();
     }
 
     @Test
@@ -219,6 +223,7 @@ public class ChurnTest {
         testViews.clear();
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
+        List<Router> g = new ArrayList<>(gateways);
         int delta = 5;
         for (int i = 0; i < (CARDINALITY / delta - 4); i++) {
             var removed = new ArrayList<Digest>();
@@ -226,10 +231,12 @@ public class ChurnTest {
                 final var view = c.get(j);
                 view.stop();
                 r.get(j).close();
+                g.get(j).close();
                 removed.add(view.getNode().getId());
             }
             c = c.subList(0, c.size() - delta);
             r = r.subList(0, r.size() - delta);
+            g = g.subList(0, g.size() - delta);
             final var expected = c;
 //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
@@ -281,6 +288,7 @@ public class ChurnTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
@@ -288,14 +296,23 @@ public class ChurnTest {
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
-                                                             .setTarget(2)
+                                                             .setTarget(CARDINALITY)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         exec, metrics.limitsMetrics());
+            var gateway = new LocalRouter(gatewayPrefix,
+                                          ServerConnectionCache.newBuilder()
+                                                               .setTarget(CARDINALITY)
+                                                               .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                       : registry)),
+                                          exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
+            gateway.setMember(node);
+            gateway.start();
+            gateways.add(gateway);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
                             DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }

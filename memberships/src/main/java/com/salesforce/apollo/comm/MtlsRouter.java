@@ -33,17 +33,19 @@ public class MtlsRouter extends Router {
     public static class MtlsServerConnectionFactory implements ServerConnectionFactory {
         private final Function<Member, ClientContextSupplier> contextSupplier;
         private final EndpointProvider                        epProvider;
+        private final Executor                                exec;
 
         public MtlsServerConnectionFactory(EndpointProvider epProvider,
-                                           Function<Member, ClientContextSupplier> contextSupplier) {
+                                           Function<Member, ClientContextSupplier> contextSupplier, Executor exec) {
             this.epProvider = epProvider;
             this.contextSupplier = contextSupplier;
+            this.exec = exec;
         }
 
         @Override
         public ManagedChannel connectTo(Member to, SigningMember from) {
             return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                                  contextSupplier.apply(from), epProvider.getValiator()).getChannel();
+                                  contextSupplier.apply(from), epProvider.getValiator(), exec).getChannel();
         }
     }
 
@@ -60,7 +62,8 @@ public class MtlsRouter extends Router {
     public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, ServerContextSupplier supplier,
                       MutableHandlerRegistry registry, Executor executor,
                       Function<Member, ClientContextSupplier> clientContextProvider) {
-        super(builder.setFactory(new MtlsServerConnectionFactory(ep, clientContextProvider)).build(), registry);
+        super(builder.setFactory(new MtlsServerConnectionFactory(ep, clientContextProvider, executor)).build(),
+              registry);
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
                                      supplier, epProvider.getValiator(), registry, executor);

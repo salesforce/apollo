@@ -86,6 +86,7 @@ public class SwarmTest {
     }
 
     private List<Router>                            communications = new ArrayList<>();
+    private List<Router>                            gateways       = new ArrayList<>();
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
@@ -100,6 +101,9 @@ public class SwarmTest {
 
         communications.forEach(e -> e.close());
         communications.clear();
+
+        gateways.forEach(e -> e.close());
+        gateways.clear();
     }
 
     @Test
@@ -117,7 +121,7 @@ public class SwarmTest {
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(largeTests ? 150 : 5);
+        final var gossipDuration = Duration.ofMillis(largeTests ? 50 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
@@ -208,7 +212,10 @@ public class SwarmTest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder().setMaximumTxfr(500).build();
+        var parameters = Parameters.newBuilder()
+                                   .setMaxPending(largeTests ? 100 : 10)
+                                   .setMaximumTxfr(largeTests ? 100 : 20)
+                                   .build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
@@ -220,6 +227,7 @@ public class SwarmTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var gatewayPrefix = UUID.randomUUID().toString();
         final var executor = ForkJoinPool.commonPool();
         final var commExec = new ForkJoinPool();
         views = members.values().stream().map(node -> {
@@ -232,10 +240,20 @@ public class SwarmTest {
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         commExec, metrics.limitsMetrics());
+            var gateway = new LocalRouter(gatewayPrefix,
+                                          ServerConnectionCache.newBuilder()
+                                                               .setTarget(200)
+                                                               .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                       : registry)),
+                                          commExec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
+
+            gateway.setMember(node);
+            gateway.start();
+            gateways.add(comms);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
                             DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toList());
     }

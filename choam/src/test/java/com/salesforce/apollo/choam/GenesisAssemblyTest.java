@@ -132,6 +132,9 @@ public class GenesisAssemblyTest {
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
                                                                         .create(m, base.getId(), servers.get(m),
+                                                                                servers.get(m)
+                                                                                       .getClass()
+                                                                                       .getCanonicalName(),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
                                                                                                         null, r,

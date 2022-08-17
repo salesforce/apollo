@@ -97,9 +97,10 @@ public class TestBinder {
                 return DigestAlgorithm.DEFAULT.getOrigin();
             }
         };
-        serverRouter.create(serverMember, context, protoService, r -> new BinderServer(r, ci, exec, null), null, null);
+        serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
+                            r -> new BinderServer(r, ci, exec, null), null, null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService,
+        var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
                                               r -> new BinderServer(r, ci, exec, null),
                                               BinderClient.getCreate(context, null), null);
 

@@ -275,10 +275,12 @@ public class KerlDHT implements ProtoKERLService {
         this.fpr = falsePositiveRate;
         this.frequency = frequency;
         this.scheduler = scheduler;
-        dhtComms = communications.create(member, context.getId(), service, r -> new DhtServer(r, executor, metrics),
+        dhtComms = communications.create(member, context.getId(), service, service.getClass().getCanonicalName(),
+                                         r -> new DhtServer(r, executor, metrics),
                                          DhtClient.getCreate(context.getId(), metrics),
                                          DhtClient.getLocalLoopback(service, member));
         reconcileComms = communications.create(member, context.getId(), reconciliation,
+                                               reconciliation.getClass().getCanonicalName(),
                                                r -> new ReconciliationServer(r,
                                                                              communications.getClientIdentityProvider(),
                                                                              executor, metrics),

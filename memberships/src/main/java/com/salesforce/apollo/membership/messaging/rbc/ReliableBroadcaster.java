@@ -46,6 +46,7 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.Router.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -148,7 +149,7 @@ public class ReliableBroadcaster {
 
     }
 
-    public class Service {
+    public class Service implements ServiceRouting {
 
         public Reconcile gossip(MessageBff request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);

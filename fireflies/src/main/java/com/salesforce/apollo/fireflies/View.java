@@ -90,12 +90,16 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.Router.ServiceRouting;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.fireflies.communications.Approach;
+import com.salesforce.apollo.fireflies.communications.EntranceClient;
+import com.salesforce.apollo.fireflies.communications.EntranceServer;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.fireflies.communications.Fireflies;
 import com.salesforce.apollo.membership.Context;
@@ -228,7 +232,7 @@ public class View {
             final var accusations = validAccusations;
 
             // disable current accusations
-            for (int i = 0; i < context.getRingCount(); i++) {
+            for (int i = 0; i < context.getRingCount() && i < accusations.length; i++) {
                 if (accusations[i] != null) {
                     mask.set(i, false);
                     continue;
@@ -236,17 +240,20 @@ public class View {
             }
             // clear masks from previous note
             BitSet previous = BitSet.valueOf(current.getMask().toByteArray());
-            for (int index = 0; index < context.getRingCount(); index++) {
+            for (int index = 0; index < context.getRingCount() && index < accusations.length; index++) {
                 if (!previous.get(index) && accusations[index] == null) {
                     mask.set(index, true);
                 }
             }
 
             // Fill the rest of the mask with randomly set index
+
             while (mask.cardinality() != toleranceLevel + 1) {
                 int index = Entropy.nextBitsStreamInt(context.getRingCount());
-                if (accusations[index] != null) {
-                    continue;
+                if (index < accusations.length) {
+                    if (accusations[index] != null) {
+                        continue;
+                    }
                 }
                 if (mask.cardinality() > toleranceLevel + 1 && mask.get(index)) {
                     mask.set(index, false);
@@ -523,7 +530,7 @@ public class View {
 
     public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
 
-    public class Service {
+    public class Service implements ServiceRouting {
 
         /**
          * Asynchronously add a member to the next view
@@ -541,10 +548,6 @@ public class View {
                 return;
             }
             stable(() -> {
-                if (pendingJoins.size() >= params.maxPending()) {
-                    responseObserver.onNext(Gateway.getDefaultInstance());
-                    return;
-                }
                 if (!validate(credentials)) {
                     log.trace("Invalid join credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
                               currentView.get(), context.getId(), context.cardinality(), node.getId());
@@ -567,6 +570,10 @@ public class View {
                 if (!currentView.get().equals(requestView)) {
                     responseObserver.onError(new StatusRuntimeException(Status.OUT_OF_RANGE.withDescription("View: "
                     + requestView + " does not match: " + currentView.get())));
+                    return;
+                }
+                if (pendingJoins.size() >= params.maxPending()) {
+                    responseObserver.onError(new StatusRuntimeException(Status.RESOURCE_EXHAUSTED.withDescription("No room at the inn")));
                     return;
                 }
                 pendingJoins.put(from, joining -> {
@@ -846,14 +853,20 @@ public class View {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
                     switch (sre.getStatus().getCode()) {
                     case RESOURCE_EXHAUSTED:
+                        log.warn("Resource exhausted in join: {} with: {} : {} on: {}", view, member.getId(),
+                                 sre.getStatus(), node.getId());
                         break;
                     case OUT_OF_RANGE:
                         log.warn("View change in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
                                  node.getId());
                         resetBootstrapView();
                         node.reset();
-                        seeding();
+                        exec.execute(() -> seeding());
                         return false;
+                    case DEADLINE_EXCEEDED:
+                        log.warn("Join timeout for view: {} with: {} : {} on: {}", view, member.getId(),
+                                 sre.getStatus(), node.getId());
+                        break;
                     default:
                         log.warn("Failure in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
                                  node.getId());
@@ -890,7 +903,7 @@ public class View {
                     return false;
                 }
             }
-            log.debug("Gateway received, views: {} cardinality: {} memberships: {} majority: {} from: {} view: {} context: {} on: {}",
+            log.debug("Gateway received, view count: {} cardinality: {} memberships: {} majority: {} from: {} view: {} context: {} on: {}",
                       views.size(), cards.size(), memberships.size(), majority, member.getId(), gatewayView,
                       context.getId(), node.getId());
             return true;
@@ -968,12 +981,7 @@ public class View {
                 node.nextNote(view);
 
                 log.debug("Completing redirect to view: {} context: {} successors: {} on: {}", view, context.getId(),
-                          r.getSuccessorsList()
-                           .stream()
-                           .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
-                           .map(nw -> nw.getId())
-                           .toList(),
-                          node.getId());
+                          r.getSuccessorsCount(), node.getId());
                 if (timer != null) {
                     timer.close();
                 }
@@ -988,8 +996,7 @@ public class View {
                                      .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
                                      .map(nw -> new Participant(nw))
                                      .collect(Collectors.toList());
-            log.info("Redirecting to: {} context: {} successors: {} on: {}", view, context.getId(),
-                     succsesors.stream().filter(p -> !node.getId().equals(p.getId())).map(p -> p.getId()).toList(),
+            log.info("Redirecting to: {} context: {} successors: {} on: {}", view, context.getId(), succsesors.size(),
                      node.getId());
             var gateway = new CompletableFuture<Bound>();
             var timer = metrics == null ? null : metrics.joinDuration().time();
@@ -1007,11 +1014,11 @@ public class View {
             context.rebalance(redirect.getCardinality());
             node.nextNote(view);
 
-            final var redirecting = new SliceIterator<>("Gateways", node, succsesors, comm, exec);
+            final var redirecting = new SliceIterator<>("Gateways", node, succsesors, approaches, exec);
             regate.set(() -> {
                 redirecting.iterate((link, m) -> {
                     log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(), node.getId());
-                    return link.join(credentials(view));
+                    return link.join(credentials(view), params.seedingTimeout());
                 }, (futureSailor, link,
                     m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards, seeds, view,
                                           Context.minimalQuorum(redirect.getRings(), context.getBias()), joined),
@@ -1054,7 +1061,7 @@ public class View {
                                                      .map(nw -> new Participant(nw))
                                                      .filter(p -> !node.getId().equals(p.getId()))
                                                      .collect(Collectors.toList()),
-                                                comm, exec);
+                                                approaches, exec);
             AtomicReference<Runnable> reseed = new AtomicReference<>();
             reseed.set(() -> {
                 seedlings.iterate((link, m) -> {
@@ -1154,8 +1161,9 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
-    private final AtomicInteger attempt = new AtomicInteger();
+    private final CommonCommunications<Approach, Service> approaches;
 
+    private final AtomicInteger                               attempt             = new AtomicInteger();
     private volatile SecretKeySpec                            authentication;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
@@ -1187,6 +1195,12 @@ public class View {
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
+        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec);
+    }
+
+    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+                EventValidation validation, Router communications, Parameters params, Router gateway,
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec) {
         this.metrics = metrics;
         this.validation = validation;
         this.params = params;
@@ -1200,6 +1214,9 @@ public class View {
                                           r -> new FfServer(service, communications.getClientIdentityProvider(), r,
                                                             exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
+        this.approaches = gateway.create(node, context.getId(), service, service.getClass().getCanonicalName()
+        + ":approach", r -> new EntranceServer(service, gateway.getClientIdentityProvider(), r, exec, metrics),
+                                         EntranceClient.getCreate(metrics), Approach.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
         this.membership = new DigestBloomFilter(0x666, params.minimumBiffCardinality(), MEMBERSHIP_FPR);
@@ -2017,7 +2034,7 @@ public class View {
      */
     private void install(Ballot view) {
         log.debug("View change: {}, pending: {} joining: {} leaving: {} local joins: {} leaving: {} on: {}",
-                  currentView.get(), pendingJoins.size(), view.joining.size(), view.leaving.size(), joins.keySet(),
+                  currentView.get(), pendingJoins.size(), view.joining.size(), view.leaving.size(), joins.size(),
                   context.offlineCount(), node.getId());
         attempt.set(0);
         view.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> remove(p));

@@ -13,6 +13,9 @@ package fireflies;
 service Fireflies {
     rpc gossip (SayWhat) returns (Gossip) {}
     rpc update (State) returns (google.protobuf.Empty) {}
+}
+
+service Entrance {
     rpc seed (Credentials) returns (Redirect) {}
     rpc join (Credentials) returns (Gateway) {}
 }
@@ -128,11 +131,6 @@ message Gateway {
     repeated SignedNote initialSeedSet = 3;
     utils.Biff members = 4;
     repeated SignedNote joining = 5;
-}
-
-message Entrance {
-    Gateway gateway = 1;
-    bytes hmac = 2;
 }
 
 message Credentials {

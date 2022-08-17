@@ -187,6 +187,9 @@ public class ViewAssemblyTest {
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
                                                                         .create(m, context.getId(), servers.get(m),
+                                                                                servers.get(m)
+                                                                                       .getClass()
+                                                                                       .getCanonicalName(),
                                                                                 r -> {
                                                                                     Router router = communications.get(m);
                                                                                     return new TerminalServer(router.getClientIdentityProvider(),
