@@ -542,7 +542,13 @@ public class View {
          */
         public void join(Credentials credentials, Digest from, StreamObserver<Gateway> responseObserver,
                          Timer.Context timer) {
-            if (!started.get() | !joined.isDone()) {
+            if (!started.get()) {
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
+            }
+            final var join = credentials.getJoin();
+            if (!joined.get()) {
+                log.warn("Not joined, ignored join of view: {} from: {} on: {}", Digest.from(join.getView()), from,
+                         node.getId());
                 responseObserver.onNext(Gateway.getDefaultInstance());
                 responseObserver.onCompleted();
                 return;
@@ -551,9 +557,8 @@ public class View {
                 if (!validate(credentials)) {
                     log.trace("Invalid join credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
                               currentView.get(), context.getId(), context.cardinality(), node.getId());
-                    return;
+                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
                 }
-                final var join = credentials.getJoin();
                 var note = new NoteWrapper(join.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
                     responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
@@ -647,11 +652,16 @@ public class View {
         }
 
         public Redirect seed(Credentials credentials, Digest from) {
-            if (!started.get() | !joined.isDone()) {
-                return Redirect.getDefaultInstance();
+            if (!started.get()) {
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
             }
             final var join = credentials.getJoin();
             final var requestView = Digest.from(join.getView());
+
+            if (!joined.get()) {
+                log.warn("Not joined, ignored seed view: {} from: {} on: {}", requestView, from, node.getId());
+                return Redirect.getDefaultInstance();
+            }
             if (!bootstrapView().equals(requestView)) {
                 log.warn("Invalid bootstrap view: {} from: {} on: {}", requestView, from, node.getId());
                 return Redirect.getDefaultInstance();
@@ -666,7 +676,7 @@ public class View {
                 if (!validate(credentials)) {
                     log.trace("Invalid seed credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
                               currentView.get(), context.getId(), context.cardinality(), node.getId());
-                    return Redirect.getDefaultInstance();
+                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
                 }
                 var newMember = new Participant(note.getId());
                 final var successors = new TreeSet<Participant>(context.successors(newMember,
@@ -732,7 +742,7 @@ public class View {
                                                               .collect(new ReservoirSampler<>(params.maximumTxfr(),
                                                                                               Entropy.bitsStream())))
                                  .setMembers(current.toBff())
-                                 .setCardinality(context.totalCount())
+                                 .setCardinality(context.cardinality())
                                  .addAllJoining(joined.stream()
                                                       .collect(new ReservoirSampler<>(params.maximumTxfr(),
                                                                                       Entropy.bitsStream())))
@@ -798,8 +808,8 @@ public class View {
 
             log.info("Bootstrapped view: {} cardinality: {} count: {} context: {} on: {}", currentView.get(),
                      context.cardinality(), context.activeCount(), context.getId(), node.getId());
-            joined.complete(null);
-
+            onJoined.complete(null);
+            joined.set(true);
         }
 
         private boolean complete(CompletableFuture<Redirect> redirect,
@@ -853,19 +863,19 @@ public class View {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
                     switch (sre.getStatus().getCode()) {
                     case RESOURCE_EXHAUSTED:
-                        log.warn("Resource exhausted in join: {} with: {} : {} on: {}", view, member.getId(),
-                                 sre.getStatus(), node.getId());
+                        log.trace("Resource exhausted in join: {} with: {} : {} on: {}", view, member.getId(),
+                                  sre.getStatus(), node.getId());
                         break;
                     case OUT_OF_RANGE:
-                        log.warn("View change in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
-                                 node.getId());
+                        log.debug("View change in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
+                                  node.getId());
                         resetBootstrapView();
                         node.reset();
                         exec.execute(() -> seeding());
                         return false;
                     case DEADLINE_EXCEEDED:
-                        log.warn("Join timeout for view: {} with: {} : {} on: {}", view, member.getId(),
-                                 sre.getStatus(), node.getId());
+                        log.trace("Join timeout for view: {} with: {} : {} on: {}", view, member.getId(),
+                                  sre.getStatus(), node.getId());
                         break;
                     default:
                         log.warn("Failure in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
@@ -886,6 +896,10 @@ public class View {
                 return true;
             }
             var gatewayView = Digest.from(g.getView());
+            if (gatewayView.equals(Digest.NONE)) {
+                log.warn("Empty view in join returned from: {} on: {}", member.getId(), node.getId());
+                return true;
+            }
             views.add(gatewayView);
             cards.add(g.getCardinality());
             memberships.add(g.getMembers());
@@ -958,6 +972,7 @@ public class View {
                     if (timer != null) {
                         timer.stop();
                     }
+                    joined.set(true);
 
                     log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", bound.view,
                              bound.seeds.size(), context.cardinality(), context.totalCount(), node.getId());
@@ -974,6 +989,10 @@ public class View {
             return (r, t) -> {
                 if (t != null) {
                     log.error("Failed seeding on: {}", node.getId(), t);
+                    return;
+                }
+                if (!r.isInitialized()) {
+                    log.error("Empty seeding response on: {}", node.getId(), t);
                     return;
                 }
                 var view = Digest.from(r.getView());
@@ -1024,14 +1043,16 @@ public class View {
                                           Context.minimalQuorum(redirect.getRings(), context.getBias()), joined),
                                     () -> {
                                         if (retries.get() < params.joinRetries()) {
-                                            log.warn("Failed to join view: {} retry: {} out of: {} on: {}", view,
+                                            log.info("Failed to join view: {} retry: {} out of: {} on: {}", view,
                                                      retries.incrementAndGet(), params.joinRetries(), node.getId());
                                             biffs.clear();
                                             views.clear();
                                             cards.clear();
                                             seeds.clear();
                                             scheduler.schedule(exec(() -> regate.get().run()),
-                                                               params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
+                                                               Entropy.nextBitsStreamLong(params.retryDelay()
+                                                                                                .toNanos()),
+                                                               TimeUnit.NANOSECONDS);
                                         } else {
                                             log.error("Failed to join view: {} cannot obtain majority on: {}", view,
                                                       node.getId());
@@ -1080,12 +1101,12 @@ public class View {
         private boolean validate(Gateway g, Digest view, CompletableFuture<Bound> gateway,
                                  HashMultiset<Biff> memberships, HashMultiset<Integer> cards,
                                  HashMultiset<SignedNote> seeds, int majority, Set<SignedNote> joined) {
-            var cardinality = cards.entrySet()
-                                   .stream()
-                                   .filter(e -> e.getCount() >= majority)
-                                   .mapToInt(e -> e.getElement())
-                                   .findFirst()
-                                   .orElse(-1);
+            final var max = cards.entrySet()
+                                 .stream()
+                                 .filter(e -> e.getCount() >= majority)
+                                 .mapToInt(e -> e.getElement())
+                                 .findFirst();
+            var cardinality = max.orElse(-1);
             if (cardinality > 0) {
                 var members = memberships.entrySet()
                                          .stream()
@@ -1107,6 +1128,8 @@ public class View {
                     return true;
                 }
             }
+            log.info("Gateway: {} majority not achieved: {} required: {} count: {} context: {} on: {}", view,
+                     cardinality, majority, cards.size(), context.getId(), node.getId());
             return false;
         }
     }
@@ -1173,12 +1196,13 @@ public class View {
     private final Executor                                    exec;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private CompletableFuture<Void>                           joined;
+    private final AtomicBoolean                               joined              = new AtomicBoolean();
     private final ConcurrentMap<Digest, NoteWrapper>          joins               = new ConcurrentSkipListMap<>();
     private volatile BloomFilter<Digest>                      membership;
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
     private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private CompletableFuture<Void>                           onJoined;
     private final Parameters                                  params;
     private final Map<Digest, Consumer<List<NoteWrapper>>>    pendingJoins        = new ConcurrentSkipListMap<>();
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
@@ -1261,7 +1285,7 @@ public class View {
             return;
         }
         this.authentication = authentication;
-        joined = onJoin;
+        onJoined = onJoin;
         var seeds = new ArrayList<>(seedpods);
         Entropy.secureShuffle(seeds);
 
@@ -1626,7 +1650,7 @@ public class View {
         if (accused) {
             checkInvalidations(m);
         }
-        if (!joined.isDone() && context.totalCount() == context.cardinality()) {
+        if (!onJoined.isDone() && context.totalCount() == context.cardinality()) {
             assert context.totalCount() == context.cardinality();
             View.this.join();
         } else {
@@ -2134,7 +2158,7 @@ public class View {
      */
     private synchronized void join() {
         assert context.totalCount() == context.cardinality();
-        if (joined.isDone()) {
+        if (onJoined.isDone()) {
             return;
         }
         crown.set(digestAlgo.getOrigin());
@@ -2146,7 +2170,8 @@ public class View {
             throw new IllegalStateException("Invalid crown");
         }
         notifyListeners(context.allMembers().map(p -> p.getId()).toList(), Collections.emptyList());
-        joined.complete(null);
+        onJoined.complete(null);
+        joined.set(true);
 
         log.info("Joined view: {} cardinality: {} count: {} on: {}", currentView.get(), context.cardinality(),
                  context.totalCount(), node.getId());

@@ -146,6 +146,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return log;
     }
 
+    @SuppressWarnings("unchecked")
     List<iteration<T>> calculateTraversal(Digest digest) {
         var traversal = new ArrayList<iteration<T>>();
         var traversed = new TreeSet<T>();
@@ -166,7 +167,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                 }
                 return IterateResult.SUCCESS;
             });
-            traversal.add(new iteration<>(successor, ring.getIndex()));
+            traversal.add(new iteration<>(successor == null ? (T) member : successor, ring.getIndex()));
         });
         return traversal;
     }
