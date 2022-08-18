@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,8 +74,14 @@ public class AniTest extends AbstractDhtTest {
                 throw new IllegalStateException(e);
             }
         });
-        var ani = new Ani(identities.keySet().stream().findFirst().get(), threshold, timeout, kerl);
         var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
+
+        var v1 = controller.newIdentifier().get();
+        var v2 = controller.newIdentifier().get();
+        var v3 = controller.newIdentifier().get();
+
+        var ani = new Ani(identities.keySet().stream().findFirst().get(), threshold, timeout, kerl,
+                          Arrays.asList(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier()));
 
         // inception
         var identifier = controller.newIdentifier().get();
@@ -82,10 +89,6 @@ public class AniTest extends AbstractDhtTest {
 
         assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
-
-        var v1 = controller.newIdentifier().get();
-        var v2 = controller.newIdentifier().get();
-        var v3 = controller.newIdentifier().get();
         var validations = new HashMap<Identifier, JohnHancock>();
 
         ani.clearValidations();
@@ -123,16 +126,17 @@ public class AniTest extends AbstractDhtTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         SigningThreshold threshold = SigningThreshold.unweighted(0);
+        routers.values().forEach(lr -> lr.start());
+        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
+
+        var dht = dhts.values().stream().findFirst().get();
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), threshold, timeout,
-                                                                                  dhts.get(e.getKey()).asKERL())));
-        routers.values().forEach(lr -> lr.start());
-        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
-
-        var dht = dhts.values().stream().findFirst().get();
+                                                                                  dhts.get(e.getKey()).asKERL(),
+                                                                                  Collections.emptyList())));
         var ani = anis.values().stream().findFirst().get();
 
         // inception
@@ -155,18 +159,25 @@ public class AniTest extends AbstractDhtTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         SigningThreshold threshold = SigningThreshold.unweighted(3);
+        routers.values().forEach(lr -> lr.start());
+        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
+
+        var kerl = dhts.values().stream().findFirst().get().asKERL();
+        var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
+
+        var v1 = controller.newIdentifier().get();
+        var v2 = controller.newIdentifier().get();
+        var v3 = controller.newIdentifier().get();
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), threshold, timeout,
-                                                                                  dhts.get(e.getKey()).asKERL())));
-        routers.values().forEach(lr -> lr.start());
-        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
-
+                                                                                  dhts.get(e.getKey()).asKERL(),
+                                                                                  Arrays.asList(v1.getIdentifier(),
+                                                                                                v2.getIdentifier(),
+                                                                                                v3.getIdentifier()))));
         var ani = anis.values().stream().findFirst().get();
-        var kerl = ani.getKerl();
-        var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
 
         // inception
         var identifier = controller.newIdentifier().get();
@@ -174,10 +185,6 @@ public class AniTest extends AbstractDhtTest {
 
         assertFalse(ani.validate(inception).get(5, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
-
-        var v1 = controller.newIdentifier().get();
-        var v2 = controller.newIdentifier().get();
-        var v3 = controller.newIdentifier().get();
         var validations = new HashMap<Identifier, JohnHancock>();
 
         ani.clearValidations();
