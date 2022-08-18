@@ -11,8 +11,6 @@ import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -49,9 +47,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -554,11 +549,6 @@ public class View {
                 return;
             }
             stable(() -> {
-                if (!validate(credentials)) {
-                    log.trace("Invalid join credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
-                              currentView.get(), context.getId(), context.cardinality(), node.getId());
-                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
-                }
                 var note = new NoteWrapper(join.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
                     responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
@@ -673,11 +663,6 @@ public class View {
                 return Redirect.getDefaultInstance();
             }
             return stable(() -> {
-                if (!validate(credentials)) {
-                    log.trace("Invalid seed credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
-                              currentView.get(), context.getId(), context.cardinality(), node.getId());
-                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
-                }
                 var newMember = new Participant(note.getId());
                 final var successors = new TreeSet<Participant>(context.successors(newMember,
                                                                                    m -> context.isActive(m)));
@@ -939,12 +924,7 @@ public class View {
                            .setNote(node.getNote().getWrapped())
                            .setKeyState(node.noteState())
                            .build();
-            var hmac = hmac(join);
-            var credentials = Credentials.newBuilder()
-                                         .setContext(context.getId().toDigeste())
-                                         .setJoin(join)
-                                         .setHmac(hmac)
-                                         .build();
+            var credentials = Credentials.newBuilder().setContext(context.getId().toDigeste()).setJoin(join).build();
             return credentials;
         }
 
@@ -1124,8 +1104,8 @@ public class View {
                                          .orElse(null);
                 if (members != null) {
                     if (gateway.complete(new Bound(view,
-                                                seeds.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
-                                                cardinality, joined, BloomFilter.from(g.getMembers())))) {
+                                                   seeds.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
+                                                   cardinality, joined, BloomFilter.from(g.getMembers())))) {
                         log.info("Gateway acquired: {} context: {} on: {}", view, context.getId(), node.getId());
                     }
                     return true;
@@ -1190,7 +1170,6 @@ public class View {
     private final CommonCommunications<Approach, Service> approaches;
 
     private final AtomicInteger                               attempt             = new AtomicInteger();
-    private volatile SecretKeySpec                            authentication;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     crown;
@@ -1281,13 +1260,12 @@ public class View {
     /**
      * Start the View
      */
-    public void start(SecretKeySpec authentication, CompletableFuture<Void> onJoin, Duration d, List<Seed> seedpods,
+    public void start(CompletableFuture<Void> onJoin, Duration d, List<Seed> seedpods,
                       ScheduledExecutorService scheduler) {
         java.util.Objects.requireNonNull(onJoin, "Join completion must not be null");
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        this.authentication = authentication;
         onJoined = onJoin;
         var seeds = new ArrayList<>(seedpods);
         Entropy.secureShuffle(seeds);
@@ -1309,13 +1287,12 @@ public class View {
     /**
      * Start the View
      */
-    public void start(SecretKeySpec authentication, Runnable onJoin, Duration d, List<Seed> seedpods,
-                      ScheduledExecutorService scheduler) {
+    public void start(Runnable onJoin, Duration d, List<Seed> seedpods, ScheduledExecutorService scheduler) {
         final var futureSailor = new CompletableFuture<Void>();
         futureSailor.whenComplete((v, t) -> {
             onJoin.run();
         });
-        start(authentication, futureSailor, d, seedpods, scheduler);
+        start(futureSailor, d, seedpods, scheduler);
     }
 
     /**
@@ -2003,22 +1980,6 @@ public class View {
         }
     }
 
-    private ByteString hmac(Join join) {
-        Mac mac;
-        try {
-            mac = Mac.getInstance(authentication.getAlgorithm());
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-        try {
-            mac.init(authentication);
-        } catch (InvalidKeyException e) {
-            throw new IllegalStateException(e);
-        }
-        var hmac = mac.doFinal(join.toByteArray());
-        return ByteString.copyFrom(hmac);
-    }
-
     /**
      * Initiate the view change
      */
@@ -2624,10 +2585,6 @@ public class View {
         }
 
         return builder.build();
-    }
-
-    private boolean validate(Credentials credentials) {
-        return hmac(credentials.getJoin()).equals(credentials.getHmac());
     }
 
     private void validate(Digest from, final int ring, Digest requestView) {
