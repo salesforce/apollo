@@ -28,8 +28,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -124,18 +122,15 @@ public class SwarmTest {
         final var gossipDuration = Duration.ofMillis(largeTests ? 50 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
-        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
-        views.get(0)
-             .start(authentication, () -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    scheduler);
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
         assertTrue(countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
         bootstrappers.subList(1, bootstrappers.size())
-                     .forEach(v -> v.start(authentication, () -> countdown.get().countDown(), gossipDuration,
-                                           bootstrapSeed, scheduler));
+                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
+                                           scheduler));
 
         // Test that all bootstrappers up
         var success = countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS);
@@ -148,8 +143,7 @@ public class SwarmTest {
 
         // Start remaining views
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(v -> v.start(authentication, () -> countdown.get().countDown(), gossipDuration, seeds,
-                                   scheduler));
+        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
         success = countdown.get().await(largeTests ? 1200 : 60, TimeUnit.SECONDS);
 

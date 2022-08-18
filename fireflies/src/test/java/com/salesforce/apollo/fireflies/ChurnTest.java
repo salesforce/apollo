@@ -30,8 +30,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -127,11 +125,8 @@ public class ChurnTest {
         final var gossipDuration = Duration.ofMillis(5);
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         long then = System.currentTimeMillis();
-        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
 
-        views.get(0)
-             .start(authentication, () -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    scheduler);
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -140,8 +135,8 @@ public class ChurnTest {
         var bootstrappers = views.subList(1, seeds.size());
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
-        bootstrappers.forEach(v -> v.start(authentication, () -> countdown.get().countDown(), gossipDuration,
-                                           bootstrapSeed, scheduler));
+        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
+                                           scheduler));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -168,8 +163,7 @@ public class ChurnTest {
             then = System.currentTimeMillis();
             countdown.set(new CountDownLatch(toStart.size()));
 
-            toStart.forEach(view -> view.start(authentication, () -> countdown.get().countDown(), gossipDuration, seeds,
-                                               scheduler));
+            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
             failed = testViews.stream()
