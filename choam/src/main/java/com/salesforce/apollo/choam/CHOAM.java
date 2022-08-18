@@ -705,13 +705,14 @@ public class CHOAM {
         checkpoint.set(new NullBlock(params.digestAlgorithm()));
         final Trampoline service = new Trampoline();
         comm = params.communications()
-                     .create(params.member(), params.context().getId(), service,
+                     .create(params.member(), params.context().getId(), service, service.getClass().getCanonicalName(),
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
                                                      params.metrics(), r, params.exec()),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
         submissionComm = params.communications()
                                .create(params.member(), params.context().getId(), txnSubmission,
+                                       txnSubmission.getClass().getCanonicalName(),
                                        r -> new TxnSubmitServer(params.communications().getClientIdentityProvider(),
                                                                 params.metrics(), r, params.exec()),
                                        TxnSubmitClient.getCreate(params.metrics()),

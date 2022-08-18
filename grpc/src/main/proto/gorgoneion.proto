@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.gorgoneion.proto";
+option java_outer_classname = "ApolloGorgoneionProto";
+option objc_class_prefix = "Ag";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";  
+import "google/protobuf/timestamp.proto";
+
+import "pal.proto";
+import "util.proto";
+
+package gorgoneion;
+
+service Gorgoneion {
+    rpc decrypt ( pal.Encrypted ) returns (pal.Decrypted) {}
+    rpc createUser ( UsernamePassword ) returns (google.protobuf.Empty) {}
+    rpc summary ( UsernamePassword ) returns (Summary) {}
+    rpc delegate ( Delegation ) returns (google.protobuf.Empty) {}
+    rpc purge ( UsernamePassword ) returns (google.protobuf.Empty) {}
+    rpc changePassword ( ChangePassword ) returns (google.protobuf.Empty) {}
+    rpc encrypt ( EncryptionRequest ) returns (EncryptionResponse) {}
+    rpc reencrypt ( EncryptionRequest ) returns (EncryptionResponse) {}
+    rpc decryption ( DecryptRequest ) returns (DecryptResponse) {}
+    rpc owners ( google.protobuf.Any ) returns (Owners) {}
+    rpc modify ( Modify ) returns (google.protobuf.Empty) {}
+    rpc export ( UsernamePassword ) returns (Export) {}
+    rpc create ( UsernamePassword ) returns (google.protobuf.Empty) {}
+}
+
+message Export {
+}
+
+message Modify {
+    enum COMMAND {
+        INVALID = 0;
+        revoke = 1;
+        admin = 2;
+        delete = 3;
+    }
+    UsernamePassword credentials = 1;
+    string toModify = 2;
+    COMMAND command = 3;
+} 
+
+message Owners {
+    repeated string owners = 1;
+    repeated string labels = 2;
+    string predicate = 3;
+} 
+
+message UsernamePassword {
+    string name = 1;
+    string password = 2;
+}
+
+message Summary {
+    repeated User live = 1;
+    repeated KeyUser all = 2;
+}
+
+message User {
+    int32 uses = 1;
+    repeated string labels = 2;
+    repeated string users = 3;
+    google.protobuf.Timestamp expiry = 4;
+    map<string, string> altNames = 5;
+    bool admin = 6;
+    string type = 7;
+}
+
+message KeyUser {
+    bool admin = 1;
+    string type = 2;
+}
+
+message Delegation {
+    UsernamePassword credentials = 1;
+    int32 uses = 2;
+    google.protobuf.Duration duration = 3;
+    string slot = 4;
+    repeated string users = 5;
+    repeated string labels = 6;
+}
+
+message ChangePassword {
+    UsernamePassword credentials = 1;
+    string newPassword = 2;
+}
+
+message DecryptRequest {
+    UsernamePassword credentials = 1;
+    google.protobuf.Any data = 2;
+}
+
+message DecryptResponse {
+    google.protobuf.Any data = 1;
+    bool secure = 2;
+    repeated string delegates = 3;
+}
+
+message EncryptionRequest {
+    UsernamePassword credentials = 1;
+    Access access = 2;
+    google.protobuf.Any data = 3;
+    repeated string labels = 4;
+    repeated string usages = 5;
+}
+
+message Access {
+    int32 minimum = 1;
+    repeated string owners = 2;
+    repeated string leftOwners = 3;
+    repeated string rightOwners = 4;
+    string predicate = 5;
+}
+
+
+message EncryptionResponse {
+    google.protobuf.Any encrypted = 1;
+    bytes signature = 2;
+}
+
+message EncryptedData {
+    int32 version = 1;
+    utils.Digeste vaultId = 2;
+    repeated string labels = 3;
+    repeated string usages = 4;
+    string predicate = 5;
+    repeated MultiWrappedKey keySet = 6;
+    map<string, SingleWrappedKey> keySetRsa = 7;
+    map<string, Share> shareSet = 8;
+    bytes iv = 9;
+    bytes data = 10;
+    bytes signature = 11;
+}
+
+message MultiWrappedKey {
+    repeated string name = 1;
+    bytes aesKey = 2;
+}
+
+message SingleWrappedKey {
+    bytes key = 1;
+    bytes aesKey = 2;
+}
+
+message Share {
+    repeated bytes share = 1;
+}

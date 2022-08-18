@@ -12,10 +12,7 @@ import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -78,52 +75,8 @@ public class FfClient implements Fireflies {
         return result;
     }
 
-    @Override
-    public ListenableFuture<Gateway> join(Join join) {
-        if (metrics != null) {
-            var serializedSize = join.getSerializedSize();
-            metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundJoin().update(serializedSize);
-        }
-        ListenableFuture<Gateway> result = client.join(join);
-        result.addListener(() -> {
-            if (metrics != null) {
-                try {
-                    var serializedSize = result.get().getSerializedSize();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.inboundGateway().update(serializedSize);
-                } catch (Throwable e) {
-                    // nothing
-                }
-            }
-        }, r -> r.run());
-        return result;
-    }
-
     public void release() {
         close();
-    }
-
-    @Override
-    public ListenableFuture<Redirect> seed(Join join) {
-        if (metrics != null) {
-            var serializedSize = join.getSerializedSize();
-            metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundSeed().update(serializedSize);
-        }
-        ListenableFuture<Redirect> result = client.seed(join);
-        result.addListener(() -> {
-            if (metrics != null) {
-                try {
-                    var serializedSize = result.get().getSerializedSize();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.inboundRedirect().update(serializedSize);
-                } catch (Throwable e) {
-                    // nothing
-                }
-            }
-        }, r -> r.run());
-        return result;
     }
 
     @Override

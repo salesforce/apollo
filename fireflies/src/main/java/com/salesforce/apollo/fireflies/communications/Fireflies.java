@@ -9,10 +9,7 @@ package com.salesforce.apollo.fireflies.communications;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.Link;
@@ -43,26 +40,12 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gateway> join(Join join) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Redirect> seed(Join join) {
-                return null;
-            }
-
-            @Override
             public void update(State state) {
             }
         };
     }
 
     ListenableFuture<Gossip> gossip(SayWhat sw);
-
-    ListenableFuture<Gateway> join(Join join);
-
-    ListenableFuture<Redirect> seed(Join join);
 
     void update(State state);
 

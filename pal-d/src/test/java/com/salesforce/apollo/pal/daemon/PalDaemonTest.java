@@ -21,12 +21,14 @@ import java.util.function.Function;
 
 import org.junit.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.pal.proto.Decrypted;
 import com.salesfoce.apollo.pal.proto.Encrypted;
 import com.salesfoce.apollo.pal.proto.PalGrpc;
 import com.salesfoce.apollo.pal.proto.PalGrpc.PalBlockingStub;
 import com.salesfoce.apollo.pal.proto.Secret;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
@@ -60,7 +62,12 @@ public class PalDaemonTest {
 
         decrypters.put("nb", e -> {
             var fs = new CompletableFuture<Decrypted>();
-            fs.complete(Decrypted.newBuilder().putSecrets("foo", ByteString.copyFromUtf8("bar")).build());
+            fs.complete(Decrypted.newBuilder()
+                                 .putSecrets("foo",
+                                             Any.pack(ByteMessage.newBuilder()
+                                                                 .setContents(ByteString.copyFromUtf8("bar"))
+                                                                 .build()))
+                                 .build());
             return fs;
         });
 
@@ -80,9 +87,18 @@ public class PalDaemonTest {
 
         var secrets = new HashMap<String, Secret>();
         secrets.put("test",
-                    Secret.newBuilder().addLabels(testLabel).setDecryptor("nb").setEncrypted(ByteString.EMPTY).build());
+                    Secret.newBuilder()
+                          .addLabels(testLabel)
+                          .setDecryptor("nb")
+                          .setEncrypted(Any.pack(ByteMessage.newBuilder().build()))
+                          .build());
         var result = stub.decrypt(Encrypted.newBuilder().putAllSecrets(secrets).build());
         assertNotNull(result);
-        assertEquals("bar", result.getSecretsMap().get("foo").toString(Charset.defaultCharset()));
+        assertEquals("bar",
+                     result.getSecretsMap()
+                           .get("foo")
+                           .unpack(ByteMessage.class)
+                           .getContents()
+                           .toString(Charset.defaultCharset()));
     }
 }

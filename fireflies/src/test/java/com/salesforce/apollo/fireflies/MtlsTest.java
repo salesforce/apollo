@@ -33,6 +33,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -140,8 +142,8 @@ public class MtlsTest {
                            .toList();
 
         var scheduler = Executors.newScheduledThreadPool(10);
-        var exec = ForkJoinPool.commonPool();
-        var commExec = exec;
+        var exec = new ForkJoinPool();
+        var commExec = ForkJoinPool.commonPool();
 
         var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);
@@ -168,7 +170,9 @@ public class MtlsTest {
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
 
-        views.get(0).start(() -> countdown.get().countDown(), duration, Collections.emptyList(), scheduler);
+        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
+        views.get(0)
+             .start(authentication, () -> countdown.get().countDown(), duration, Collections.emptyList(), scheduler);
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "KERNEL did not stabilize");
 
@@ -177,12 +181,14 @@ public class MtlsTest {
 
         countdown.set(new CountDownLatch(seedlings.size()));
 
-        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel, scheduler));
+        seedlings.forEach(view -> view.start(authentication, () -> countdown.get().countDown(), duration, kernel,
+                                             scheduler));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Seeds did not stabilize");
 
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds, scheduler));
+        views.forEach(view -> view.start(authentication, () -> countdown.get().countDown(), duration, seeds,
+                                         scheduler));
 
         assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()

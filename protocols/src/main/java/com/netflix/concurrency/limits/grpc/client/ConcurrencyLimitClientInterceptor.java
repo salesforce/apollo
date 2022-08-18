@@ -16,6 +16,7 @@
 package com.netflix.concurrency.limits.grpc.client;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
@@ -31,7 +32,6 @@ import io.grpc.ForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.Status.Code;
 
 /**
  * ClientInterceptor that enforces per service and/or per method concurrent
@@ -39,13 +39,15 @@ import io.grpc.Status.Code;
  * reached.
  */
 public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
-    private static final Status LIMIT_EXCEEDED_STATUS = Status.UNAVAILABLE.withDescription("Client concurrency limit reached");
 
     private final Limiter<GrpcClientRequestContext> grpcLimiter;
+    private final Supplier<Status>                  statusSupplier;
 
-    public ConcurrencyLimitClientInterceptor(final Limiter<GrpcClientRequestContext> grpcLimiter) {
+    public ConcurrencyLimitClientInterceptor(final Limiter<GrpcClientRequestContext> grpcLimiter,
+                                             Supplier<Status> statusSupplier) {
         Preconditions.checkArgument(grpcLimiter != null, "GrpcLimiter cannot not be null");
         this.grpcLimiter = grpcLimiter;
+        this.statusSupplier = statusSupplier;
     }
 
     @Override
@@ -93,7 +95,7 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
                                               if (done.compareAndSet(false, true)) {
                                                   if (status.isOk()) {
                                                       listener.onSuccess();
-                                                  } else if (Code.UNAVAILABLE == status.getCode()) {
+                                                  } else if (statusSupplier.get().getCode() == status.getCode()) {
                                                       listener.onDropped();
                                                   } else {
                                                       listener.onIgnore();
@@ -114,7 +116,7 @@ public class ConcurrencyLimitClientInterceptor implements ClientInterceptor {
 
                               @Override
                               public void halfClose() {
-                                  responseListener.onClose(LIMIT_EXCEEDED_STATUS, new Metadata());
+                                  responseListener.onClose(statusSupplier.get(), new Metadata());
                               }
 
                               @Override

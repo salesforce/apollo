@@ -32,7 +32,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;

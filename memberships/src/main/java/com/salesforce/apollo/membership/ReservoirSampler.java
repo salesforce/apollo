@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
@@ -20,10 +21,14 @@ import org.apache.commons.math3.random.BitsStreamGenerator;
 
 public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
 
-    private int                       c = 0;
-    private Object                    exclude;
+    private AtomicInteger             c = new AtomicInteger();
+    private final Object              exclude;
     private final BitsStreamGenerator rand;
     private final int                 sz;
+
+    public ReservoirSampler(int size, BitsStreamGenerator entropy) {
+        this(null, size, entropy);
+    }
 
     public ReservoirSampler(Object excluded, int size, BitsStreamGenerator entropy) {
         assert size >= 0;
@@ -67,7 +72,7 @@ public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
         if (in.size() < sz) {
             in.add(s);
         } else {
-            int replaceInIndex = (int) (rand.nextDouble() * (sz + (c++) + 1));
+            int replaceInIndex = (int) (rand.nextLong(sz + (c.getAndIncrement()) + 1));
             if (replaceInIndex < sz) {
                 in.set(replaceInIndex, s);
             }

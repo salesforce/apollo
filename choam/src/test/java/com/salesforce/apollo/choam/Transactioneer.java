@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.utils.Utils;
 

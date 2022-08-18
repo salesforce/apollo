@@ -29,8 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -165,18 +166,17 @@ public class CHOAMTest {
             }
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
+        var commExec = ForkJoinPool.commonPool();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2,
-                                                                           r -> new Thread(r,
-                                                                                           "Comm[" + m.getId() + "]")),
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), commExec,
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
+        var scheduler = Executors.newScheduledThreadPool(2);
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context, metrics);
+            return createCHOAM(entropy, params, m, context, metrics, scheduler);
         }));
     }
 
@@ -201,10 +201,10 @@ public class CHOAMTest {
         assertTrue(activated, "System did not become active: "
         + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList()));
 
+        var txScheduler = Executors.newScheduledThreadPool(3);
+        var exec = Executors.newFixedThreadPool(3);
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-            var txScheduler = Executors.newScheduledThreadPool(1);
-            var exec = Executors.newFixedThreadPool(2);
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
                                                        countdown, txScheduler));
@@ -284,7 +284,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics) {
+                              ChoamMetrics metrics, ScheduledExecutorService scheduler) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -292,22 +292,13 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        var ei = new AtomicInteger();
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(Executors.newScheduledThreadPool(1,
-                                                                                                      r -> new Thread(r,
-                                                                                                                      "Sched["
-                                                                                                                      + m.getId()
-                                                                                                                      + "]")))
+                                                       .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(Executors.newFixedThreadPool(2,
-                                                                                             r -> new Thread(r, "Exec["
-                                                                                             + m.getId() + ":"
-                                                                                             + ei.incrementAndGet()
-                                                                                             + "]")))
+                                                       .setExec(ForkJoinPool.commonPool())
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {

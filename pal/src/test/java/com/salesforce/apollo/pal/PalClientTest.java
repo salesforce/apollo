@@ -6,8 +6,10 @@
  */
 package com.salesforce.apollo.pal;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -17,10 +19,12 @@ import java.util.function.Function;
 
 import org.junit.Test;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.pal.proto.Decrypted;
 import com.salesfoce.apollo.pal.proto.Encrypted;
 import com.salesfoce.apollo.pal.proto.Secret;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.pal.daemon.PalDaemon;
 
 import io.netty.channel.unix.PeerCredentials;
@@ -46,7 +50,12 @@ public class PalClientTest {
 
         decrypters.put("nb", e -> {
             var fs = new CompletableFuture<Decrypted>();
-            fs.complete(Decrypted.newBuilder().putSecrets("foo", ByteString.copyFromUtf8("bar")).build());
+            fs.complete(Decrypted.newBuilder()
+                                 .putSecrets("foo",
+                                             Any.pack(ByteMessage.newBuilder()
+                                                                 .setContents(ByteString.copyFromUtf8("bar"))
+                                                                 .build()))
+                                 .build());
             return fs;
         });
 
@@ -57,8 +66,18 @@ public class PalClientTest {
 
         var secrets = new HashMap<String, Secret>();
         secrets.put("test",
-                    Secret.newBuilder().addLabels(testLabel).setDecryptor("nb").setEncrypted(ByteString.EMPTY).build());
+                    Secret.newBuilder()
+                          .addLabels(testLabel)
+                          .setDecryptor("nb")
+                          .setEncrypted(Any.pack(ByteMessage.newBuilder().build()))
+                          .build());
         var result = palClient.decrypt(Encrypted.newBuilder().putAllSecrets(secrets).build());
         assertNotNull(result);
+        assertEquals("bar",
+                     result.getSecretsMap()
+                           .get("foo")
+                           .unpack(ByteMessage.class)
+                           .getContents()
+                           .toString(Charset.defaultCharset()));
     }
 }

@@ -11,3 +11,7 @@ package apollo.test;
 service TestIt {
     rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
 }
+
+message ByteMessage {
+    bytes contents = 1;
+}

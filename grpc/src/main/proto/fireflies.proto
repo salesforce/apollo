@@ -13,8 +13,11 @@ package fireflies;
 service Fireflies {
     rpc gossip (SayWhat) returns (Gossip) {}
     rpc update (State) returns (google.protobuf.Empty) {}
-    rpc seed (Join) returns (Redirect) {}
-    rpc join (Join) returns (Gateway) {}
+}
+
+service Entrance {
+    rpc seed (Credentials) returns (Redirect) {}
+    rpc join (Credentials) returns (Gateway) {}
 }
 
 message SayWhat {
@@ -117,7 +120,7 @@ message Update {
 
 message Redirect {
     utils.Digeste view = 1;
-    repeated SignedNote successors = 2;
+    repeated Seed_ successors = 2;
     int32 cardinality = 3;
     int32 rings = 4;
 }
@@ -130,8 +133,19 @@ message Gateway {
     repeated SignedNote joining = 5;
 }
 
-message Join {
+message Credentials {
     utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    SignedNote note = 3;
+    Join join = 2;
+    bytes hmac = 3;
+}
+
+message Join {
+    utils.Digeste view = 1;
+    SignedNote note = 2;
+    stereotomy.KeyState_ keyState = 3;
+}
+
+message Seed_ {
+    SignedNote note = 1;
+    stereotomy.KeyState_ keyState = 5;
 }

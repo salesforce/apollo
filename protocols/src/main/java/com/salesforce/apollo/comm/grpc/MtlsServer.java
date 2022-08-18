@@ -81,8 +81,7 @@ public class MtlsServer implements ClientIdentity {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .sslContextProvider(PROVIDER_JSSE)
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
-                                                                                           privateKey,
-                                                                                           PROVIDER_JSSE));
+                                                                                           privateKey, PROVIDER_JSSE));
         GrpcSslContexts.configure(builder, SslProvider.JDK);
         builder.protocols(TL_SV1_3)
                .sslContextProvider(PROVIDER_JSSE)
@@ -152,6 +151,7 @@ public class MtlsServer implements ClientIdentity {
             }
         });
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
+                                                       .executor(executor)
                                                        .withOption(ChannelOption.SO_REUSEADDR, true)
                                                        .sslContext(supplier.forServer(clientAuth, alias, validator,
                                                                                       PROVIDER_JSSE, TL_SV1_3))

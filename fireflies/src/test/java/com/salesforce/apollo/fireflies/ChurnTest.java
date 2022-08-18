@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -81,6 +83,7 @@ public class ChurnTest {
     }
 
     private List<Router>                            communications = new ArrayList<>();
+    private List<Router>                            gateways       = new ArrayList<>();
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
@@ -95,6 +98,9 @@ public class ChurnTest {
 
         communications.forEach(e -> e.close());
         communications.clear();
+
+        gateways.forEach(e -> e.close());
+        gateways.clear();
     }
 
     @Test
@@ -121,8 +127,11 @@ public class ChurnTest {
         final var gossipDuration = Duration.ofMillis(5);
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         long then = System.currentTimeMillis();
+        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
 
-        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+        views.get(0)
+             .start(authentication, () -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
+                    scheduler);
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -131,8 +140,8 @@ public class ChurnTest {
         var bootstrappers = views.subList(1, seeds.size());
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
-        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           scheduler));
+        bootstrappers.forEach(v -> v.start(authentication, () -> countdown.get().countDown(), gossipDuration,
+                                           bootstrapSeed, scheduler));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -159,7 +168,8 @@ public class ChurnTest {
             then = System.currentTimeMillis();
             countdown.set(new CountDownLatch(toStart.size()));
 
-            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
+            toStart.forEach(view -> view.start(authentication, () -> countdown.get().countDown(), gossipDuration, seeds,
+                                               scheduler));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
             failed = testViews.stream()
@@ -213,6 +223,7 @@ public class ChurnTest {
         testViews.clear();
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
+        List<Router> g = new ArrayList<>(gateways);
         int delta = 5;
         for (int i = 0; i < (CARDINALITY / delta - 4); i++) {
             var removed = new ArrayList<Digest>();
@@ -220,10 +231,12 @@ public class ChurnTest {
                 final var view = c.get(j);
                 view.stop();
                 r.get(j).close();
+                g.get(j).close();
                 removed.add(view.getNode().getId());
             }
             c = c.subList(0, c.size() - delta);
             r = r.subList(0, r.size() - delta);
+            g = g.subList(0, g.size() - delta);
             final var expected = c;
 //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
@@ -275,6 +288,7 @@ public class ChurnTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
+        final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
@@ -282,14 +296,23 @@ public class ChurnTest {
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
-                                                             .setTarget(2)
+                                                             .setTarget(CARDINALITY)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         exec, metrics.limitsMetrics());
+            var gateway = new LocalRouter(gatewayPrefix,
+                                          ServerConnectionCache.newBuilder()
+                                                               .setTarget(CARDINALITY)
+                                                               .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                       : registry)),
+                                          exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters,
+            gateway.setMember(node);
+            gateway.start();
+            gateways.add(gateway);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
                             DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }

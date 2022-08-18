@@ -11,6 +11,7 @@ import static com.salesforce.apollo.comm.grpc.MtlsServer.forClient;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.concurrent.Executor;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
@@ -19,6 +20,7 @@ import com.netflix.concurrency.limits.grpc.client.GrpcClientRequestContext;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 
 import io.grpc.ManagedChannel;
+import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.ClientAuth;
 
@@ -31,23 +33,27 @@ public class MtlsClient {
     private final ManagedChannel channel;
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, ClientContextSupplier supplier,
-                      CertificateValidator validator) {
+                      CertificateValidator validator, Executor exec) {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
+                                     .executor(exec)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, MtlsServer.TL_SV1_3))
-                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter,
+                                                                                      () -> Status.RESOURCE_EXHAUSTED.withDescription("Client side concurrency limit exceeded")))
                                      .build();
 
     }
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, X509Certificate certificate,
-                      PrivateKey privateKey, CertificateValidator validator) {
+                      PrivateKey privateKey, CertificateValidator validator, Executor exec) {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
+                                     .executor(exec)
                                      .sslContext(forClient(clientAuth, alias, certificate, privateKey, validator))
-                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter,
+                                                                                      () -> Status.RESOURCE_EXHAUSTED.withDescription("Client side concurrency limit exceeded")))
                                      .build();
 
     }

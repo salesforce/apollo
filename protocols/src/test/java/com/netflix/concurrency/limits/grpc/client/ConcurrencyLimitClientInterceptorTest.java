@@ -15,6 +15,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ClientCalls;
@@ -55,7 +56,8 @@ public class ConcurrencyLimitClientInterceptorTest {
 
         Channel channel = NettyChannelBuilder.forTarget("localhost:" + server.getPort())
                                              .usePlaintext()
-                                             .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                             .intercept(new ConcurrencyLimitClientInterceptor(limiter,
+                                                                                              () -> Status.UNAVAILABLE))
                                              .build();
 
         AtomicLong counter = new AtomicLong();

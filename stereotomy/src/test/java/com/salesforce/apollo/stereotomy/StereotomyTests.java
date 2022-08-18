@@ -49,9 +49,9 @@ import com.salesforce.apollo.utils.Hex;
  *
  */
 public class StereotomyTests {
-    KERL                     kel;
-    final StereotomyKeyStore ks = new MemKeyStore();
-    SecureRandom             secureRandom;
+    KERL               kel;
+    StereotomyKeyStore ks;
+    SecureRandom       secureRandom;
 
     @BeforeEach
     public void before() throws Exception {
@@ -59,6 +59,7 @@ public class StereotomyTests {
         secureRandom.setSeed(new byte[] { 0 });
         initializeKel();
         // this makes the values of secureRandom deterministic
+        ks = initializeKeyStore();
     }
 
     @Test
@@ -244,6 +245,10 @@ public class StereotomyTests {
         provision(i, controller);
         i.rotate();
         provision(i, controller);
+    }
+
+    protected StereotomyKeyStore initializeKeyStore() {
+        return new MemKeyStore();
     }
 
     void initializeKel() throws Exception {

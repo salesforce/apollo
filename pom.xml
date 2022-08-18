@@ -28,6 +28,7 @@
         <module>grpc</module>
         <module>pal-d</module>
         <module>pal</module>
+        <module>gorgoneion</module>
     </modules>
 
     <properties>
@@ -207,7 +208,7 @@
                 <artifactId>pal</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            
+
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>h2-deterministic</artifactId>
@@ -350,6 +351,11 @@
                 <groupId>io.netty</groupId>
                 <artifactId>netty-transport-native-unix-common</artifactId>
                 <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.crypto.tink</groupId>
+                <artifactId>tink</artifactId>
+                <version>1.7.0</version>
             </dependency>
 
             <!-- Test dependencies only below this line! -->
