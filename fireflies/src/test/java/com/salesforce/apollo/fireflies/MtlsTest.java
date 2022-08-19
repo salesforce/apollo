@@ -33,6 +33,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.fireflies.View.Authentication;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
@@ -148,6 +151,7 @@ public class MtlsTest {
         Function<Member, SocketAddress> resolver = m -> ((Participant) m).endpoint();
 
         var clientContextSupplier = clientContextSupplier();
+        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
         views = members.stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -160,7 +164,8 @@ public class MtlsTest {
                                               clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, exec);
+                            DigestAlgorithm.DEFAULT, metrics, exec, () -> new Authentication("foo", authentication),
+                            id -> authentication);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();

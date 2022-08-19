@@ -11,6 +11,8 @@ import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -45,8 +47,13 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -549,6 +556,11 @@ public class View {
                 return;
             }
             stable(() -> {
+                if (!validate(credentials)) {
+                    log.trace("Invalid join credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
+                              currentView.get(), context.getId(), context.cardinality(), node.getId());
+                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
+                }
                 var note = new NoteWrapper(join.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
                     responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
@@ -663,6 +675,11 @@ public class View {
                 return Redirect.getDefaultInstance();
             }
             return stable(() -> {
+                if (!validate(credentials)) {
+                    log.trace("Invalid seed credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
+                              currentView.get(), context.getId(), context.cardinality(), node.getId());
+                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
+                }
                 var newMember = new Participant(note.getId());
                 final var successors = new TreeSet<Participant>(context.successors(newMember,
                                                                                    m -> context.isActive(m)));
@@ -757,6 +774,8 @@ public class View {
          */
         void viewChange(Context<Participant> context, Digest viewId, List<Digest> joins, List<Digest> leaves);
     }
+
+    public record Authentication(String identifier, SecretKeySpec authentication) {}
 
     /**
      * Embodiment of the client side join protocol
@@ -924,7 +943,13 @@ public class View {
                            .setNote(node.getNote().getWrapped())
                            .setKeyState(node.noteState())
                            .build();
-            var credentials = Credentials.newBuilder().setContext(context.getId().toDigeste()).setJoin(join).build();
+            var auth = authenticate(join);
+            var credentials = Credentials.newBuilder()
+                                         .setContext(context.getId().toDigeste())
+                                         .setJoin(join)
+                                         .setIdentifier(auth.identifier)
+                                         .setHmac(auth.hmac)
+                                         .build();
             return credentials;
         }
 
@@ -1145,10 +1170,13 @@ public class View {
         }
     }
 
-    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
+    private record Auth(String identifier, ByteString hmac) {}
 
-    private static final Logger log                   = LoggerFactory.getLogger(View.class);
-    private static final double MEMBERSHIP_FPR        = 0.0000125;
+    private static final String FINALIZE_VIEW_CHANGE = "FINALIZE VIEW CHANGE";
+    private static final Logger log                  = LoggerFactory.getLogger(View.class);
+
+    private static final double MEMBERSHIP_FPR = 0.0000125;
+
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     /**
@@ -1167,9 +1195,9 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
     }
 
-    private final CommonCommunications<Approach, Service> approaches;
-
+    private final CommonCommunications<Approach, Service>     approaches;
     private final AtomicInteger                               attempt             = new AtomicInteger();
+    private final Supplier<Authentication>                    authentication;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final AtomicReference<Digest>                     crown;
@@ -1194,6 +1222,7 @@ public class View {
     private final AtomicBoolean                               started             = new AtomicBoolean();
     private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
+    private final Function<String, SecretKeySpec>             validator;
     private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
     private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
     private final AtomicReference<ViewChange>                 vote                = new AtomicReference<>();
@@ -1201,17 +1230,29 @@ public class View {
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
-        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec);
+        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
+             () -> null, id -> null);
+    }
+
+    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+                EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
+                FireflyMetrics metrics, Executor exec, Supplier<Authentication> authentication,
+                Function<String, SecretKeySpec> validator) {
+        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
+             authentication, validator);
     }
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, Router gateway,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec) {
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec,
+                Supplier<Authentication> authentication, Function<String, SecretKeySpec> validator) {
+        this.authentication = authentication;
         this.metrics = metrics;
         this.validation = validation;
         this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
+        this.validator = validator;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         crown = new AtomicReference<>(digestAlgo.getOrigin());
         resetBootstrapView();
@@ -1653,6 +1694,32 @@ public class View {
                    log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
                    accuse(target, ring.getIndex(), new IllegalStateException("Amplifying accusation"));
                });
+    }
+
+    private Auth authenticate(Join join) {
+        var auth = authentication.get();
+        if (auth == null) {
+            return new Auth("", ByteString.EMPTY);
+        }
+        final var secret = auth.authentication;
+        var hmac = authenticate(join, secret);
+        return new Auth(auth.identifier, hmac);
+    }
+
+    private ByteString authenticate(Join join, final SecretKeySpec secret) {
+        Mac mac;
+        try {
+            mac = Mac.getInstance(secret.getAlgorithm());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        try {
+            mac.init(secret);
+        } catch (InvalidKeyException e) {
+            throw new IllegalStateException(e);
+        }
+        var hmac = mac.doFinal(join.toByteArray());
+        return ByteString.copyFrom(hmac);
     }
 
     private Digest bootstrapView() {
@@ -2585,6 +2652,14 @@ public class View {
         }
 
         return builder.build();
+    }
+
+    private boolean validate(Credentials credentials) {
+        var secret = validator.apply(credentials.getIdentifier());
+        if (secret == null) {
+            return true;
+        }
+        return authenticate(credentials.getJoin(), secret).equals(credentials.getHmac());
     }
 
     private void validate(Digest from, final int ring, Digest requestView) {
