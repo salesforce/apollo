@@ -143,7 +143,7 @@ message Credentials {
 message Join {
     utils.Digeste view = 1;
     SignedNote note = 2;
-    stereotomy.KeyState_ keyState = 3;
+    stereotomy.KERL_ kerl = 3;
 }
 
 message Seed_ {

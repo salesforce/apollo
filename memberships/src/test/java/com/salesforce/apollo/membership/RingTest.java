@@ -48,6 +48,7 @@ public class RingTest {
             Member m = createMember(i);
             members.add(m);
         }
+        members.sort(Comparator.naturalOrder());
     }
 
     private static Member createMember(int i) {
@@ -92,7 +93,7 @@ public class RingTest {
             if (index == -1) {
                 index = members.size() - 1; // wrap around
             }
-            assertEquals(index, members.indexOf(test));
+            assertEquals(test, members.get(index), "index: " + index + " not equals");
             index--;
         }
 

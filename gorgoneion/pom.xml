@@ -6,7 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>gorgoneion</artifactId>
-    <name>Apollo Gorgoneioon</name>
+    <name>Apollo Gorgoneion</name>
     <description>Apollo software based two-person rule type encryption and decryption service</description>
 
     <properties>
