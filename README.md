@@ -1,5 +1,5 @@
 # Apollo Delphinius
-The Apollo Delphinius project is a multi-tenant, distributed system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
+The Apollo Delphinius project is an experimental multi-tenant, distributed system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
 
 The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency service for managing identity, key management, access control and verifiable credentials such as JWT issuance and validation.
 
@@ -70,7 +70,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 
 
 ## Protobuf and GRPC
-Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the Eclipse IDE Maven integration. To aleviate this, _all_ grpc/proto generation occurs in one module, the aptly named _grpc_ module.
+Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the Eclipse IDE Maven integration. To aleviate this,  _all_  grpc/proto generation occurs in one module, the aptly named  _grpc_  module.
 
 ## JOOQ
 Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore.  Unlike GRPC, the JOOQ code generation plays very nicely with the Eclipse IDE's Maven integration, so JOOQ code generation is included in the module that defines it.
@@ -79,7 +79,7 @@ Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This als
 Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
 ## WIP
-Note that Apollo Delphinius is very much a _work in progress_.  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed ledger platform.
+Note that Apollo Delphinius is very much a  _work_   _in_   _progress_ .  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed systems platform.
 
 ## Requirements
 Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
@@ -91,7 +91,7 @@ Apollo requires code generation as part of the build.  This is performed in the 
 
 The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for the various serializable forms and network protocols used by Apollo.  The JOOQ code generation is for the JOOQ SQL functionality.
 
-GRPC/Protoc code generation only occurs in the _grpc_ module and is output into the _grpc/target/generated-sources_ directory.  For GRPC/Proto, there are 2 directory roots: _grpc/target/generated-sources/protobuf/grpc-java_ and _grpc/target/generated-sources/protobuf/java_ .  For JOOQ, the root directory is _(module dir)/target/generated-sources/jooq_ .
+GRPC/Protoc code generation only occurs in the _grpc_  module and is output into the  _grpc/target/generated-sources_  directory.  For GRPC/Proto, there are 2 directory roots:  _grpc/target/generated-sources/protobuf/grpc-java_  and  _grpc/target/generated-sources/protobuf/java_ .  For JOOQ, the root directory is  _(module dir)/target/generated-sources/jooq_ .
 
 Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
 
@@ -99,7 +99,7 @@ Note that adding these generated source directories to the compile path is autom
 
 ## IDE Integration
 **This is Important!**
-Apollo contains one module that create a shaded version of standard libraries.  This module **must** be built (installed), but only needs to be built once in order to install the resulting jar into your local maven repository.  This is performed as part of the top level pom's _pre_ profile.  As mentioned previously, this profile must be executed at least once before the full build.  Note, however, Eclipse and IntellJ **do not understand this** and will not be able to import this module without error and messing up the rest of the code. What this means is that the IDE thinks the module is fine and doesn't notice there has been package rewriting to avoid conflicts with existing libraries.  What this means is that you *must* exclude this module in your IDE environment.  This module will not be imported unless you explicitly do so, so please do not do so.  If you really think you need to be working on it, then you probably understand all this. But if you are simply trying to get Apollo into your IDE, importing these module is gonna ruin your day.
+Apollo contains one module that create a shaded version of standard libraries.  This module **must** be built (installed), but only needs to be built once in order to install the resulting jar into your local maven repository.  This is performed as part of the top level pom's  _pre_  profile.  As mentioned previously, this profile must be executed at least once before the full build.  Note, however, Eclipse and IntellJ **does not understand this transformation** and thus will not be able to import this module without errors and messing up the rest of the code that depends on the transformation. What this means is that the IDE thinks the module is fine and doesn't notice there has been package rewriting to avoid conflicts with existing libraries.  What this means is that you *must* exclude this module in your IDE environment.  This module will not be imported unless you explicitly do so, so please do not do so.  If you really think you need to be working on it, then you probably understand all this. But if you are simply trying to get Apollo into your IDE, importing these module is gonna ruin your day.
 
 ### Module to exclude
 
@@ -117,7 +117,7 @@ from the command line before attempting to load the remaining Apollo modules int
 
 ### Eclipse M2E issues with ${os.detected.classifier}
 
-This is a known weirdness with Eclipse M2E with the [os-maven-plugin build extension](https://github.com/trustin/os-maven-plugin).  I've been fine with this, but ran into another project that Eclipse just kept refusing to resolve.  I solved this by downloading the supplied maven plugin](https://repo1.maven.org/maven2/kr/motd/maven/os-maven-plugin/1.7.0/os-maven-plugin-1.7.0.jar) and adding this to the `<ECLIPSE_HOME>/dropins` directory.  This works because the plugin is also an Eclipse plugin, which is nice.
+This is a known weirdness with Eclipse M2E with the [os-maven-plugin build extension](https://github.com/trustin/os-maven-plugin).  I've been fine with this, but ran into another project that Eclipse just kept refusing to resolve.  I solved this by downloading the [supplied maven plugin](https://repo1.maven.org/maven2/kr/motd/maven/os-maven-plugin/1.7.0/os-maven-plugin-1.7.0.jar) and adding this to the `<ECLIPSE_HOME>/dropins` directory.  This works because the plugin is also an Eclipse plugin, which is nice.
 
 ### Your IDE and Maven code generation
 
