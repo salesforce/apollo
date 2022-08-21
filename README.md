@@ -8,6 +8,15 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
+## Requirements
+Apollo requires the [GraalVM](https://www.graalvm.org) JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+
+### Install Maven
+See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
+
+### Install GraalVM
+Apollo now requires the GraalVM for Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
+
 ## Building Apollo
 **Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
 
@@ -20,9 +29,6 @@ This will perform a full build, including the deterministic SQL execution module
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
 
 You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
-
-## Requirements
-Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
