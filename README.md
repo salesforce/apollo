@@ -54,6 +54,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
+* [Gorgoneion](gorgoneion/README.md) - Experimental identity bootstrapping and secrets service
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
 * [PAL](pal/README.md) - Permissive Action Link GRPC client, for secure bootstrapping of secets over unix domain sockets.
