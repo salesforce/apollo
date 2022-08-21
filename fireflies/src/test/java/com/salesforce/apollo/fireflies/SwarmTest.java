@@ -28,21 +28,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.crypto.spec.SecretKeySpec;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.fireflies.View.Authentication;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
@@ -228,7 +226,6 @@ public class SwarmTest {
         final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
         final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
         final var gatewayExec = ForkJoinPool.commonPool();
-        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -253,8 +250,7 @@ public class SwarmTest {
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, executor, () -> new Authentication("foo", authentication),
-                            id -> authentication);
+                            DigestAlgorithm.DEFAULT, metrics, executor, () -> ByteString.EMPTY, attestation -> true);
         }).collect(Collectors.toList());
     }
 }

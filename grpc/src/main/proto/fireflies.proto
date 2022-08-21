@@ -135,9 +135,8 @@ message Gateway {
 
 message Credentials {
     utils.Digeste context = 1;
-    Join join = 2;
-    string identifier = 3;
-    bytes hmac = 4;
+    Join join = 2; 
+    bytes attestation = 3;
 }
 
 message Join {
