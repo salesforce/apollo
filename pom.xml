@@ -33,7 +33,7 @@
 
     <properties>
         <jackson.version>2.13.2</jackson.version>
-        <dropwizard.version>2.0.28</dropwizard.version>
+        <dropwizard.version>2.1.1</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.71</bc.version>
@@ -48,6 +48,7 @@
 
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
+        <graal.vm.version>22.2.0</graal.vm.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     </properties>
@@ -353,9 +354,9 @@
                 <version>${netty.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.google.crypto.tink</groupId>
-                <artifactId>tink</artifactId>
-                <version>1.7.0</version>
+                <groupId>org.graalvm.sdk</groupId>
+                <artifactId>graal-sdk</artifactId>
+                <version>${graal.vm.version}</version>
             </dependency>
 
             <!-- Test dependencies only below this line! -->
@@ -478,7 +479,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>1</forkCount>
-                    <reuseForks>false</reuseForks>
+                    <reuseForks>true</reuseForks>
                 </configuration>
             </plugin>
             <plugin>
@@ -565,7 +566,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0-M5</version>
+                    <version>3.0.0-M7</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>

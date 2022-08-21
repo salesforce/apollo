@@ -11,7 +11,7 @@
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
-    </properties> 
+    </properties>
 
     <dependencies>
         <dependency>
@@ -27,14 +27,9 @@
             <artifactId>grpc</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>graal-sdk</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.perfmark</groupId>
-            <artifactId>perfmark-api</artifactId>
-            <scope>provided</scope>
-        </dependency> 
 
         <!-- Test only deps below this line -->
 
@@ -58,7 +53,7 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    
+
     <build>
         <plugins>
             <plugin>
