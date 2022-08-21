@@ -123,8 +123,8 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                       digest, context.getId(), next.ring(), completed, member.getId());
             if (link == null) {
                 log.trace("No successor found of: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
-                          context.getId(), currentIndex, traversed,
-                          context.ring(currentIndex).getRing().keySet().stream().toList(), member);
+                          context.getId(), currentIndex, traversed, context.ring(currentIndex).stream().toList(),
+                          member);
                 final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {

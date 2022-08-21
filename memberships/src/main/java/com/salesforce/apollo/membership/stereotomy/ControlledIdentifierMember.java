@@ -9,8 +9,11 @@ package com.salesforce.apollo.membership.stereotomy;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -20,6 +23,7 @@ import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
@@ -112,6 +116,10 @@ public class ControlledIdentifierMember implements SigningMember {
         return id.hashCode();
     }
 
+    public CompletableFuture<KERL_> kerl() {
+        return identifier.getKerl().thenApply(kerl -> kerl(kerl));
+    }
+
     @Override
     public JohnHancock sign(InputStream message) {
         Signer signer;
@@ -147,5 +155,9 @@ public class ControlledIdentifierMember implements SigningMember {
             return false;
         }
         return verifier.get().verify(threshold, signature, message);
+    }
+
+    private KERL_ kerl(List<EventWithAttachments> kerl) {
+        return KERL_.newBuilder().addAllEvents(kerl.stream().map(ewa -> ewa.toKeyEvente()).toList()).build();
     }
 }

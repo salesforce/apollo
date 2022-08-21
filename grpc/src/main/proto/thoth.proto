@@ -40,15 +40,6 @@ service Reconciliation {
     rpc update (Updating) returns (google.protobuf.Empty) {}
 }
 
-service Validator {
-	rpc validate (ValidateContext) returns (Validated) {}
-	rpc witness (WitnessContext) returns (Signatures) {}
-}
-
-service Witness {
-
-}
-
 message Update {
     repeated stereotomy.KeyEvent_ events = 1;
     repeated Interval intervals = 2;
@@ -76,24 +67,4 @@ message Get {
 message Interval {
         utils.Digeste start = 1;
         utils.Digeste end = 2;
-}
-
-message Signatures {
-	repeated utils.Sig signatures = 1;
-}
-
-message WitnessContext {
-    utils.Digeste context = 1;
-	stereotomy.Ident identifier = 2;
-    repeated stereotomy.KeyEvent_ events = 3;
-}
-
-message ValidateContext {
-    utils.Digeste context = 1;
-    repeated stereotomy.KeyEventWithAttachments events = 2;
-}
-
-message Validated {
-    stereotomy.Ident validator = 1;
-    repeated utils.Sig signatures = 2;
 }

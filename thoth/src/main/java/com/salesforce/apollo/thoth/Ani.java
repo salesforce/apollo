@@ -10,7 +10,10 @@ package com.salesforce.apollo.thoth;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -38,6 +41,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -63,13 +67,10 @@ public class Ani {
     private final SigningMember                                member;
     private final SigningThreshold                             threshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> validated;
-
-    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl) {
-        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder());
-    }
+    private final Set<Identifier>                              validators;
 
     public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> validatedBuilder) {
+               Caffeine<EventCoordinates, Boolean> validatedBuilder, List<Identifier> validators) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
@@ -80,6 +81,12 @@ public class Ani {
         this.member = member;
         this.kerl = kerl;
         this.threshold = threshold;
+        this.validators = new HashSet<>(validators);
+    }
+
+    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
+               List<Identifier> validators) {
+        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder(), validators);
     }
 
     public void clearValidations() {
@@ -256,10 +263,15 @@ public class Ani {
 
         record resolved(KeyState state, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<resolved>();
-        var last = ksAttach.validations().entrySet().stream().map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
-            mapped.add(new resolved(ks, e.getValue()));
-            return ks;
-        })).reduce((a, b) -> a.thenCompose(ks -> b));
+        var last = ksAttach.validations()
+                           .entrySet()
+                           .stream()
+                           .filter(e -> validators.contains(e.getKey()))
+                           .map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
+                               mapped.add(new resolved(ks, e.getValue()));
+                               return ks;
+                           }))
+                           .reduce((a, b) -> a.thenCompose(ks -> b));
 
         if (last.isEmpty()) {
             log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());

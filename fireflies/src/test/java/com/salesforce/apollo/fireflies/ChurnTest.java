@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.fireflies.View.Authentication;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
@@ -284,6 +287,7 @@ public class ChurnTest {
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
+        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -307,7 +311,8 @@ public class ChurnTest {
             gateway.start();
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, exec);
+                            DigestAlgorithm.DEFAULT, metrics, exec, () -> new Authentication("foo", authentication),
+                            id -> authentication);
         }).collect(Collectors.toList());
     }
 }

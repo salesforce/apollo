@@ -10,9 +10,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -36,9 +36,9 @@ public class Ring<T extends Member> implements Iterable<T> {
         CONTINUE, FAIL, SUCCESS;
     }
 
-    private final ContextImpl<T>                    context;
-    private final int                               index;
-    private final ConcurrentNavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
+    private final ContextImpl<T>          context;
+    private final int                     index;
+    private final NavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
 
     public Ring(int index, ContextImpl<T> context) {
         this.index = index;
@@ -99,8 +99,8 @@ public class Ring<T extends Member> implements Iterable<T> {
             return ring.subMap(startHash, false, stopHash, false).values();
         }
 
-        ConcurrentNavigableMap<Digest, T> headMap = ring.headMap(stopHash, false);
-        ConcurrentNavigableMap<Digest, T> tailMap = ring.tailMap(startHash, false);
+        NavigableMap<Digest, T> headMap = ring.headMap(stopHash, false);
+        NavigableMap<Digest, T> tailMap = ring.tailMap(startHash, false);
 
         Iterator<T> head = headMap.values().iterator();
         Iterator<T> tail = tailMap.values().iterator();
