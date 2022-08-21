@@ -34,10 +34,6 @@ public class RoutableService<Service> {
         services.put(context, service);
     }
 
-    public void unbind(Digest context) {
-        services.remove(context);
-    }
-
     public void evaluate(StreamObserver<?> responseObserver, Digest context, Consumer<Service> c) {
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
@@ -49,12 +45,20 @@ public class RoutableService<Service> {
                 log.trace("No service for context {}", context);
                 responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             } else {
-                c.accept(service);
+                try {
+                    c.accept(service);
+                } catch (Throwable t) {
+                    responseObserver.onError(t);
+                }
             }
         }
     }
 
     public void evaluate(StreamObserver<?> responseObserver, String id, Consumer<Service> c) {
         evaluate(responseObserver, digest(id), c);
+    }
+
+    public void unbind(Digest context) {
+        services.remove(context);
     }
 }

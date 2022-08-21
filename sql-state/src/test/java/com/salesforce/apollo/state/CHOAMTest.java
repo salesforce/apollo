@@ -202,7 +202,7 @@ public class CHOAMTest {
         + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList()));
 
         var txScheduler = Executors.newScheduledThreadPool(3);
-        var exec = Executors.newFixedThreadPool(3);
+        var exec = Executors.newFixedThreadPool(LARGE_TESTS ? 100 : 3);
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {

@@ -9,11 +9,10 @@ package com.salesforce.apollo.crypto;
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
-import org.bouncycastle.util.encoders.Hex;
-
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.Digeste.Builder;
 import com.salesforce.apollo.utils.BUZ;
+import com.salesforce.apollo.utils.Hex;
 import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
@@ -273,7 +272,7 @@ public class Digest implements Comparable<Digest> {
     }
 
     public String shortString() {
-        String hexString = Hex.toHexString(getBytes());
+        String hexString = Hex.hex(getBytes());
         return hexString.substring(0, Math.min(hexString.length(), 16));
     }
 
@@ -291,7 +290,7 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public String toString() {
-        String hexString = Hex.toHexString(getBytes());
+        String hexString = Hex.hex(getBytes());
         return "[" + hexString.substring(0, Math.min(hexString.length(), 12)) + ":" + algorithm.digestCode() + "]";
     }
 
