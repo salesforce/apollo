@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -308,13 +309,16 @@ public class StereotomyImpl implements Stereotomy {
         public CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
                                                                       List<CertExtension> extensions,
                                                                       SignatureAlgorithm algo) {
-
             return getSigner().thenApply(signer -> {
                 KeyPair keyPair = algo.generateKeyPair(entropy);
 
                 var signature = signer.sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
-                var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(getState().getIdentifier()),
+                var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s",
+                                                            Base64.getUrlEncoder()
+                                                                  .encodeToString((getState().getCoordinates()
+                                                                                             .toEventCoords()
+                                                                                             .toByteArray())),
                                                             qb64(signature)));
 
                 return new CertificateWithPrivateKey(Certificates.selfSign(false, dn, keyPair, validFrom,

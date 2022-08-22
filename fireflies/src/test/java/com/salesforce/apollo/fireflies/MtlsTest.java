@@ -239,7 +239,10 @@ public class MtlsTest {
 
             @Override
             public Digest getMemberId(X509Certificate key) {
-                return ((SelfAddressingIdentifier) Stereotomy.decode(key).get().identifier()).getDigest();
+                return ((SelfAddressingIdentifier) Stereotomy.decode(key)
+                                                             .get()
+                                                             .coordinates()
+                                                             .getIdentifier()).getDigest();
             }
         };
     }
