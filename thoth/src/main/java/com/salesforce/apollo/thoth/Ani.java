@@ -54,43 +54,64 @@ public class Ani {
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
-    public static Caffeine<EventCoordinates, Boolean> defaultValidatedBuilder() {
+    public static Caffeine<EventCoordinates, Boolean> defaultKerlValidatedBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
                        .removalListener((EventCoordinates coords, Boolean validated,
-                                         RemovalCause cause) -> log.trace("Validation {} was removed ({})", coords,
-                                                                          cause));
+                                         RemovalCause cause) -> log.info("KERL validation {} was removed ({})", coords,
+                                                                         cause));
+    }
+
+    public static Caffeine<EventCoordinates, Boolean> defaultRootValidatedBuilder() {
+        return Caffeine.newBuilder()
+                       .maximumSize(10_000)
+                       .expireAfterWrite(Duration.ofMinutes(10))
+                       .removalListener((EventCoordinates coords, Boolean validated,
+                                         RemovalCause cause) -> log.info("Root validation {} was removed ({})", coords,
+                                                                         cause));
     }
 
     private final KERL                                         kerl;
+    private final AsyncLoadingCache<EventCoordinates, Boolean> kerlValidated;
     private final SigningMember                                member;
-    private final SigningThreshold                             threshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean> validated;
-    private final Set<Identifier>                              validators;
+    private final Set<Identifier>                              roots;
+    private final SigningThreshold                             rootThreshold;
+    private final AsyncLoadingCache<EventCoordinates, Boolean> rootValidated;
 
-    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> validatedBuilder, List<Identifier> validators) {
-        validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
+    public Ani(SigningMember member, Duration validationTimeout, KERL kerl,
+               Caffeine<EventCoordinates, Boolean> rootValidatedBuilder, SigningThreshold rootThreshold,
+               List<Identifier> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
+               SigningThreshold kerlThreshold) {
+        rootValidated = rootValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
                                                                   Executor executor) throws Exception {
-                return performValidation(key, validationTimeout);
+                return performRootValidation(key, validationTimeout);
+            }
+        });
+        kerlValidated = kerlValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
+            @Override
+            public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
+                                                                  Executor executor) throws Exception {
+                return performKerlValidation(key, validationTimeout);
             }
         });
         this.member = member;
         this.kerl = kerl;
-        this.threshold = threshold;
-        this.validators = new HashSet<>(validators);
+        this.rootThreshold = rootThreshold;
+        this.roots = new HashSet<>(roots);
     }
 
-    public Ani(SigningMember member, SigningThreshold threshold, Duration validationTimeout, KERL kerl,
-               List<Identifier> validators) {
-        this(member, threshold, validationTimeout, kerl, defaultValidatedBuilder(), validators);
+    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, SigningThreshold rootThreshold,
+               List<Identifier> roots, SigningThreshold kerlThreshold) {
+        this(member, validationTimeout, kerl, defaultRootValidatedBuilder(), rootThreshold, roots,
+             defaultKerlValidatedBuilder(), kerlThreshold);
     }
 
     public void clearValidations() {
-        validated.synchronous().invalidateAll();
+        rootValidated.synchronous().invalidateAll();
+        kerlValidated.synchronous().invalidateAll();
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -134,7 +155,7 @@ public class Ani {
             @Override
             public boolean validate(EstablishmentEvent event) {
                 try {
-                    return Ani.this.validate(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                    return Ani.this.validateKerl(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return false;
@@ -151,7 +172,7 @@ public class Ani {
             public boolean validate(EventCoordinates coordinates) {
                 try {
                     return kerl.getKeyEvent(coordinates)
-                               .thenCompose(ke -> Ani.this.validate(ke))
+                               .thenCompose(ke -> Ani.this.validateKerl(ke))
                                .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -206,8 +227,12 @@ public class Ani {
         };
     }
 
-    public CompletableFuture<Boolean> validate(KeyEvent event) {
-        return validated.get(event.getCoordinates());
+    public CompletableFuture<Boolean> validateKerl(KeyEvent event) {
+        return kerlValidated.get(event.getCoordinates());
+    }
+
+    public CompletableFuture<Boolean> validateRoot(KeyEvent event) {
+        return rootValidated.get(event.getCoordinates());
     }
 
     KERL getKerl() {
@@ -220,11 +245,75 @@ public class Ani {
         return fs;
     }
 
-    private CompletableFuture<Boolean> performValidation(EventCoordinates coord, Duration timeout) {
+    private CompletableFuture<Boolean> kerlValidate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
+                                                    KeyEvent event) {
+        // TODO Multisig
+        var state = ksAttach.state();
+        boolean witnessed = false;
+        if (state.getWitnesses().isEmpty()) {
+            witnessed = true; // no witnesses for event
+        } else {
+            var witnesses = new PublicKey[state.getWitnesses().size()];
+            for (var i = 0; i < state.getWitnesses().size(); i++) {
+                witnesses[i] = state.getWitnesses().get(i).getPublicKey();
+            }
+            var algo = SignatureAlgorithm.lookup(witnesses[0]);
+            byte[][] signatures = new byte[state.getWitnesses().size()][];
+            if (!ksAttach.endorsements().isEmpty()) {
+                for (var entry : ksAttach.endorsements().entrySet()) {
+                    signatures[entry.getKey()] = entry.getValue().getBytes()[0];
+                }
+            }
+            witnessed = new JohnHancock(algo, signatures).verify(state.getSigningThreshold(), witnesses,
+                                                                 BbBackedInputStream.aggregate(event.toKeyEvent_()
+                                                                                                    .toByteString()));
+        }
+
+        if (!witnessed) {
+            return complete(witnessed);
+        }
+
+        record resolved(KeyState state, JohnHancock signature) {}
+        var mapped = new CopyOnWriteArrayList<resolved>();
+        var last = ksAttach.validations().entrySet().stream().map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
+            mapped.add(new resolved(ks, e.getValue()));
+            return ks;
+        })).reduce((a, b) -> a.thenCompose(ks -> b));
+
+        if (last.isEmpty()) {
+            log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
+            return complete(SigningThreshold.thresholdMet(rootThreshold, new int[] {}));
+        }
+
+        return last.get().thenApply(o -> {
+            log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
+                      ksAttach.validations().size(), mapped.size(), member.getId());
+            var validations = new PublicKey[mapped.size()];
+            byte[][] signatures = new byte[mapped.size()][];
+
+            int index = 0;
+            for (var r : mapped) {
+                validations[index] = r.state.getKeys().get(0);
+                signatures[index++] = r.signature.getBytes()[0];
+            }
+
+            SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
+            var validated = new JohnHancock(algo,
+                                            signatures).verify(rootThreshold, validations,
+                                                               BbBackedInputStream.aggregate(event.toKeyEvent_()
+                                                                                                  .toByteString()));
+            return validated;
+        }).exceptionally(t -> {
+            log.error("Error in validating {} on: {}", ksAttach.state().getCoordinates(), member.getId(), t);
+            return false;
+        });
+    }
+
+    private CompletableFuture<Boolean> performKerlValidation(EventCoordinates coord, Duration timeout) {
         return kerl.getKeyEvent(coord)
                    .thenCombine(kerl.getKeyStateWithEndorsementsAndValidations(coord), (event, ksa) -> {
                        try {
-                           return validate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                           return kerlValidate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                        } catch (InterruptedException | TimeoutException e) {
                            throw new IllegalStateException(e);
                        } catch (ExecutionException e) {
@@ -233,8 +322,21 @@ public class Ani {
                    });
     }
 
-    private CompletableFuture<Boolean> validate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
-                                                KeyEvent event) {
+    private CompletableFuture<Boolean> performRootValidation(EventCoordinates coord, Duration timeout) {
+        return kerl.getKeyEvent(coord)
+                   .thenCombine(kerl.getKeyStateWithEndorsementsAndValidations(coord), (event, ksa) -> {
+                       try {
+                           return rootValidate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                       } catch (InterruptedException | TimeoutException e) {
+                           throw new IllegalStateException(e);
+                       } catch (ExecutionException e) {
+                           throw new IllegalStateException(e.getCause());
+                       }
+                   });
+    }
+
+    private CompletableFuture<Boolean> rootValidate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
+                                                    KeyEvent event) {
         // TODO Multisig
         var state = ksAttach.state();
         boolean witnessed = false;
@@ -266,7 +368,7 @@ public class Ani {
         var last = ksAttach.validations()
                            .entrySet()
                            .stream()
-                           .filter(e -> validators.contains(e.getKey()))
+                           .filter(e -> roots.contains(e.getKey()))
                            .map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
                                mapped.add(new resolved(ks, e.getValue()));
                                return ks;
@@ -275,7 +377,7 @@ public class Ani {
 
         if (last.isEmpty()) {
             log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
-            return complete(SigningThreshold.thresholdMet(threshold, new int[] {}));
+            return complete(SigningThreshold.thresholdMet(rootThreshold, new int[] {}));
         }
 
         return last.get().thenApply(o -> {
@@ -292,7 +394,7 @@ public class Ani {
 
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
             var validated = new JohnHancock(algo,
-                                            signatures).verify(threshold, validations,
+                                            signatures).verify(rootThreshold, validations,
                                                                BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                   .toByteString()));
             return validated;
