@@ -15,5 +15,13 @@ jobs:
         java-version: '17'
         components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Restore Maven cache
+      uses: skjolber/maven-cache-github-action@v1
+      with:
+        step: restore
     - name: Build with Maven
-      run: mvn -batch-mode clean package -Ppre  --file pom.xml
+      run: mvn -batch-mode  --update-snapshots clean package -Ppre --file pom.xml
+    - name: Save Maven cache
+      uses: skjolber/maven-cache-github-action@v1
+      with:
+        step: save
