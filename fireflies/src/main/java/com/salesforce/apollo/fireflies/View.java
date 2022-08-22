@@ -62,6 +62,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
@@ -896,8 +897,8 @@ public class View {
                                           Context.minimalQuorum(redirect.getRings(), context.getBias()), joined),
                                     () -> {
                                         if (retries.get() < params.joinRetries()) {
-                                            log.info("Failed to join view: {} retry: {} out of: {} on: {}", view,
-                                                     retries.incrementAndGet(), params.joinRetries(), node.getId());
+                                            log.debug("Failed to join view: {} retry: {} out of: {} on: {}", view,
+                                                      retries.incrementAndGet(), params.joinRetries(), node.getId());
                                             biffs.clear();
                                             views.clear();
                                             cards.clear();
@@ -1557,7 +1558,7 @@ public class View {
     }
 
     private final CommonCommunications<Approach, Service>     approaches;
-    private final Supplier<ByteString>                        attestation;
+    private final Supplier<Any>                               attestation;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final DigestAlgorithm                             digestAlgo;
@@ -1575,7 +1576,7 @@ public class View {
     private final AtomicBoolean                               started             = new AtomicBoolean();
     private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
-    private final Predicate<ByteString>                       validator;
+    private final Predicate<Any>                              validator;
     private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
     private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
     private final ViewManagement                              viewManagement;
@@ -1584,21 +1585,20 @@ public class View {
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
         this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
-             () -> ByteString.EMPTY, attestation -> true);
+             () -> Any.getDefaultInstance(), attestation -> true);
     }
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics, Executor exec, Supplier<ByteString> attestation,
-                Predicate<ByteString> validator) {
+                FireflyMetrics metrics, Executor exec, Supplier<Any> attestation, Predicate<Any> validator) {
         this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
              attestation, validator);
     }
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, Router gateway,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec, Supplier<ByteString> attestation,
-                Predicate<ByteString> validator) {
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec, Supplier<Any> attestation,
+                Predicate<Any> validator) {
         this.attestation = attestation;
         this.metrics = metrics;
         this.validation = validation;

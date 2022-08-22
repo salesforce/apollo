@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.ByteString;
+import com.google.protobuf.Any;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -308,7 +308,8 @@ public class ChurnTest {
             gateway.start();
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, exec, () -> ByteString.EMPTY, attestation -> true);
+                            DigestAlgorithm.DEFAULT, metrics, exec, () -> Any.getDefaultInstance(),
+                            attestation -> true);
         }).collect(Collectors.toList());
     }
 }

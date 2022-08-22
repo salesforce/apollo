@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>gorgoneion</artifactId>
-    <name>Apollo Gorgoneion</name>
-    <description>Apollo software based two-person rule type encryption and decryption service</description>
+    <name>Gorgoneion</name>
+    <description>Apollo identity bootstrapping and secrets service</description>
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>

@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.ByteString;
+import com.google.protobuf.Any;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
@@ -161,7 +161,8 @@ public class MtlsTest {
                                               clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics, exec, () -> ByteString.EMPTY, attestation -> true);
+                            DigestAlgorithm.DEFAULT, metrics, exec, () -> Any.getDefaultInstance(),
+                            attestation -> true);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();
