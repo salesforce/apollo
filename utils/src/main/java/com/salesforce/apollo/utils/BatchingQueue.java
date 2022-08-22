@@ -144,7 +144,6 @@ public class BatchingQueue<T> {
                 taken++;
                 log.trace("Taking events: {} new size: {} added: {} taken: {}", batch.size(), size, added, taken);
                 return batch;
-
             }
             taken++;
         } finally {

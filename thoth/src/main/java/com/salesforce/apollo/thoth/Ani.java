@@ -38,6 +38,7 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
@@ -112,6 +113,119 @@ public class Ani {
     public void clearValidations() {
         rootValidated.synchronous().invalidateAll();
         kerlValidated.synchronous().invalidateAll();
+    }
+
+    public EventValidation eventRootValidation(Duration timeout) {
+        return new EventValidation() {
+            @Override
+            public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                                     InputStream message) {
+                try {
+                    return kerl.getKeyState(coordinates)
+                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                               .thenApply(v -> v.filtered(threshold, signature, message))
+                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new Filtered(false, null);
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return new Filtered(false, null);
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return new Filtered(false, null);
+                }
+            }
+
+            @Override
+            public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+                try {
+                    return Optional.of(kerl.getKeyState(coordinates).get(timeout.toNanos(), TimeUnit.NANOSECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                } catch (ExecutionException e) {
+                    log.error("Unable to retrieve keystate: {} on: {}", coordinates, member, e.getCause());
+                    return Optional.empty();
+                } catch (TimeoutException e) {
+                    log.error("Timeout retrieving keystate: {} on: {} ", coordinates, member);
+                    return Optional.empty();
+                }
+            }
+
+            @Override
+            public boolean validate(EstablishmentEvent event) {
+                try {
+                    return Ani.this.validateRoot(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
+                    return false;
+                }
+            }
+
+            @Override
+            public boolean validate(EventCoordinates coordinates) {
+                try {
+                    return kerl.getKeyEvent(coordinates)
+                               .thenCompose(ke -> Ani.this.validateRoot(ke))
+                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
+            }
+
+            @Override
+            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
+                try {
+                    return kerl.getKeyState(coordinates)
+                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                               .thenApply(v -> v.verify(signature, message))
+                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
+            }
+
+            @Override
+            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                                  InputStream message) {
+                try {
+                    return kerl.getKeyState(coordinates)
+                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
+                               .thenApply(v -> v.verify(threshold, signature, message))
+                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return false;
+                }
+            }
+        };
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -233,6 +347,49 @@ public class Ani {
 
     public CompletableFuture<Boolean> validateRoot(KeyEvent event) {
         return rootValidated.get(event.getCoordinates());
+    }
+
+    public Verifiers verifiers(Duration timeout) {
+        return new Verifiers() {
+
+            @Override
+            public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+                try {
+                    return Optional.ofNullable(kerl.getKeyEvent(coordinates)
+                                                   .thenApply(ke -> (EstablishmentEvent) ke)
+                                                   .thenApply(ke -> new Verifier.DefaultVerifier(ke.getKeys()))
+                                                   .get(timeout.toNanos(), TimeUnit.NANOSECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    return Optional.empty();
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    return Optional.empty();
+                }
+            }
+
+            @Override
+            public Optional<Verifier> verifierFor(Identifier identifier) {
+                try {
+                    return Optional.ofNullable(kerl.getKeyState(identifier)
+                                                   .thenApply(ke -> (EstablishmentEvent) ke)
+                                                   .thenApply(ke -> new Verifier.DefaultVerifier(ke.getKeys()))
+                                                   .get(timeout.toNanos(), TimeUnit.NANOSECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: {} on: {}", identifier, member, e.getCause());
+                    return Optional.empty();
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: {} on: {} ", identifier, member);
+                    return Optional.empty();
+                }
+            }
+        };
     }
 
     KERL getKerl() {
