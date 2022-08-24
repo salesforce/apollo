@@ -45,7 +45,6 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -56,13 +55,11 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Objects;
-import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
@@ -595,20 +592,22 @@ public class View {
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("No successor of: "
                     + from));
                 }
-                if (!successor.equals(node)) {
-                    return redirectTo(member, ring, successor);
-                }
+                Gossip g;
                 final var digests = request.getGossip();
-                final var g = Gossip.newBuilder()
-                                    .setRedirect(false)
-                                    .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
-                                    .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()),
-                                                                       params.fpr()))
-                                    .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()),
-                                                                         params.fpr()))
-                                    .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff()),
-                                                                          params.fpr()))
-                                    .build();
+                if (!successor.equals(node)) {
+                    g = redirectTo(member, ring, successor, digests);
+                } else {
+                    g = Gossip.newBuilder()
+                              .setRedirect(false)
+                              .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
+                              .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()),
+                                                                 params.fpr()))
+                              .setObservations(processObservations(BloomFilter.from(digests.getObservationBff()),
+                                                                   params.fpr()))
+                              .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff()),
+                                                                    params.fpr()))
+                              .build();
+                }
                 if (g.getNotes().getUpdatesCount() + g.getAccusations().getUpdatesCount()
                 + g.getObservations().getUpdatesCount() + g.getJoins().getUpdatesCount() != 0) {
                     log.trace("Gossip for: {} notes: {} accusations: {} joins: {} observations: {} on: {}", from,
@@ -829,11 +828,7 @@ public class View {
                            .setNote(node.getNote().getWrapped())
                            .setKerl(node.kerl())
                            .build();
-            var credentials = Credentials.newBuilder()
-                                         .setContext(context.getId().toDigeste())
-                                         .setJoin(join)
-                                         .setAttestation(attestation.get())
-                                         .build();
+            var credentials = Credentials.newBuilder().setContext(context.getId().toDigeste()).setJoin(join).build();
             return credentials;
         }
 
@@ -1074,20 +1069,23 @@ public class View {
                 metrics.notes().mark();
             }
 
-            var accused = m.isAccused();
-            stopRebuttalTimer(m);
-            m.setNote(note);
-            recover(m);
-            if (accused) {
-                checkInvalidations(m);
-            }
-            if (!onJoined.isDone() && context.totalCount() == context.cardinality()) {
-                assert context.totalCount() == context.cardinality();
-                join();
-            } else {
-                assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
-                + context.cardinality();
-            }
+            var member = m;
+            stable(() -> {
+                var accused = member.isAccused();
+                stopRebuttalTimer(member);
+                member.setNote(note);
+                recover(member);
+                if (accused) {
+                    checkInvalidations(member);
+                }
+                if (!onJoined.isDone() && context.totalCount() == context.cardinality()) {
+                    assert context.totalCount() == context.cardinality();
+                    join();
+                } else {
+                    assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
+                    + context.cardinality();
+                }
+            });
             return true;
         }
 
@@ -1108,6 +1106,9 @@ public class View {
                      context.cardinality(), context.activeCount(), context.getId(), node.getId());
             onJoined.complete(null);
             joined.set(true);
+            if (metrics != null) {
+                metrics.viewChanges().mark();
+            }
         }
 
         private void clear() {
@@ -1269,6 +1270,9 @@ public class View {
                     log.error("Exception in pending join on: {}", node.getId(), t);
                 }
             });
+            if (metrics != null) {
+                metrics.viewChanges().mark();
+            }
 
             log.info("Installed view: {} from: {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
                      currentView(), previousView, crown.get(), context.getId(), context.cardinality(),
@@ -1301,6 +1305,9 @@ public class View {
 
             scheduleViewChange();
 
+            if (metrics != null) {
+                metrics.viewChanges().mark();
+            }
             log.info("Joined view: {} cardinality: {} count: {} on: {}", currentView(), context.cardinality(),
                      context.totalCount(), node.getId());
         }
@@ -1316,11 +1323,6 @@ public class View {
                 return;
             }
             stable(() -> {
-                if (!validator.test(credentials.getAttestation())) {
-                    log.trace("Invalid join credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
-                              currentView(), context.getId(), context.cardinality(), node.getId());
-                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
-                }
                 var note = new NoteWrapper(join.getNote(), digestAlgo);
                 if (!from.equals(note.getId())) {
                     responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
@@ -1449,6 +1451,16 @@ public class View {
          * @param digests
          */
         private JoinGossip processJoins(BloomFilter<Digest> bff, double p) {
+            JoinGossip.Builder builder = processJoins(bff);
+            builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
+            JoinGossip gossip = builder.build();
+            if (builder.getUpdatesCount() != 0) {
+                log.trace("process joins produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
+            }
+            return gossip;
+        }
+
+        private JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {
             JoinGossip.Builder builder = JoinGossip.newBuilder();
 
             // Add all updates that this view has that aren't reflected in the inbound bff
@@ -1458,12 +1470,7 @@ public class View {
                  .map(m -> m.getValue())
                  .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                  .forEach(n -> builder.addUpdates(n.getWrapped()));
-            builder.setBff(getJoinsBff(Entropy.nextSecureLong(), p).toBff());
-            JoinGossip gossip = builder.build();
-            if (builder.getUpdatesCount() != 0) {
-                log.trace("process joins produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
-            }
-            return gossip;
+            return builder;
         }
 
         private void resetBootstrapView() {
@@ -1512,11 +1519,6 @@ public class View {
                 return Redirect.getDefaultInstance();
             }
             return stable(() -> {
-                if (!validator.test(credentials.getAttestation())) {
-                    log.trace("Invalid seed credentials from: {} view: {}  context: {} cardinality: {} on: {}", from,
-                              currentView(), context.getId(), context.cardinality(), node.getId());
-                    throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid authentication"));
-                }
                 var newMember = new Participant(note.getId());
                 final var successors = new TreeSet<Participant>(context.successors(newMember,
                                                                                    m -> context.isActive(m)));
@@ -1558,7 +1560,6 @@ public class View {
     }
 
     private final CommonCommunications<Approach, Service>     approaches;
-    private final Supplier<Any>                               attestation;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final DigestAlgorithm                             digestAlgo;
@@ -1576,7 +1577,6 @@ public class View {
     private final AtomicBoolean                               started             = new AtomicBoolean();
     private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
-    private final Predicate<Any>                              validator;
     private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
     private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
     private final ViewManagement                              viewManagement;
@@ -1584,28 +1584,17 @@ public class View {
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
-        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
-             () -> Any.getDefaultInstance(), attestation -> true);
-    }
-
-    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
-                EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics, Executor exec, Supplier<Any> attestation, Predicate<Any> validator) {
-        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec,
-             attestation, validator);
+        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec);
     }
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, Router gateway,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec, Supplier<Any> attestation,
-                Predicate<Any> validator) {
-        this.attestation = attestation;
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec) {
         this.metrics = metrics;
         this.validation = validation;
         this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
-        this.validator = validator;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         viewManagement = new ViewManagement();
         viewManagement.resetBootstrapView();
@@ -2308,6 +2297,20 @@ public class View {
         });
     }
 
+    private AccusationGossip.Builder processAccusations(BloomFilter<Digest> bff) {
+        AccusationGossip.Builder builder = AccusationGossip.newBuilder();
+        // Add all updates that this view has that aren't reflected in the inbound
+        // bff
+        var current = currentView();
+        context.allMembers()
+               .flatMap(m -> m.getAccusations())
+               .filter(m -> current.equals(m.currentView()))
+               .filter(a -> !bff.contains(a.getHash()))
+               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               .forEach(a -> builder.addUpdates(a.getWrapped()));
+        return builder;
+    }
+
     /**
      * Process the inbound accusations from the gossip. Reconcile the differences
      * between the view's state and the digests of the gossip. Update the reply with
@@ -2321,16 +2324,7 @@ public class View {
      * @return
      */
     private AccusationGossip processAccusations(BloomFilter<Digest> bff, double p) {
-        AccusationGossip.Builder builder = AccusationGossip.newBuilder();
-        // Add all updates that this view has that aren't reflected in the inbound
-        // bff
-        var current = currentView();
-        context.allMembers()
-               .flatMap(m -> m.getAccusations())
-               .filter(m -> current.equals(m.currentView()))
-               .filter(a -> !bff.contains(a.getHash()))
-               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-               .forEach(a -> builder.addUpdates(a.getWrapped()));
+        AccusationGossip.Builder builder = processAccusations(bff);
         builder.setBff(getAccusationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process accusations produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
@@ -2338,17 +2332,7 @@ public class View {
         return builder.build();
     }
 
-    /**
-     * Process the inbound notes from the gossip. Reconcile the differences between
-     * the view's state and the digests of the gossip. Update the reply with the
-     * list of digests the view requires, as well as proposed updates based on the
-     * inbound digests that the view has more recent information
-     *
-     * @param from
-     * @param p
-     * @param digests
-     */
-    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
+    private NoteGossip.Builder processNotes(BloomFilter<Digest> bff) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
@@ -2362,11 +2346,41 @@ public class View {
                .map(m -> m.getNote())
                .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(n -> builder.addUpdates(n.getWrapped()));
+        return builder;
+    }
+
+    /**
+     * Process the inbound notes from the gossip. Reconcile the differences between
+     * the view's state and the digests of the gossip. Update the reply with the
+     * list of digests the view requires, as well as proposed updates based on the
+     * inbound digests that the view has more recent information
+     *
+     * @param from
+     * @param p
+     * @param digests
+     */
+    private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
+        NoteGossip.Builder builder = processNotes(bff);
         builder.setBff(getNotesBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process notes produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
         }
         return builder.build();
+    }
+
+    private ViewChangeGossip.Builder processObservations(BloomFilter<Digest> bff) {
+        ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
+
+        // Add all updates that this view has that aren't reflected in the inbound bff
+        final var current = currentView();
+        observations.entrySet()
+                    .stream()
+                    .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
+                    .filter(m -> !bff.contains(m.getKey()))
+                    .map(m -> m.getValue())
+                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+                    .forEach(n -> builder.addUpdates(n));
+        return builder;
     }
 
     /**
@@ -2380,17 +2394,7 @@ public class View {
      * @param digests
      */
     private ViewChangeGossip processObservations(BloomFilter<Digest> bff, double p) {
-        ViewChangeGossip.Builder builder = ViewChangeGossip.newBuilder();
-
-        // Add all updates that this view has that aren't reflected in the inbound bff
-        final var current = currentView();
-        observations.entrySet()
-                    .stream()
-                    .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
-                    .filter(m -> !bff.contains(m.getKey()))
-                    .map(m -> m.getValue())
-                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-                    .forEach(n -> builder.addUpdates(n));
+        ViewChangeGossip.Builder builder = processObservations(bff);
         builder.setBff(getObservationsBff(Entropy.nextSecureLong(), p).toBff());
         if (builder.getUpdatesCount() != 0) {
             log.trace("process view change produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
@@ -2502,10 +2506,11 @@ public class View {
      * @param member
      * @param ring
      * @param successor
+     * @param digests
      * @return the Gossip containing the successor's Identity and Note from this
      *         view
      */
-    private Gossip redirectTo(Participant member, int ring, Participant successor) {
+    private Gossip redirectTo(Participant member, int ring, Participant successor, Digests digests) {
         assert member != null;
         assert successor != null;
         if (successor.getNote() == null) {
@@ -2520,12 +2525,12 @@ public class View {
                       node.getId());
             return Gossip.getDefaultInstance();
         }
-
-        log.debug("Redirecting from: {} to: {} on ring: {} on: {}", member, successor, ring, node.getId());
         return Gossip.newBuilder()
-                     .setRedirect(true)
-                     .setNotes(NoteGossip.newBuilder().addUpdates(identity.getWrapped()).build())
-                     .setAccusations(AccusationGossip.newBuilder().addAllUpdates(member.getEncodedAccusations()))
+                     .setRedirect(false)
+                     .setNotes(processNotes(BloomFilter.from(digests.getNoteBff())))
+                     .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff())))
+                     .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
+                     .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
                      .build();
     }
 

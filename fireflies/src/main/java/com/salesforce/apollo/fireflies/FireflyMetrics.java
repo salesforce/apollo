@@ -70,4 +70,6 @@ public interface FireflyMetrics extends EdpointMetrics {
     Timer seedDuration();
 
     Meter shunnedGossip();
+
+    Meter viewChanges();
 }

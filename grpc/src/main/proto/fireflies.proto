@@ -137,8 +137,7 @@ message Gateway {
 
 message Credentials {
     utils.Digeste context = 1;
-    Join join = 2; 
-    google.protobuf.Any attestation = 3;
+    Join join = 2;
 }
 
 message Join {

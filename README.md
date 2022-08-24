@@ -109,7 +109,7 @@ The module to exclude is:
 
 Again, I stress that you must **NOT** include this in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.
 
-This modules must be built, so please run once from the top level of the repository
+This module must be built, however, so please run the following once from the top level of the repository
 
     mvn clean install -Ppre -DskipTests
 
@@ -117,19 +117,19 @@ from the command line before attempting to load the remaining Apollo modules int
 
 ### Eclipse M2E issues with ${os.detected.classifier}
 
-This is a known weirdness with Eclipse M2E with the [os-maven-plugin build extension](https://github.com/trustin/os-maven-plugin).  I've been fine with this, but ran into another project that Eclipse just kept refusing to resolve.  I solved this by downloading the [supplied maven plugin](https://repo1.maven.org/maven2/kr/motd/maven/os-maven-plugin/1.7.0/os-maven-plugin-1.7.0.jar) and adding this to the `<ECLIPSE_HOME>/dropins` directory.  This works because the plugin is also an Eclipse plugin, which is nice.
+This is a known weirdness with Eclipse M2E with the [os-maven-plugin build extension](https://github.com/trustin/os-maven-plugin).  I've been fine with this, but ran into another project that Eclipse just kept refusing to resolve.  I solved this by downloading the [supplied maven plugin](https://repo1.maven.org/maven2/kr/motd/maven/os-maven-plugin/1.7.0/os-maven-plugin-1.7.0.jar) and adding this to the **<ECLIPSE_HOME>/dropins** directory.  This works because the plugin is also an Eclipse plugin, which is nice.
 
 ### Your IDE and Maven code generation
 
-Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
+Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), the generation phase can occasionally cause interesting issues with your IDE whne you import Apollo.  I work with Eclipse, and things are relatively fine with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that invalidates the generated code and that may require an additional *generate-sources* pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
 
 I have no idea about IntellJ or Visual Code, so you're on your own there.
 
-What I  _strongly_  recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
+What I  _strongly_  recommend is first building from the command line with **-DskipTests** - i.e **mvn clean install -DskipTests**.  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
 
 After you do this, you shouldn't have any issue *if* your IDE Maven integration knows about and takes care of using the build-helper plugin to manage compilation directories for the module in the IDE.  However....
 
-Myself, I find that I have to first select the top level Apollo.app module, and then Menu -> Run As -> Maven generate sources (or the equivalent in your IDE).  This *should* generate all the sources required for every submodule, so...
+Myself, I find that I have to first select the top level Apollo.app module, and then **Menu -> Run As -> Maven generate sources** (or the equivalent in your IDE).  This *should* generate all the sources required for every submodule, so...
 
 Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience.  I know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
 

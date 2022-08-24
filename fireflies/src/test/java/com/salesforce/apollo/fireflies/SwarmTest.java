@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.Any;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -62,10 +61,10 @@ public class SwarmTest {
     private static final int                                                   CARDINALITY;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static boolean                                                     largeTests = Boolean.getBoolean("large_tests");
-    private static final double                                                P_BYZ      = 0.3;
+    private static final double                                                P_BYZ      = 0.1;
 
     static {
-        CARDINALITY = largeTests ? 1000 : 100;
+        CARDINALITY = largeTests ? 3000 : 100;
     }
 
     @BeforeAll
@@ -120,12 +119,12 @@ public class SwarmTest {
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(largeTests ? 50 : 5);
+        final var gossipDuration = Duration.ofMillis(largeTests ? 70 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -134,7 +133,7 @@ public class SwarmTest {
                                            scheduler));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
@@ -146,7 +145,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-        success = countdown.get().await(largeTests ? 1200 : 60, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -157,7 +156,7 @@ public class SwarmTest {
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(1200_000, 1_000, () -> {
+        success = Utils.waitForCondition(2400_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
@@ -208,7 +207,7 @@ public class SwarmTest {
 
     private void initialize() {
         var parameters = Parameters.newBuilder()
-                                   .setMaxPending(largeTests ? 3 : 10)
+                                   .setMaxPending(largeTests ? 10 : 10)
                                    .setMaximumTxfr(largeTests ? 100 : 20)
                                    .build();
         registry = new MetricRegistry();
@@ -224,7 +223,7 @@ public class SwarmTest {
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
-        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
+        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
         final var gatewayExec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
@@ -250,8 +249,7 @@ public class SwarmTest {
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, executor, () -> Any.getDefaultInstance(),
-                            attestation -> true);
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toList());
     }
 }
