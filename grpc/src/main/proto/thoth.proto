@@ -125,7 +125,7 @@ message AdmissionsGossip {
 
 message AdmissionsUpdate {
     utils.Digeste context = 1;
-    repeated SignedAttestation update = 2;
+    repeated SignedNonce update = 2;
     utils.Biff bff = 3;
 }
 
