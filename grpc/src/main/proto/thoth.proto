@@ -38,6 +38,11 @@ service Admissions {
     rpc register(SignedAttestation) returns (Admittance) {}
 }
 
+service AdmissionsReplication {
+    rpc gossip (AdmissionsGossip) returns (AdmissionsUpdate) {}
+    rpc update (AdmissionsUpdate) returns (google.protobuf.Empty) {}
+}
+
 service Delegated {
     rpc reconcile ( Intervals ) returns (Update) {}
     rpc update (Updating) returns (google.protobuf.Empty) {}
@@ -110,4 +115,15 @@ message SignedAttestation {
 message Admittance {
     fireflies.Seed_ seed = 1;
     repeated stereotomy.Attachment validations = 2;
+}
+
+message AdmissionsGossip {
+    utils.Digeste context = 1;
+    utils.Biff bff = 2;
+}
+
+message AdmissionsUpdate {
+    utils.Digeste context = 1;
+    repeated SignedAttestation update = 2;
+    utils.Biff bff = 3;
 }

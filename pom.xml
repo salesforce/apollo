@@ -28,7 +28,6 @@
         <module>grpc</module>
         <module>pal-d</module>
         <module>pal</module>
-        <module>gorgoneion</module>
     </modules>
 
     <properties>

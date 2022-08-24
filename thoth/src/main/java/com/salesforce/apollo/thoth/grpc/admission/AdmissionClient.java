@@ -23,7 +23,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.thoth.grpc.reconciliation.Reconciliation;
 
 /**
  * @author hal.hildebrand
@@ -36,7 +35,7 @@ public class AdmissionClient implements AdmissionService {
         };
     }
 
-    public static AdmissionService getLocalLoopback(Reconciliation service, SigningMember member) {
+    public static AdmissionService getLocalLoopback(Admission service, SigningMember member) {
         return new AdmissionService() {
 
             @Override
