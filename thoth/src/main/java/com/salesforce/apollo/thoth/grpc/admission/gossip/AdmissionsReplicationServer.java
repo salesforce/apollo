@@ -16,6 +16,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc.AdmissionsReplicationImplBase;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
+import com.salesfoce.apollo.thoth.proto.Expunge;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -31,7 +32,8 @@ import io.grpc.stub.StreamObserver;
 public class AdmissionsReplicationServer extends AdmissionsReplicationImplBase {
     private final static Logger log = LoggerFactory.getLogger(AdmissionsReplicationServer.class);
 
-    private final Executor                               exec;
+    private final Executor exec;
+
     private final ClientIdentity                         identity;
     @SuppressWarnings("unused")
     private final StereotomyMetrics                      metrics;
@@ -43,6 +45,21 @@ public class AdmissionsReplicationServer extends AdmissionsReplicationImplBase {
         this.router = router;
         this.exec = exec;
         this.identity = identity;
+    }
+
+    @Override
+    public void expunge(Expunge request, StreamObserver<Empty> responseObserver) {
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            s.expunge(request, from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+        }), log));
     }
 
     @Override

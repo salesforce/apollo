@@ -9,6 +9,7 @@ package com.salesforce.apollo.thoth.grpc.admission.gossip;
 
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
+import com.salesfoce.apollo.thoth.proto.Expunge;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -16,6 +17,8 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public interface AdmissionsReplication {
+    void expunge(Expunge expunge, Digest from);
+
     AdmissionsUpdate gossip(AdmissionsGossip gossip, Digest from);
 
     void update(AdmissionsUpdate update, Digest from);

@@ -41,6 +41,7 @@ service Admissions {
 service AdmissionsReplication {
     rpc gossip (AdmissionsGossip) returns (AdmissionsUpdate) {}
     rpc update (AdmissionsUpdate) returns (google.protobuf.Empty) {}
+    rpc expunge (Expunge) returns (google.protobuf.Empty) {}
 }
 
 service Delegated {
@@ -126,4 +127,9 @@ message AdmissionsUpdate {
     utils.Digeste context = 1;
     repeated SignedAttestation update = 2;
     utils.Biff bff = 3;
+}
+
+message Expunge {
+    utils.Digeste context = 1;
+    SignedNonce nonce = 2;
 }

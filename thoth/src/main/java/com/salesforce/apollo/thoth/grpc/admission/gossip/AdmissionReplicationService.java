@@ -11,6 +11,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
+import com.salesfoce.apollo.thoth.proto.Expunge;
 import com.salesforce.apollo.comm.Link;
 
 /**
@@ -18,6 +19,8 @@ import com.salesforce.apollo.comm.Link;
  *
  */
 public interface AdmissionReplicationService extends Link {
+
+    ListenableFuture<Empty> expunge(Expunge expunge);
 
     ListenableFuture<AdmissionsUpdate> gossip(AdmissionsGossip gossip);
 
