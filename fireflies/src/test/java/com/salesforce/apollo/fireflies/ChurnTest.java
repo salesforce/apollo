@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -45,6 +46,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -284,17 +286,19 @@ public class ChurnTest {
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix,
+            var comms = new LocalRouter(prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(CARDINALITY)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         exec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix,
+            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
                                           ServerConnectionCache.newBuilder()
                                                                .setTarget(CARDINALITY)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry

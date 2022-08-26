@@ -86,7 +86,7 @@ message Interval {
 
 message Registration {
     utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
+    stereotomy.KeyState_ keyState = 2;
 }
 
 message Nonce {

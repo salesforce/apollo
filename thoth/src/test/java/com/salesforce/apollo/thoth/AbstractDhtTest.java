@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -124,7 +125,8 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        LocalRouter router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
                                              ForkJoinPool.commonPool(), null);
         router.setMember(member);
         routers.put(member, router);

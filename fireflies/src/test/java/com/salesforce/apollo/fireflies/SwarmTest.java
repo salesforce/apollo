@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -43,6 +44,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -58,7 +60,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static final int                                                   BIAS       = 2;
+    private static final int                                                   BIAS       = 3;
     private static final int                                                   CARDINALITY;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static boolean                                                     largeTests = Boolean.getBoolean("large_tests");
@@ -226,17 +228,19 @@ public class SwarmTest {
         final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
         final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
         final var gatewayExec = ForkJoinPool.commonPool();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix,
+            var comms = new LocalRouter(prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(200)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         commExec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix,
+            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
                                           ServerConnectionCache.newBuilder()
                                                                .setTarget(200)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry

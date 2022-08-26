@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -26,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
 import com.salesfoce.apollo.thoth.proto.Admittance;
@@ -46,7 +48,10 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
@@ -107,7 +112,7 @@ public class Gorgoneion {
     private final Clock                                                                    clock;
     private final Context<Member>                                                          context;
     private final DigestAlgorithm                                                          digestAlgo;
-    @SuppressWarnings("unused")
+    private com.google.protobuf.Duration                                                   duration;
     private final SecureRandom                                                             entropy;
     private final Executor                                                                 exec;
     private final ConcurrentSkipListSet<Digest>                                            expunged    = new ConcurrentSkipListSet<>();
@@ -123,12 +128,14 @@ public class Gorgoneion {
     private final RoundScheduler                                                           roundTimers;
     private final AtomicBoolean                                                            started     = new AtomicBoolean();
 
+    private final ControlledIdentifier<SelfAddressingIdentifier> validating;
     @SuppressWarnings("unused")
-    private final Predicate<SignedAttestation> verifier;
+    private final Predicate<SignedAttestation>                   verifier;
 
     public Gorgoneion(ControlledIdentifierMember member, Context<Member> context, Router admissionsRouter, KERL kerl,
                       Router replicationRouter, Executor executor, Clock clock, SecureRandom entropy,
-                      DigestAlgorithm digestAlgo, double fpr, Predicate<SignedAttestation> verifier) {
+                      DigestAlgorithm digestAlgo, double fpr,
+                      Predicate<SignedAttestation> verifier) throws InterruptedException, ExecutionException {
         this.clock = clock;
         this.digestAlgo = digestAlgo;
         this.entropy = entropy;
@@ -152,6 +159,9 @@ public class Gorgoneion {
         gossiper = new RingCommunications<>(context, member, replicationComms, executor);
         roundTimers = new RoundScheduler("replications", context.timeToLive());
         this.verifier = verifier;
+        validating = member.getIdentifier()
+                           .newIdentifier(IdentifierSpecification.<SelfAddressingIdentifier>newBuilder())
+                           .get();
     }
 
     public void start(Duration frequency, ScheduledExecutorService scheduler) {
@@ -196,9 +206,22 @@ public class Gorgoneion {
     }
 
     @SuppressWarnings("unused")
-    private SignedNonce generateNonce() {
-        var nonce = Nonce.newBuilder().build();
-        return SignedNonce.newBuilder().setNonce(nonce).build();
+    private CompletableFuture<SignedNonce> generateNonce(Registration registration) {
+        var noise = new byte[digestAlgo.longLength()];
+        entropy.nextBytes(noise);
+        var now = clock.instant();
+        var nonce = Nonce.newBuilder()
+                         .setMember(registration.getKeyState().getCoordinates().getIdentifier())
+                         .setDuration(duration)
+                         .setIssuer(validating.getLastEstablishmentEvent().toEventCoords())
+                         .setNoise(digestAlgo.random(entropy).toDigeste())
+                         .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
+                         .build();
+        return validating.getSigner()
+                         .thenApply(s -> SignedNonce.newBuilder()
+                                                    .setNonce(nonce)
+                                                    .setSignature(s.sign(nonce.toByteString()).toSig())
+                                                    .build());
     }
 
     private BloomFilter<Digest> getBff(long seed, double p) {

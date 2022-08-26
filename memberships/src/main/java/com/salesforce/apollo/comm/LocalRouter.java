@@ -13,7 +13,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
@@ -133,27 +133,28 @@ public class LocalRouter extends Router {
     private static final Context.Key<Member> CLIENT_ID_CONTEXT_KEY = Context.key("from.id");
     private static final ThreadIdentity      LOCAL_IDENTITY        = new ThreadIdentity();
     private static final Logger              log                   = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<Digest, Member> serverMembers         = new ConcurrentHashMap<>();
+    private final Executor                   executor;
 
-    private final Executor           executor;
-    private GrpcServerLimiterBuilder limitsBuilder;
-    private Member                   member;
-    private final String             prefix;
-    private Server                   server;
+    private GrpcServerLimiterBuilder  limitsBuilder;
+    private Member                    member;
+    private final String              prefix;
+    private Server                    server;
+    private final Map<Digest, Member> serverMembers;
 
-    public LocalRouter(String prefix, ServerConnectionCache.Builder builder, Executor executor,
-                       LimitsRegistry limitsRegistry) {
-        this(prefix, () -> Router.defaultClientLimit(), builder, new MutableHandlerRegistry(),
+    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers,
+                       ServerConnectionCache.Builder builder, Executor executor, LimitsRegistry limitsRegistry) {
+        this(prefix, serverMembers, () -> Router.defaultClientLimit(), builder, new MutableHandlerRegistry(),
              () -> Router.defaultServerLimit(), executor, limitsRegistry);
     }
 
-    public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
-                       MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor,
-                       LimitsRegistry limitsRegistry) {
+    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers, Supplier<Limit> clientLimit,
+                       ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
+                       Supplier<Limit> serverLimit, Executor executor, LimitsRegistry limitsRegistry) {
         super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit, limitsRegistry, executor))
                      .build(),
               registry);
 
+        this.serverMembers = serverMembers;
         limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -163,9 +164,11 @@ public class LocalRouter extends Router {
         this.executor = executor;
     }
 
-    public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
-                       Supplier<Limit> serverLimit, Executor executor, LimitsRegistry limitsRegistry) {
-        this(prefix, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor, limitsRegistry);
+    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers, Supplier<Limit> clientLimit,
+                       ServerConnectionCache.Builder builder, Supplier<Limit> serverLimit, Executor executor,
+                       LimitsRegistry limitsRegistry) {
+        this(prefix, serverMembers, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor,
+             limitsRegistry);
     }
 
     @Override

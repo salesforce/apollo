@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.security.SecureRandom;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
@@ -20,7 +21,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -63,8 +66,9 @@ public class TestResolver {
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3);
-        serverRouter = new LocalRouter(prefix, builder, exec, null);
-        clientRouter = new LocalRouter(prefix, builder, exec, null);
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        serverRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
+        clientRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
 
         serverRouter.setMember(serverMember);
         clientRouter.setMember(clientMember);

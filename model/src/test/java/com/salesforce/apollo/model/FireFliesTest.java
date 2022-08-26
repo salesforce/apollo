@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -44,6 +45,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -96,9 +98,10 @@ public class FireFliesTest {
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
                                                                           Executors.newSingleThreadScheduledExecutor());
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
                                               ForkJoinPool.commonPool(), null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()

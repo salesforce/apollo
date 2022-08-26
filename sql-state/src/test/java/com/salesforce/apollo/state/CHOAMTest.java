@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -168,9 +169,10 @@ public class CHOAMTest {
         members.forEach(m -> context.activate(m));
         var commExec = ForkJoinPool.commonPool();
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), commExec,
-                                              metrics.limitsMetrics());
+            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
+                                              commExec, metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));

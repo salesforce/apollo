@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -121,9 +122,10 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), Executors.newSingleThreadExecutor(),
-                                       null);
+            var comm = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder(),
+                                       Executors.newSingleThreadExecutor(), null);
             comm.setMember(m);
             return comm;
         }));
