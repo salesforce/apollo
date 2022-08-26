@@ -93,7 +93,8 @@ public class AbstractDhtTest {
         String prefix = UUID.randomUUID().toString();
         Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         majority = context.majority();
-        identities.keySet().forEach(member -> instantiate(member, context, prefix));
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        identities.keySet().forEach(member -> instantiate(member, context, prefix, serverMembers));
 
         System.out.println();
         System.out.println();
@@ -119,13 +120,13 @@ public class AbstractDhtTest {
         return event;
     }
 
-    protected void instantiate(SigningMember member, Context<Member> context, String prefix) {
+    protected void instantiate(SigningMember member, Context<Member> context, String prefix,
+                               ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         LocalRouter router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
                                              ForkJoinPool.commonPool(), null);
         router.setMember(member);
