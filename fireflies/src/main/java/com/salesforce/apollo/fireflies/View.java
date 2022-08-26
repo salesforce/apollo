@@ -139,14 +139,14 @@ public class View {
          * @param toleranceLevel - t
          * @return the mask
          */
-        public static BitSet createInitialMask(int toleranceLevel) {
-            int nbits = 2 * toleranceLevel + 1;
+        public static BitSet createInitialMask(Context<?> context) {
+            int nbits = context.getRingCount();
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();
-            for (int i = 0; i < toleranceLevel + 1; i++) {
+            for (int i = 0; i < ((context.getBias() - 1) * context.toleranceLevel()) + 1; i++) {
                 random.add(true);
             }
-            for (int i = 0; i < toleranceLevel; i++) {
+            for (int i = 0; i < context.toleranceLevel(); i++) {
                 random.add(false);
             }
             Entropy.secureShuffle(random);
@@ -228,15 +228,14 @@ public class View {
          */
         BitSet nextMask() {
             final var current = note;
-            final var toleranceLevel = context.toleranceLevel();
             if (current == null) {
-                BitSet mask = createInitialMask(toleranceLevel);
-                assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " tolerance: " + toleranceLevel
+                BitSet mask = createInitialMask(context);
+                assert isValidMask(mask, context) : "Invalid mask: " + mask + " tolerance: " + context.toleranceLevel()
                 + " for node: " + getId();
                 return mask;
             }
 
-            BitSet mask = new BitSet(2 * toleranceLevel + 1);
+            BitSet mask = new BitSet(context.getRingCount());
             mask.flip(0, context.getRingCount());
             final var accusations = validAccusations;
 
@@ -257,21 +256,21 @@ public class View {
 
             // Fill the rest of the mask with randomly set index
 
-            while (mask.cardinality() != toleranceLevel + 1) {
+            while (mask.cardinality() != ((context.getBias() - 1) * context.toleranceLevel()) + 1) {
                 int index = Entropy.nextBitsStreamInt(context.getRingCount());
                 if (index < accusations.length) {
                     if (accusations[index] != null) {
                         continue;
                     }
                 }
-                if (mask.cardinality() > toleranceLevel + 1 && mask.get(index)) {
+                if (mask.cardinality() > context.toleranceLevel() + 1 && mask.get(index)) {
                     mask.set(index, false);
-                } else if (mask.cardinality() < toleranceLevel && !mask.get(index)) {
+                } else if (mask.cardinality() < context.toleranceLevel() && !mask.get(index)) {
                     mask.set(index, true);
                 }
             }
-            assert isValidMask(mask, toleranceLevel) : "Invalid mask: " + mask + " t: " + toleranceLevel + " for node: "
-            + getId();
+            assert isValidMask(mask, context) : "Invalid mask: " + mask + " t: " + context.toleranceLevel()
+            + " for node: " + getId();
             return mask;
         }
 
@@ -695,7 +694,6 @@ public class View {
         private void bootstrap() {
             log.info("Bootstrapping seed node view: {} context: {} on: {}", currentView(), context.getId(),
                      node.getId());
-
             var nw = node.getNote();
             final var sched = scheduler;
             final var dur = duration;
@@ -883,13 +881,14 @@ public class View {
             node.nextNote(view);
 
             final var redirecting = new SliceIterator<>("Gateways", node, succsesors, approaches, exec);
+            var majority = redirect.getBootstrap() ? 1 :
+                                    Context.minimalQuorum(redirect.getRings(), context.getBias());
             regate.set(() -> {
                 redirecting.iterate((link, m) -> {
                     log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(), node.getId());
                     return link.join(credentials(view), params.seedingTimeout());
-                }, (futureSailor, link,
-                    m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards, seeds, view,
-                                          Context.minimalQuorum(redirect.getRings(), context.getBias()), joined),
+                }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views,
+                                                              cards, seeds, view, majority, joined),
                                     () -> {
                                         if (retries.get() < params.joinRetries()) {
                                             log.debug("Failed to join view: {} retry: {} out of: {} on: {}", view,
@@ -1014,6 +1013,7 @@ public class View {
 
     private class ViewManagement {
         private final AtomicInteger                            attempt      = new AtomicInteger();
+        private boolean                                        bootstrap;
         private final AtomicReference<Digest>                  crown;
         private final AtomicReference<Digest>                  currentView  = new AtomicReference<>();
         private final AtomicBoolean                            joined       = new AtomicBoolean();
@@ -1440,6 +1440,19 @@ public class View {
             }
         }
 
+        private JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {
+            JoinGossip.Builder builder = JoinGossip.newBuilder();
+
+            // Add all updates that this view has that aren't reflected in the inbound bff
+            joins.entrySet()
+                 .stream()
+                 .filter(m -> !bff.contains(m.getKey()))
+                 .map(m -> m.getValue())
+                 .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+                 .forEach(n -> builder.addUpdates(n.getWrapped()));
+            return builder;
+        }
+
         /**
          * Process the inbound joins from the gossip. Reconcile the differences between
          * the view's state and the digests of the gossip. Update the reply with the
@@ -1458,19 +1471,6 @@ public class View {
                 log.trace("process joins produced updates: {} on: {}", builder.getUpdatesCount(), node.getId());
             }
             return gossip;
-        }
-
-        private JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {
-            JoinGossip.Builder builder = JoinGossip.newBuilder();
-
-            // Add all updates that this view has that aren't reflected in the inbound bff
-            joins.entrySet()
-                 .stream()
-                 .filter(m -> !bff.contains(m.getKey()))
-                 .map(m -> m.getValue())
-                 .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-                 .forEach(n -> builder.addUpdates(n.getWrapped()));
-            return builder;
         }
 
         private void resetBootstrapView() {
@@ -1532,6 +1532,7 @@ public class View {
                                                            .map(p -> p.getSeed())
                                                            .toList())
                                .setCardinality(context.cardinality())
+                               .setBootstrap(bootstrap)
                                .setRings(context.getRingCount())
                                .build();
             });
@@ -1555,8 +1556,9 @@ public class View {
      * @param mask
      * @return
      */
-    public static boolean isValidMask(BitSet mask, int toleranceLevel) {
-        return mask.cardinality() == toleranceLevel + 1 && mask.length() <= 2 * toleranceLevel + 1;
+    public static boolean isValidMask(BitSet mask, Context<?> context) {
+        return mask.cardinality() == ((context.getBias() - 1) * context.toleranceLevel()) + 1 &&
+               mask.length() <= context.getRingCount();
     }
 
     private final CommonCommunications<Approach, Service>     approaches;
@@ -1653,6 +1655,7 @@ public class View {
         viewManagement.onJoined = onJoin;
         var seeds = new ArrayList<>(seedpods);
         Entropy.secureShuffle(seeds);
+        viewManagement.bootstrap = seeds.isEmpty();
 
         log.info("Starting: {} cardinality: {} tolerance: {} seeds: {} on: {}", context.getId(), context.cardinality(),
                  context.toleranceLevel(), seeds.size(), node.getId());
@@ -1862,7 +1865,7 @@ public class View {
             return false;
         }
 
-        if (!isValidMask(note.getMask(), context.toleranceLevel())) {
+        if (!isValidMask(note.getMask(), context)) {
             log.trace("Note: {} mask invalid: {} on: {}", note.getId(), note.getMask(), node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
@@ -1925,7 +1928,7 @@ public class View {
             return false;
         }
 
-        if (!isValidMask(note.getMask(), context.toleranceLevel())) {
+        if (!isValidMask(note.getMask(), context)) {
             log.trace("Invalid join note from: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
             return false;
         }
@@ -2573,7 +2576,7 @@ public class View {
                                                      .setPort(seed.endpoint.getPort())
                                                      .setCoordinates(seed.coordinates.toEventCoords())
                                                      .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context)
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();

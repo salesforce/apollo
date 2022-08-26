@@ -125,6 +125,7 @@ message Redirect {
     repeated Seed_ successors = 2;
     int32 cardinality = 3;
     int32 rings = 4;
+    bool bootstrap = 5;
 }
 
 message Gateway { 

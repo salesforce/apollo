@@ -16,7 +16,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc.AdmissionsReplicationImplBase;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
-import com.salesfoce.apollo.thoth.proto.Expunge;
+import com.salesfoce.apollo.thoth.proto.Commit;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -48,7 +48,7 @@ public class AdmissionsReplicationServer extends AdmissionsReplicationImplBase {
     }
 
     @Override
-    public void expunge(Expunge request, StreamObserver<Empty> responseObserver) {
+    public void commit(Commit request, StreamObserver<Empty> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
@@ -56,7 +56,7 @@ public class AdmissionsReplicationServer extends AdmissionsReplicationImplBase {
 
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            s.expunge(request, from);
+            s.commit(request, from);
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         }), log));

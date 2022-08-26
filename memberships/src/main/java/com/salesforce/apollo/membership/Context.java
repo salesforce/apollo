@@ -108,10 +108,12 @@ public interface Context<T extends Member> {
 
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
+    static int majority(int rings, int bias) {
+        return (bias - 1) * toleranceLevel(rings, bias);
+    }
+
     static short minimalQuorum(int np, double bias) {
-        var nProcesses = (double) np;
-        short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
-        return minimalQuorum;
+        return (short) (toleranceLevel(np, (int) bias) + 1);
     }
 
     static int minMajority(double pByz, int cardinality) {
@@ -164,6 +166,10 @@ public interface Context<T extends Member> {
                 return new ContextImpl<Z>(id, cardinality, pByz, bias);
             }
         };
+    }
+
+    static int toleranceLevel(int rings, int bias) {
+        return ((rings - 1) / bias);
     }
 
     /**

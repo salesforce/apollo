@@ -9,6 +9,7 @@ package com.salesforce.apollo.thoth;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -28,7 +29,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
 import com.salesfoce.apollo.thoth.proto.Admittance;
-import com.salesfoce.apollo.thoth.proto.Expunge;
+import com.salesfoce.apollo.thoth.proto.Commit;
+import com.salesfoce.apollo.thoth.proto.Nonce;
+import com.salesfoce.apollo.thoth.proto.Pending;
 import com.salesfoce.apollo.thoth.proto.Registration;
 import com.salesfoce.apollo.thoth.proto.SignedAttestation;
 import com.salesfoce.apollo.thoth.proto.SignedNonce;
@@ -64,67 +67,68 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class Gorgoneion {
+
     private class Admissions implements Admission {
         @Override
         public SignedNonce apply(Registration request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return Gorgoneion.this.apply(request, from);
         }
 
         @Override
         public Admittance register(SignedAttestation request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return Gorgoneion.this.register(request, from);
         }
     }
 
     private class Replication implements AdmissionsReplication {
         @Override
-        public void expunge(Expunge expunge, Digest from) {
-            // TODO Auto-generated method stub
-
+        public void commit(Commit commit, Digest from) {
+            Gorgoneion.this.commit(commit, from);
         }
 
         @Override
         public AdmissionsUpdate gossip(AdmissionsGossip gossip, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return Gorgoneion.this.gossip(gossip, from);
         }
 
         @Override
         public void update(AdmissionsUpdate update, Digest from) {
-            // TODO Auto-generated method stub
-
+            Gorgoneion.this.update(update, from);
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
+    private record PendingAuth(Pending pending, Instant useBy) {}
 
+    private static final Logger                                                            log         = LoggerFactory.getLogger(Gorgoneion.class);
+    @SuppressWarnings("unused")
     private final CommonCommunications<AdmissionService, Admission>                        admissionComms;
     private final Admissions                                                               admissions  = new Admissions();
     private final Clock                                                                    clock;
     private final Context<Member>                                                          context;
     private final DigestAlgorithm                                                          digestAlgo;
+    @SuppressWarnings("unused")
     private final SecureRandom                                                             entropy;
     private final Executor                                                                 exec;
     private final ConcurrentSkipListSet<Digest>                                            expunged    = new ConcurrentSkipListSet<>();
     private final double                                                                   fpr;
     private volatile ScheduledFuture<?>                                                    futureGossip;
     private final RingCommunications<Member, AdmissionReplicationService>                  gossiper;
+    @SuppressWarnings("unused")
     private final KERL                                                                     kerl;
     private final ControlledIdentifierMember                                               member;
-    private final ConcurrentNavigableMap<Digest, SignedNonce>                              pending     = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<Digest, PendingAuth>                              pending     = new ConcurrentSkipListMap<>();
     private final AdmissionsReplication                                                    replication = new Replication();
     private final CommonCommunications<AdmissionReplicationService, AdmissionsReplication> replicationComms;
     private final RoundScheduler                                                           roundTimers;
     private final AtomicBoolean                                                            started     = new AtomicBoolean();
-    private final Predicate<SignedAttestation>                                             validator;
+
+    @SuppressWarnings("unused")
+    private final Predicate<SignedAttestation> verifier;
 
     public Gorgoneion(ControlledIdentifierMember member, Context<Member> context, Router admissionsRouter, KERL kerl,
                       Router replicationRouter, Executor executor, Clock clock, SecureRandom entropy,
-                      DigestAlgorithm digestAlgo, double fpr, Predicate<SignedAttestation> validator) {
+                      DigestAlgorithm digestAlgo, double fpr, Predicate<SignedAttestation> verifier) {
         this.clock = clock;
         this.digestAlgo = digestAlgo;
         this.entropy = entropy;
@@ -147,7 +151,7 @@ public class Gorgoneion {
                                                   AdmissionClient.getLocalLoopback(admissions, member));
         gossiper = new RingCommunications<>(context, member, replicationComms, executor);
         roundTimers = new RoundScheduler("replications", context.timeToLive());
-        this.validator = validator;
+        this.verifier = verifier;
     }
 
     public void start(Duration frequency, ScheduledExecutorService scheduler) {
@@ -168,13 +172,33 @@ public class Gorgoneion {
         }
     }
 
-    private void add(SignedNonce sn) {
-        final var digest = JohnHancock.from(sn.getSignature()).toDigest(digestAlgo);
+    private void add(Pending p) {
+        final var digest = JohnHancock.from(p.getPending().getSignature()).toDigest(digestAlgo);
         if (expunged.contains(digest)) {
             log.trace("Not adding expunged: {} on: {}", digest, member.getId());
             return;
         }
-        pending.putIfAbsent(digest, sn);
+        final var duration = p.getPending().getNonce().getDuration();
+        pending.putIfAbsent(digest,
+                            new PendingAuth(p,
+                                            clock.instant()
+                                                 .plus(Duration.ofSeconds(duration.getSeconds(),
+                                                                          duration.getNanos()))));
+    }
+
+    private SignedNonce apply(Registration request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private void commit(Commit expunge, Digest from) {
+        // TODO Auto-generated method stub
+    }
+
+    @SuppressWarnings("unused")
+    private SignedNonce generateNonce() {
+        var nonce = Nonce.newBuilder().build();
+        return SignedNonce.newBuilder().setNonce(nonce).build();
     }
 
     private BloomFilter<Digest> getBff(long seed, double p) {
@@ -191,6 +215,11 @@ public class Gorgoneion {
         return link.gossip(AdmissionsGossip.newBuilder()
                                            .setBff(getBff(Entropy.nextBitsStreamLong(), fpr).toBff())
                                            .build());
+    }
+
+    private AdmissionsUpdate gossip(AdmissionsGossip gossip, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private void gossip(Duration frequency, ScheduledExecutorService scheduler) {
@@ -239,12 +268,22 @@ public class Gorgoneion {
         }
     }
 
+    private Admittance register(SignedAttestation request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private void update(AdmissionsUpdate update, Digest from) {
+        // TODO Auto-generated method stub
+
+    }
+
     private AdmissionsUpdate updateFor(BloomFilter<Digest> have) {
         var update = AdmissionsUpdate.newBuilder();
         pending.entrySet()
                .stream()
                .filter(e -> !have.contains(e.getKey()))
-               .forEach(e -> update.addUpdate(e.getValue()));
+               .forEach(e -> update.addUpdate(e.getValue().pending));
         return update.build();
     }
 }

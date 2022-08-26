@@ -217,7 +217,7 @@ public class SwarmTest {
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
+        var ctxBuilder = Context.<Participant>newBuilder().setBias(3).setpByz(P_BYZ).setCardinality(CARDINALITY);
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();

@@ -8,6 +8,7 @@ option objc_class_prefix = "Tp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 import "fireflies.proto";
 import "stereotomy.proto";
@@ -41,7 +42,7 @@ service Admissions {
 service AdmissionsReplication {
     rpc gossip (AdmissionsGossip) returns (AdmissionsUpdate) {}
     rpc update (AdmissionsUpdate) returns (google.protobuf.Empty) {}
-    rpc expunge (Expunge) returns (google.protobuf.Empty) {}
+    rpc commit (Commit) returns (google.protobuf.Empty) {}
 }
 
 service Delegated {
@@ -93,6 +94,7 @@ message Nonce {
     stereotomy.EventCoords issuer = 2;
     utils.Digeste noise = 3;
     google.protobuf.Timestamp timestamp = 4;
+    google.protobuf.Duration duration = 5;
 }
 
 message SignedNonce {
@@ -125,11 +127,16 @@ message AdmissionsGossip {
 
 message AdmissionsUpdate {
     utils.Digeste context = 1;
-    repeated SignedNonce update = 2;
+    repeated Pending update = 2;
     utils.Biff bff = 3;
 }
 
-message Expunge {
+message Pending {
+    stereotomy.KERL_ kerl = 1;
+    SignedNonce pending = 2;
+}
+
+message Commit {
     utils.Digeste context = 1;
     SignedNonce nonce = 2;
 }

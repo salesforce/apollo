@@ -15,7 +15,7 @@ import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc.AdmissionsReplicationFutureStub;
 import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
-import com.salesfoce.apollo.thoth.proto.Expunge;
+import com.salesfoce.apollo.thoth.proto.Commit;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -44,7 +44,7 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
             }
 
             @Override
-            public ListenableFuture<Empty> expunge(Expunge expunge) {
+            public ListenableFuture<Empty> commit(Commit commit) {
                 return null;
             }
 
@@ -88,8 +88,8 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
     }
 
     @Override
-    public ListenableFuture<Empty> expunge(Expunge expunge) {
-        return client.expunge(expunge);
+    public ListenableFuture<Empty> commit(Commit commit) {
+        return client.commit(commit);
     }
 
     @Override
