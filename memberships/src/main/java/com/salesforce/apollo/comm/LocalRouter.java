@@ -244,9 +244,7 @@ public class LocalRouter extends Router {
                 }
                 Member member = serverMembers.get(digest(id));
                 if (member == null) {
-                    call.close(Status.INTERNAL.withCause(new NullPointerException("Member is null"))
-                                              .withDescription("Member is null for id: " + id),
-                               null);
+                    call.close(Status.UNAUTHENTICATED.withDescription("No member for id: " + id), null);
                     return new ServerCall.Listener<ReqT>() {
                     };
                 }
