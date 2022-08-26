@@ -547,11 +547,8 @@ public class StereotomyImpl implements Stereotomy {
                                                                                             interaction.hash(kerl.getDigestAlgorithm()),
                                                                                             interaction.getSequenceNumber()
                                                                                                        .longValue())));
-            return kerl.append(Arrays.asList(event, interaction), Arrays.asList(attachment));
-        }).thenApply(states -> {
-            // The new key state for the delegated identifier
-            KeyState delegatedState = states.get(0);
-
+            return kerl.append(Collections.singletonList(interaction), Collections.singletonList(attachment));
+        }).thenCompose(s -> kerl.append(event)).thenApply(delegatedState -> {
             if (delegatedState == null) {
                 log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
                 return Optional.empty();
