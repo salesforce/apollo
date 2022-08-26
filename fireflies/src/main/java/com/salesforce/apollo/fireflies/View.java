@@ -766,6 +766,10 @@ public class View {
                         log.trace("Join timeout for view: {} with: {} : {} on: {}", view, member.getId(),
                                   sre.getStatus(), node.getId());
                         break;
+                    case UNAUTHENTICATED:
+                        log.trace("Join unauthenticated for view: {} with: {} : {} on: {}", view, member.getId(),
+                                  sre.getStatus(), node.getId());
+                        break;
                     default:
                         log.warn("Failure in join: {} with: {} : {} on: {}", view, member.getId(), sre.getStatus(),
                                  node.getId());
@@ -881,8 +885,7 @@ public class View {
             node.nextNote(view);
 
             final var redirecting = new SliceIterator<>("Gateways", node, succsesors, approaches, exec);
-            var majority = redirect.getBootstrap() ? 1 :
-                                    Context.minimalQuorum(redirect.getRings(), context.getBias());
+            var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), context.getBias());
             regate.set(() -> {
                 redirecting.iterate((link, m) -> {
                     log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(), node.getId());
