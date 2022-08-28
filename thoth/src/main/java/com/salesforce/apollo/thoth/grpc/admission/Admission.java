@@ -15,6 +15,8 @@ import com.salesfoce.apollo.thoth.proto.SignedAttestation;
 import com.salesfoce.apollo.thoth.proto.SignedNonce;
 import com.salesforce.apollo.crypto.Digest;
 
+import io.grpc.stub.StreamObserver;
+
 /**
  * @author hal.hildebrand
  *
@@ -22,5 +24,5 @@ import com.salesforce.apollo.crypto.Digest;
 public interface Admission {
     CompletableFuture<SignedNonce> apply(Registration request, Digest from);
 
-    CompletableFuture<Admittance> register(SignedAttestation request, Digest from);
+    void register(SignedAttestation request, Digest from, StreamObserver<Admittance> responseObserver);
 }

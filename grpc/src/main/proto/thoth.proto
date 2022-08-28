@@ -10,7 +10,6 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
-import "fireflies.proto";
 import "stereotomy.proto";
 import "stereotomy-services.proto";
 import "util.proto";
@@ -116,8 +115,7 @@ message SignedAttestation {
 }
 
 message Admittance {
-    fireflies.Seed_ seed = 1;
-    repeated stereotomy.Attachment validations = 2;
+    repeated Validation validations = 1;
 }
 
 message AdminGossip {
@@ -128,16 +126,16 @@ message AdminGossip {
 message AdminUpdate {
     utils.Digeste context = 1;
     repeated Pending pending = 2;
-    repeated Proposal proposals = 3;
-    repeated Commit commits = 4;
-    repeated Deny deny = 5;
+    repeated SignedProposal proposals = 3;
+    repeated SignedEndorsement endorsements = 4;
+    repeated SignedDeny deny = 5;
     Have have = 6;
 }
 
 message Have {
     utils.Biff pending = 1;
     utils.Biff proposals = 2;
-    utils.Biff commits = 3;
+    utils.Biff endorsements = 3;
     utils.Biff denies = 4;
 }
 
@@ -146,22 +144,40 @@ message Pending {
     SignedNonce pending = 2;
 }
 
-message Commit {
-    utils.Digeste committer = 1;
+message Endorsement {
+    utils.Digeste endorser = 1;
     SignedNonce nonce = 2;
-    utils.Sig signature = 3;
+    Validation validation = 3;
+}
+
+message Validation {
+    stereotomy.Ident identifier = 1;
+    utils.Sig signature = 2;
+}
+
+message SignedEndorsement {
+    Endorsement endorsement = 1;
+    utils.Sig signature = 2;
 }
 
 message Deny {
     utils.Digeste denier = 1;
     SignedNonce nonce = 2;
-    utils.Sig signature = 3;
+}
+
+message SignedDeny {
+    Deny denial = 1;
+    utils.Sig signature = 2;
 }
 
 message Proposal {
     utils.Digeste proposer = 1;
     SignedNonce nonce = 2;
     SignedAttestation  attestation = 3;
-    utils.Sig signature = 4;
+}
+
+message SignedProposal {
+    Proposal proposal = 1;
+    utils.Sig signature = 2;
 }
 

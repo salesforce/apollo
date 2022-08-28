@@ -81,20 +81,7 @@ public class AdmissionServer extends AdmissionsImplBase {
 
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var admittance = s.register(request, from);
-            if (admittance == null) {
-                responseObserver.onNext(Admittance.getDefaultInstance());
-                responseObserver.onCompleted();
-                return;
-            }
-            admittance.whenComplete((adm, t) -> {
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(adm);
-                    responseObserver.onCompleted();
-                }
-            });
+            s.register(request, from, responseObserver);
         }), log));
     }
 }
