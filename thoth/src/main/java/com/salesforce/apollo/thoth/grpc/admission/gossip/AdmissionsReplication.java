@@ -7,9 +7,8 @@
 
 package com.salesforce.apollo.thoth.grpc.admission.gossip;
 
-import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
-import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
-import com.salesfoce.apollo.thoth.proto.Commit;
+import com.salesfoce.apollo.thoth.proto.AdminGossip;
+import com.salesfoce.apollo.thoth.proto.AdminUpdate;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -17,9 +16,8 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public interface AdmissionsReplication {
-    void commit(Commit commit, Digest from);
 
-    AdmissionsUpdate gossip(AdmissionsGossip gossip, Digest from);
+    AdminUpdate gossip(AdminGossip gossip, Digest from);
 
-    void update(AdmissionsUpdate update, Digest from);
+    void update(AdminUpdate update, Digest from);
 }

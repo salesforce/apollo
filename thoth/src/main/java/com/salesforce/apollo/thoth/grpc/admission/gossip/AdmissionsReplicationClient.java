@@ -11,11 +11,10 @@ import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.thoth.proto.AdmissionsGossip;
+import com.salesfoce.apollo.thoth.proto.AdminGossip;
+import com.salesfoce.apollo.thoth.proto.AdminUpdate;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc;
 import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc.AdmissionsReplicationFutureStub;
-import com.salesfoce.apollo.thoth.proto.AdmissionsUpdate;
-import com.salesfoce.apollo.thoth.proto.Commit;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -44,22 +43,17 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
             }
 
             @Override
-            public ListenableFuture<Empty> commit(Commit commit) {
-                return null;
-            }
-
-            @Override
             public Member getMember() {
                 return member;
             }
 
             @Override
-            public ListenableFuture<AdmissionsUpdate> gossip(AdmissionsGossip gossip) {
+            public ListenableFuture<AdminUpdate> gossip(AdminGossip gossip) {
                 return null;
             }
 
             @Override
-            public ListenableFuture<Empty> register(AdmissionsUpdate update) {
+            public ListenableFuture<Empty> update(AdminUpdate update) {
                 return null;
             }
         };
@@ -88,22 +82,17 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
     }
 
     @Override
-    public ListenableFuture<Empty> commit(Commit commit) {
-        return client.commit(commit);
-    }
-
-    @Override
     public Member getMember() {
         return member;
     }
 
     @Override
-    public ListenableFuture<AdmissionsUpdate> gossip(AdmissionsGossip gossip) {
+    public ListenableFuture<AdminUpdate> gossip(AdminGossip gossip) {
         return client.gossip(gossip);
     }
 
     @Override
-    public ListenableFuture<Empty> register(AdmissionsUpdate update) {
+    public ListenableFuture<Empty> update(AdminUpdate update) {
         return client.update(update);
     }
 }

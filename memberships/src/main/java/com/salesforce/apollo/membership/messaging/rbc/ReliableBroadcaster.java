@@ -33,8 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
@@ -59,6 +57,7 @@ import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomWindow;
 
 /**
  * Content agnostic reliable broadcast of messages.
@@ -79,7 +78,7 @@ public class ReliableBroadcaster {
                              int deliveredCacheSize) {
         public static class Builder implements Cloneable {
             private int             bufferSize         = 1500;
-            private int             deliveredCacheSize = 1_000;
+            private int             deliveredCacheSize = 100;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
             private double          falsePositiveRate  = 0.00125;
             private int             maxMessages        = 500;
@@ -176,19 +175,22 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final Cache<Digest, Boolean> delivered;
-        private final Semaphore              garbageCollecting = new Semaphore(1);
-        private final int                    highWaterMark;
-        private final int                    maxAge;
-        private final AtomicInteger          nonce             = new AtomicInteger(0);
-        private final AtomicInteger          round             = new AtomicInteger();
-        private final Map<Digest, state>     state             = new ConcurrentHashMap<>();
-        private final Semaphore              tickGate          = new Semaphore(1);
+        private final BloomWindow<Digest> delivered;
+        private final Semaphore           garbageCollecting = new Semaphore(1);
+        private final int                 highWaterMark;
+        private final int                 maxAge;
+        private final AtomicInteger       nonce             = new AtomicInteger(0);
+        private final AtomicInteger       round             = new AtomicInteger();
+        private final Map<Digest, state>  state             = new ConcurrentHashMap<>();
+        private final Semaphore           tickGate          = new Semaphore(1);
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
-            delivered = CacheBuilder.newBuilder().maximumSize(params.deliveredCacheSize).build();
+            delivered = new BloomWindow<>(params.deliveredCacheSize,
+                                          () -> new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                                                      params.bufferSize * 2, 0.000125),
+                                          2);
         }
 
         public void clear() {
@@ -225,7 +227,7 @@ public class ReliableBroadcaster {
                             })
                             .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
                             .map(s -> new Msg(s.from, s.msg.getContent(), s.hash))
-                            .filter(m -> delivered(m.hash))
+                            .filter(m -> delivered.add(m.hash, null))
                             .toList());
             gc();
         }
@@ -296,14 +298,6 @@ public class ReliableBroadcaster {
             }
         }
 
-        private boolean delivered(Digest hash) {
-            if (delivered.getIfPresent(hash) != null) {
-                return false;
-            }
-            delivered.put(hash, true);
-            return true;
-        }
-
         private boolean dup(state s) {
             if (s.msg.getAge() > maxAge) {
                 log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge, member);
@@ -320,7 +314,7 @@ public class ReliableBroadcaster {
                 log.trace("duplicate event: {} on: {}", s.hash, member);
                 return true;
             }
-            return delivered.getIfPresent(s.hash) != null;
+            return delivered.contains(s.hash);
         }
 
         private void gc() {

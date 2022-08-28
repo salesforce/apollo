@@ -40,9 +40,8 @@ service Admissions {
 }
 
 service AdmissionsReplication {
-    rpc gossip (AdmissionsGossip) returns (AdmissionsUpdate) {}
-    rpc update (AdmissionsUpdate) returns (google.protobuf.Empty) {}
-    rpc commit (Commit) returns (google.protobuf.Empty) {}
+    rpc gossip (AdminGossip) returns (AdminUpdate) {}
+    rpc update (AdminUpdate) returns (google.protobuf.Empty) {}
 }
 
 service Delegated {
@@ -86,7 +85,8 @@ message Interval {
 
 message Registration {
     utils.Digeste context = 1;
-    stereotomy.KeyState_ keyState = 2;
+    stereotomy.Ident identity = 2;
+    stereotomy.KERL_ kerl = 3;
 }
 
 message Nonce {
@@ -120,15 +120,25 @@ message Admittance {
     repeated stereotomy.Attachment validations = 2;
 }
 
-message AdmissionsGossip {
+message AdminGossip {
     utils.Digeste context = 1;
-    utils.Biff bff = 2;
+    Have have = 2;
 }
 
-message AdmissionsUpdate {
+message AdminUpdate {
     utils.Digeste context = 1;
-    repeated Pending update = 2;
-    utils.Biff bff = 3;
+    repeated Pending pending = 2;
+    repeated Proposal proposals = 3;
+    repeated Commit commits = 4;
+    repeated Deny deny = 5;
+    Have have = 6;
+}
+
+message Have {
+    utils.Biff pending = 1;
+    utils.Biff proposals = 2;
+    utils.Biff commits = 3;
+    utils.Biff denies = 4;
 }
 
 message Pending {
@@ -137,6 +147,21 @@ message Pending {
 }
 
 message Commit {
-    utils.Digeste context = 1;
+    utils.Digeste committer = 1;
     SignedNonce nonce = 2;
+    utils.Sig signature = 3;
 }
+
+message Deny {
+    utils.Digeste denier = 1;
+    SignedNonce nonce = 2;
+    utils.Sig signature = 3;
+}
+
+message Proposal {
+    utils.Digeste proposer = 1;
+    SignedNonce nonce = 2;
+    SignedAttestation  attestation = 3;
+    utils.Sig signature = 4;
+}
+

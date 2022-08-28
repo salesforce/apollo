@@ -7,6 +7,7 @@
 package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.BitSet;
+import java.util.function.Consumer;
 
 import org.joou.ULong;
 
@@ -257,6 +258,24 @@ abstract public class BloomFilter<T> {
         for (int hash : h.hashes(element)) {
             bits.set(hash);
         }
+    }
+
+    public boolean add(T element, Consumer<T> ifAbsent) {
+        final var hashes = h.hashes(element);
+        var contains = true;
+        for (int hash : hashes) {
+            if (!bits.get(hash)) {
+                contains = false;
+                break;
+            }
+        }
+        if (!contains) {
+            ifAbsent.accept(element);
+            for (int hash : hashes) {
+                bits.set(hash);
+            }
+        }
+        return !contains;
     }
 
     public String biffString() {

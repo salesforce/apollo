@@ -55,9 +55,20 @@ public class AdmissionServer extends AdmissionsImplBase {
 
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var nonce = s.apply(request, from);
-            responseObserver.onNext(nonce);
-            responseObserver.onCompleted();
+            var nonceF = s.apply(request, from);
+            if (nonceF == null) {
+                responseObserver.onNext(SignedNonce.getDefaultInstance());
+                responseObserver.onCompleted();
+                return;
+            }
+            nonceF.whenComplete((sn, t) -> {
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    responseObserver.onNext(sn);
+                    responseObserver.onCompleted();
+                }
+            });
         }), log));
     }
 
@@ -71,8 +82,19 @@ public class AdmissionServer extends AdmissionsImplBase {
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             var admittance = s.register(request, from);
-            responseObserver.onNext(admittance);
-            responseObserver.onCompleted();
+            if (admittance == null) {
+                responseObserver.onNext(Admittance.getDefaultInstance());
+                responseObserver.onCompleted();
+                return;
+            }
+            admittance.whenComplete((adm, t) -> {
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    responseObserver.onNext(adm);
+                    responseObserver.onCompleted();
+                }
+            });
         }), log));
     }
 }

@@ -7,6 +7,8 @@
 
 package com.salesforce.apollo.thoth.grpc.admission;
 
+import java.util.concurrent.CompletableFuture;
+
 import com.salesfoce.apollo.thoth.proto.Admittance;
 import com.salesfoce.apollo.thoth.proto.Registration;
 import com.salesfoce.apollo.thoth.proto.SignedAttestation;
@@ -18,7 +20,7 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public interface Admission {
-    SignedNonce apply(Registration request, Digest from);
+    CompletableFuture<SignedNonce> apply(Registration request, Digest from);
 
-    Admittance register(SignedAttestation request, Digest from);
+    CompletableFuture<Admittance> register(SignedAttestation request, Digest from);
 }
