@@ -10,6 +10,8 @@ import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -20,6 +22,7 @@ import java.util.function.Supplier;
 public class BloomWindow<T> {
     private final AtomicInteger                 count    = new AtomicInteger(0);
     private final Supplier<BloomFilter<T>>      factory;
+    private final ReadWriteLock                 rwLock   = new ReentrantReadWriteLock();
     private final BlockingDeque<BloomFilter<T>> segments = new LinkedBlockingDeque<>();
     private final int                           windowSize;
 
@@ -43,17 +46,29 @@ public class BloomWindow<T> {
             }
             added.set(true);
         };
-        for (var segment : segments) {
-            segment.add(element, wrap);
+        final var l = rwLock.writeLock();
+        l.lock();
+        try {
+            for (var segment : segments) {
+                segment.add(element, wrap);
+            }
+        } finally {
+            l.unlock();
         }
         return added.get();
     }
 
     public boolean contains(T element) {
-        for (var biff : segments) {
-            if (biff.contains(element)) {
-                return true;
+        final var l = rwLock.readLock();
+        l.lock();
+        try {
+            for (var biff : segments) {
+                if (biff.contains(element)) {
+                    return true;
+                }
             }
+        } finally {
+            l.unlock();
         }
         return false;
     }
