@@ -19,7 +19,7 @@ import com.salesfoce.apollo.thoth.proto.AdmissionsReplicationGrpc.AdmissionsRepl
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
@@ -34,11 +34,11 @@ public class AdmissionsReplicationServer extends AdmissionsReplicationImplBase {
     private final Executor                               exec;
     private final ClientIdentity                         identity;
     @SuppressWarnings("unused")
-    private final StereotomyMetrics                      metrics;
+    private final GorgoneionMetrics                      metrics;
     private final RoutableService<AdmissionsReplication> router;
 
     public AdmissionsReplicationServer(RoutableService<AdmissionsReplication> router, ClientIdentity identity,
-                                       Executor exec, StereotomyMetrics metrics) {
+                                       Executor exec, GorgoneionMetrics metrics) {
         this.metrics = metrics;
         this.router = router;
         this.exec = exec;

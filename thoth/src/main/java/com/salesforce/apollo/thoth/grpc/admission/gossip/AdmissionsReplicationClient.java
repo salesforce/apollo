@@ -21,7 +21,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
 
 /**
  * @author hal.hildebrand
@@ -29,7 +29,7 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
  */
 public class AdmissionsReplicationClient implements AdmissionReplicationService {
     public static CreateClientCommunications<AdmissionReplicationService> getCreate(Digest context,
-                                                                                    StereotomyMetrics metrics) {
+                                                                                    GorgoneionMetrics metrics) {
         return (t, f, c) -> {
             return new AdmissionsReplicationClient(context, c, t, metrics);
         };
@@ -65,10 +65,10 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
     private final Digeste                         context;
     private final Member                          member;
     @SuppressWarnings("unused")
-    private final StereotomyMetrics               metrics;
+    private final GorgoneionMetrics               metrics;
 
     public AdmissionsReplicationClient(Digest context, ManagedServerConnection channel, Member member,
-                                       StereotomyMetrics metrics) {
+                                       GorgoneionMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;

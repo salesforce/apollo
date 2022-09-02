@@ -20,7 +20,7 @@ import com.salesfoce.apollo.thoth.proto.SignedNonce;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
@@ -35,11 +35,11 @@ public class AdmissionServer extends AdmissionsImplBase {
     private final Executor                   exec;
     private final ClientIdentity             identity;
     @SuppressWarnings("unused")
-    private final StereotomyMetrics          metrics;
+    private final GorgoneionMetrics          metrics;
     private final RoutableService<Admission> router;
 
     public AdmissionServer(RoutableService<Admission> router, ClientIdentity identity, Executor exec,
-                           StereotomyMetrics metrics) {
+                           GorgoneionMetrics metrics) {
         this.metrics = metrics;
         this.router = router;
         this.exec = exec;
