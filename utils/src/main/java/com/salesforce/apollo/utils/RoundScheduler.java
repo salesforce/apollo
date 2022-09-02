@@ -26,10 +26,10 @@ public class RoundScheduler extends AtomicInteger {
     public class Timer implements Comparable<Timer> {
         private final Runnable   action;
         private volatile boolean cancelled = false;
-        private final int        deadline;
+        private final long       deadline;
         private final String     label;
 
-        public Timer(String label, int target, Runnable action) {
+        public Timer(String label, long target, Runnable action) {
             this.label = label;
             this.deadline = target;
             this.action = action;
@@ -50,7 +50,7 @@ public class RoundScheduler extends AtomicInteger {
             if (o == null) {
                 return -1;
             }
-            return Integer.compare(deadline, o.deadline);
+            return Long.compare(deadline, o.deadline);
         }
 
         public void fire() {
@@ -69,7 +69,7 @@ public class RoundScheduler extends AtomicInteger {
             }
         }
 
-        public int getDeadline() {
+        public long getDeadline() {
             return deadline;
         }
 
@@ -111,11 +111,11 @@ public class RoundScheduler extends AtomicInteger {
         set(0);
     }
 
-    public Timer schedule(Runnable action, int delayRounds) {
+    public Timer schedule(Runnable action, long delayRounds) {
         return schedule(null, action, delayRounds);
     }
 
-    public Timer schedule(String timerLabel, Runnable action, int delayRounds) {
+    public Timer schedule(String timerLabel, Runnable action, long delayRounds) {
         final var current = get();
         final var duration = roundDuration;
         final var target = current + (delayRounds * duration);
