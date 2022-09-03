@@ -8,7 +8,6 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -94,7 +93,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         return kerl.appendValidations(EventCoordinates.from(validations.getCoordinates()),
                                       validations.getValidationsList()
                                                  .stream()
-                                                 .collect(Collectors.toMap(v -> Identifier.from(v.getValidator()),
+                                                 .collect(Collectors.toMap(v -> EventCoordinates.from(v.getValidator()),
                                                                            v -> JohnHancock.from(v.getSignature()))))
                    .thenApply(v -> Empty.getDefaultInstance());
     }
@@ -146,13 +145,12 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coords) {
         return kerl.getValidations(EventCoordinates.from(coords))
-                   .thenApply(m -> new TreeMap<>(m))
                    .thenApply(vs -> Validations.newBuilder()
                                                .addAllValidations(vs.entrySet()
                                                                     .stream()
                                                                     .map(e -> Validation_.newBuilder()
                                                                                          .setValidator(e.getKey()
-                                                                                                        .toIdent())
+                                                                                                        .toEventCoords())
                                                                                          .setSignature(e.getValue()
                                                                                                         .toSig())
                                                                                          .build())

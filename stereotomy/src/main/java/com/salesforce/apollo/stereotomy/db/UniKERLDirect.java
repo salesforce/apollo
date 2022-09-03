@@ -20,7 +20,6 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -72,7 +71,7 @@ public class UniKERLDirect extends UniKERL {
 
     @Override
     public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<Identifier, JohnHancock> validations) {
+                                                     Map<EventCoordinates, JohnHancock> validations) {
         CompletableFuture<Void> complete = new CompletableFuture<>();
 
         try {

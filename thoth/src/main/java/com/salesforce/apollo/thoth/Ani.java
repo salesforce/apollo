@@ -521,16 +521,17 @@ public class Ani {
             return complete(witnessed);
         }
 
-        record resolved(KeyState state, JohnHancock signature) {}
+        record resolved(EstablishmentEvent event, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<resolved>();
         final var rootSet = roots.get();
         var last = ksAttach.validations()
                            .entrySet()
                            .stream()
-                           .filter(e -> rootSet.contains(e.getKey()))
-                           .map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
-                               mapped.add(new resolved(ks, e.getValue()));
-                               return ks;
+                           .filter(e -> rootSet.contains(e.getKey().getIdentifier()))
+                           .map(e -> kerl.getKeyEvent(e.getKey()).thenApply(evnt -> {
+                               var est = (EstablishmentEvent) evnt;
+                               mapped.add(new resolved(est, e.getValue()));
+                               return event;
                            }))
                            .reduce((a, b) -> a.thenCompose(ks -> b));
 
@@ -547,7 +548,7 @@ public class Ani {
 
             int index = 0;
             for (var r : mapped) {
-                validations[index] = r.state.getKeys().get(0);
+                validations[index] = r.event.getKeys().get(0);
                 signatures[index++] = r.signature.getBytes()[0];
             }
 

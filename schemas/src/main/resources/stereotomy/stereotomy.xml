@@ -158,7 +158,7 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-            <column name="validator" type="INT8">
+            <column name="validator" type="VARBINARY">
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
@@ -172,13 +172,6 @@
             baseTableName="validation" baseTableSchemaName="stereotomy"
             constraintName="validation_for_fk" referencedTableName="event"
             referencedColumnNames="coordinates"
-            referencedTableSchemaName="stereotomy" />
-
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="validator"
-            baseTableName="validation" baseTableSchemaName="stereotomy"
-            constraintName="validation_identifier_fk"
-            referencedTableName="identifier" referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
     </changeSet>
