@@ -151,7 +151,7 @@ message Endorsement {
 }
 
 message Validation {
-    stereotomy.Ident identifier = 1;
+    stereotomy.EventCoords coordinates = 1;
     utils.Sig signature = 2;
 }
 

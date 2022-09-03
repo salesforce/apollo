@@ -163,7 +163,7 @@ public interface Context<T extends Member> {
 
             @Override
             public Context<Z> build() {
-                return new ContextImpl<Z>(id, cardinality, pByz, bias);
+                return new ContextImpl<Z>(id, Math.max(bias + 1, cardinality), pByz, bias);
             }
         };
     }

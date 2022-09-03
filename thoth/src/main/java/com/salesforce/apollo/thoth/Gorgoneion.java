@@ -61,7 +61,6 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
@@ -90,7 +89,99 @@ import io.grpc.stub.StreamObserver;
 public class Gorgoneion {
     public record Parameters(double fpr, SecureRandom entropy,
                              Function<SignedAttestation, CompletableFuture<Boolean>> verifier, Clock clock,
-                             Executor exec, DigestAlgorithm digestAlgo, Duration registrationTimeout, int maxTracked) {}
+                             Executor exec, DigestAlgorithm digestAlgo, Duration registrationTimeout, int maxTracked) {
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+
+        public static class Builder {
+            private Clock                                                   clock               = Clock.systemUTC();
+            private DigestAlgorithm                                         digestAlgo          = DigestAlgorithm.DEFAULT;
+            private SecureRandom                                            entropy;
+            private Executor                                                exec                = r -> r.run();
+            private double                                                  fpr                 = 0.000125;
+            private int                                                     maxTracked          = 100;
+            private Duration                                                registrationTimeout = Duration.ofSeconds(30);
+            private Function<SignedAttestation, CompletableFuture<Boolean>> verifier;
+
+            public Parameters build() {
+                return new Parameters(0, null, null, null, null, null, null, 0);
+            }
+
+            public Clock getClock() {
+                return clock;
+            }
+
+            public DigestAlgorithm getDigestAlgo() {
+                return digestAlgo;
+            }
+
+            public SecureRandom getEntropy() {
+                return entropy;
+            }
+
+            public Executor getExec() {
+                return exec;
+            }
+
+            public double getFpr() {
+                return fpr;
+            }
+
+            public int getMaxTracked() {
+                return maxTracked;
+            }
+
+            public Duration getRegistrationTimeout() {
+                return registrationTimeout;
+            }
+
+            public Function<SignedAttestation, CompletableFuture<Boolean>> getVerifier() {
+                return verifier;
+            }
+
+            public Builder setClock(Clock clock) {
+                this.clock = clock;
+                return this;
+            }
+
+            public Builder setDigestAlgo(DigestAlgorithm digestAlgo) {
+                this.digestAlgo = digestAlgo;
+                return this;
+            }
+
+            public Builder setEntropy(SecureRandom entropy) {
+                this.entropy = entropy;
+                return this;
+            }
+
+            public Builder setExec(Executor exec) {
+                this.exec = exec;
+                return this;
+            }
+
+            public Builder setFpr(double fpr) {
+                this.fpr = fpr;
+                return this;
+            }
+
+            public Builder setMaxTracked(int maxTracked) {
+                this.maxTracked = maxTracked;
+                return this;
+            }
+
+            public Builder setRegistrationTimeout(Duration registrationTimeout) {
+                this.registrationTimeout = registrationTimeout;
+                return this;
+            }
+
+            public Builder setVerifier(Function<SignedAttestation, CompletableFuture<Boolean>> verifier) {
+                this.verifier = verifier;
+                return this;
+            }
+        }
+    }
 
     private class Admissions implements Admission {
         @Override
@@ -124,7 +215,7 @@ public class Gorgoneion {
     private class State implements AdmissionsReplication {
 
         private final ConcurrentNavigableMap<Digest, SignedDeny>                               denies       = new ConcurrentSkipListMap<>();
-        private volatile Duration                                                              durationPerRound;
+        private Duration                                                                       durationPerRound;
         private final ConcurrentNavigableMap<Digest, SignedEndorsement>                        endorsements = new ConcurrentSkipListMap<>();
         private volatile ScheduledFuture<?>                                                    futureGossip;
         private final RingCommunications<Member, AdmissionReplicationService>                  gossiper;
@@ -428,9 +519,9 @@ public class Gorgoneion {
     private final State                                                                        state;
     private final ControlledIdentifier<SelfAddressingIdentifier>                               validating;
 
-    public Gorgoneion(ControlledIdentifierMember member, Context<Member> context, Router admissionsRouter, KERL kerl,
-                      Router replicationRouter, Parameters parameters,
-                      GorgoneionMetrics metrics) throws InterruptedException, ExecutionException {
+    public Gorgoneion(ControlledIdentifierMember member, ControlledIdentifier<SelfAddressingIdentifier> validating,
+                      Context<Member> context, Router admissionsRouter, KERL kerl, Router replicationRouter,
+                      Parameters parameters, GorgoneionMetrics metrics) {
         admissionComms = replicationRouter.create(member, context.getId(), admissions, "admissions",
                                                   r -> new AdmissionServer(r,
                                                                            admissionsRouter.getClientIdentityProvider(),
@@ -441,9 +532,7 @@ public class Gorgoneion {
         this.member = member;
         this.context = context;
         this.kerl = kerl;
-        validating = member.getIdentifier()
-                           .newIdentifier(IdentifierSpecification.<SelfAddressingIdentifier>newBuilder())
-                           .get();
+        this.validating = validating;
         this.state = new State(replicationRouter, metrics);
     }
 
@@ -469,25 +558,28 @@ public class Gorgoneion {
         return Duration.ofSeconds(duration.getSeconds(), duration.getNanos());
     }
 
-    private Validation endorse(Pending p) {
+    private CompletableFuture<Validation> endorse(Pending p) {
         var event = p.getKerl().getEvents(0).getInception();
-        return Validation.newBuilder()
-                         .setIdentifier(validating.getIdentifier().toIdent())
-                         .setSignature(member.sign(event.toByteString()).toSig())
-                         .build();
+        return validating.getSigner()
+                         .thenApply(signer -> Validation.newBuilder()
+                                                        .setCoordinates(validating.getCoordinates().toEventCoords())
+                                                        .setSignature(signer.sign(event.toByteString()).toSig())
+                                                        .build());
     }
 
-    private Endorsement endorse(SignedProposal sp) {
+    private CompletableFuture<Endorsement> endorse(SignedProposal sp) {
         var identifier = identifier(sp.getProposal().getAttestation().getAttestation().getMember());
         var pend = state.pending.get(identifier);
         if (pend == null) {
-            return Endorsement.getDefaultInstance();
+            var fs = new CompletableFuture<Endorsement>();
+            fs.complete(Endorsement.getDefaultInstance());
+            return fs;
         }
-        return Endorsement.newBuilder()
-                          .setEndorser(member.getId().toDigeste())
-                          .setNonce(pend.getPending())
-                          .setValidation(endorse(pend))
-                          .build();
+        return endorse(pend).thenApply(v -> Endorsement.newBuilder()
+                                                       .setEndorser(member.getId().toDigeste())
+                                                       .setNonce(pend.getPending())
+                                                       .setValidation(v)
+                                                       .build());
     }
 
     private void gcPending(Pending p) {
@@ -523,15 +615,23 @@ public class Gorgoneion {
     }
 
     private void maybeEndorse(SignedProposal p) {
-        parameters.verifier.apply(p.getProposal().getAttestation()).whenComplete((success, t) -> {
-            if (t != null || !success) {
+        parameters.verifier.apply(p.getProposal().getAttestation()).thenCompose(success -> {
+            if (!success) {
                 var deny = Deny.newBuilder().build();
                 state.add(SignedDeny.newBuilder()
                                     .setDenial(deny)
                                     .setSignature(member.sign(deny.toByteString()).toSig())
                                     .build());
+                var fs = new CompletableFuture<Endorsement>();
+                fs.complete(null);
+                return fs;
             } else {
-                Endorsement endorsement = endorse(p);
+                return endorse(p);
+            }
+        }).whenComplete((endorsement, error) -> {
+            if (error != null) {
+                log.error("Error endorsing proposal on: {}", member.getId(), error);
+            } else if (endorsement != null) {
                 state.add(SignedEndorsement.newBuilder()
                                            .setEndorsement(endorsement)
                                            .setSignature(member.sign(endorsement.toByteString()).toSig())
