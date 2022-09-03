@@ -12,11 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -80,8 +80,8 @@ public class AniTest extends AbstractDhtTest {
         var v2 = controller.newIdentifier().get();
         var v3 = controller.newIdentifier().get();
 
-        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, threshold,
-                          Arrays.asList(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier()), threshold);
+        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, () -> threshold,
+                          () -> Set.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier()), () -> threshold);
 
         // inception
         var identifier = controller.newIdentifier().get();
@@ -136,8 +136,9 @@ public class AniTest extends AbstractDhtTest {
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  threshold, Collections.emptyList(),
-                                                                                  threshold)));
+                                                                                  () -> threshold,
+                                                                                  () -> Collections.emptySet(),
+                                                                                  () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
         // inception
@@ -175,11 +176,11 @@ public class AniTest extends AbstractDhtTest {
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  threshold,
-                                                                                  Arrays.asList(v1.getIdentifier(),
-                                                                                                v2.getIdentifier(),
-                                                                                                v3.getIdentifier()),
-                                                                                  threshold)));
+                                                                                  () -> threshold,
+                                                                                  () -> Set.of(v1.getIdentifier(),
+                                                                                               v2.getIdentifier(),
+                                                                                               v3.getIdentifier()),
+                                                                                  () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
         // inception

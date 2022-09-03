@@ -10,8 +10,6 @@ package com.salesforce.apollo.thoth;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,16 +73,17 @@ public class Ani {
     }
 
     private final KERL                                         kerl;
+    private final Supplier<SigningThreshold>                   kerlThreshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> kerlValidated;
     private final SigningMember                                member;
-    private final Set<Identifier>                              roots;
-    private final SigningThreshold                             rootThreshold;
+    private final Supplier<Set<Identifier>>                    roots;
+    private final Supplier<SigningThreshold>                   rootThreshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> rootValidated;
 
     public Ani(SigningMember member, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> rootValidatedBuilder, SigningThreshold rootThreshold,
-               List<Identifier> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
-               SigningThreshold kerlThreshold) {
+               Caffeine<EventCoordinates, Boolean> rootValidatedBuilder, Supplier<SigningThreshold> rootThreshold,
+               Supplier<Set<Identifier>> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
+               Supplier<SigningThreshold> kerlThreshold) {
         rootValidated = rootValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
@@ -101,11 +101,12 @@ public class Ani {
         this.member = member;
         this.kerl = kerl;
         this.rootThreshold = rootThreshold;
-        this.roots = new HashSet<>(roots);
+        this.kerlThreshold = kerlThreshold;
+        this.roots = roots;
     }
 
-    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, SigningThreshold rootThreshold,
-               List<Identifier> roots, SigningThreshold kerlThreshold) {
+    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, Supplier<SigningThreshold> rootThreshold,
+               Supplier<Set<Identifier>> roots, Supplier<SigningThreshold> kerlThreshold) {
         this(member, validationTimeout, kerl, defaultRootValidatedBuilder(), rootThreshold, roots,
              defaultKerlValidatedBuilder(), kerlThreshold);
     }
@@ -439,7 +440,7 @@ public class Ani {
 
         if (last.isEmpty()) {
             log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
-            return complete(SigningThreshold.thresholdMet(rootThreshold, new int[] {}));
+            return complete(SigningThreshold.thresholdMet(kerlThreshold.get(), new int[] {}));
         }
 
         return last.get().thenApply(o -> {
@@ -456,7 +457,7 @@ public class Ani {
 
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
             var validated = new JohnHancock(algo,
-                                            signatures).verify(rootThreshold, validations,
+                                            signatures).verify(kerlThreshold.get(), validations,
                                                                BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                   .toByteString()));
             return validated;
@@ -522,10 +523,11 @@ public class Ani {
 
         record resolved(KeyState state, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<resolved>();
+        final var rootSet = roots.get();
         var last = ksAttach.validations()
                            .entrySet()
                            .stream()
-                           .filter(e -> roots.contains(e.getKey()))
+                           .filter(e -> rootSet.contains(e.getKey()))
                            .map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
                                mapped.add(new resolved(ks, e.getValue()));
                                return ks;
@@ -534,7 +536,7 @@ public class Ani {
 
         if (last.isEmpty()) {
             log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
-            return complete(SigningThreshold.thresholdMet(rootThreshold, new int[] {}));
+            return complete(SigningThreshold.thresholdMet(rootThreshold.get(), new int[] {}));
         }
 
         return last.get().thenApply(o -> {
@@ -551,7 +553,7 @@ public class Ani {
 
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
             var validated = new JohnHancock(algo,
-                                            signatures).verify(rootThreshold, validations,
+                                            signatures).verify(rootThreshold.get(), validations,
                                                                BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                   .toByteString()));
             return validated;
