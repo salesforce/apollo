@@ -14,9 +14,9 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -36,6 +36,7 @@ import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
@@ -79,9 +80,13 @@ public class AniTest extends AbstractDhtTest {
         var v1 = controller.newIdentifier().get();
         var v2 = controller.newIdentifier().get();
         var v3 = controller.newIdentifier().get();
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
+        for (var id : List.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier())) {
+            roots.add(id.getDigest());
+        }
 
-        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, () -> threshold,
-                          () -> Set.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier()), () -> threshold);
+        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, () -> threshold, () -> roots,
+                          () -> SigningThreshold.unweighted(3));
 
         // inception
         var identifier = controller.newIdentifier().get();
@@ -133,14 +138,14 @@ public class AniTest extends AbstractDhtTest {
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  () -> threshold,
-                                                                                  () -> Collections.emptySet(),
+                                                                                  () -> threshold, () -> roots,
                                                                                   () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
@@ -174,15 +179,17 @@ public class AniTest extends AbstractDhtTest {
         var v2 = controller.newIdentifier().get();
         var v3 = controller.newIdentifier().get();
 
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
+        for (var id : List.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier())) {
+            roots.add(id.getDigest());
+        }
+
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  () -> threshold,
-                                                                                  () -> Set.of(v1.getIdentifier(),
-                                                                                               v2.getIdentifier(),
-                                                                                               v3.getIdentifier()),
+                                                                                  () -> threshold, () -> roots,
                                                                                   () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 

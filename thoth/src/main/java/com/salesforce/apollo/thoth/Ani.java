@@ -11,7 +11,6 @@ import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -42,7 +41,9 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * Key Event Validation
@@ -76,13 +77,13 @@ public class Ani {
     private final Supplier<SigningThreshold>                   kerlThreshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> kerlValidated;
     private final SigningMember                                member;
-    private final Supplier<Set<Identifier>>                    roots;
+    private final Supplier<DigestBloomFilter>                  roots;
     private final Supplier<SigningThreshold>                   rootThreshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> rootValidated;
 
     public Ani(SigningMember member, Duration validationTimeout, KERL kerl,
                Caffeine<EventCoordinates, Boolean> rootValidatedBuilder, Supplier<SigningThreshold> rootThreshold,
-               Supplier<Set<Identifier>> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
+               Supplier<DigestBloomFilter> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
                Supplier<SigningThreshold> kerlThreshold) {
         rootValidated = rootValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
@@ -106,7 +107,7 @@ public class Ani {
     }
 
     public Ani(SigningMember member, Duration validationTimeout, KERL kerl, Supplier<SigningThreshold> rootThreshold,
-               Supplier<Set<Identifier>> roots, Supplier<SigningThreshold> kerlThreshold) {
+               Supplier<DigestBloomFilter> roots, Supplier<SigningThreshold> kerlThreshold) {
         this(member, validationTimeout, kerl, defaultRootValidatedBuilder(), rootThreshold, roots,
              defaultKerlValidatedBuilder(), kerlThreshold);
     }
@@ -527,7 +528,8 @@ public class Ani {
         var last = ksAttach.validations()
                            .entrySet()
                            .stream()
-                           .filter(e -> rootSet.contains(e.getKey().getIdentifier()))
+                           .filter(e -> rootSet.contains(((SelfAddressingIdentifier) e.getKey()
+                                                                                      .getIdentifier()).getDigest()))
                            .map(e -> kerl.getKeyEvent(e.getKey()).thenApply(evnt -> {
                                var est = (EstablishmentEvent) evnt;
                                mapped.add(new resolved(est, e.getValue()));

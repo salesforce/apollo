@@ -181,3 +181,10 @@ message SignedProposal {
     utils.Sig signature = 2;
 }
 
+message ViewState {
+    utils.Digeste crown = 1;
+    utils.Digeste previous = 2;
+    utils.Biff roots = 3;
+    int32 threshold = 4;
+    repeated Validation validations = 5;
+}

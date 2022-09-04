@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
@@ -104,6 +105,8 @@ public class GorgoneionTest {
                                                   .build())
                                .get();
         assertNotNull(signedNonce);
+        assertNotNull(signedNonce.getNonce());
+        assertEquals(client.getIdentifier().getIdentifier().toIdent(), signedNonce.getNonce().getMember());
 
         final var now = Instant.now();
         final var attestation = Attestation.newBuilder()
@@ -126,6 +129,7 @@ public class GorgoneionTest {
             assertNotNull(validation);
         } catch (TimeoutException e) {
             // expected for now
+            System.out.println("Timeout");
         }
 
     }

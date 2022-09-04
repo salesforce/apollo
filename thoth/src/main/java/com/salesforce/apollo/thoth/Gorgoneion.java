@@ -77,6 +77,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomWindow;
 
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
@@ -653,19 +654,29 @@ public class Gorgoneion {
     }
 
     private void register(SignedAttestation request, Digest from, StreamObserver<Admittance> observer) {
-        var proposal = Proposal.newBuilder().setAttestation(request).setProposer(member.getId().toDigeste()).build();
+        final var identifier = identifier(request.getAttestation().getMember());
+        if (identifier == null) {
+            observer.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid identifier")));
+            return;
+        }
+        var pending = state.pending.get(identifier);
+        if (pending == null) {
+            observer.onError(new StatusRuntimeException(Status.NOT_FOUND.withDescription("No pending admission")));
+            return;
+        }
+        var proposal = Proposal.newBuilder()
+                               .setNonce(pending.getPending())
+                               .setAttestation(request)
+                               .setProposer(member.getId().toDigeste())
+                               .build();
         var signed = SignedProposal.newBuilder()
                                    .setProposal(proposal)
                                    .setSignature(member.sign(proposal.toByteString()).toSig())
                                    .build();
-        var identifier = identifier(request.getAttestation().getMember());
-        if (identifier == null) {
-            return;
-        }
         pendingClients.putIfAbsent(identifier, validations -> {
             observer.onNext(Admittance.newBuilder().addAllValidations(validations).build());
             observer.onCompleted();
         });
-        state.proposals.put(identifier, signed);
+        state.add(signed);
     }
 }

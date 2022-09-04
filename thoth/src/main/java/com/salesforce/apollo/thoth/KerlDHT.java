@@ -11,6 +11,7 @@ import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,6 +24,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -54,6 +56,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesfoce.apollo.thoth.proto.ViewState;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -62,6 +65,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -110,7 +114,6 @@ public class KerlDHT implements ProtoKERLService {
         public CompletionException(String message) {
             super(message);
         }
-
     }
 
     private class Reconcile implements Reconciliation {
@@ -234,6 +237,9 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
+    private record ValidatorView(Digest crown, DigestBloomFilter roots, SigningThreshold threshold, Digest previous,
+                                 ViewState state) {}
+
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
     public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
@@ -248,6 +254,7 @@ public class KerlDHT implements ProtoKERLService {
         return fs;
     }
 
+    private final Ani                                                         ani;
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
     private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
@@ -265,6 +272,7 @@ public class KerlDHT implements ProtoKERLService {
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final TemporalAmount                                              timeout;
+    private final AtomicReference<ValidatorView>                              view           = new AtomicReference<>();
 
     public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
@@ -300,6 +308,8 @@ public class KerlDHT implements ProtoKERLService {
                 return completeExceptionally(e);
             }
         });
+        this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), kerl, () -> view.get().threshold,
+                           () -> view.get().roots, () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
@@ -452,6 +462,10 @@ public class KerlDHT implements ProtoKERLService {
 
     public DigestAlgorithm digestAlgorithm() {
         return kerlPool.getDigestAlgorithm();
+    }
+
+    public Ani getAni() {
+        return ani;
     }
 
     @Override
