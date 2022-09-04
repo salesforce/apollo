@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
@@ -80,9 +81,9 @@ public class TestEventObserver {
         ProtoEventObserver protoService = new ProtoEventObserver() {
 
             @Override
-            public CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl) {
-                CompletableFuture<List<AttachmentEvent>> f = new CompletableFuture<>();
-                f.complete(Collections.emptyList());
+            public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations) {
+                CompletableFuture<Void> f = new CompletableFuture<>();
+                f.complete(null);
                 return f;
             }
 
@@ -94,9 +95,9 @@ public class TestEventObserver {
             }
 
             @Override
-            public CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events) {
-                CompletableFuture<List<AttachmentEvent>> f = new CompletableFuture<>();
-                f.complete(Collections.emptyList());
+            public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
+                CompletableFuture<Void> f = new CompletableFuture<>();
+                f.complete(null);
                 return f;
             }
         };
@@ -111,7 +112,7 @@ public class TestEventObserver {
         var client = clientComms.apply(serverMember, clientMember);
 
         client.publishAttachments(Collections.emptyList()).get();
-        client.publish(KERL_.getDefaultInstance()).get();
-        client.publishEvents(Collections.emptyList()).get();
+        client.publish(KERL_.getDefaultInstance(), Collections.emptyList()).get();
+        client.publishEvents(Collections.emptyList(), Collections.emptyList()).get();
     }
 }

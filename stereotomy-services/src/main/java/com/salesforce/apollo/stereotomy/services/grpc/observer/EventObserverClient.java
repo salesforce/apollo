@@ -15,7 +15,7 @@ import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentEvents;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverFutureStub;
@@ -56,8 +56,8 @@ public class EventObserverClient implements EventObserverService {
             }
 
             @Override
-            public CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl) {
-                return service.publish(kerl);
+            public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations) {
+                return service.publish(kerl, validations);
             }
 
             @Override
@@ -66,8 +66,8 @@ public class EventObserverClient implements EventObserverService {
             }
 
             @Override
-            public CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events) {
-                return service.publishEvents(events);
+            public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
+                return service.publishEvents(events, validations);
             }
         };
     }
@@ -98,22 +98,21 @@ public class EventObserverClient implements EventObserverService {
     }
 
     @Override
-    public CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl) {
+    public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations) {
         Context timer = metrics == null ? null : metrics.publishKERLClient().time();
-        var request = KERLContext.newBuilder().setContext(context).build();
+        var request = KERLContext.newBuilder().setContext(context).setKerl(kerl).addAllValidations(validations).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundPublishKERLRequest().mark(request.getSerializedSize());
         }
         var result = client.publish(request);
-        var f = new CompletableFuture<List<AttachmentEvent>>();
+        var f = new CompletableFuture<Void>();
         result.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
-            AttachmentEvents attachments;
             try {
-                attachments = result.get();
+                result.get();
             } catch (InterruptedException e) {
                 f.completeExceptionally(e);
                 return;
@@ -121,11 +120,7 @@ public class EventObserverClient implements EventObserverService {
                 f.completeExceptionally(e.getCause());
                 return;
             }
-            if (timer != null) {
-                metrics.inboundBandwidth().mark(attachments.getSerializedSize());
-                metrics.inboundPublishKERLResponse().mark(attachments.getSerializedSize());
-            }
-            f.complete(attachments.getAttachmentsList());
+            f.complete(null);
         }, r -> r.run());
         return f;
     }
@@ -159,22 +154,25 @@ public class EventObserverClient implements EventObserverService {
     }
 
     @Override
-    public CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events) {
+    public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
         Context timer = metrics == null ? null : metrics.publishEventsClient().time();
-        KeyEventsContext request = KeyEventsContext.newBuilder().addAllKeyEvent(events).setContext(context).build();
+        KeyEventsContext request = KeyEventsContext.newBuilder()
+                                                   .addAllKeyEvent(events)
+                                                   .addAllValidations(validations)
+                                                   .setContext(context)
+                                                   .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundPublishEventsRequest().mark(request.getSerializedSize());
         }
         var result = client.publishEvents(request);
-        var f = new CompletableFuture<List<AttachmentEvent>>();
+        var f = new CompletableFuture<Void>();
         result.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
-            AttachmentEvents attachments;
             try {
-                attachments = result.get();
+                result.get();
             } catch (InterruptedException e) {
                 f.completeExceptionally(e);
                 return;
@@ -182,11 +180,7 @@ public class EventObserverClient implements EventObserverService {
                 f.completeExceptionally(e.getCause());
                 return;
             }
-            if (timer != null) {
-                metrics.inboundBandwidth().mark(attachments.getSerializedSize());
-                metrics.inboundPublishEventsResponse().mark(attachments.getSerializedSize());
-            }
-            f.complete(attachments.getAttachmentsList());
+            f.complete(null);
         }, r -> r.run());
         return f;
     }

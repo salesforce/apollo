@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentEvents;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
@@ -34,9 +33,9 @@ import io.grpc.stub.StreamObserver;
 public class EventObserverServer extends EventObserverImplBase {
     private final static Logger log = LoggerFactory.getLogger(EventObserverServer.class);
 
+    private final Executor                            exec;
     private final StereotomyMetrics                   metrics;
     private final RoutableService<ProtoEventObserver> routing;
-    private final Executor                            exec;
 
     public EventObserverServer(RoutableService<ProtoEventObserver> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
@@ -45,14 +44,14 @@ public class EventObserverServer extends EventObserverImplBase {
     }
 
     @Override
-    public void publish(KERLContext request, StreamObserver<AttachmentEvents> responseObserver) {
+    public void publish(KERLContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.publishKERLService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundPublishKERLRequest().mark(request.getSerializedSize());
         }
         exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var result = s.publish(request.getKerl());
+            var result = s.publish(request.getKerl(), request.getValidationsList());
             result.whenComplete((e, t) -> {
                 if (timer != null) {
                     timer.stop();
@@ -60,12 +59,7 @@ public class EventObserverServer extends EventObserverImplBase {
                 if (t != null) {
                     responseObserver.onError(t);
                 } else {
-                    var response = AttachmentEvents.newBuilder().addAllAttachments(e).build();
-                    if (timer != null) {
-                        metrics.outboundBandwidth().mark(response.getSerializedSize());
-                        metrics.outboundPublishKERLResponse().mark(response.getSerializedSize());
-                    }
-                    responseObserver.onNext(response);
+                    responseObserver.onNext(Empty.getDefaultInstance());
                     responseObserver.onCompleted();
                 }
             });
@@ -96,14 +90,14 @@ public class EventObserverServer extends EventObserverImplBase {
     }
 
     @Override
-    public void publishEvents(KeyEventsContext request, StreamObserver<AttachmentEvents> responseObserver) {
+    public void publishEvents(KeyEventsContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.publishEventsService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundPublishEventsRequest().mark(request.getSerializedSize());
         }
         exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var result = s.publishEvents(request.getKeyEventList());
+            var result = s.publishEvents(request.getKeyEventList(), request.getValidationsList());
             result.whenComplete((e, t) -> {
                 if (timer != null) {
                     timer.stop();
@@ -111,12 +105,7 @@ public class EventObserverServer extends EventObserverImplBase {
                 if (t != null) {
                     responseObserver.onError(t);
                 } else {
-                    var response = AttachmentEvents.newBuilder().addAllAttachments(e).build();
-                    if (timer != null) {
-                        metrics.outboundBandwidth().mark(response.getSerializedSize());
-                        metrics.outboundPublishEventsResponse().mark(response.getSerializedSize());
-                    }
-                    responseObserver.onNext(response);
+                    responseObserver.onNext(Empty.getDefaultInstance());
                     responseObserver.onCompleted();
                 }
             });

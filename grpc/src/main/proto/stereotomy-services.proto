@@ -45,6 +45,7 @@ message AttachmentsContext {
 message KERLContext {
     utils.Digeste context = 1;
     stereotomy.KERL_ kerl = 2;
+    repeated stereotomy.Validations validations = 3;
 }
 
 message BindContext {
@@ -55,11 +56,13 @@ message BindContext {
 message KeyEventContext {
     utils.Digeste context = 1;
     KeyEvent_ keyEvent = 2;
+    Validations validations = 3;
 }
 
 message KeyEventsContext {
     utils.Digeste context = 1;
     repeated KeyEvent_ keyEvent = 2;
+    repeated stereotomy.Validations validations = 3;
 }
 
 message KeyEventWithAttachmentsContext {
@@ -96,8 +99,8 @@ message ValidationsContext {
 }
 
 service EventObserver { 
-    rpc publish(KERLContext) returns(AttachmentEvents) {}
-    rpc publishEvents (KeyEventsContext) returns(AttachmentEvents) {}
+    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
+    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
     rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
 }
 

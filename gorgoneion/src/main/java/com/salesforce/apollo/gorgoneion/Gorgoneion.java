@@ -9,6 +9,7 @@ package com.salesforce.apollo.gorgoneion;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +46,7 @@ import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.gorgoneion.proto.SignedProposal;
 import com.salesfoce.apollo.gorgoneion.proto.Update;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
@@ -60,11 +62,11 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
@@ -581,9 +583,9 @@ public class Gorgoneion {
     private final CommonCommunications<AdmissionService, Admission>                       admissionComms;
     private final Admissions                                                              admissions     = new Admissions();
     private final Context<Member>                                                         context;
-    @SuppressWarnings("unused")
-    private final KERL                                                                    kerl;
     private final ControlledIdentifierMember                                              member;
+    @SuppressWarnings("unused")
+    private final ProtoEventObserver                                                      observer;
     private final Parameters                                                              parameters;
     private final ConcurrentNavigableMap<SelfAddressingIdentifier, Consumer<Validations>> pendingClients = new ConcurrentSkipListMap<>();
     private final AtomicBoolean                                                           started        = new AtomicBoolean();
@@ -591,8 +593,8 @@ public class Gorgoneion {
     private final ControlledIdentifier<SelfAddressingIdentifier>                          validating;
 
     public Gorgoneion(ControlledIdentifierMember member, ControlledIdentifier<SelfAddressingIdentifier> validating,
-                      Context<Member> context, Router admissionsRouter, KERL kerl, Router replicationRouter,
-                      Parameters parameters, GorgoneionMetrics metrics) {
+                      Context<Member> context, Router admissionsRouter, ProtoEventObserver observer,
+                      Router replicationRouter, Parameters parameters, GorgoneionMetrics metrics) {
         admissionComms = admissionsRouter.create(member, context.getId(), admissions, "admissions",
                                                  r -> new AdmissionServer(r,
                                                                           admissionsRouter.getClientIdentityProvider(),
@@ -602,7 +604,7 @@ public class Gorgoneion {
         this.parameters = parameters;
         this.member = member;
         this.context = context;
-        this.kerl = kerl;
+        this.observer = observer;
         this.validating = validating;
         this.state = new State(replicationRouter, metrics);
     }
@@ -621,8 +623,8 @@ public class Gorgoneion {
         state.stop();
     }
 
-    private void commit(Validations validations) {
-        // TODO Auto-generated method stub
+    private void commit(KERL_ kerl, Validations validations) {
+        observer.publish(kerl, Collections.singletonList(validations));
     }
 
     private void commit(Votes v) {
@@ -648,7 +650,7 @@ public class Gorgoneion {
                                                                                                  .getValidation())
                                                                                     .toList())
                                                    .build();
-                commit(validations);
+                commit(kerl, validations);
                 client.accept(validations);
             }
         } else {

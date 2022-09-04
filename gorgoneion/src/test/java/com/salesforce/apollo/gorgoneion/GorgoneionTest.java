@@ -9,7 +9,10 @@ package com.salesforce.apollo.gorgoneion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -29,6 +32,7 @@ import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Registration;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -43,6 +47,7 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
@@ -61,7 +66,6 @@ public class GorgoneionTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         final var prefix = UUID.randomUUID().toString();
-        var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         final var serverMembers = new ConcurrentSkipListMap<Digest, Member>();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
         var context = Context.<Member>newBuilder().setCardinality(1).build();
@@ -86,7 +90,9 @@ public class GorgoneionTest {
                                .newIdentifier(IdentifierSpecification.<SelfAddressingIdentifier>newBuilder())
                                .get();
 
-        var gorgon = new Gorgoneion(member, validating, context, gorgonRouter, kerl, gorgonRouter, params, null);
+        // The kerl observer to publish admitted client KERLs to
+        var observer = mock(ProtoEventObserver.class);
+        var gorgon = new Gorgoneion(member, validating, context, gorgonRouter, observer, gorgonRouter, params, null);
         gorgon.start(Duration.ofMillis(5), scheduler);
 
         // The registering client
@@ -147,5 +153,6 @@ public class GorgoneionTest {
         assertNotEquals(Validations.getDefaultInstance(), validation);
         assertEquals(1, validation.getValidationsCount());
         assertEquals(client.getIdentifier().getCoordinates().toEventCoords(), validation.getCoordinates());
+        verify(observer).publish(any(KERL_.class), anyList());
     }
 }
