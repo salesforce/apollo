@@ -55,11 +55,14 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
@@ -210,7 +213,30 @@ public class Gorgoneion {
         }
 
         private boolean validate(SignedAttestation request, Digest from) {
-            return true;
+            var attestation = request.getAttestation();
+            final var identifier = identifier(attestation.getMember());
+            var pending = state.pending.get(identifier);
+            if (pending == null) {
+                log.warn("Invalid attestation, no pending state for: {} on: {}", identifier, member.getId());
+                return false;
+            }
+            var kerl = pending.getKerl();
+            if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
+                                    .event() instanceof EstablishmentEvent establishment) {
+                final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
+                if (!verifier.verify(JohnHancock.from(request.getSignature()), attestation.toByteString())) {
+                    log.warn("Invalid attestation, invalid signature from: {} on: {}", identifier, member.getId());
+                    return false;
+                }
+                if (!verifier.verify(JohnHancock.from(attestation.getNonce()), pending.getPending().toByteString())) {
+                    log.warn("Invalid attestation, invalid nonce signature from: {} on: {}", identifier,
+                             member.getId());
+                    return false;
+                }
+                return true;
+            } else {
+                return false;
+            }
         }
     }
 
@@ -512,17 +538,17 @@ public class Gorgoneion {
 
     private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
-    private final CommonCommunications<AdmissionService, Admission>                             admissionComms;
-    private final Admissions                                                                    admissions     = new Admissions();
-    private final Context<Member>                                                               context;
+    private final CommonCommunications<AdmissionService, Admission>                       admissionComms;
+    private final Admissions                                                              admissions     = new Admissions();
+    private final Context<Member>                                                         context;
     @SuppressWarnings("unused")
-    private final KERL                                                                          kerl;
-    private final ControlledIdentifierMember                                                    member;
-    private final Parameters                                                                    parameters;
-    private final ConcurrentNavigableMap<SelfAddressingIdentifier, Consumer<List<Validation_>>> pendingClients = new ConcurrentSkipListMap<>();
-    private final AtomicBoolean                                                                 started        = new AtomicBoolean();
-    private final State                                                                         state;
-    private final ControlledIdentifier<SelfAddressingIdentifier>                                validating;
+    private final KERL                                                                    kerl;
+    private final ControlledIdentifierMember                                              member;
+    private final Parameters                                                              parameters;
+    private final ConcurrentNavigableMap<SelfAddressingIdentifier, Consumer<Validations>> pendingClients = new ConcurrentSkipListMap<>();
+    private final AtomicBoolean                                                           started        = new AtomicBoolean();
+    private final State                                                                   state;
+    private final ControlledIdentifier<SelfAddressingIdentifier>                          validating;
 
     public Gorgoneion(ControlledIdentifierMember member, ControlledIdentifier<SelfAddressingIdentifier> validating,
                       Context<Member> context, Router admissionsRouter, KERL kerl, Router replicationRouter,
@@ -555,11 +581,40 @@ public class Gorgoneion {
         state.stop();
     }
 
+    private void commit(Validations validations) {
+        // TODO Auto-generated method stub
+    }
+
     private void commit(Votes v) {
         final var identifier = identifier(v.proposal.getAttestation().getAttestation().getMember());
         var client = pendingClients.remove(identifier);
-        if (client != null) {
-            client.accept(v.endorsements.stream().map(se -> se.getEndorsement().getValidation()).toList());
+
+        var pending = state.pending.get(identifier);
+        if (pending == null) {
+            if (client != null) {
+                client.accept(Validations.getDefaultInstance());
+            }
+            return;
+        }
+
+        var kerl = pending.getKerl();
+        if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
+                                .event() instanceof EstablishmentEvent establishment) {
+            if (client != null) {
+                final var validations = Validations.newBuilder()
+                                                   .setCoordinates(establishment.getCoordinates().toEventCoords())
+                                                   .addAllValidations(v.endorsements.stream()
+                                                                                    .map(se -> se.getEndorsement()
+                                                                                                 .getValidation())
+                                                                                    .toList())
+                                                   .build();
+                commit(validations);
+                client.accept(validations);
+            }
+        } else {
+            if (client != null) {
+                client.accept(Validations.getDefaultInstance());
+            }
         }
         log.info("Committing: {} on: {}", identifier, member.getId());
     }
@@ -685,7 +740,7 @@ public class Gorgoneion {
                                    .setSignature(member.sign(proposal.toByteString()).toSig())
                                    .build();
         pendingClients.putIfAbsent(identifier, validations -> {
-            observer.onNext(Validations.newBuilder().addAllValidations(validations).build());
+            observer.onNext(validations);
             observer.onCompleted();
         });
         state.add(signed);

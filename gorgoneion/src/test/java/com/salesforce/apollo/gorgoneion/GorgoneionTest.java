@@ -7,6 +7,7 @@
 package com.salesforce.apollo.gorgoneion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
+import com.google.common.base.Function;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
@@ -53,6 +55,8 @@ public class GorgoneionTest {
 
     @Test
     public void smokin() throws Exception {
+        final var scheduler = Executors.newSingleThreadScheduledExecutor();
+        final var exec = Executors.newSingleThreadExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -60,29 +64,37 @@ public class GorgoneionTest {
         var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         final var serverMembers = new ConcurrentSkipListMap<Digest, Member>();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var context = Context.<Member>newBuilder().setCardinality(1).build();
+        context.activate(member);
+
+        // Gorgoneion service comms
         var gorgonRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
                                            ForkJoinPool.commonPool(), null);
-
         gorgonRouter.setMember(member);
         gorgonRouter.start();
 
-        var validating = member.getIdentifier()
-                               .newIdentifier(IdentifierSpecification.<SelfAddressingIdentifier>newBuilder())
-                               .get();
-        var context = Context.<Member>newBuilder().setCardinality(1).build();
-        context.activate(member);
-        Parameters params = Parameters.newBuilder().setVerifier(sa -> {
+        // The async abstraction of the underlying attestation verification service
+        final Function<SignedAttestation, CompletableFuture<Boolean>> verifier = sa -> {
             var fs = new CompletableFuture<Boolean>();
             fs.complete(true);
             return fs;
-        }).setEntropy(entropy).setExec(Executors.newSingleThreadExecutor()).build();
+        };
+        Parameters params = Parameters.newBuilder().setVerifier(verifier).setEntropy(entropy).setExec(exec).build();
+
+        // This is the identifier used to validate the client's KERL
+        var validating = member.getIdentifier()
+                               .newIdentifier(IdentifierSpecification.<SelfAddressingIdentifier>newBuilder())
+                               .get();
 
         var gorgon = new Gorgoneion(member, validating, context, gorgonRouter, kerl, gorgonRouter, params, null);
-        gorgon.start(Duration.ofMillis(5), Executors.newSingleThreadScheduledExecutor());
+        gorgon.start(Duration.ofMillis(5), scheduler);
 
+        // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
-                                           ForkJoinPool.commonPool(), null);
+
+        // Registering client comms
+        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
+                                           null);
         Admission admissions = mock(Admission.class);
         var clientComminications = clientRouter.create(member, context.getId(), admissions, "admissions",
                                                        r -> new AdmissionServer(r,
@@ -93,10 +105,13 @@ public class GorgoneionTest {
         clientRouter.setMember(client);
         clientRouter.start();
 
+        // Admin client link
         var admin = clientComminications.apply(member, client);
 
         assertNotNull(admin);
 
+        // Apply for registration of the client's KERL, receiving the signed nonce from
+        // the server
         var signedNonce = admin.apply(Registration.newBuilder()
                                                   .setContext(context.getId().toDigeste())
                                                   .setIdentity(client.getIdentifier().getIdentifier().toIdent())
@@ -107,16 +122,20 @@ public class GorgoneionTest {
         assertNotNull(signedNonce.getNonce());
         assertEquals(client.getIdentifier().getIdentifier().toIdent(), signedNonce.getNonce().getMember());
 
+        // Create attestation
         final var now = Instant.now();
+        // Attestation document from fundamental identity service (AWS, PAL, GCM, etc)
+        final var attestationDocument = Any.getDefaultInstance();
         final var attestation = Attestation.newBuilder()
                                            .setMember(client.getIdentifier().getIdentifier().toIdent())
                                            .setTimestamp(Timestamp.newBuilder()
                                                                   .setSeconds(now.getEpochSecond())
                                                                   .setNanos(now.getNano()))
                                            .setNonce(client.sign(signedNonce.toByteString()).toSig())
-                                           .setAttestation(Any.getDefaultInstance())
+                                           .setAttestation(attestationDocument)
                                            .build();
 
+        // Register with gorgoneion, receive validations of client's KERL
         Validations validation = admin.register(SignedAttestation.newBuilder()
                                                                  .setContext(context.getId().toDigeste())
                                                                  .setAttestation(attestation)
@@ -125,6 +144,8 @@ public class GorgoneionTest {
                                                                  .build())
                                       .get(1, TimeUnit.SECONDS);
         assertNotNull(validation);
+        assertNotEquals(Validations.getDefaultInstance(), validation);
         assertEquals(1, validation.getValidationsCount());
+        assertEquals(client.getIdentifier().getCoordinates().toEventCoords(), validation.getCoordinates());
     }
 }
