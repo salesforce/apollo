@@ -9,14 +9,13 @@ package com.salesforce.apollo.gorgoneion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -32,7 +31,6 @@ import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Registration;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -153,6 +151,8 @@ public class GorgoneionTest {
         assertNotEquals(Validations.getDefaultInstance(), validation);
         assertEquals(1, validation.getValidationsCount());
         assertEquals(client.getIdentifier().getCoordinates().toEventCoords(), validation.getCoordinates());
-        verify(observer).publish(any(KERL_.class), anyList());
+
+        // Verify client KERL published
+        verify(observer).publish(client.kerl().get(), Collections.singletonList(validation));
     }
 }
