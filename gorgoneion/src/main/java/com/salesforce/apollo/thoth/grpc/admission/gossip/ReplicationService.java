@@ -7,17 +7,20 @@
 
 package com.salesforce.apollo.thoth.grpc.admission.gossip;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Gossip;
 import com.salesfoce.apollo.gorgoneion.proto.Update;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.comm.Link;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface AdmissionsReplication {
+public interface ReplicationService extends Link {
 
-    Update gossip(Gossip gossip, Digest from);
+    ListenableFuture<Update> gossip(Gossip gossip);
 
-    void update(Update update, Digest from);
+    ListenableFuture<Empty> update(Update update);
+
 }

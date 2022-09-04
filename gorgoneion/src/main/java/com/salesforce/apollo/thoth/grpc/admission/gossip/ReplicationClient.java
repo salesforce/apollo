@@ -27,16 +27,16 @@ import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
  * @author hal.hildebrand
  *
  */
-public class AdmissionsReplicationClient implements AdmissionReplicationService {
-    public static CreateClientCommunications<AdmissionReplicationService> getCreate(Digest context,
+public class ReplicationClient implements ReplicationService {
+    public static CreateClientCommunications<ReplicationService> getCreate(Digest context,
                                                                                     GorgoneionMetrics metrics) {
         return (t, f, c) -> {
-            return new AdmissionsReplicationClient(context, c, t, metrics);
+            return new ReplicationClient(context, c, t, metrics);
         };
     }
 
-    public static AdmissionReplicationService getLocalLoopback(AdmissionsReplication service, SigningMember member) {
-        return new AdmissionReplicationService() {
+    public static ReplicationService getLocalLoopback(Replication service, SigningMember member) {
+        return new ReplicationService() {
 
             @Override
             public void close() throws IOException {
@@ -67,7 +67,7 @@ public class AdmissionsReplicationClient implements AdmissionReplicationService 
     @SuppressWarnings("unused")
     private final GorgoneionMetrics       metrics;
 
-    public AdmissionsReplicationClient(Digest context, ManagedServerConnection channel, Member member,
+    public ReplicationClient(Digest context, ManagedServerConnection channel, Member member,
                                        GorgoneionMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;

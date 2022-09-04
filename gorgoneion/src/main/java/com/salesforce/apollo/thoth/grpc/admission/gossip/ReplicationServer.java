@@ -28,16 +28,16 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class AdmissionsReplicationServer extends ReplicationImplBase {
-    private final static Logger log = LoggerFactory.getLogger(AdmissionsReplicationServer.class);
+public class ReplicationServer extends ReplicationImplBase {
+    private final static Logger log = LoggerFactory.getLogger(ReplicationServer.class);
 
     private final Executor                               exec;
     private final ClientIdentity                         identity;
     @SuppressWarnings("unused")
     private final GorgoneionMetrics                      metrics;
-    private final RoutableService<AdmissionsReplication> router;
+    private final RoutableService<Replication> router;
 
-    public AdmissionsReplicationServer(RoutableService<AdmissionsReplication> router, ClientIdentity identity,
+    public ReplicationServer(RoutableService<Replication> router, ClientIdentity identity,
                                        Executor exec, GorgoneionMetrics metrics) {
         this.metrics = metrics;
         this.router = router;

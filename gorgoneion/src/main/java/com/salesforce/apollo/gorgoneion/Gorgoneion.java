@@ -65,10 +65,10 @@ import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionService;
-import com.salesforce.apollo.thoth.grpc.admission.gossip.AdmissionReplicationService;
-import com.salesforce.apollo.thoth.grpc.admission.gossip.AdmissionsReplication;
-import com.salesforce.apollo.thoth.grpc.admission.gossip.AdmissionsReplicationClient;
-import com.salesforce.apollo.thoth.grpc.admission.gossip.AdmissionsReplicationServer;
+import com.salesforce.apollo.thoth.grpc.admission.gossip.Replication;
+import com.salesforce.apollo.thoth.grpc.admission.gossip.ReplicationClient;
+import com.salesforce.apollo.thoth.grpc.admission.gossip.ReplicationServer;
+import com.salesforce.apollo.thoth.grpc.admission.gossip.ReplicationService;
 import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
@@ -213,27 +213,27 @@ public class Gorgoneion {
         }
     }
 
-    private class State implements AdmissionsReplication {
+    private class State implements Replication {
 
         private final ConcurrentNavigableMap<Digest, SignedDeny>                               denies       = new ConcurrentSkipListMap<>();
         private Duration                                                                       durationPerRound;
         private final ConcurrentNavigableMap<Digest, SignedEndorsement>                        endorsements = new ConcurrentSkipListMap<>();
         private volatile ScheduledFuture<?>                                                    futureGossip;
-        private final RingCommunications<Member, AdmissionReplicationService>                  gossiper;
+        private final RingCommunications<Member, ReplicationService>                  gossiper;
         private final ConcurrentNavigableMap<SelfAddressingIdentifier, Pending>                pending      = new ConcurrentSkipListMap<>();
         private final BloomWindow<Digest>                                                      processed;
         private final ConcurrentNavigableMap<SelfAddressingIdentifier, SignedProposal>         proposals    = new ConcurrentSkipListMap<>();
-        private final CommonCommunications<AdmissionReplicationService, AdmissionsReplication> replicationComms;
+        private final CommonCommunications<ReplicationService, Replication> replicationComms;
         private final RoundScheduler                                                           roundTimers;
         private final ConcurrentNavigableMap<SelfAddressingIdentifier, Votes>                  votes        = new ConcurrentSkipListMap<>();
 
         private State(Router replicationRouter, GorgoneionMetrics metrics) {
             replicationComms = replicationRouter.create(member, context.getId(), this, "replication",
-                                                        r -> new AdmissionsReplicationServer(r,
+                                                        r -> new ReplicationServer(r,
                                                                                              replicationRouter.getClientIdentityProvider(),
                                                                                              parameters.exec, metrics),
-                                                        AdmissionsReplicationClient.getCreate(context.getId(), metrics),
-                                                        AdmissionsReplicationClient.getLocalLoopback(this, member));
+                                                        ReplicationClient.getCreate(context.getId(), metrics),
+                                                        ReplicationClient.getLocalLoopback(this, member));
             gossiper = new RingCommunications<>(context, member, replicationComms, parameters.exec);
             processed = new BloomWindow<>(parameters.maxTracked,
                                           () -> new DigestBloomFilter(Entropy.nextBitsStreamLong(),
@@ -308,7 +308,7 @@ public class Gorgoneion {
                        .build();
         }
 
-        private ListenableFuture<Update> gossip(AdmissionReplicationService link, Integer ring) {
+        private ListenableFuture<Update> gossip(ReplicationService link, Integer ring) {
             if (!started.get()) {
                 return null;
             }
@@ -331,7 +331,7 @@ public class Gorgoneion {
         }
 
         private void gossip(Optional<ListenableFuture<Update>> futureSailor,
-                            Destination<Member, AdmissionReplicationService> destination, Duration frequency,
+                            Destination<Member, ReplicationService> destination, Duration frequency,
                             ScheduledExecutorService scheduler) {
             final var member = destination.member();
             try {
@@ -462,11 +462,7 @@ public class Gorgoneion {
 
             final var memberId = digest(c.getDenial().getNonce().getNonce().getMember());
             final var member = context.getActiveMember(memberId);
-            if (member == null) {
-                return null;
-            }
-
-            if (!member.verify(signature, c.getDenial().toByteString())) {
+            if ((member == null) || !member.verify(signature, c.getDenial().toByteString())) {
                 return null;
             }
             return digest;
@@ -480,10 +476,7 @@ public class Gorgoneion {
             }
             final var memberId = digest(c.getEndorsement().getNonce().getNonce().getMember());
             final var member = context.getActiveMember(memberId);
-            if (member == null) {
-                return null;
-            }
-            if (!member.verify(signature, c.getEndorsement().toByteString())) {
+            if ((member == null) || !member.verify(signature, c.getEndorsement().toByteString())) {
                 return null;
             }
             return digest;
@@ -497,10 +490,7 @@ public class Gorgoneion {
             }
             var proposerId = Digest.from(c.getProposal().getProposer());
             final var proposer = context.getActiveMember(proposerId);
-            if (proposer == null) {
-                return null;
-            }
-            if (!proposer.verify(signature, c.getProposal().toByteString())) {
+            if ((proposer == null) || !proposer.verify(signature, c.getProposal().toByteString())) {
                 return null;
             }
 
