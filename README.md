@@ -33,7 +33,7 @@ You can, of course, use the "--also-make-dependents" argument for maven "-amd" i
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Stereotomy - Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
-* PAL - Permissive Action Link implementation for attestation boostrapping secrets
+* PAL - Permissive Action Link implementation for attestation and boostrapping secrets
 * MTLS network communication - Can use KERI for certificate authentication and generation.  Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay providing virtually synchronous, stable membership views.
@@ -54,6 +54,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
+* [Gorgoneion](gorgoneion/README.md) - Experimental identity bootstrapping and secrets service
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
 * [PAL](pal/README.md) - Permissive Action Link GRPC client, for secure bootstrapping of secets over unix domain sockets.
@@ -108,7 +109,7 @@ The module to exclude is:
 
 Again, I stress that you must **NOT** include this in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.
 
-This module must be built, however, so please run the following once from the top level of the repository
+This module must be built so please run the following once from the top level of the repository
 
     mvn clean install -Ppre -DskipTests
 
