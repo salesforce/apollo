@@ -9,6 +9,7 @@ package com.salesforce.apollo.gorgoneion;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -215,23 +216,23 @@ public class Gorgoneion {
 
     private class State implements Replication {
 
-        private final ConcurrentNavigableMap<Digest, SignedDeny>                               denies       = new ConcurrentSkipListMap<>();
-        private Duration                                                                       durationPerRound;
-        private final ConcurrentNavigableMap<Digest, SignedEndorsement>                        endorsements = new ConcurrentSkipListMap<>();
-        private volatile ScheduledFuture<?>                                                    futureGossip;
-        private final RingCommunications<Member, ReplicationService>                  gossiper;
-        private final ConcurrentNavigableMap<SelfAddressingIdentifier, Pending>                pending      = new ConcurrentSkipListMap<>();
-        private final BloomWindow<Digest>                                                      processed;
-        private final ConcurrentNavigableMap<SelfAddressingIdentifier, SignedProposal>         proposals    = new ConcurrentSkipListMap<>();
-        private final CommonCommunications<ReplicationService, Replication> replicationComms;
-        private final RoundScheduler                                                           roundTimers;
-        private final ConcurrentNavigableMap<SelfAddressingIdentifier, Votes>                  votes        = new ConcurrentSkipListMap<>();
+        private final ConcurrentNavigableMap<Digest, SignedDeny>                       denies       = new ConcurrentSkipListMap<>();
+        private Duration                                                               durationPerRound;
+        private final ConcurrentNavigableMap<Digest, SignedEndorsement>                endorsements = new ConcurrentSkipListMap<>();
+        private volatile ScheduledFuture<?>                                            futureGossip;
+        private final RingCommunications<Member, ReplicationService>                   gossiper;
+        private final ConcurrentNavigableMap<SelfAddressingIdentifier, Pending>        pending      = new ConcurrentSkipListMap<>();
+        private final BloomWindow<Digest>                                              processed;
+        private final ConcurrentNavigableMap<SelfAddressingIdentifier, SignedProposal> proposals    = new ConcurrentSkipListMap<>();
+        private final CommonCommunications<ReplicationService, Replication>            replicationComms;
+        private final RoundScheduler                                                   roundTimers;
+        private final ConcurrentNavigableMap<SelfAddressingIdentifier, Votes>          votes        = new ConcurrentSkipListMap<>();
 
         private State(Router replicationRouter, GorgoneionMetrics metrics) {
             replicationComms = replicationRouter.create(member, context.getId(), this, "replication",
                                                         r -> new ReplicationServer(r,
-                                                                                             replicationRouter.getClientIdentityProvider(),
-                                                                                             parameters.exec, metrics),
+                                                                                   replicationRouter.getClientIdentityProvider(),
+                                                                                   parameters.exec, metrics),
                                                         ReplicationClient.getCreate(context.getId(), metrics),
                                                         ReplicationClient.getLocalLoopback(this, member));
             gossiper = new RingCommunications<>(context, member, replicationComms, parameters.exec);
@@ -283,7 +284,15 @@ public class Gorgoneion {
                 if (identifier == null) {
                     return null;
                 }
-                votes.computeIfAbsent(identifier, null);
+                var v = votes.get(identifier);
+                if (v == null) {
+                    log.error("No proposal for endorsement: {} on: {}", identifier, member.getId());
+                    return null;
+                }
+                v.endorsements.add(c);
+                if (v.endorsements.size() >= context.majority() || context.activeCount() == 1) {
+                    commit(v);
+                }
                 return c;
             });
         }
@@ -294,6 +303,7 @@ public class Gorgoneion {
                 return;
             }
             proposals.computeIfAbsent(identifier, d -> {
+                votes.computeIfAbsent(d, i -> new Votes(p.getProposal(), new HashSet<>(), new HashSet<>()));
                 maybeEndorse(p);
                 return p;
             });
@@ -306,14 +316,6 @@ public class Gorgoneion {
                        .setPending(havePending())
                        .setProposals(haveProposals())
                        .build();
-        }
-
-        private ListenableFuture<Update> gossip(ReplicationService link, Integer ring) {
-            if (!started.get()) {
-                return null;
-            }
-            roundTimers.tick();
-            return link.gossip(Gossip.newBuilder().setHave(getHave()).build());
         }
 
         private void gossip(Duration frequency, ScheduledExecutorService scheduler) {
@@ -359,6 +361,14 @@ public class Gorgoneion {
                 futureGossip = scheduler.schedule(() -> gossip(frequency, scheduler), frequency.toNanos(),
                                                   TimeUnit.NANOSECONDS);
             }
+        }
+
+        private ListenableFuture<Update> gossip(ReplicationService link, Integer ring) {
+            if (!started.get()) {
+                return null;
+            }
+            roundTimers.tick();
+            return link.gossip(Gossip.newBuilder().setHave(getHave()).build());
         }
 
         private Biff haveDenies() {
@@ -474,9 +484,9 @@ public class Gorgoneion {
             if (processed.contains(digest)) {
                 return null;
             }
-            final var memberId = digest(c.getEndorsement().getNonce().getNonce().getMember());
-            final var member = context.getActiveMember(memberId);
-            if ((member == null) || !member.verify(signature, c.getEndorsement().toByteString())) {
+            final var endorserId = Digest.from(c.getEndorsement().getEndorser());
+            final var endorser = context.getActiveMember(endorserId);
+            if ((endorser == null) || !endorser.verify(signature, c.getEndorsement().toByteString())) {
                 return null;
             }
             return digest;
@@ -545,8 +555,17 @@ public class Gorgoneion {
         state.stop();
     }
 
+    private void commit(Votes v) {
+        final var identifier = identifier(v.proposal.getAttestation().getAttestation().getMember());
+        var client = pendingClients.remove(identifier);
+        if (client != null) {
+            client.accept(v.endorsements.stream().map(se -> se.getEndorsement().getValidation()).toList());
+        }
+        log.info("Committing: {} on: {}", identifier, member.getId());
+    }
+
     private Digest digest(Ident identifier) {
-        return ((SelfAddressingIdentifier) Identifier.from(identifier)).getDigest();
+        return identifier(identifier).getDigest();
     }
 
     private Duration duration(com.google.protobuf.Duration duration) {
@@ -635,6 +654,8 @@ public class Gorgoneion {
             if (error != null) {
                 log.error("Error endorsing proposal on: {}", member.getId(), error);
             } else if (endorsement != null) {
+                final var identifier = identifier(endorsement.getNonce().getNonce().getMember());
+                log.info("Endorsing proposal: {} on: {}", identifier, member.getId(), error);
                 state.add(SignedEndorsement.newBuilder()
                                            .setEndorsement(endorsement)
                                            .setSignature(member.sign(endorsement.toByteString()).toSig())

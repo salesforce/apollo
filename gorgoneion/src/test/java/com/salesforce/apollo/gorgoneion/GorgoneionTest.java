@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
 
@@ -118,19 +117,14 @@ public class GorgoneionTest {
                                            .setAttestation(Any.getDefaultInstance())
                                            .build();
 
-        Validations validation = null;
-        try {
-            validation = admin.register(SignedAttestation.newBuilder()
-                                                         .setContext(context.getId().toDigeste())
-                                                         .setAttestation(attestation)
-                                                         .setSignature(client.sign(attestation.toByteString()).toSig())
-                                                         .build())
-                              .get(1, TimeUnit.SECONDS);
-            assertNotNull(validation);
-        } catch (TimeoutException e) {
-            // expected for now
-            System.out.println("Timeout");
-        }
-
+        Validations validation = admin.register(SignedAttestation.newBuilder()
+                                                                 .setContext(context.getId().toDigeste())
+                                                                 .setAttestation(attestation)
+                                                                 .setSignature(client.sign(attestation.toByteString())
+                                                                                     .toSig())
+                                                                 .build())
+                                      .get(1, TimeUnit.SECONDS);
+        assertNotNull(validation);
+        assertEquals(1, validation.getValidationsCount());
     }
 }
