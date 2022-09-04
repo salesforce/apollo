@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.thoth;
+package com.salesforce.apollo.gorgoneion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -25,14 +25,15 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.thoth.proto.Admittance;
-import com.salesfoce.apollo.thoth.proto.Attestation;
-import com.salesfoce.apollo.thoth.proto.Registration;
-import com.salesfoce.apollo.thoth.proto.SignedAttestation;
+import com.salesfoce.apollo.gorgoneion.proto.Attestation;
+import com.salesfoce.apollo.gorgoneion.proto.Registration;
+import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.gorgoneion.Gorgoneion.Parameters;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -41,7 +42,6 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.thoth.Gorgoneion.Parameters;
 import com.salesforce.apollo.thoth.grpc.admission.Admission;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionClient;
 import com.salesforce.apollo.thoth.grpc.admission.AdmissionServer;
@@ -118,7 +118,7 @@ public class GorgoneionTest {
                                            .setAttestation(Any.getDefaultInstance())
                                            .build();
 
-        Admittance validation = null;
+        Validations validation = null;
         try {
             validation = admin.register(SignedAttestation.newBuilder()
                                                          .setContext(context.getId().toDigeste())

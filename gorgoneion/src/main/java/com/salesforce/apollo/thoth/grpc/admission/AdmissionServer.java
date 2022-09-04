@@ -12,11 +12,11 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.thoth.proto.AdmissionsGrpc.AdmissionsImplBase;
-import com.salesfoce.apollo.thoth.proto.Admittance;
-import com.salesfoce.apollo.thoth.proto.Registration;
-import com.salesfoce.apollo.thoth.proto.SignedAttestation;
-import com.salesfoce.apollo.thoth.proto.SignedNonce;
+import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
+import com.salesfoce.apollo.gorgoneion.proto.Registration;
+import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -76,7 +76,7 @@ public class AdmissionServer extends AdmissionsImplBase {
     }
 
     @Override
-    public void register(SignedAttestation request, StreamObserver<Admittance> responseObserver) {
+    public void register(SignedAttestation request, StreamObserver<Validations> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));

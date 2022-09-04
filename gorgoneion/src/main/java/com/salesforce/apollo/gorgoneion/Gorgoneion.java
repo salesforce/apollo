@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.thoth;
+package com.salesforce.apollo.gorgoneion;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -29,23 +29,23 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Timestamp;
+import com.salesfoce.apollo.gorgoneion.proto.Deny;
+import com.salesfoce.apollo.gorgoneion.proto.Endorsement;
+import com.salesfoce.apollo.gorgoneion.proto.Gossip;
+import com.salesfoce.apollo.gorgoneion.proto.Have;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
+import com.salesfoce.apollo.gorgoneion.proto.Pending;
+import com.salesfoce.apollo.gorgoneion.proto.Proposal;
+import com.salesfoce.apollo.gorgoneion.proto.Registration;
+import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesfoce.apollo.gorgoneion.proto.SignedDeny;
+import com.salesfoce.apollo.gorgoneion.proto.SignedEndorsement;
+import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.gorgoneion.proto.SignedProposal;
+import com.salesfoce.apollo.gorgoneion.proto.Update;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.thoth.proto.AdminGossip;
-import com.salesfoce.apollo.thoth.proto.AdminUpdate;
-import com.salesfoce.apollo.thoth.proto.Admittance;
-import com.salesfoce.apollo.thoth.proto.Deny;
-import com.salesfoce.apollo.thoth.proto.Endorsement;
-import com.salesfoce.apollo.thoth.proto.Have;
-import com.salesfoce.apollo.thoth.proto.Nonce;
-import com.salesfoce.apollo.thoth.proto.Pending;
-import com.salesfoce.apollo.thoth.proto.Proposal;
-import com.salesfoce.apollo.thoth.proto.Registration;
-import com.salesfoce.apollo.thoth.proto.SignedAttestation;
-import com.salesfoce.apollo.thoth.proto.SignedDeny;
-import com.salesfoce.apollo.thoth.proto.SignedEndorsement;
-import com.salesfoce.apollo.thoth.proto.SignedNonce;
-import com.salesfoce.apollo.thoth.proto.SignedProposal;
-import com.salesfoce.apollo.thoth.proto.Validation;
+import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -196,7 +196,7 @@ public class Gorgoneion {
         }
 
         @Override
-        public void register(SignedAttestation request, Digest from, StreamObserver<Admittance> observer) {
+        public void register(SignedAttestation request, Digest from, StreamObserver<Validations> observer) {
             if (!validate(request, from)) {
                 observer.onError(new StatusRuntimeException(io.grpc.Status.UNAUTHENTICATED));
                 return;
@@ -243,12 +243,12 @@ public class Gorgoneion {
         }
 
         @Override
-        public AdminUpdate gossip(AdminGossip gossip, Digest from) {
+        public Update gossip(Gossip gossip, Digest from) {
             return state.updateFor(gossip.getHave()).setHave(state.getHave()).build();
         }
 
         @Override
-        public void update(AdminUpdate update, Digest from) {
+        public void update(Update update, Digest from) {
             update(update, from);
         }
 
@@ -308,12 +308,12 @@ public class Gorgoneion {
                        .build();
         }
 
-        private ListenableFuture<AdminUpdate> gossip(AdmissionReplicationService link, Integer ring) {
+        private ListenableFuture<Update> gossip(AdmissionReplicationService link, Integer ring) {
             if (!started.get()) {
                 return null;
             }
             roundTimers.tick();
-            return link.gossip(AdminGossip.newBuilder().setHave(getHave()).build());
+            return link.gossip(Gossip.newBuilder().setHave(getHave()).build());
         }
 
         private void gossip(Duration frequency, ScheduledExecutorService scheduler) {
@@ -330,7 +330,7 @@ public class Gorgoneion {
             }, log));
         }
 
-        private void gossip(Optional<ListenableFuture<AdminUpdate>> futureSailor,
+        private void gossip(Optional<ListenableFuture<Update>> futureSailor,
                             Destination<Member, AdmissionReplicationService> destination, Duration frequency,
                             ScheduledExecutorService scheduler) {
             final var member = destination.member();
@@ -388,7 +388,7 @@ public class Gorgoneion {
             return bif.toBff();
         }
 
-        private void process(AdminUpdate adminUpdate) {
+        private void process(Update adminUpdate) {
             adminUpdate.getEndorsementsList().forEach(c -> add(c));
             adminUpdate.getDenyList().forEach(d -> add(d));
             adminUpdate.getProposalsList().forEach(p -> add(p));
@@ -423,12 +423,12 @@ public class Gorgoneion {
                                .toList();
         }
 
-        private AdminUpdate.Builder updateFor(final Have have) {
-            return AdminUpdate.newBuilder()
-                              .addAllEndorsements(updateEndorsements(have.getEndorsements()))
-                              .addAllDeny(updateDenies(have.getDenies()))
-                              .addAllPending(updatePending(have.getPending()))
-                              .addAllProposals(updateProposals(have.getProposals()));
+        private Update.Builder updateFor(final Have have) {
+            return Update.newBuilder()
+                         .addAllEndorsements(updateEndorsements(have.getEndorsements()))
+                         .addAllDeny(updateDenies(have.getDenies()))
+                         .addAllPending(updatePending(have.getPending()))
+                         .addAllProposals(updateProposals(have.getProposals()));
         }
 
         private List<Pending> updatePending(Biff have) {
@@ -512,17 +512,17 @@ public class Gorgoneion {
 
     private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
-    private final CommonCommunications<AdmissionService, Admission>                            admissionComms;
-    private final Admissions                                                                   admissions     = new Admissions();
-    private final Context<Member>                                                              context;
+    private final CommonCommunications<AdmissionService, Admission>                             admissionComms;
+    private final Admissions                                                                    admissions     = new Admissions();
+    private final Context<Member>                                                               context;
     @SuppressWarnings("unused")
-    private final KERL                                                                         kerl;
-    private final ControlledIdentifierMember                                                   member;
-    private final Parameters                                                                   parameters;
-    private final ConcurrentNavigableMap<SelfAddressingIdentifier, Consumer<List<Validation>>> pendingClients = new ConcurrentSkipListMap<>();
-    private final AtomicBoolean                                                                started        = new AtomicBoolean();
-    private final State                                                                        state;
-    private final ControlledIdentifier<SelfAddressingIdentifier>                               validating;
+    private final KERL                                                                          kerl;
+    private final ControlledIdentifierMember                                                    member;
+    private final Parameters                                                                    parameters;
+    private final ConcurrentNavigableMap<SelfAddressingIdentifier, Consumer<List<Validation_>>> pendingClients = new ConcurrentSkipListMap<>();
+    private final AtomicBoolean                                                                 started        = new AtomicBoolean();
+    private final State                                                                         state;
+    private final ControlledIdentifier<SelfAddressingIdentifier>                                validating;
 
     public Gorgoneion(ControlledIdentifierMember member, ControlledIdentifier<SelfAddressingIdentifier> validating,
                       Context<Member> context, Router admissionsRouter, KERL kerl, Router replicationRouter,
@@ -563,13 +563,13 @@ public class Gorgoneion {
         return Duration.ofSeconds(duration.getSeconds(), duration.getNanos());
     }
 
-    private CompletableFuture<Validation> endorse(Pending p) {
+    private CompletableFuture<Validation_> endorse(Pending p) {
         var event = p.getKerl().getEvents(0).getInception();
         return validating.getSigner()
-                         .thenApply(signer -> Validation.newBuilder()
-                                                        .setCoordinates(validating.getCoordinates().toEventCoords())
-                                                        .setSignature(signer.sign(event.toByteString()).toSig())
-                                                        .build());
+                         .thenApply(signer -> Validation_.newBuilder()
+                                                         .setValidator(validating.getCoordinates().toEventCoords())
+                                                         .setSignature(signer.sign(event.toByteString()).toSig())
+                                                         .build());
     }
 
     private CompletableFuture<Endorsement> endorse(SignedProposal sp) {
@@ -653,7 +653,7 @@ public class Gorgoneion {
         });
     }
 
-    private void register(SignedAttestation request, Digest from, StreamObserver<Admittance> observer) {
+    private void register(SignedAttestation request, Digest from, StreamObserver<Validations> observer) {
         final var identifier = identifier(request.getAttestation().getMember());
         if (identifier == null) {
             observer.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid identifier")));
@@ -674,7 +674,7 @@ public class Gorgoneion {
                                    .setSignature(member.sign(proposal.toByteString()).toSig())
                                    .build();
         pendingClients.putIfAbsent(identifier, validations -> {
-            observer.onNext(Admittance.newBuilder().addAllValidations(validations).build());
+            observer.onNext(Validations.newBuilder().addAllValidations(validations).build());
             observer.onCompleted();
         });
         state.add(signed);

@@ -9,8 +9,8 @@ package com.salesforce.apollo.thoth.grpc.admission.gossip;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.thoth.proto.AdminGossip;
-import com.salesfoce.apollo.thoth.proto.AdminUpdate;
+import com.salesfoce.apollo.gorgoneion.proto.Gossip;
+import com.salesfoce.apollo.gorgoneion.proto.Update;
 import com.salesforce.apollo.comm.Link;
 
 /**
@@ -19,8 +19,8 @@ import com.salesforce.apollo.comm.Link;
  */
 public interface AdmissionReplicationService extends Link {
 
-    ListenableFuture<AdminUpdate> gossip(AdminGossip gossip);
+    ListenableFuture<Update> gossip(Gossip gossip);
 
-    ListenableFuture<Empty> update(AdminUpdate update);
+    ListenableFuture<Empty> update(Update update);
 
 }

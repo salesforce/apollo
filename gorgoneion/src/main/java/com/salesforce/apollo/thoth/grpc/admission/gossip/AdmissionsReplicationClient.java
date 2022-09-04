@@ -5,17 +5,16 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-package com.salesforce.apollo.thoth.grpc.admission;
+package com.salesforce.apollo.thoth.grpc.admission.gossip;
 
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.thoth.proto.AdmissionsGrpc;
-import com.salesfoce.apollo.thoth.proto.AdmissionsGrpc.AdmissionsFutureStub;
-import com.salesfoce.apollo.thoth.proto.Admittance;
-import com.salesfoce.apollo.thoth.proto.Registration;
-import com.salesfoce.apollo.thoth.proto.SignedAttestation;
-import com.salesfoce.apollo.thoth.proto.SignedNonce;
+import com.google.protobuf.Empty;
+import com.salesfoce.apollo.gorgoneion.proto.Gossip;
+import com.salesfoce.apollo.gorgoneion.proto.ReplicationGrpc;
+import com.salesfoce.apollo.gorgoneion.proto.ReplicationGrpc.ReplicationFutureStub;
+import com.salesfoce.apollo.gorgoneion.proto.Update;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -28,20 +27,16 @@ import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
  * @author hal.hildebrand
  *
  */
-public class AdmissionClient implements AdmissionService {
-    public static CreateClientCommunications<AdmissionService> getCreate(Digest context, GorgoneionMetrics metrics) {
+public class AdmissionsReplicationClient implements AdmissionReplicationService {
+    public static CreateClientCommunications<AdmissionReplicationService> getCreate(Digest context,
+                                                                                    GorgoneionMetrics metrics) {
         return (t, f, c) -> {
-            return new AdmissionClient(context, c, t, metrics);
+            return new AdmissionsReplicationClient(context, c, t, metrics);
         };
     }
 
-    public static AdmissionService getLocalLoopback(Admission service, SigningMember member) {
-        return new AdmissionService() {
-
-            @Override
-            public ListenableFuture<SignedNonce> apply(Registration registration) {
-                return null;
-            }
+    public static AdmissionReplicationService getLocalLoopback(AdmissionsReplication service, SigningMember member) {
+        return new AdmissionReplicationService() {
 
             @Override
             public void close() throws IOException {
@@ -53,31 +48,32 @@ public class AdmissionClient implements AdmissionService {
             }
 
             @Override
-            public ListenableFuture<Admittance> register(SignedAttestation attestation) {
+            public ListenableFuture<Update> gossip(Gossip gossip) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Empty> update(Update update) {
                 return null;
             }
         };
     }
 
     private final ManagedServerConnection channel;
-    private final AdmissionsFutureStub    client;
+    private final ReplicationFutureStub   client;
     @SuppressWarnings("unused")
     private final Digeste                 context;
     private final Member                  member;
     @SuppressWarnings("unused")
     private final GorgoneionMetrics       metrics;
 
-    public AdmissionClient(Digest context, ManagedServerConnection channel, Member member, GorgoneionMetrics metrics) {
+    public AdmissionsReplicationClient(Digest context, ManagedServerConnection channel, Member member,
+                                       GorgoneionMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;
-        this.client = AdmissionsGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = ReplicationGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
-    }
-
-    @Override
-    public ListenableFuture<SignedNonce> apply(Registration registration) {
-        return client.apply(registration);
     }
 
     @Override
@@ -91,7 +87,12 @@ public class AdmissionClient implements AdmissionService {
     }
 
     @Override
-    public ListenableFuture<Admittance> register(SignedAttestation attestation) {
-        return client.register(attestation);
+    public ListenableFuture<Update> gossip(Gossip gossip) {
+        return client.gossip(gossip);
+    }
+
+    @Override
+    public ListenableFuture<Empty> update(Update update) {
+        return client.update(update);
     }
 }

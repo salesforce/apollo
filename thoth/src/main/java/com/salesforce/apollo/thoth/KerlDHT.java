@@ -308,8 +308,9 @@ public class KerlDHT implements ProtoKERLService {
                 return completeExceptionally(e);
             }
         });
-        this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), kerl, () -> view.get().threshold,
-                           () -> view.get().roots, () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
+        this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), asKERL(),
+                           () -> view.get().threshold, () -> view.get().roots,
+                           () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
