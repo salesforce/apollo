@@ -34,6 +34,14 @@ public class BloomWindow<T> {
         }
     }
 
+    public void add(T element) {
+        if (count.incrementAndGet() % windowSize == 0) {
+            segments.removeLast();
+            segments.addFirst(factory.get());
+        }
+        segments.getFirst().add(element);
+    }
+
     public boolean add(T element, Consumer<T> ifAbsent) {
         if (count.incrementAndGet() % windowSize == 0) {
             segments.removeLast();
@@ -49,9 +57,7 @@ public class BloomWindow<T> {
         final var l = rwLock.writeLock();
         l.lock();
         try {
-            for (var segment : segments) {
-                segment.add(element, wrap);
-            }
+            segments.getFirst().add(element, wrap);
         } finally {
             l.unlock();
         }

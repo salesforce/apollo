@@ -316,8 +316,8 @@ public class Gorgoneion {
                     return null;
                 }
                 v.endorsements.add(c);
-                if (v.endorsements.size() >= context.majority() || context.activeCount() == 1) {
-                    commit(v);
+                if (maybeCommit(v)) {
+                    return null; // committed, don't add
                 }
                 return c;
             });
@@ -333,6 +333,17 @@ public class Gorgoneion {
                 maybeEndorse(p);
                 return p;
             });
+        }
+
+        private Pending committed(SelfAddressingIdentifier identifier) {
+            final var pendingAdmittance = pending.remove(identifier);
+            if (pendingAdmittance == null) {
+                return null;
+            }
+            proposals.remove(identifier);
+            removeEndorsements(identifier);
+            removeDenies(identifier);
+            return pendingAdmittance;
         }
 
         private Have getHave() {
@@ -431,6 +442,28 @@ public class Gorgoneion {
             adminUpdate.getPendingList().forEach(p -> add(p));
         }
 
+        private void removeDenies(SelfAddressingIdentifier identifier) {
+            for (var iterator = denies.entrySet().iterator(); iterator.hasNext();) {
+                var next = iterator.next();
+                if (identifier.equals(identifier(next.getValue().getDenial().getNonce().getNonce().getMember()))) {
+                    iterator.remove();
+                    processed.add(next.getKey());
+                    break;
+                }
+            }
+        }
+
+        private void removeEndorsements(SelfAddressingIdentifier identifier) {
+            for (var iterator = endorsements.entrySet().iterator(); iterator.hasNext();) {
+                var next = iterator.next();
+                if (identifier.equals(identifier(next.getValue().getEndorsement().getNonce().getNonce().getMember()))) {
+                    iterator.remove();
+                    processed.add(next.getKey());
+                    break;
+                }
+            }
+        }
+
         private long roundsFor(Pending p) {
             return duration(p.getPending().getNonce().getDuration()).dividedBy(durationPerRound);
         }
@@ -486,13 +519,19 @@ public class Gorgoneion {
         }
 
         private SelfAddressingIdentifier validate(Pending c) {
-            return identifier(c.getPending().getNonce().getMember());
+            final var identifier = identifier(c.getPending().getNonce().getMember());
+            if (processed.contains(identifier.getDigest())) {
+                log.info("Already processed: {} on: {}", identifier, member.getId());
+                return null;
+            }
+            return identifier;
         }
 
         private Digest validate(SignedDeny c) {
             final var signature = JohnHancock.from(c.getSignature());
             final var digest = signature.toDigest(parameters.digestAlgo);
             if (processed.contains(digest)) {
+                log.trace("Already processed deny: {} on: {}", digest, member.getId());
                 return null;
             }
 
@@ -508,6 +547,7 @@ public class Gorgoneion {
             final var signature = JohnHancock.from(c.getSignature());
             final var digest = signature.toDigest(parameters.digestAlgo);
             if (processed.contains(digest)) {
+                log.trace("Already processed endorsement: {} on: {}", digest, member.getId());
                 return null;
             }
             final var endorserId = Digest.from(c.getEndorsement().getEndorser());
@@ -589,7 +629,7 @@ public class Gorgoneion {
         final var identifier = identifier(v.proposal.getAttestation().getAttestation().getMember());
         var client = pendingClients.remove(identifier);
 
-        var pending = state.pending.get(identifier);
+        var pending = state.committed(identifier);
         if (pending == null) {
             if (client != null) {
                 client.accept(Validations.getDefaultInstance());
@@ -689,6 +729,14 @@ public class Gorgoneion {
             return sai;
         }
         return null;
+    }
+
+    private boolean maybeCommit(Votes v) {
+        if (v.endorsements.size() >= context.majority() || context.activeCount() == 1) {
+            commit(v);
+            return true;
+        }
+        return false;
     }
 
     private void maybeEndorse(SignedProposal p) {
