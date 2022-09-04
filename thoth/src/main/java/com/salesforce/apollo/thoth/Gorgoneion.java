@@ -106,7 +106,7 @@ public class Gorgoneion {
             private Function<SignedAttestation, CompletableFuture<Boolean>> verifier;
 
             public Parameters build() {
-                return new Parameters(0, null, null, null, null, null, null, 0);
+                return new Parameters(fpr, entropy, verifier, clock, exec, digestAlgo, registrationTimeout, maxTracked);
             }
 
             public Clock getClock() {
@@ -278,17 +278,21 @@ public class Gorgoneion {
                 return;
             }
             endorsements.computeIfAbsent(digest, d -> {
-                votes.computeIfAbsent(identifier(c.getEndorsement().getNonce().getNonce().getMember()), null);
+                final var identifier = identifier(c.getEndorsement().getNonce().getNonce().getMember());
+                if (identifier == null) {
+                    return null;
+                }
+                votes.computeIfAbsent(identifier, null);
                 return c;
             });
         }
 
         private void add(SignedProposal p) {
-            final var digest = validate(p);
-            if (digest == null) {
+            final var identifier = validate(p);
+            if (identifier == null) {
                 return;
             }
-            proposals.computeIfAbsent(digest, d -> {
+            proposals.computeIfAbsent(identifier, d -> {
                 maybeEndorse(p);
                 return p;
             });
@@ -522,12 +526,12 @@ public class Gorgoneion {
     public Gorgoneion(ControlledIdentifierMember member, ControlledIdentifier<SelfAddressingIdentifier> validating,
                       Context<Member> context, Router admissionsRouter, KERL kerl, Router replicationRouter,
                       Parameters parameters, GorgoneionMetrics metrics) {
-        admissionComms = replicationRouter.create(member, context.getId(), admissions, "admissions",
-                                                  r -> new AdmissionServer(r,
-                                                                           admissionsRouter.getClientIdentityProvider(),
-                                                                           parameters.exec, metrics),
-                                                  AdmissionClient.getCreate(context.getId(), metrics),
-                                                  AdmissionClient.getLocalLoopback(admissions, member));
+        admissionComms = admissionsRouter.create(member, context.getId(), admissions, "admissions",
+                                                 r -> new AdmissionServer(r,
+                                                                          admissionsRouter.getClientIdentityProvider(),
+                                                                          parameters.exec, metrics),
+                                                 AdmissionClient.getCreate(context.getId(), metrics),
+                                                 AdmissionClient.getLocalLoopback(admissions, member));
         this.parameters = parameters;
         this.member = member;
         this.context = context;
@@ -604,14 +608,22 @@ public class Gorgoneion {
             final var signature = s.sign(nonce.toByteString());
             return SignedNonce.newBuilder().setNonce(nonce).setSignature(signature.toSig()).build();
         }).thenApply(signed -> {
-            state.pending.put(identifier(registration.getIdentity()),
+            final var identifier = identifier(registration.getIdentity());
+            if (identifier == null) {
+                return null;
+            }
+            state.pending.put(identifier,
                               Pending.newBuilder().setPending(signed).setKerl(registration.getKerl()).build());
             return signed;
         });
     }
 
     private SelfAddressingIdentifier identifier(Ident identifier) {
-        return (SelfAddressingIdentifier) Identifier.from(identifier);
+        final var from = Identifier.from(identifier);
+        if (from instanceof SelfAddressingIdentifier sai) {
+            return sai;
+        }
+        return null;
     }
 
     private void maybeEndorse(SignedProposal p) {
@@ -647,6 +659,9 @@ public class Gorgoneion {
                                    .setSignature(member.sign(proposal.toByteString()).toSig())
                                    .build();
         var identifier = identifier(request.getAttestation().getMember());
+        if (identifier == null) {
+            return;
+        }
         pendingClients.putIfAbsent(identifier, validations -> {
             observer.onNext(Admittance.newBuilder().addAllValidations(validations).build());
             observer.onCompleted();

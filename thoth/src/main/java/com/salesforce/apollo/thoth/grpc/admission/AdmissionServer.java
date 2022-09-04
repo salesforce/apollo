@@ -23,6 +23,8 @@ import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.thoth.metrics.GorgoneionMetrics;
 import com.salesforce.apollo.utils.Utils;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -63,7 +65,8 @@ public class AdmissionServer extends AdmissionsImplBase {
             }
             nonceF.whenComplete((sn, t) -> {
                 if (t != null) {
-                    responseObserver.onError(t);
+                    log.error("Error in apply", t);
+                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
                 } else {
                     responseObserver.onNext(sn);
                     responseObserver.onCompleted();
