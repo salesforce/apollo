@@ -107,7 +107,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
     private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
     private final double                              pByz;
-    private final List<Ring<T>>                       rings               = new ArrayList<>();
+
+    private final List<Ring<T>> rings = new ArrayList<>();
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this.pByz = pbyz;
@@ -303,7 +304,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     public Digest hashFor(Digest d, int ring) {
-        return d.prefix(id, ring);
+        return Context.hashFor(id, ring, d);
     }
 
     @Override

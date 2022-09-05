@@ -108,6 +108,10 @@ public interface Context<T extends Member> {
 
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
+    static Digest hashFor(Digest ctxId, int ring, Digest d) {
+        return d.prefix(ctxId, ring);
+    }
+
     static int majority(int rings, int bias) {
         return (bias - 1) * toleranceLevel(rings, bias);
     }

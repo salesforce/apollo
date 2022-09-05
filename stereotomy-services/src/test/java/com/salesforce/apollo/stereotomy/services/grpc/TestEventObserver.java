@@ -27,12 +27,13 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServer;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 
 /**
  * @author hal.hildebrand
@@ -78,35 +79,37 @@ public class TestEventObserver {
         serverRouter.start();
         clientRouter.start();
 
-        ProtoEventObserver protoService = new ProtoEventObserver() {
+        EventObserver protoService = new EventObserver() {
 
             @Override
-            public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations) {
+            public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations, Digest from) {
                 CompletableFuture<Void> f = new CompletableFuture<>();
                 f.complete(null);
                 return f;
             }
 
             @Override
-            public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
+            public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments, Digest from) {
                 CompletableFuture<Void> f = new CompletableFuture<>();
                 f.complete(null);
                 return f;
             }
 
             @Override
-            public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
+            public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations,
+                                                         Digest from) {
                 CompletableFuture<Void> f = new CompletableFuture<>();
                 f.complete(null);
                 return f;
             }
         };
 
+        ClientIdentity identity = () -> clientMember.getId();
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                            r -> new EventObserverServer(r, exec, null), null, null);
+                            r -> new EventObserverServer(r, identity, exec, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new EventObserverServer(r, exec, null),
+                                              r -> new EventObserverServer(r, identity, exec, null),
                                               EventObserverClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

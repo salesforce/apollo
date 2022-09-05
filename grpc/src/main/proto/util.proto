@@ -32,39 +32,6 @@ message PubKey {
     bytes encoded = 2;
 }
 
-message IBiff {
-    oneof type {
-        IntIBiff integer = 1;
-        LongIBiff long = 2;
-        DigestIBiff digest = 3;
-    }
-}
-
-message IBiffCommon {
-    uint64 seed = 1;
-    int32 m = 2;
-    int32 k = 3;
-    int32 size = 4;
-    repeated uint32 count = 5;
-    repeated uint32 hashSum = 6; 
-}
-
-message DigestIBiff {
-    int32 digestAlgorithm = 1;
-    IBiffCommon common = 2;
-    repeated int64 kSum = 3;
-}
-
-message IntIBiff {
-    IBiffCommon common = 1;
-    repeated int32 kSum = 2;
-}
-
-message LongIBiff {
-    IBiffCommon common = 1;
-    repeated int64 kSum = 2;
-}
-
 message Clock {
     uint64 prefix = 1;
     bytes counts = 2;
