@@ -7,6 +7,7 @@
 package com.salesforce.apollo.membership;
 
 import static com.salesforce.apollo.membership.Context.hashFor;
+import static com.salesforce.apollo.membership.Context.minMajority;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,6 +20,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * Compact context structure that mimics a context, but only tracks the digest
@@ -28,6 +30,77 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public class CompactContext {
+
+    public static class Builder {
+        private int          bias    = 2;
+        private double       epsilon = Context.DEFAULT_EPSILON;
+        private Digest       id      = DigestAlgorithm.DEFAULT.getOrigin();
+        private List<Digest> members;
+        private double       pByz    = 0.1;                                // 10% chance any node is out to get ya
+
+        public Builder() {
+        }
+
+        public Builder(com.salesforce.apollo.membership.Context.Builder<Member> builder) {
+            bias = builder.bias;
+            epsilon = builder.epsilon;
+            id = builder.id;
+            pByz = builder.pByz;
+        }
+
+        public CompactContext build() {
+            if (members == null) {
+                throw new IllegalArgumentException("Members must not be null");
+            }
+            return new CompactContext(id, Math.max(bias + 1, members.size()), pByz, bias, members, epsilon);
+        }
+
+        public int getBias() {
+            return bias;
+        }
+
+        public double getEpsilon() {
+            return epsilon;
+        }
+
+        public Digest getId() {
+            return id;
+        }
+
+        public List<Digest> getMembers() {
+            return members;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder setBias(int bias) {
+            this.bias = bias;
+            return this;
+        }
+
+        public Builder setEpsilon(double epsilon) {
+            this.epsilon = epsilon;
+            return this;
+        }
+
+        public Builder setId(Digest id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder setMembers(List<Digest> members) {
+            this.members = members;
+            return this;
+        }
+
+        public Builder setpByz(double pByz) {
+            this.pByz = pByz;
+            return this;
+        }
+    }
+
     public class CompactRing {
         private static class HeadIterator implements Iterator<Digest> {
             private int                     current;
@@ -130,7 +203,7 @@ public class CompactContext {
 
                         @Override
                         public boolean hasNext() {
-                            return current <= ids.length;
+                            return current < ids.length;
                         }
 
                         @Override
@@ -249,10 +322,23 @@ public class CompactContext {
         }
     }
 
-    private final Digest     id;
-    private final Digest[]   ids;
-    private final short[][]  ringMap;
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
+    public static Builder newBuilder(Context.Builder<Member> ctxBuilder) {
+        return new Builder(ctxBuilder);
+    }
+
+    private final Digest    id;
+    private final Digest[]  ids;
+    private final short[][] ringMap;
+
     private final Digest[][] rings;
+
+    public CompactContext(Digest id, int cardinality, double pByz, int bias, List<Digest> ids, double epsilon) {
+        this(id, ids, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1));
+    }
 
     public CompactContext(Digest id, List<Digest> ids, short rings) {
         this.id = id;
@@ -266,6 +352,10 @@ public class CompactContext {
             this.ringMap[j] = new short[ids.size()];
         }
         initialize(ids);
+    }
+
+    public int getRingCount() {
+        return rings.length;
     }
 
     public List<Digest> predecessors(Digest digest) {
@@ -315,7 +405,7 @@ public class CompactContext {
         for (int j = 0; j < rings.length; j++) {
             var mapped = new TreeMap<Digest, Short>();
             for (short i = 0; i < ids.length; i++) {
-                mapped.put(hashFor(id, i, ids[i]), i);
+                mapped.put(hashFor(id, j, ids[i]), i);
             }
             short index = 0;
             for (var e : mapped.entrySet()) {

@@ -35,7 +35,7 @@ import com.salesforce.apollo.crypto.Digest;
  * member, and thus each ring has a different ring order of the same membership
  * set. Hashes for Context level operators include the ID of the ring. Hashes
  * computed for each member, per ring include the ID of the enclosing Context.
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -102,7 +102,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     private final int                                 bias;
     private volatile int                              cardinality;
-    private final double                              epsilon             = 0.99999;
+    private final double                              epsilon;
     private final Digest                              id;
     private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
     private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
@@ -111,12 +111,17 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private final List<Ring<T>> rings = new ArrayList<>();
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
+        this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
+    }
+
+    public ContextImpl(Digest id, int cardinality, double pbyz, int bias, double epsilon) {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;
         this.cardinality = cardinality;
-        for (int i = 0; i < minMajority(pByz, cardinality, epsilon, bias) * bias + 1; i++) {
-            rings.add(new Ring<T>(i, this));
+        this.epsilon = epsilon;
+        for (int i = 0; i < (minMajority(pByz, cardinality, epsilon, bias) * bias) + 1; i++) {
+            rings.add(new Ring<>(i, this));
         }
     }
 
@@ -270,6 +275,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public int getBias() {
         return bias;
+    }
+
+    @Override
+    public double getEpsilon() {
+        return epsilon;
     }
 
     @Override
@@ -491,7 +501,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         } else if (ringCount > currentCount) {
             final var added = new ArrayList<Ring<T>>();
             for (int i = currentCount; i < ringCount; i++) {
-                final var ring = new Ring<T>(i, this);
+                final var ring = new Ring<>(i, this);
                 rings.add(ring);
                 added.add(ring);
             }
@@ -522,8 +532,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public void remove(Digest id) {
         var removed = members.remove(id);
         if (removed != null) {
-            for (int i = 0; i < rings.size(); i++) {
-                rings.get(i).delete(removed.member);
+            for (Ring<T> ring : rings) {
+                ring.delete(removed.member);
             }
         }
     }
@@ -558,7 +568,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     /**
      * Answer a random sample of at least range size from the active members of the
      * context
-     * 
+     *
      * @param range    - the desired range
      * @param entropy  - source o randomness
      * @param excluded - the member to exclude from sample
