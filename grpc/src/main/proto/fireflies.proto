@@ -5,7 +5,10 @@ option java_package = "com.salesfoce.apollo.fireflies.proto";
 option java_outer_classname = "FirefliesProto";
 option objc_class_prefix = "Ff";
 
+import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 import "util.proto";
 import "stereotomy.proto";
@@ -15,11 +18,6 @@ package fireflies;
 service Fireflies {
     rpc gossip (SayWhat) returns (Gossip) {}
     rpc update (State) returns (google.protobuf.Empty) {}
-}
-
-service Entrance {
-    rpc seed (Credentials) returns (Redirect) {}
-    rpc join (Credentials) returns (Gateway) {}
 }
 
 message SayWhat {
@@ -120,31 +118,80 @@ message Update {
     repeated SignedNote joins = 4;
 }
 
-message Redirect {
-    utils.Digeste view = 1;
-    repeated Seed_ successors = 2;
-    int32 cardinality = 3;
-    int32 rings = 4;
-    bool bootstrap = 5;
+// Eísodos
+service Entrance {
+    rpc seed (Registration) returns (Redirect) {}
+    rpc register (Credentials) returns (Invitation) {}
+    rpc join (Join) returns (Gateway) {}
 }
 
-message Gateway { 
+message Registration {
+    utils.Digeste context = 1;
+    utils.Digeste view = 2;
+    SignedNote note = 3;
+    stereotomy.KERL_ kerl = 4;
+}
+
+message Redirect {
     utils.Digeste view = 1;
     int32 cardinality = 2;
-    repeated SignedNote initialSeedSet = 3;
-    utils.Biff members = 4;
-    repeated SignedNote joining = 5;
+    int32 rings = 3;
+    bool bootstrap = 4;
+    SignedNonce nonce = 5;
+    repeated Seed_ successors = 6;
 }
 
 message Credentials {
     utils.Digeste context = 1;
-    Join join = 2;
+    stereotomy.KERL_ kerl = 2;
+    SignedNonce nonce = 3;
+    SignedAttestation attestation = 4;
+}
+
+message Invitation {
+    utils.Digeste view = 1;
+    stereotomy.Validation_ validation = 2;
 }
 
 message Join {
+    utils.Digeste context = 1;
+    utils.Digeste view = 2;
+    SignedNote note = 3;
+    stereotomy.KERL_ kerl = 4;
+    stereotomy.Validations validations = 5;
+}
+
+message Gateway { 
     utils.Digeste view = 1;
-    SignedNote note = 2;
-    stereotomy.KERL_ kerl = 3;
+    utils.Biff members = 2;
+    int32 cardinality = 3;
+    repeated SignedNote initialSeedSet = 4;
+    repeated SignedNote joining = 5;
+}
+
+message Nonce {
+    stereotomy.Ident member = 1;
+    stereotomy.EventCoords issuer = 2;
+    utils.Digeste noise = 3;
+    google.protobuf.Timestamp timestamp = 4;
+    google.protobuf.Duration duration = 5;
+}
+
+message SignedNonce {
+    Nonce nonce = 1;
+    utils.Sig signature = 2;
+}
+
+message Attestation {
+    stereotomy.KERL_ kerl = 1;
+    utils.Sig nonce = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    google.protobuf.Any attestation = 4;
+}
+
+message SignedAttestation {
+    Attestation attestation = 1;
+    utils.Sig signature = 2;
 }
 
 message Seed_ {

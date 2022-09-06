@@ -15,7 +15,10 @@ import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Invitation;
+import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
+import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -34,7 +37,8 @@ public class EntranceServer extends EntranceImplBase {
 
     private final Executor exec;
 
-    private ClientIdentity                 identity;
+    private ClientIdentity identity;
+
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
@@ -47,7 +51,7 @@ public class EntranceServer extends EntranceImplBase {
     }
 
     @Override
-    public void join(Credentials request, StreamObserver<Gateway> responseObserver) {
+    public void join(Join request, StreamObserver<Gateway> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundJoinDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
@@ -66,7 +70,26 @@ public class EntranceServer extends EntranceImplBase {
     }
 
     @Override
-    public void seed(Credentials request, StreamObserver<Redirect> responseObserver) {
+    public void register(Credentials request, StreamObserver<Invitation> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundJoinDuration().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundJoin().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            // async handling
+            s.register(request, from, responseObserver, timer);
+        });
+    }
+
+    @Override
+    public void seed(Registration request, StreamObserver<Redirect> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundSeedDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
