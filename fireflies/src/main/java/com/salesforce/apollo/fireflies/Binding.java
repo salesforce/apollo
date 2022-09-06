@@ -25,10 +25,10 @@ import java.util.stream.Collectors;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
+import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.SliceIterator;
@@ -60,6 +60,15 @@ class Binding {
         this.scheduler = scheduler;
     }
 
+    public Join join(Digest v) {
+        return Join.newBuilder()
+                   .setContext(view.context.getId().toDigeste())
+                   .setView(v.toDigeste())
+                   .setNote(view.node.getNote().getWrapped())
+                   .setKerl(view.node.kerl())
+                   .build();
+    }
+
     void seeding() {
         if (seeds.isEmpty()) {// This node is the bootstrap seed
             bootstrap();
@@ -85,7 +94,7 @@ class Binding {
         reseed.set(() -> {
             seedlings.iterate((link, m) -> {
                 View.log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), this.view.node.getId());
-                return link.seed(credentials(this.view.bootstrapView()));
+                return link.seed(registration());
             }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                 if (!seeding.isDone()) {
                     scheduler.schedule(this.view.exec(() -> reseed.get().run()),
@@ -229,16 +238,6 @@ class Binding {
         return true;
     }
 
-    private Credentials credentials(Digest view) {
-        var join = Join.newBuilder()
-                       .setView(view.toDigeste())
-                       .setNote(this.view.node.getNote().getWrapped())
-                       .setKerl(this.view.node.kerl())
-                       .build();
-        var credentials = Credentials.newBuilder().setContext(this.view.context.getId().toDigeste()).build();
-        return credentials;
-    }
-
     private BiConsumer<? super Redirect, ? super Throwable> redirect(Duration duration,
                                                                      ScheduledExecutorService scheduler,
                                                                      Timer.Context timer) {
@@ -298,7 +297,7 @@ class Binding {
             redirecting.iterate((link, m) -> {
                 View.log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(),
                                this.view.node.getId());
-                return link.join(credentials(view), this.view.params.seedingTimeout());
+                return link.join(join(view), this.view.params.seedingTimeout());
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards,
                                                           seeds, view, majority, joined),
                                 () -> {
@@ -322,6 +321,15 @@ class Binding {
                                 }, scheduler, this.view.params.retryDelay());
         });
         regate.get().run();
+    }
+
+    private Registration registration() {
+        return Registration.newBuilder()
+                           .setContext(view.context.getId().toDigeste())
+                           .setView(view.bootstrapView().toDigeste())
+                           .setKerl(view.node.kerl())
+                           .setNote(view.node.note.getWrapped())
+                           .build();
     }
 
     private boolean validate(Gateway g, Digest view, CompletableFuture<Bound> gateway, HashMultiset<Biff> memberships,
