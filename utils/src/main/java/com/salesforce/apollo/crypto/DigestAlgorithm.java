@@ -23,6 +23,7 @@ import org.bouncycastle.crypto.digests.Blake3Digest;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * Enumerations of digest algorithms
@@ -445,6 +446,14 @@ public enum DigestAlgorithm {
 
     public int longLength() {
         return digestLength() / 8;
+    }
+
+    public Digest random() {
+        var hash = new long[longLength()];
+        for (int i = 0; i < hash.length; i++) {
+            hash[i] = Entropy.nextSecureLong();
+        }
+        return new Digest(digestCode(), hash);
     }
 
     public Digest random(Random random) {

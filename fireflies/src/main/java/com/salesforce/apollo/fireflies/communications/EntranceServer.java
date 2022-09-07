@@ -26,6 +26,8 @@ import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.utils.Utils;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -103,14 +105,21 @@ public class EntranceServer extends EntranceImplBase {
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             var redirect = s.seed(request, from);
-            responseObserver.onNext(redirect);
-            responseObserver.onCompleted();
-            if (timer != null) {
-                var serializedSize = redirect.getSerializedSize();
-                metrics.outboundBandwidth().mark(serializedSize);
-                metrics.outboundRedirect().update(serializedSize);
-                timer.stop();
-            }
+            redirect.whenComplete((r, t) -> {
+                if (t != null) {
+                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
+                } else {
+                    responseObserver.onNext(r);
+                    responseObserver.onCompleted();
+                    if (timer != null) {
+                        var serializedSize = r.getSerializedSize();
+                        metrics.outboundBandwidth().mark(serializedSize);
+                        metrics.outboundRedirect().update(serializedSize);
+                        timer.stop();
+                    }
+                }
+            });
+
         }), log));
     }
 }

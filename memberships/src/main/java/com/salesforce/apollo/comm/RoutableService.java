@@ -48,6 +48,7 @@ public class RoutableService<Service> {
                 try {
                     c.accept(service);
                 } catch (Throwable t) {
+                    log.error("Uncaught exception in service evaluation for context: {}", context, t);
                     responseObserver.onError(t);
                 }
             }

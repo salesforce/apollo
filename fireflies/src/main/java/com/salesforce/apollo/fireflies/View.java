@@ -85,6 +85,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.fireflies.ViewManagement.Ballot;
 import com.salesforce.apollo.fireflies.communications.Approach;
 import com.salesforce.apollo.fireflies.communications.EntranceClient;
@@ -97,8 +98,12 @@ import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
@@ -183,6 +188,10 @@ public class View {
         @Override
         public SignatureAlgorithm algorithm() {
             return wrapped.algorithm();
+        }
+
+        public ControlledIdentifier<SelfAddressingIdentifier> getIdentifier() {
+            return wrapped.getIdentifier();
         }
 
         public KERL_ kerl() {
@@ -560,7 +569,11 @@ public class View {
          */
         public void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver,
                              com.codahale.metrics.Timer.Context timer) {
-            // TODO Auto-generated method stub
+            if (!validate(request, from)) {
+                log.warn("Invalid credentials from: {} on: {}", from, node.getId());
+                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
+                return;
+            }
 
         }
 
@@ -625,7 +638,7 @@ public class View {
             });
         }
 
-        public Redirect seed(Registration registration, Digest from) {
+        public CompletableFuture<Redirect> seed(Registration registration, Digest from) {
             if (!started.get()) {
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
             }
@@ -1991,6 +2004,30 @@ public class View {
         }
 
         return builder.build();
+    }
+
+    private boolean validate(Credentials credentials, Digest from) {
+        var signedAtt = credentials.getAttestation();
+        var kerl = credentials.getKerl();
+        if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
+                                .event() instanceof EstablishmentEvent establishment) {
+            final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
+            if (!verifier.verify(JohnHancock.from(signedAtt.getSignature()),
+                                 signedAtt.getAttestation().toByteString())) {
+                log.warn("Invalid attestation, invalid signature from: {} on: {}", establishment.getIdentifier(),
+                         node.getId());
+                return false;
+            }
+            if (!verifier.verify(JohnHancock.from(signedAtt.getAttestation().getNonce()),
+                                 credentials.getNonce().toByteString())) {
+                log.warn("Invalid attestation, invalid nonce signature from: {} on: {}", establishment.getIdentifier(),
+                         node.getId());
+                return false;
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 
     private void validate(Digest from, final int ring, Digest requestView) {
