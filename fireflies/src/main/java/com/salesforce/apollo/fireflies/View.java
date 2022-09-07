@@ -117,6 +117,18 @@ import io.grpc.stub.StreamObserver;
  * garbage collection. It's all very complicated. These complications and many
  * others are detailed in the wonderful
  * <a href= "https://ymsir.com/papers/fireflies-tocs.pdf">Fireflies paper</a>.
+ * <p>
+ * This implementation differs significantly from the original Fireflies
+ * implementation. This version incorporates the <a href=
+ * "https://www.usenix.org/system/files/conference/atc18/atc18-suresh.pdf">Rapid</a>
+ * notion of a stable, virtually synchronous membership view, as well as
+ * relevant ideas from <a href=
+ * "https://www.cs.huji.ac.il/~dolev/pubs/opodis07-DHR-fulltext.pdf">Stable-Fireflies</a>.
+ * <p>
+ * This implementation is also very closely linked with the KERI Stereotomy
+ * implementation of Apollo. The Join protocol of this implementation includes a
+ * remote attestation protocol for secure bootstrapping of the entire
+ * membership.
  *
  * @author hal.hildebrand
  * @since 220
@@ -125,9 +137,8 @@ public class View {
     public class Node extends Participant implements SigningMember {
 
         /**
-         * Create a mask of length 2t+1 with t randomly disabled rings
-         *
-         * @param toleranceLevel - t
+         * Create a mask of length Context.majority() randomly disabled rings
+         * 
          * @return the mask
          */
         public static BitSet createInitialMask(Context<?> context) {
