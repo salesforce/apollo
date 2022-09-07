@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.salesforce.apollo.fireflies.ViewManagement.MEMBERSHIP_FPR;
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.InputStream;
@@ -669,10 +670,9 @@ public class View {
         void viewChange(Context<Participant> context, Digest viewId, List<Digest> joins, List<Digest> leaves);
     }
 
-    static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
-    static final Logger log                   = LoggerFactory.getLogger(View.class);
-    static final double MEMBERSHIP_FPR        = 0.0000125;
-    static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
+    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
@@ -996,10 +996,6 @@ public class View {
     BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
                                                       com.codahale.metrics.Timer.Context timer) {
         return viewManagement.join(scheduler, duration, timer);
-    }
-
-    Participant newParticipant(Digest id) {
-        return new Participant(id);
     }
 
     void notifyListeners(List<Digest> joining, List<Digest> leaving) {

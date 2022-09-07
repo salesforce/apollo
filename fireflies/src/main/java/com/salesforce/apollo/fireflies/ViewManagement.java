@@ -88,8 +88,9 @@ public class ViewManagement {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
+    static final double MEMBERSHIP_FPR = 0.0000125;
 
+    private static final Logger                            log          = LoggerFactory.getLogger(ViewManagement.class);
     private final AtomicInteger                            attempt      = new AtomicInteger();
     private boolean                                        bootstrap;
     private final Context<Participant>                     context;
@@ -104,7 +105,8 @@ public class ViewManagement {
     private final Parameters                               params;
     private final Map<Digest, Consumer<List<NoteWrapper>>> pendingJoins = new ConcurrentSkipListMap<>();
     private final View                                     view;
-    private final AtomicReference<ViewChange>              vote         = new AtomicReference<>();
+
+    private final AtomicReference<ViewChange> vote = new AtomicReference<>();
 
     ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
@@ -184,7 +186,7 @@ public class ViewManagement {
         var membership = new DigestBloomFilter(view.currentView().fold(),
                                                Math.max(params.minimumBiffCardinality(),
                                                         (context.memberCount() + ballot.joining.size())),
-                                               View.MEMBERSHIP_FPR);
+                                               MEMBERSHIP_FPR);
         context.allMembers().forEach(p -> membership.add(p.getId()));
         ballot.joining().forEach(id -> membership.add(id));
 
@@ -430,7 +432,8 @@ public class ViewManagement {
             return Redirect.getDefaultInstance();
         }
         return view.stable(() -> {
-            var newMember = view.newParticipant(note.getId());
+            var newMember = view.new Participant(
+                                                 note.getId());
             final var successors = new TreeSet<Participant>(context.successors(newMember, m -> context.isActive(m)));
 
             log.debug("Member seeding: {} view: {} context: {} successors: {} on: {}", newMember.getId(), currentView(),
