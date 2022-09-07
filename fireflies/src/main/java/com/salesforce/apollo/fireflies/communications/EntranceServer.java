@@ -104,8 +104,7 @@ public class EntranceServer extends EntranceImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var redirect = s.seed(request, from);
-            redirect.whenComplete((r, t) -> {
+            s.seed(request, from).whenComplete((r, t) -> {
                 if (t != null) {
                     responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
                 } else {

@@ -74,6 +74,7 @@ import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -574,7 +575,19 @@ public class View {
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
                 return;
             }
-
+            verify(request).whenComplete((v, t) -> {
+                if (t != null) {
+                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
+                } else if (v == null) {
+                    responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
+                } else {
+                    responseObserver.onNext(Invitation.newBuilder()
+                                                      .setView(currentView().toDigeste())
+                                                      .setValidation(v)
+                                                      .build());
+                    responseObserver.onCompleted();
+                }
+            });
         }
 
         /**
@@ -2006,11 +2019,22 @@ public class View {
         return builder.build();
     }
 
+    private CompletableFuture<Validation_> validate(Credentials credentials) {
+        var event = credentials.getKerl().getEvents(0).getInception();
+        return node.getIdentifier()
+                   .getSigner()
+                   .thenApply(signer -> Validation_.newBuilder()
+                                                   .setValidator(node.getIdentifier().getCoordinates().toEventCoords())
+                                                   .setSignature(signer.sign(event.toByteString()).toSig())
+                                                   .build());
+    }
+
     private boolean validate(Credentials credentials, Digest from) {
         var signedAtt = credentials.getAttestation();
         var kerl = credentials.getKerl();
         if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
                                 .event() instanceof EstablishmentEvent establishment) {
+
             final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
             if (!verifier.verify(JohnHancock.from(signedAtt.getSignature()),
                                  signedAtt.getAttestation().toByteString())) {
@@ -2079,5 +2103,17 @@ public class View {
                 metrics.shunnedGossip().mark();
             }
         }
+    }
+
+    private CompletableFuture<Validation_> verify(Credentials credentials) {
+        return params.gorgoneion().verifier().apply(credentials.getAttestation()).thenCompose(success -> {
+            if (!success) {
+                var fs = new CompletableFuture<Validation_>();
+                fs.complete(null);
+                return fs;
+            } else {
+                return validate(credentials);
+            }
+        });
     }
 }
