@@ -16,6 +16,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -36,12 +37,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
+import com.google.common.collect.Multiset.Entry;
+import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
@@ -77,6 +84,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.fireflies.ViewManagement.Ballot;
 import com.salesforce.apollo.fireflies.communications.Approach;
 import com.salesforce.apollo.fireflies.communications.EntranceClient;
 import com.salesforce.apollo.fireflies.communications.EntranceServer;
@@ -147,7 +155,7 @@ public class View {
             this.wrapped = wrapped;
             var n = Note.newBuilder()
                         .setEpoch(0)
-                        .setCurrentView(currentView().toDigeste())
+                        .setCurrentView(bootstrapView().toDigeste())
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
                         .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
@@ -683,27 +691,27 @@ public class View {
                mask.length() <= context.getRingCount();
     }
 
-    final CommonCommunications<Approach, Service>          approaches;
-    final Context<Participant>                             context;
-    final DigestAlgorithm                                  digestAlgo;
-    final Executor                                         exec;
-    volatile ScheduledFuture<?>                            futureGossip;
-    final RingCommunications<Participant, Fireflies>       gossiper;
-    volatile BloomFilter<Digest>                           membership;
-    final FireflyMetrics                                   metrics;
-    final Node                                             node;
-    final Map<Digest, SignedViewChange>                    observations        = new ConcurrentSkipListMap<>();
-    final Parameters                                       params;
-    final ConcurrentMap<Digest, RoundScheduler.Timer>      pendingRebuttals    = new ConcurrentSkipListMap<>();
-    final RoundScheduler                                   roundTimers;
-    final Set<Digest>                                      shunned             = new ConcurrentSkipListSet<>();
-    final Map<String, RoundScheduler.Timer>                timers              = new HashMap<>();
-    final EventValidation                                  validation;
-    final ViewManagement                                   viewManagement;
-    private final CommonCommunications<Fireflies, Service> comm;
-    private final AtomicBoolean                            started             = new AtomicBoolean();
-    private final ReadWriteLock                            viewChange          = new ReentrantReadWriteLock(true);
-    private final Map<UUID, ViewChangeListener>            viewChangeListeners = new HashMap<>();
+    private final CommonCommunications<Approach, Service>     approaches;
+    private final CommonCommunications<Fireflies, Service>    comm;
+    private final Context<Participant>                        context;
+    private final DigestAlgorithm                             digestAlgo;
+    private final Executor                                    exec;
+    private volatile ScheduledFuture<?>                       futureGossip;
+    private final RingCommunications<Participant, Fireflies>  gossiper;
+    private volatile BloomFilter<Digest>                      membership;
+    private final FireflyMetrics                              metrics;
+    private final Node                                        node;
+    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final Parameters                                  params;
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
+    private final RoundScheduler                              roundTimers;
+    private final Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
+    private final AtomicBoolean                               started             = new AtomicBoolean();
+    private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
+    private final EventValidation                             validation;
+    private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
+    private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
+    private final ViewManagement                              viewManagement;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
@@ -720,9 +728,9 @@ public class View {
         this.digestAlgo = digestAlgo;
         this.context = context;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
-        viewManagement = new ViewManagement(this);
-        viewManagement.resetBootstrapView();
         this.node = new Node(member, endpoint);
+        viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo);
+        viewManagement.resetBootstrapView();
         var service = new Service();
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(), r,
@@ -754,6 +762,14 @@ public class View {
     }
 
     /**
+     * @return
+     */
+    public BloomFilter<Digest> getMembership() {
+        final var current = membership;
+        return current;
+    }
+
+    /**
      * Register a listener to receive view change events
      *
      * @param listener - the ViewChangeListener to receive events
@@ -774,10 +790,9 @@ public class View {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        viewManagement.onJoined = onJoin;
         var seeds = new ArrayList<>(seedpods);
         Entropy.secureShuffle(seeds);
-        viewManagement.bootstrap = seeds.isEmpty();
+        viewManagement.start(onJoin, seeds.isEmpty());
 
         log.info("Starting: {} cardinality: {} tolerance: {} seeds: {} on: {}", context.getId(), context.cardinality(),
                  context.toleranceLevel(), seeds.size(), node.getId());
@@ -787,7 +802,9 @@ public class View {
         node.reset();
 
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
-        scheduler.schedule(exec(() -> new Binding(this, seeds, d, scheduler).seeding()), initial, TimeUnit.NANOSECONDS);
+        scheduler.schedule(exec(() -> new Binding(this, seeds, d, scheduler, context, approaches, node, params, metrics,
+                                                  exec, digestAlgo).seeding()),
+                           initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -884,7 +901,7 @@ public class View {
             if (accused) {
                 checkInvalidations(member);
             }
-            if (!viewManagement.onJoined.isDone() && context.totalCount() == context.cardinality()) {
+            if (!viewManagement.isJoined() && context.totalCount() == context.cardinality()) {
                 assert context.totalCount() == context.cardinality();
                 viewManagement.join();
             } else {
@@ -895,43 +912,68 @@ public class View {
         return true;
     }
 
+    void bootstrap(NoteWrapper nw, ScheduledExecutorService sched, Duration dur) {
+        viewManagement.bootstrap(nw, sched, dur);
+    }
+
     Digest bootstrapView() {
         return context.getId().prefix(digestAlgo.getOrigin());
     }
 
-    /**
-     * <pre>
-     * The member goes from an accused to not accused state. As such,
-     * it may invalidate other accusations.
-     * Let m_j be m's first live successor on ring r.
-     * All accusations for members q between m and m_j:
-     *   If q between accuser and accused: invalidate accusation.
-     *   If accused now is cleared, rerun for this member.
-     * </pre>
-     *
-     * @param m
-     */
-    void checkInvalidations(Participant m) {
-        Deque<Participant> check = new ArrayDeque<>();
-        check.add(m);
-        while (!check.isEmpty()) {
-            Participant checked = check.pop();
-            context.rings().forEach(ring -> {
-                for (Participant q : ring.successors(checked, member -> !member.isAccused())) {
-                    if (q.isAccusedOn(ring.getIndex())) {
-                        invalidate(q, ring, check);
-                    }
-                }
-            });
-        }
-    }
-
     Digest currentView() {
-        return viewManagement.currentView.get();
+        return viewManagement.currentView();
     }
 
-    Runnable exec(Runnable action) {
-        return () -> exec.execute(Utils.wrapped(action, log));
+    /**
+     * Finalize the view change
+     */
+    void finalizeViewChange() {
+        viewChange(() -> {
+            final var cardinality = context.memberCount();
+            final var superMajority = cardinality - ((cardinality - 1) / 4);
+            if (observations.size() < superMajority) {
+                log.trace("Do not have supermajority: {} required: {}   for: {} on: {}", observations.size(),
+                          superMajority, currentView(), node.getId());
+                scheduleFinalizeViewChange(2);
+                return;
+            }
+            HashMultiset<Ballot> ballots = HashMultiset.create();
+            observations.values().forEach(vc -> {
+                final var leaving = new ArrayList<>(vc.getChange()
+                                                      .getLeavesList()
+                                                      .stream()
+                                                      .map(d -> Digest.from(d))
+                                                      .collect(Collectors.toSet()));
+                final var joining = new ArrayList<>(vc.getChange()
+                                                      .getJoinsList()
+                                                      .stream()
+                                                      .map(d -> Digest.from(d))
+                                                      .collect(Collectors.toSet()));
+                leaving.sort(Ordering.natural());
+                joining.sort(Ordering.natural());
+                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
+            });
+            var max = ballots.entrySet()
+                             .stream()
+                             .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                             .orElse(null);
+            if (max != null && max.getCount() >= superMajority) {
+                log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
+                         superMajority, context.cardinality(), currentView(), node.getId());
+                viewManagement.install(max.getElement());
+            } else {
+                @SuppressWarnings("unchecked")
+                final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
+                log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
+                         observations.size(), superMajority, context.cardinality(),
+                         ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
+            }
+
+            scheduleViewChange();
+            removeTimer(View.FINALIZE_VIEW_CHANGE);
+            viewManagement.clearVote();
+            observations.clear();
+        });
     }
 
     /**
@@ -943,24 +985,17 @@ public class View {
         return node;
     }
 
-    /**
-     * Execute one round of gossip
-     *
-     * @param duration
-     * @param scheduler
-     */
-    void gossip(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
+    boolean hasPendingRebuttals() {
+        return pendingRebuttals.isEmpty();
+    }
 
-        exec.execute(Utils.wrapped(() -> {
-            if (context.activeCount() == 1) {
-                roundTimers.tick();
-            }
-            gossiper.execute((link, ring) -> gossip(link, ring),
-                             (futureSailor, destination) -> gossip(futureSailor, destination, duration, scheduler));
-        }, log));
+    void initiate(SignedViewChange viewChange) {
+        observations.put(node.getId(), viewChange);
+    }
+
+    BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
+                                                      com.codahale.metrics.Timer.Context timer) {
+        return viewManagement.join(scheduler, duration, timer);
     }
 
     Participant newParticipant(Digest id) {
@@ -978,25 +1013,6 @@ public class View {
                 log.error("error in view change listener: {} on: {} ", id, node.getId(), e);
             }
         });
-    }
-
-    /**
-     * recover a member from the failed state
-     *
-     * @param member
-     */
-    void recover(Participant member) {
-        if (shunned.contains(member.id)) {
-            log.debug("Not recovering shunned: {} on: {}", member.getId(), node.getId());
-            return;
-        }
-        if (context.activate(member)) {
-//            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-//                      context.totalCount(), node.getId());
-        } else {
-//            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-//                      context.totalCount(), node.getId());
-        }
     }
 
     /**
@@ -1018,19 +1034,53 @@ public class View {
         }
     }
 
-    NoteWrapper seedFor(Seed seed) {
-        SignedNote seedNote = SignedNote.newBuilder()
-                                        .setNote(Note.newBuilder()
-                                                     .setCurrentView(currentView().toDigeste())
-                                                     .setHost(seed.endpoint.getHostName())
-                                                     .setPort(seed.endpoint.getPort())
-                                                     .setCoordinates(seed.coordinates.toEventCoords())
-                                                     .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context)
-                                                                                      .toByteArray())))
-                                        .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
-                                        .build();
-        return new NoteWrapper(seedNote, digestAlgo);
+    void removeTimer(String timer) {
+        timers.remove(timer);
+    }
+
+    void reset() {
+        // Tune
+        gossiper.reset();
+        roundTimers.setRoundDuration(context.timeToLive());
+
+        // Regenerate for new epoch
+        node.nextNote();
+    }
+
+    void resetBootstrapView() {
+        viewManagement.resetBootstrapView();
+    }
+
+    void schedule(final Duration duration, final ScheduledExecutorService scheduler) {
+        futureGossip = scheduler.schedule(Utils.wrapped(() -> gossip(duration, scheduler), log),
+                                          Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
+    }
+
+    void scheduleFinalizeViewChange() {
+        scheduleFinalizeViewChange(params.finalizeViewRounds());
+    }
+
+    void scheduleFinalizeViewChange(final int finalizeViewRounds) {
+//        log.trace("View change finalization scheduled: {} rounds for: {} joining: {} leaving: {} on: {}",
+//                  finalizeViewRounds, currentView(), joins.size(), context.getOffline().size(), node.getId());
+        timers.put(FINALIZE_VIEW_CHANGE,
+                   roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), finalizeViewRounds));
+    }
+
+    void scheduleViewChange() {
+        scheduleViewChange(params.viewChangeRounds());
+    }
+
+    void scheduleViewChange(final int viewChangeRounds) {
+//        log.trace("Schedule view change: {} rounds for: {}   on: {}", viewChangeRounds, currentView(),
+//                  node.getId());
+        timers.put(SCHEDULED_VIEW_CHANGE,
+                   roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> viewManagement.maybeViewChange(),
+                                        viewChangeRounds));
+    }
+
+    void setMembership(BloomFilter<Digest> bff) {
+        membership = bff;
     }
 
     <T> T stable(Callable<T> call) {
@@ -1069,6 +1119,10 @@ public class View {
             log.debug("Cancelling accusation of: {} on: {}", m.getId(), node.getId());
             timer.cancel();
         }
+    }
+
+    Stream<Digest> streamShunned() {
+        return shunned.stream();
     }
 
     void viewChange(Runnable r) {
@@ -1301,7 +1355,7 @@ public class View {
             return false;
         }
 
-        return viewManagement.joins.put(note.getId(), note) == null;
+        return viewManagement.addJoin(note.getId(), note);
     }
 
     /**
@@ -1344,6 +1398,33 @@ public class View {
     }
 
     /**
+     * <pre>
+     * The member goes from an accused to not accused state. As such,
+     * it may invalidate other accusations.
+     * Let m_j be m's first live successor on ring r.
+     * All accusations for members q between m and m_j:
+     *   If q between accuser and accused: invalidate accusation.
+     *   If accused now is cleared, rerun for this member.
+     * </pre>
+     *
+     * @param m
+     */
+    private void checkInvalidations(Participant m) {
+        Deque<Participant> check = new ArrayDeque<>();
+        check.add(m);
+        while (!check.isEmpty()) {
+            Participant checked = check.pop();
+            context.rings().forEach(ring -> {
+                for (Participant q : ring.successors(checked, member -> !member.isAccused())) {
+                    if (q.isAccusedOn(ring.getIndex())) {
+                        invalidate(q, ring, check);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
      * @return the digests common for gossip with all neighbors
      */
     private Digests commonDigests() {
@@ -1353,6 +1434,10 @@ public class View {
                       .setJoinBiff(viewManagement.getJoinsBff(Entropy.nextSecureLong(), params.fpr()).toBff())
                       .setObservationBff(getObservationsBff(Entropy.nextSecureLong(), params.fpr()).toBff())
                       .build();
+    }
+
+    private Runnable exec(Runnable action) {
+        return () -> exec.execute(Utils.wrapped(action, log));
     }
 
     /**
@@ -1410,6 +1495,26 @@ public class View {
                                                                     p);
         observations.keySet().forEach(d -> bff.add(d));
         return bff;
+    }
+
+    /**
+     * Execute one round of gossip
+     *
+     * @param duration
+     * @param scheduler
+     */
+    private void gossip(Duration duration, ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
+
+        exec.execute(Utils.wrapped(() -> {
+            if (context.activeCount() == 1) {
+                roundTimers.tick();
+            }
+            gossiper.execute((link, ring) -> gossip(link, ring),
+                             (futureSailor, destination) -> gossip(futureSailor, destination, duration, scheduler));
+        }, log));
     }
 
     /**
@@ -1718,6 +1823,25 @@ public class View {
     }
 
     /**
+     * recover a member from the failed state
+     *
+     * @param member
+     */
+    private void recover(Participant member) {
+        if (shunned.contains(member.id)) {
+            log.debug("Not recovering shunned: {} on: {}", member.getId(), node.getId());
+            return;
+        }
+        if (context.activate(member)) {
+//            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+//                      context.totalCount(), node.getId());
+        } else {
+//            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+//                      context.totalCount(), node.getId());
+        }
+    }
+
+    /**
      * Redirect the receiver to the correct ring, processing any new accusations
      * 
      * @param member
@@ -1856,11 +1980,7 @@ public class View {
         biff = gossip.getJoins().getBff();
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> joinBff = BloomFilter.from(biff);
-            viewManagement.joins.entrySet()
-                                .stream()
-                                .filter(e -> !joinBff.contains(e.getKey()))
-                                .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-                                .forEach(e -> builder.addJoins(e.getValue().getWrapped()));
+            viewManagement.joinUpdatesFor(joinBff, builder);
         }
 
         return builder.build();
