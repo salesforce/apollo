@@ -8,8 +8,10 @@ package com.salesforce.apollo.fireflies;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -29,13 +31,22 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Timestamp;
+import com.salesfoce.apollo.fireflies.proto.Attestation;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Invitation;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
+import com.salesfoce.apollo.fireflies.proto.SignedAttestation;
+import com.salesfoce.apollo.fireflies.proto.SignedNonce;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
+import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
@@ -101,7 +112,7 @@ class Binding {
 
         var seeding = new CompletableFuture<Redirect>();
         var timer = metrics == null ? null : metrics.seedDuration().time();
-        seeding.whenComplete(redirect(duration, scheduler, timer));
+        seeding.whenComplete(validate(duration, scheduler, timer));
 
         var seedlings = new SliceIterator<>("Seedlings", node,
                                             seeds.stream()
@@ -124,6 +135,22 @@ class Binding {
             }, scheduler, params.retryDelay());
         });
         reseed.get().run();
+    }
+
+    private SignedAttestation attestation(SignedNonce nonce, Any proof) {
+        var now = params.gorgoneion().clock().instant();
+        var attestation = Attestation.newBuilder()
+                                     .setAttestation(proof)
+                                     .setKerl(node.kerl())
+                                     .setNonce(node.sign(nonce.toByteString()).toSig())
+                                     .setTimestamp(Timestamp.newBuilder()
+                                                            .setSeconds(now.getEpochSecond())
+                                                            .setNanos(now.getNano()))
+                                     .build();
+        return SignedAttestation.newBuilder()
+                                .setAttestation(attestation)
+                                .setSignature(node.sign(attestation.toByteString()).toSig())
+                                .build();
     }
 
     private void bootstrap() {
@@ -201,7 +228,7 @@ class Binding {
                               node.getId());
                     break;
                 case UNAUTHENTICATED:
-                    log.trace("Join unauthenticated for view: {} with: {} : {} on: {}", view, member.getId(),
+                    log.trace("Join unauthenticated for view: {} with: {} : {} on: {}", v, member.getId(),
                               sre.getStatus(), node.getId());
                     break;
                 default:
@@ -258,53 +285,111 @@ class Binding {
         return true;
     }
 
+    private boolean completeValidation(Participant from, int majority, Digest v,
+                                       CompletableFuture<Validations> validated,
+                                       Optional<ListenableFuture<Invitation>> futureSailor,
+                                       Map<Member, Validation_> validations) {
+        if (futureSailor.isEmpty()) {
+            return true;
+        }
+        Invitation invite;
+        try {
+            invite = futureSailor.get().get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return true;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof StatusRuntimeException sre) {
+                switch (sre.getStatus().getCode()) {
+                case RESOURCE_EXHAUSTED:
+                    log.trace("Resource exhausted in validation: {} with: {} : {} on: {}", v, from.getId(),
+                              sre.getStatus(), node.getId());
+                    break;
+                case OUT_OF_RANGE:
+                    log.debug("View change in validation: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
+                              node.getId());
+                    view.resetBootstrapView();
+                    node.reset();
+                    exec.execute(() -> seeding());
+                    return false;
+                case DEADLINE_EXCEEDED:
+                    log.trace("Validation timeout for view: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
+                              node.getId());
+                    break;
+                case UNAUTHENTICATED:
+                    log.trace("Validation unauthenticated for view: {} with: {} : {} on: {}", v, from.getId(),
+                              sre.getStatus(), node.getId());
+                    break;
+                default:
+                    log.warn("Failure in validation: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
+                             node.getId());
+                }
+            } else {
+                log.error("Failure in validation: {} with: {} on: {}", v, from.getId(), node.getId(), e.getCause());
+            }
+            return true;
+        } catch (CancellationException e) {
+            return true;
+        }
+
+        final var validation = invite.getValidation();
+        if (!validate(validation, from)) {
+            return true;
+        }
+        if (validations.put(from, validation) == null) {
+            if (validations.size() >= majority) {
+                validated.complete(Validations.newBuilder().build());
+                log.info("Validations acquired: {} majority: {} for view: {} context: {} on: {}", validations.size(),
+                         majority, v, this.context.getId(), node.getId());
+                return false;
+            }
+        }
+        log.info("Validation: {} majority not achieved: {} required: {} context: {} on: {}", v, validations.size(),
+                 majority, this.context.getId(), node.getId());
+        return true;
+    }
+
+    private CompletableFuture<Credentials> credentials(SignedNonce nonce) {
+        return params.gorgoneion()
+                     .attester()
+                     .apply(nonce)
+                     .thenApply(attestation -> Credentials.newBuilder()
+                                                          .setContext(context.getId().toDigeste())
+                                                          .setKerl(node.kerl())
+                                                          .setNonce(nonce)
+                                                          .setAttestation(attestation(nonce, attestation))
+                                                          .build());
+    }
+
     private Runnable exec(Runnable action) {
         return () -> exec.execute(Utils.wrapped(action, log));
     }
 
-    private Join join(Digest v) {
-        return Join.newBuilder()
-                   .setContext(context.getId().toDigeste())
-                   .setView(v.toDigeste())
-                   .setNote(node.getNote().getWrapped())
-                   .setKerl(node.kerl())
-                   .build();
-    }
-
-    private BiConsumer<? super Redirect, ? super Throwable> redirect(Duration duration,
-                                                                     ScheduledExecutorService scheduler,
-                                                                     Timer.Context timer) {
-        return (r, t) -> {
+    private BiConsumer<? super Validations, ? super Throwable> join(boolean bootstrap, Digest v, int cardinality,
+                                                                    List<Participant> successors, Duration duration,
+                                                                    ScheduledExecutorService scheduler, int rings) {
+        return (validations, t) -> {
             if (t != null) {
-                log.error("Failed seeding on: {}", node.getId(), t);
+                log.error("Failed validating on: {}", node.getId(), t);
                 return;
             }
-            if (!r.isInitialized()) {
-                log.error("Empty seeding response on: {}", node.getId(), t);
+            if (!validations.isInitialized()) {
+                log.error("Empty validations on: {}", node.getId(), t);
                 return;
             }
-            var view = Digest.from(r.getView());
-            this.context.rebalance(r.getCardinality());
-            node.nextNote(view);
 
-            log.debug("Completing redirect to view: {} context: {} successors: {} on: {}", view, this.context.getId(),
-                      r.getSuccessorsCount(), node.getId());
-            if (timer != null) {
-                timer.close();
-            }
-            redirect(r, duration, scheduler);
+            this.context.rebalance(cardinality);
+            node.nextNote(v);
+
+            log.debug("Completing validation for view: {} context: {} successors: {} on: {}", v, this.context.getId(),
+                      successors.size(), node.getId());
+            join(bootstrap, validations, cardinality, v, rings, successors, duration, scheduler);
         };
     }
 
-    private void redirect(Redirect redirect, Duration duration, ScheduledExecutorService scheduler) {
-        var v = Digest.from(redirect.getView());
-        var succsesors = redirect.getSuccessorsList()
-                                 .stream()
-                                 .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
-                                 .map(nw -> view.new Participant(
-                                                                 nw))
-                                 .collect(Collectors.toList());
-        log.info("Redirecting to: {} context: {} successors: {} on: {}", v, this.context.getId(), succsesors.size(),
+    private void join(boolean bootstrap, Validations validations, int cardinality, Digest v, int rings,
+                      List<Participant> successors, Duration duration, ScheduledExecutorService scheduler) {
+        log.info("Redirecting to: {} context: {} successors: {} on: {}", v, this.context.getId(), successors.size(),
                  node.getId());
         var gateway = new CompletableFuture<Bound>();
         var timer = metrics == null ? null : metrics.joinDuration().time();
@@ -319,14 +404,14 @@ class Binding {
         HashMultiset<Integer> cards = HashMultiset.create();
         Set<SignedNote> joined = new HashSet<>();
 
-        this.context.rebalance(redirect.getCardinality());
+        this.context.rebalance(cardinality);
         node.nextNote(v);
 
-        final var redirecting = new SliceIterator<>("Gateways", node, succsesors, approaches, exec);
-        var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
+        final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches, exec);
+        var majority = bootstrap ? 1 : Context.minimalQuorum(rings, this.context.getBias());
         regate.set(() -> {
             redirecting.iterate((link, m) -> {
-                log.debug("Joining: {} contacting: {} on: {}", view, link.getMember().getId(), node.getId());
+                log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
                 return link.join(join(v), params.seedingTimeout());
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards,
                                                           seeds, v, majority, joined),
@@ -351,6 +436,15 @@ class Binding {
         regate.get().run();
     }
 
+    private Join join(Digest v) {
+        return Join.newBuilder()
+                   .setContext(context.getId().toDigeste())
+                   .setView(v.toDigeste())
+                   .setNote(node.getNote().getWrapped())
+                   .setKerl(node.kerl())
+                   .build();
+    }
+
     private Registration registration() {
         return Registration.newBuilder()
                            .setContext(context.getId().toDigeste())
@@ -373,6 +467,31 @@ class Binding {
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
         return new NoteWrapper(seedNote, digestAlgo);
+    }
+
+    private BiConsumer<? super Redirect, ? super Throwable> validate(Duration duration,
+                                                                     ScheduledExecutorService scheduler,
+                                                                     Timer.Context timer) {
+        return (r, t) -> {
+            if (t != null) {
+                log.error("Failed seeding on: {}", node.getId(), t);
+                return;
+            }
+            if (!r.isInitialized()) {
+                log.error("Empty seeding response on: {}", node.getId(), t);
+                return;
+            }
+            var view = Digest.from(r.getView());
+            this.context.rebalance(r.getCardinality());
+            node.nextNote(view);
+
+            log.debug("Completing redirect to view: {} context: {} successors: {} on: {}", view, this.context.getId(),
+                      r.getSuccessorsCount(), node.getId());
+            if (timer != null) {
+                timer.close();
+            }
+            validate(r, duration, scheduler);
+        };
     }
 
     private boolean validate(Gateway g, Digest v, CompletableFuture<Bound> gateway, HashMultiset<Biff> memberships,
@@ -401,5 +520,59 @@ class Binding {
         log.info("Gateway: {} majority not achieved: {} required: {} count: {} context: {} on: {}", v, cardinality,
                  majority, cards.size(), this.context.getId(), node.getId());
         return false;
+    }
+
+    private void validate(Redirect redirect, Duration duration, ScheduledExecutorService scheduler) {
+        var v = Digest.from(redirect.getView());
+        var successors = redirect.getSuccessorsList()
+                                 .stream()
+                                 .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
+                                 .map(nw -> view.new Participant(
+                                                                 nw))
+                                 .collect(Collectors.toList());
+        log.info("Validating for: {} context: {} successors: {} on: {}", v, this.context.getId(), successors.size(),
+                 node.getId());
+        var validate = new CompletableFuture<Validations>();
+        validate.whenComplete(join(redirect.getBootstrap(), v, redirect.getRings(), successors, duration, scheduler,
+                                   0));
+
+        var revalidate = new AtomicReference<Runnable>();
+        var retries = new AtomicInteger();
+
+        Map<Member, Validation_> validations = new HashMap<>();
+
+        this.context.rebalance(redirect.getCardinality());
+        node.nextNote(v);
+
+        final var validating = new SliceIterator<>("Validation", node, successors, approaches, exec);
+        var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
+        credentials(redirect.getNonce()).whenComplete((credentials, t) -> {
+            revalidate.set(() -> {
+                validating.iterate((link, m) -> {
+                    log.debug("Validating from: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
+                    return link.register(credentials, params.seedingTimeout());
+                }, (futureSailor, link, m) -> completeValidation((Participant) m, majority, v, validate, futureSailor,
+                                                                 validations),
+                                   () -> {
+                                       if (retries.get() < params.joinRetries()) {
+                                           log.debug("Failed to validate with view: {} retry: {} out of: {} on: {}", v,
+                                                     retries.incrementAndGet(), params.joinRetries(), node.getId());
+                                           validations.clear();
+                                           scheduler.schedule(exec(() -> revalidate.get().run()),
+                                                              Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
+                                                              TimeUnit.NANOSECONDS);
+                                       } else {
+                                           log.error("Failed to validate with view: {} cannot obtain majority on: {}",
+                                                     view, node.getId());
+                                           view.stop();
+                                       }
+                                   }, scheduler, params.retryDelay());
+            });
+            revalidate.get().run();
+        });
+    }
+
+    private boolean validate(Validation_ validation, Member from) {
+        return true;
     }
 }

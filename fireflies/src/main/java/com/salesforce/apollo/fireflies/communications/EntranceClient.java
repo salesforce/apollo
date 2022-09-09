@@ -10,9 +10,11 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Invitation;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
@@ -63,6 +65,30 @@ public class EntranceClient implements Approach {
         }
 
         ListenableFuture<Gateway> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).join(join);
+        result.addListener(() -> {
+            if (metrics != null) {
+                try {
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGateway().update(serializedSize);
+                } catch (Throwable e) {
+                    // nothing
+                }
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Invitation> register(Credentials credentials, Duration timeout) {
+        if (metrics != null) {
+            var serializedSize = credentials.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundJoin().update(serializedSize);
+        }
+
+        ListenableFuture<Invitation> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                                    .register(credentials);
         result.addListener(() -> {
             if (metrics != null) {
                 try {

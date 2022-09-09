@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Invitation;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
@@ -42,6 +44,11 @@ public interface Approach extends Link {
             }
 
             @Override
+            public ListenableFuture<Invitation> register(Credentials credentials, Duration registrationTimeout) {
+                return null;
+            }
+
+            @Override
             public ListenableFuture<Redirect> seed(Registration registration) {
                 return null;
             }
@@ -49,6 +56,8 @@ public interface Approach extends Link {
     }
 
     ListenableFuture<Gateway> join(Join join, Duration timeout);
+
+    ListenableFuture<Invitation> register(Credentials credentials, Duration registrationTimeout);
 
     ListenableFuture<Redirect> seed(Registration registration);
 }

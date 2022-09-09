@@ -2032,6 +2032,10 @@ public class View {
     private boolean validate(Credentials credentials, Digest from) {
         var signedAtt = credentials.getAttestation();
         var kerl = credentials.getKerl();
+        if (kerl.getEventsCount() == 0) {
+            log.warn("Invalid credentials, no KERL from: {} on: {}", from, node.getId());
+            return false;
+        }
         if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
                                 .event() instanceof EstablishmentEvent establishment) {
 

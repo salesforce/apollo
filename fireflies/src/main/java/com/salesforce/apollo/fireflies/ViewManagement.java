@@ -59,6 +59,9 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
+ * 
+ * Management of the view state logic
+ *
  * @author hal.hildebrand
  *
  */
@@ -493,10 +496,12 @@ public class ViewManagement {
                          .setNoise(digestAlgo.random().toDigeste())
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
-        return node.getIdentifier().getSigner().thenApply(s -> {
-            final var signature = s.sign(nonce.toByteString());
-            return SignedNonce.newBuilder().setNonce(nonce).setSignature(signature.toSig()).build();
-        });
+        return node.getIdentifier()
+                   .getSigner()
+                   .thenApply(s -> SignedNonce.newBuilder()
+                                              .setNonce(nonce)
+                                              .setSignature(s.sign(nonce.toByteString()).toSig())
+                                              .build());
     }
 
     private Ident identifier(Registration registration) {
