@@ -378,6 +378,8 @@ class Binding {
                 return;
             }
 
+            log.info("Rebalancing to cardinality: {} (joining) for: {} context: {} on: {}", cardinality, v,
+                     context.getId(), node.getId());
             this.context.rebalance(cardinality);
             node.nextNote(v);
 
@@ -404,15 +406,18 @@ class Binding {
         HashMultiset<Integer> cards = HashMultiset.create();
         Set<SignedNote> joined = new HashSet<>();
 
+        log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", cardinality, v, context.getId(),
+                 node.getId());
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
         final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches, exec);
         var majority = bootstrap ? 1 : Context.minimalQuorum(rings, this.context.getBias());
+        final var join = join(v);
         regate.set(() -> {
             redirecting.iterate((link, m) -> {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
-                return link.join(join(v), params.seedingTimeout());
+                return link.join(join, params.seedingTimeout());
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards,
                                                           seeds, v, majority, joined),
                                 () -> {
@@ -482,6 +487,8 @@ class Binding {
                 return;
             }
             var view = Digest.from(r.getView());
+            log.info("Rebalancing to cardinality: {} (validate) for: {} context: {} on: {}", r.getCardinality(), view,
+                     context.getId(), node.getId());
             this.context.rebalance(r.getCardinality());
             node.nextNote(view);
 
@@ -534,13 +541,15 @@ class Binding {
                  node.getId());
         var validate = new CompletableFuture<Validations>();
         validate.whenComplete(join(redirect.getBootstrap(), v, redirect.getRings(), successors, duration, scheduler,
-                                   0));
+                                   redirect.getCardinality()));
 
         var revalidate = new AtomicReference<Runnable>();
         var retries = new AtomicInteger();
 
         Map<Member, Validation_> validations = new HashMap<>();
 
+        log.info("Rebalancing to cardinality: {} (validation) for: {} context: {} on: {}", context.totalCount(), v,
+                 context.getId(), node.getId());
         this.context.rebalance(redirect.getCardinality());
         node.nextNote(v);
 

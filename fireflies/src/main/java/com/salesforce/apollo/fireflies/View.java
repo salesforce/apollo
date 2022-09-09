@@ -242,7 +242,7 @@ public class View {
             final var current = note;
             if (current == null) {
                 BitSet mask = createInitialMask(context);
-                assert isValidMask(mask, context) : "Invalid mask: " + mask + " tolerance: " + context.toleranceLevel()
+                assert isValidMask(mask, context) : "Invalid mask: " + mask + " majority: " + context.majority()
                 + " for node: " + getId();
                 return mask;
             }
@@ -570,6 +570,9 @@ public class View {
          */
         public void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver,
                              com.codahale.metrics.Timer.Context timer) {
+            if (!started.get()) {
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
+            }
             if (!validate(request, from)) {
                 log.warn("Invalid credentials from: {} on: {}", from, node.getId());
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
@@ -724,8 +727,17 @@ public class View {
      * @return
      */
     public static boolean isValidMask(BitSet mask, Context<?> context) {
-        return mask.cardinality() == ((context.getBias() - 1) * context.toleranceLevel()) + 1 &&
-               mask.length() <= context.getRingCount();
+        if (mask.cardinality() == context.majority()) {
+            if (mask.length() <= context.getRingCount()) {
+                return true;
+            } else {
+                log.warn("invalid length: {} required: {}", mask.length(), context.getRingCount());
+            }
+        } else {
+            log.warn("invalid cardinality: {} required: {}", mask.cardinality(), context.majority());
+        }
+        return false;
+//        return mask.cardinality() == context.majority() && mask.length() <= context.getRingCount();
     }
 
     private final CommonCommunications<Approach, Service>     approaches;
@@ -998,6 +1010,7 @@ public class View {
                 log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
                          superMajority, context.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
+                observations.clear();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
@@ -1009,7 +1022,6 @@ public class View {
             scheduleViewChange();
             removeTimer(View.FINALIZE_VIEW_CHANGE);
             viewManagement.clearVote();
-            observations.clear();
         });
     }
 
@@ -1315,7 +1327,8 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
-            log.trace("Note: {} mask invalid: {} on: {}", note.getId(), note.getMask(), node.getId());
+            log.warn("Note: {} mask invalid: {} majority: on: {}", note.getId(), note.getMask(), context.majority(),
+                     node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
@@ -1378,7 +1391,8 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
-            log.trace("Invalid join note from: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
+            log.warn("Invalid join note from: {} mask invalid: {} majority: {} on: {}", note.getId(), note.getMask(),
+                     context.majority(), node.getId());
             return false;
         }
 

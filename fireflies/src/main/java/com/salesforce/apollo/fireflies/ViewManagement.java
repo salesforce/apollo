@@ -136,12 +136,8 @@ public class ViewManagement {
         crown = new AtomicReference<>(digestAlgo.getOrigin());
     }
 
-    public boolean addJoin(Digest id, NoteWrapper note) {
+    boolean addJoin(Digest id, NoteWrapper note) {
         return joins.put(id, note) == null;
-    }
-
-    public Digest currentView() {
-        return currentView.get();
     }
 
     void bootstrap(NoteWrapper nw, final ScheduledExecutorService sched, final Duration dur) {
@@ -171,6 +167,10 @@ public class ViewManagement {
 
     void clearVote() {
         vote.set(null);
+    }
+
+    Digest currentView() {
+        return currentView.get();
     }
 
     /**
@@ -319,6 +319,11 @@ public class ViewManagement {
                 + requestView + " does not match: " + currentView())));
                 return;
             }
+            if (!View.isValidMask(note.getMask(), context)) {
+                log.warn("Invalid join mask: {} majority: {} from member: {} view: {}  context: {} cardinality: {} on: {}",
+                         note.getMask(), context.majority(), from, currentView(), context.getId(),
+                         context.cardinality(), node.getId());
+            }
             if (pendingJoins.size() >= params.maxPending()) {
                 responseObserver.onError(new StatusRuntimeException(Status.RESOURCE_EXHAUSTED.withDescription("No room at the inn")));
                 return;
@@ -345,6 +350,8 @@ public class ViewManagement {
                     return;
                 }
 
+                log.info("Rebalancing to cardinality: {} (pre join) for: {} context: {} on: {}", context.totalCount(),
+                         bound.view(), context.getId(), node.getId());
                 context.rebalance(bound.cardinality());
                 context.activate(node);
 
