@@ -13,6 +13,7 @@
 *.csv
 **/dependency-reduced-pom.xml
 pom.xml.bak
+/ff.log
 
 ## Intellij stuff
 .idea
