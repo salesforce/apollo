@@ -14,7 +14,7 @@ import java.time.Duration;
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
-                         Duration seedingTimeout, GorgoneionParameters gorgoneion) {
+                         Duration seedingTimeout, GorgoneionParameters gorgoneion, int validationRetries) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -62,6 +62,10 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          * Timeout for contacting seed gateways during seeding and join operations
          */
         private Duration                     seedingTimout          = Duration.ofSeconds(5);
+        /**
+         * Max number of times to attempt validation when joining a view
+         */
+        private int                          validationRetries      = 3;
 
         /**
          * Minimum number of rounds to check for view change
@@ -71,7 +75,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
                                   finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout,
-                                  gorgoneion.build());
+                                  gorgoneion.build(), validationRetries);
         }
 
         public int getFinalizeViewRounds() {
@@ -112,6 +116,10 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Duration getSeedingTimout() {
             return seedingTimout;
+        }
+
+        public int getValidationRetries() {
+            return validationRetries;
         }
 
         public int getViewChangeRounds() {
@@ -165,6 +173,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setSeedingTimout(Duration seedingTimout) {
             this.seedingTimout = seedingTimout;
+            return this;
+        }
+
+        public Builder setValidationRetries(int validationRetries) {
+            this.validationRetries = validationRetries;
             return this;
         }
 

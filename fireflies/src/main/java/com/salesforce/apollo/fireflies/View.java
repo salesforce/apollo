@@ -747,6 +747,7 @@ public class View {
     private final Executor                                    exec;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
+    private final AtomicBoolean                               introduced          = new AtomicBoolean();
     private volatile BloomFilter<Digest>                      membership;
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
@@ -1040,6 +1041,10 @@ public class View {
 
     void initiate(SignedViewChange viewChange) {
         observations.put(node.getId(), viewChange);
+    }
+
+    void introduced() {
+        introduced.set(true);
     }
 
     BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
@@ -2076,6 +2081,11 @@ public class View {
         if (shunned.contains(from)) {
             log.trace("Member is shunned: {} on: {}", from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned: " + from));
+        }
+        if (!introduced.get()) {
+            log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
+            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member: " + node.getId()
+            + " is yet to be introduced"));
         }
         if (!started.get()) {
             log.trace("Currently offline, send unknown to: {}  on: {}", from, node.getId());

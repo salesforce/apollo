@@ -155,6 +155,7 @@ public class ViewManagement {
                  context.cardinality(), context.activeCount(), context.getId(), node.getId());
         onJoined.complete(null);
         joined.set(true);
+        view.introduced();
         if (metrics != null) {
             metrics.viewChanges().mark();
         }
@@ -350,7 +351,7 @@ public class ViewManagement {
                     return;
                 }
 
-                log.info("Rebalancing to cardinality: {} (pre join) for: {} context: {} on: {}", context.totalCount(),
+                log.info("Rebalancing to cardinality: {} (pre join) for: {} context: {} on: {}", bound.cardinality(),
                          bound.view(), context.getId(), node.getId());
                 context.rebalance(bound.cardinality());
                 context.activate(node);
@@ -365,12 +366,14 @@ public class ViewManagement {
 
                 context.allMembers().forEach(p -> p.clearAccusations());
 
+                view.introduced();
+
                 view.schedule(duration, scheduler);
 
                 if (timer != null) {
                     timer.stop();
                 }
-                joined.set(true);
+                view.introduced();
 
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", bound.view(),
                          bound.seeds().size(), context.cardinality(), context.totalCount(), node.getId());

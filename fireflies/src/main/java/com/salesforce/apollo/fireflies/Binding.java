@@ -548,7 +548,7 @@ class Binding {
 
         Map<Member, Validation_> validations = new HashMap<>();
 
-        log.info("Rebalancing to cardinality: {} (validation) for: {} context: {} on: {}", context.totalCount(), v,
+        log.info("Rebalancing to cardinality: {} (validation) for: {} context: {} on: {}", redirect.getCardinality(), v,
                  context.getId(), node.getId());
         this.context.rebalance(redirect.getCardinality());
         node.nextNote(v);

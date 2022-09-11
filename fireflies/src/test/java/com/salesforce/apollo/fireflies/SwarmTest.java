@@ -127,7 +127,7 @@ public class SwarmTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(largeTests ? 2400 : 10, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -136,7 +136,7 @@ public class SwarmTest {
                                            scheduler));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 2400 : 10, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
@@ -148,7 +148,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-        success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 10, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -159,7 +159,7 @@ public class SwarmTest {
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(2400_000, 1_000, () -> {
+        success = Utils.waitForCondition(largeTests ? 2400_000 : 10, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
