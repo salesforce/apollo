@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -16,7 +17,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -28,28 +28,23 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Objects;
-import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.JoinGossip;
-import com.salesfoce.apollo.fireflies.proto.Nonce;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesfoce.apollo.fireflies.proto.SignedNonce;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.SignedViewChange;
 import com.salesfoce.apollo.fireflies.proto.Update.Builder;
 import com.salesfoce.apollo.fireflies.proto.ViewChange;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
@@ -101,29 +96,20 @@ public class ViewManagement {
 
     private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
 
-    private static <T> CompletableFuture<T> complete(T value) {
-        var fs = new CompletableFuture<T>();
-        fs.complete(value);
-        return fs;
-    }
-
     private final AtomicInteger                            attempt      = new AtomicInteger();
     private boolean                                        bootstrap;
     private final Context<Participant>                     context;
     private final AtomicReference<Digest>                  crown;
     private final AtomicReference<Digest>                  currentView  = new AtomicReference<>();
     private final DigestAlgorithm                          digestAlgo;
-    private final AtomicBoolean                            joined       = new AtomicBoolean();
     private final ConcurrentMap<Digest, NoteWrapper>       joins        = new ConcurrentSkipListMap<>();
     private final FireflyMetrics                           metrics;
     private final Node                                     node;
     private CompletableFuture<Void>                        onJoined;
     private final Parameters                               params;
     private final Map<Digest, Consumer<List<NoteWrapper>>> pendingJoins = new ConcurrentSkipListMap<>();
-
-    private final View view;
-
-    private final AtomicReference<ViewChange> vote = new AtomicReference<>();
+    private final View                                     view;
+    private final AtomicReference<ViewChange>              vote         = new AtomicReference<>();
 
     ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
@@ -154,7 +140,6 @@ public class ViewManagement {
         log.info("Bootstrapped view: {} cardinality: {} count: {} context: {} on: {}", view.currentView(),
                  context.cardinality(), context.activeCount(), context.getId(), node.getId());
         onJoined.complete(null);
-        joined.set(true);
         view.introduced();
         if (metrics != null) {
             metrics.viewChanges().mark();
@@ -260,7 +245,7 @@ public class ViewManagement {
     }
 
     boolean isJoined() {
-        return onJoined.isDone();
+        return joined();
     }
 
     /**
@@ -269,7 +254,7 @@ public class ViewManagement {
      */
     synchronized void join() {
         assert context.totalCount() == context.cardinality();
-        if (onJoined.isDone()) {
+        if (joined()) {
             return;
         }
         crown.set(digestAlgo.getOrigin());
@@ -282,7 +267,6 @@ public class ViewManagement {
         }
         view.notifyListeners(context.allMembers().map(p -> p.getId()).toList(), Collections.emptyList());
         onJoined.complete(null);
-        joined.set(true);
 
         view.scheduleViewChange();
 
@@ -294,7 +278,7 @@ public class ViewManagement {
     }
 
     void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
-        if (!joined.get()) {
+        if (!joined()) {
             log.trace("Not joined, ignored join of view: {} from: {} on: {}", Digest.from(join.getView()), from,
                       node.getId());
             responseObserver.onNext(Gateway.getDefaultInstance());
@@ -346,12 +330,12 @@ public class ViewManagement {
         return (bound, t) -> {
             view.viewChange(() -> {
                 if (t != null) {
-                    log.error("Failed to join view: {}on: {}", bound.view(), node.getId(), t);
+                    log.error("Failed to join view: {} on: {}", bound.view(), node.getId(), t);
                     view.stop();
                     return;
                 }
 
-                log.info("Rebalancing to cardinality: {} (pre join) for: {} context: {} on: {}", bound.cardinality(),
+                log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", bound.cardinality(),
                          bound.view(), context.getId(), node.getId());
                 context.rebalance(bound.cardinality());
                 context.activate(node);
@@ -359,8 +343,7 @@ public class ViewManagement {
                 view.setMembership(bound.bff());
                 currentView.set(bound.view());
 
-                bound.seeds().forEach(nw -> view.addToView(nw));
-                bound.joined().forEach(nw -> view.addToView(new NoteWrapper(nw, digestAlgo)));
+                bound.successors().forEach(nw -> view.addToView(nw));
 
                 view.reset();
 
@@ -376,12 +359,16 @@ public class ViewManagement {
                 view.introduced();
 
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", bound.view(),
-                         bound.seeds().size(), context.cardinality(), context.totalCount(), node.getId());
+                         bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
                 if (context.totalCount() == context.cardinality()) {
                     join();
                 }
             });
         };
+    }
+
+    boolean joined() {
+        return onJoined.isDone();
     }
 
     void joinUpdatesFor(BloomFilter<Digest> joinBff, Builder builder) {
@@ -441,22 +428,22 @@ public class ViewManagement {
         currentView.set(view.bootstrapView());
     }
 
-    CompletableFuture<Redirect> seed(Registration registration, Digest from) {
+    Redirect seed(Registration registration, Digest from) {
         final var requestView = Digest.from(registration.getView());
 
-        if (!joined.get()) {
+        if (!joined()) {
             log.warn("Not joined, ignored seed view: {} from: {} on: {}", requestView, from, node.getId());
-            return complete(Redirect.getDefaultInstance());
+            return Redirect.getDefaultInstance();
         }
         if (!view.bootstrapView().equals(requestView)) {
             log.warn("Invalid bootstrap view: {} from: {} on: {}", requestView, from, node.getId());
-            return complete(Redirect.getDefaultInstance());
+            return Redirect.getDefaultInstance();
         }
         var note = new NoteWrapper(registration.getNote(), digestAlgo);
         if (!from.equals(note.getId())) {
             log.warn("Invalid bootstrap note: {} from: {} claiming: {} on: {}", requestView, from, note.getId(),
                      node.getId());
-            return complete(Redirect.getDefaultInstance());
+            return Redirect.getDefaultInstance();
         }
         return view.stable(() -> {
             var newMember = view.new Participant(
@@ -465,62 +452,19 @@ public class ViewManagement {
 
             log.debug("Member seeding: {} view: {} context: {} successors: {} on: {}", newMember.getId(), currentView(),
                       context.getId(), successors.size(), node.getId());
-            return generateNonce(registration).thenApply(sn -> Redirect.newBuilder()
-                                                                       .setView(currentView().toDigeste())
-                                                                       .addAllSuccessors(successors.stream()
-                                                                                                   .filter(p -> p != null)
-                                                                                                   .map(p -> p.getSeed())
-                                                                                                   .toList())
-                                                                       .setCardinality(context.cardinality())
-                                                                       .setBootstrap(bootstrap)
-                                                                       .setRings(context.getRingCount())
-                                                                       .setNonce(sn)
-                                                                       .build());
+            return Redirect.newBuilder()
+                           .setView(currentView().toDigeste())
+                           .addAllSuccessors(successors.stream().filter(p -> p != null).map(p -> p.getSeed()).toList())
+                           .setCardinality(context.cardinality())
+                           .setBootstrap(bootstrap)
+                           .setRings(context.getRingCount())
+                           .build();
         });
     }
 
     void start(CompletableFuture<Void> onJoin, boolean bootstrap) {
         this.onJoined = onJoin;
         this.bootstrap = bootstrap;
-    }
-
-    private CompletableFuture<SignedNonce> generateNonce(Registration registration) {
-        var now = params.gorgoneion().clock().instant();
-        final var identifier = identifier(registration);
-        if (identifier == null) {
-            var fs = new CompletableFuture<SignedNonce>();
-            fs.completeExceptionally(new IllegalArgumentException("No identifier"));
-            return fs;
-        }
-        var nonce = Nonce.newBuilder()
-                         .setMember(identifier)
-                         .setDuration(com.google.protobuf.Duration.newBuilder()
-                                                                  .setSeconds(params.gorgoneion()
-                                                                                    .registrationTimeout()
-                                                                                    .toSecondsPart())
-                                                                  .setNanos(params.gorgoneion()
-                                                                                  .registrationTimeout()
-                                                                                  .toNanosPart())
-                                                                  .build())
-                         .setIssuer(node.getIdentifier().getLastEstablishmentEvent().toEventCoords())
-                         .setNoise(digestAlgo.random().toDigeste())
-                         .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
-                         .build();
-        return node.getIdentifier()
-                   .getSigner()
-                   .thenApply(s -> SignedNonce.newBuilder()
-                                              .setNonce(nonce)
-                                              .setSignature(s.sign(nonce.toByteString()).toSig())
-                                              .build());
-    }
-
-    private Ident identifier(Registration registration) {
-        final var kerl = registration.getKerl();
-        if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                                .event() instanceof EstablishmentEvent establishment) {
-            return establishment.getIdentifier().toIdent();
-        }
-        return null;
     }
 
     /**
@@ -562,23 +506,20 @@ public class ViewManagement {
 
     private void joined(List<SignedNote> joined, Digest from, StreamObserver<Gateway> responseObserver,
                         Timer.Context timer) {
-        var seedSet = new TreeSet<Participant>();
-        context.successors(from, m -> context.isActive(m)).forEach(p -> seedSet.add(p));
         final var current = view.getMembership();
+        final var seedSet = new HashSet<SignedNote>();
+        context.successors(from, m -> context.isActive(m)).forEach(p -> seedSet.add(p.getNote().getWrapped()));
+        joined.stream()
+              .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+              .forEach(sn -> seedSet.add(sn));
         var gateway = Gateway.newBuilder()
                              .setView(currentView().toDigeste())
-                             .addAllInitialSeedSet(seedSet.stream()
-                                                          .map(p -> p.getNote().getWrapped())
-                                                          .collect(new ReservoirSampler<>(params.maximumTxfr(),
-                                                                                          Entropy.bitsStream())))
+                             .addAllInitialSeedSet(seedSet)
                              .setMembers(current.toBff())
                              .setCardinality(context.cardinality())
-                             .addAllJoining(joined.stream()
-                                                  .collect(new ReservoirSampler<>(params.maximumTxfr(),
-                                                                                  Entropy.bitsStream())))
                              .build();
-        assert gateway.getInitialSeedSetCount() != 0 : "No seeds";
         assert !gateway.getMembers().equals(Biff.getDefaultInstance()) : "Empty membership";
+        assert gateway.getInitialSeedSetCount() != 0 : "Empty seed set";
         responseObserver.onNext(gateway);
         responseObserver.onCompleted();
         if (timer != null) {

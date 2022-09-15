@@ -52,14 +52,15 @@ import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
+import com.salesfoce.apollo.fireflies.proto.Application;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Invitation;
 import com.salesfoce.apollo.fireflies.proto.Join;
+import com.salesfoce.apollo.fireflies.proto.Notarization;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
@@ -67,6 +68,7 @@ import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.Seed_;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
+import com.salesfoce.apollo.fireflies.proto.SignedNonce;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.SignedViewChange;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -74,7 +76,6 @@ import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingCommunications.Destination;
@@ -86,9 +87,9 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.ViewManagement.Ballot;
-import com.salesforce.apollo.fireflies.communications.Approach;
+import com.salesforce.apollo.fireflies.communications.Entrance;
 import com.salesforce.apollo.fireflies.communications.EntranceClient;
 import com.salesforce.apollo.fireflies.communications.EntranceServer;
 import com.salesforce.apollo.fireflies.communications.FfServer;
@@ -102,8 +103,6 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
@@ -553,6 +552,21 @@ public class View {
     public class Service implements ServiceRouting {
 
         /**
+         * @param request
+         * @param from
+         * @return
+         */
+        public SignedNonce apply(Application request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public Empty enroll(Notarization request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        /**
          * Asynchronously add a member to the next view
          */
         public void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
@@ -560,37 +574,6 @@ public class View {
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
             }
             viewManagement.join(join, from, responseObserver, timer);
-        }
-
-        /**
-         * @param request
-         * @param from
-         * @param responseObserver
-         * @param timer
-         */
-        public void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver,
-                             com.codahale.metrics.Timer.Context timer) {
-            if (!started.get()) {
-                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
-            }
-            if (!validate(request, from)) {
-                log.warn("Invalid credentials from: {} on: {}", from, node.getId());
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
-                return;
-            }
-            verify(request).whenComplete((v, t) -> {
-                if (t != null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
-                } else if (v == null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
-                } else {
-                    responseObserver.onNext(Invitation.newBuilder()
-                                                      .setView(currentView().toDigeste())
-                                                      .setValidation(v)
-                                                      .build());
-                    responseObserver.onCompleted();
-                }
-            });
         }
 
         /**
@@ -607,6 +590,10 @@ public class View {
          *         would like updated.
          */
         public Gossip rumors(SayWhat request, Digest from) {
+            if (!introduced.get()) {
+                log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
+                return Gossip.getDefaultInstance();
+            }
             return stable(() -> {
                 validate(from, request);
                 final var ring = request.getRing();
@@ -654,7 +641,7 @@ public class View {
             });
         }
 
-        public CompletableFuture<Redirect> seed(Registration registration, Digest from) {
+        public Redirect seed(Registration registration, Digest from) {
             if (!started.get()) {
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
             }
@@ -669,6 +656,10 @@ public class View {
          * @param from
          */
         public void update(State request, Digest from) {
+            if (!introduced.get()) {
+                log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
+                return;
+            }
             stable(() -> {
                 validate(from, request);
                 final var ring = request.getRing();
@@ -740,7 +731,7 @@ public class View {
 //        return mask.cardinality() == context.majority() && mask.length() <= context.getRingCount();
     }
 
-    private final CommonCommunications<Approach, Service>     approaches;
+    private final CommonCommunications<Entrance, Service>     approaches;
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final DigestAlgorithm                             digestAlgo;
@@ -788,7 +779,7 @@ public class View {
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         this.approaches = gateway.create(node, context.getId(), service, service.getClass().getCanonicalName()
         + ":approach", r -> new EntranceServer(service, gateway.getClientIdentityProvider(), r, exec, metrics),
-                                         EntranceClient.getCreate(metrics), Approach.getLocalLoopback(node));
+                                         EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
         this.membership = new DigestBloomFilter(0x666, params.minimumBiffCardinality(), MEMBERSHIP_FPR);
@@ -1600,6 +1591,11 @@ public class View {
             return link.gossip(gossip);
         } catch (Throwable e) {
             final var p = (Participant) link.getMember();
+            if (!viewManagement.joined()) {
+                log.debug("Exception bootstrap gossiping with {} view: {} on: {}", p.getId(), currentView(),
+                          node.getId(), e);
+                return null;
+            }
             if (e instanceof StatusRuntimeException sre) {
                 switch (sre.getStatus().getCode()) {
                 case PERMISSION_DENIED:
@@ -1619,8 +1615,7 @@ public class View {
                 }
                 return null;
             } else {
-                log.debug("Exception gossiping with {} view: {} on: {}", p.getId(), currentView(), node.getId(),
-                          e.getCause());
+                log.debug("Exception gossiping with {} view: {} on: {}", p.getId(), currentView(), node.getId(), e);
                 accuse(p, ring, e);
                 return null;
             }
@@ -1649,7 +1644,7 @@ public class View {
                 Gossip gossip = futureSailor.get().get();
                 if (gossip.getRedirect()) {
                     stable(() -> redirect(member, gossip, destination.ring()));
-                } else {
+                } else if (viewManagement.joined()) {
                     try {
                         Update update = stable(() -> response(gossip));
                         if (update != null && !update.equals(Update.getDefaultInstance())) {
@@ -1668,8 +1663,15 @@ public class View {
                     } catch (StatusRuntimeException e) {
                         handleSRE("update", destination, member, e);
                     }
+                } else {
+                    stable(() -> processUpdates(gossip));
                 }
             } catch (ExecutionException e) {
+                if (!viewManagement.joined()) {
+                    log.debug("Exception bootstrap gossiping with {} view: {} on: {}", member.getId(), currentView(),
+                              node.getId(), e.getCause());
+                    return;
+                }
                 if (e.getCause() instanceof StatusRuntimeException sre) {
                     handleSRE("gossip", destination, member, sre);
                 } else {
@@ -1885,8 +1887,8 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-//            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-//                      context.totalCount(), node.getId());
+            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+                      context.totalCount(), node.getId());
         } else {
 //            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
 //                      context.totalCount(), node.getId());
@@ -2038,54 +2040,10 @@ public class View {
         return builder.build();
     }
 
-    private CompletableFuture<Validation_> validate(Credentials credentials) {
-        var event = credentials.getKerl().getEvents(0).getInception();
-        return node.getIdentifier()
-                   .getSigner()
-                   .thenApply(signer -> Validation_.newBuilder()
-                                                   .setValidator(node.getIdentifier().getCoordinates().toEventCoords())
-                                                   .setSignature(signer.sign(event.toByteString()).toSig())
-                                                   .build());
-    }
-
-    private boolean validate(Credentials credentials, Digest from) {
-        var signedAtt = credentials.getAttestation();
-        var kerl = credentials.getKerl();
-        if (kerl.getEventsCount() == 0) {
-            log.warn("Invalid credentials, no KERL from: {} on: {}", from, node.getId());
-            return false;
-        }
-        if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                                .event() instanceof EstablishmentEvent establishment) {
-
-            final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
-            if (!verifier.verify(JohnHancock.from(signedAtt.getSignature()),
-                                 signedAtt.getAttestation().toByteString())) {
-                log.warn("Invalid attestation, invalid signature from: {} on: {}", establishment.getIdentifier(),
-                         node.getId());
-                return false;
-            }
-            if (!verifier.verify(JohnHancock.from(signedAtt.getAttestation().getNonce()),
-                                 credentials.getNonce().toByteString())) {
-                log.warn("Invalid attestation, invalid nonce signature from: {} on: {}", establishment.getIdentifier(),
-                         node.getId());
-                return false;
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     private void validate(Digest from, final int ring, Digest requestView) {
         if (shunned.contains(from)) {
             log.trace("Member is shunned: {} on: {}", from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned: " + from));
-        }
-        if (!introduced.get()) {
-            log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
-            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member: " + node.getId()
-            + " is yet to be introduced"));
         }
         if (!started.get()) {
             log.trace("Currently offline, send unknown to: {}  on: {}", from, node.getId());
@@ -2131,17 +2089,5 @@ public class View {
                 metrics.shunnedGossip().mark();
             }
         }
-    }
-
-    private CompletableFuture<Validation_> verify(Credentials credentials) {
-        return params.gorgoneion().verifier().apply(credentials.getAttestation()).thenCompose(success -> {
-            if (!success) {
-                var fs = new CompletableFuture<Validation_>();
-                fs.complete(null);
-                return fs;
-            } else {
-                return validate(credentials);
-            }
-        });
     }
 }

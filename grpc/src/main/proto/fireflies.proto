@@ -121,7 +121,6 @@ message Update {
 // Eísodos
 service Entrance {
     rpc seed (Registration) returns (Redirect) {}
-    rpc register (Credentials) returns (Invitation) {}
     rpc join (Join) returns (Gateway) {}
 }
 
@@ -137,36 +136,41 @@ message Redirect {
     int32 cardinality = 2;
     int32 rings = 3;
     bool bootstrap = 4;
-    SignedNonce nonce = 5;
     repeated Seed_ successors = 6;
 }
 
-message Credentials {
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
-    SignedNonce nonce = 3;
-    SignedAttestation attestation = 4;
-}
-
-message Invitation {
-    utils.Digeste view = 1;
-    stereotomy.Validation_ validation = 2;
+message Seed_ {
+    SignedNote note = 1;
+    stereotomy.KeyState_ keyState = 5;
 }
 
 message Join {
     utils.Digeste context = 1;
     utils.Digeste view = 2;
     SignedNote note = 3;
-    stereotomy.KERL_ kerl = 4;
-    stereotomy.Validations validations = 5;
 }
 
 message Gateway { 
     utils.Digeste view = 1;
     utils.Biff members = 2;
-    int32 cardinality = 3;
+    int32 cardinality = 3; 
     repeated SignedNote initialSeedSet = 4;
-    repeated SignedNote joining = 5;
+}
+
+service Admissions {
+    rpc apply (Application) returns (SignedNonce) {}
+    rpc register (Credentials) returns (Invitation) {}
+    rpc enroll (Notarization) returns (google.protobuf.Empty) {}
+}
+
+message Application {
+    utils.Digeste context = 1;
+    stereotomy.KERL_ kerl = 2;
+}
+
+message SignedNonce {
+    Nonce nonce = 1;
+    utils.Sig signature = 2;
 }
 
 message Nonce {
@@ -177,9 +181,15 @@ message Nonce {
     google.protobuf.Duration duration = 5;
 }
 
-message SignedNonce {
-    Nonce nonce = 1;
-    utils.Sig signature = 2;
+message Credentials {
+    utils.Digeste context = 1;
+    stereotomy.KERL_ kerl = 2;
+    SignedNonce nonce = 3;
+    SignedAttestation attestation = 4;
+}
+
+message Invitation {
+    stereotomy.Validation_ validation = 1;
 }
 
 message Attestation {
@@ -194,7 +204,8 @@ message SignedAttestation {
     utils.Sig signature = 2;
 }
 
-message Seed_ {
-    SignedNote note = 1;
-    stereotomy.KeyState_ keyState = 5;
+message Notarization { 
+    utils.Digeste context = 1;
+    stereotomy.KERL_ kerl = 2; 
+    stereotomy.Validations validations = 3;
 }

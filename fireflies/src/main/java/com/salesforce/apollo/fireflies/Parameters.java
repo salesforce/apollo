@@ -14,7 +14,7 @@ import java.time.Duration;
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
-                         Duration seedingTimeout, GorgoneionParameters gorgoneion, int validationRetries) {
+                         Duration seedingTimeout, int validationRetries) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -24,48 +24,44 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Number of TTL rounds to wait before finalizing a view change
          */
-        private int                          finalizeViewRounds     = 3;
+        private int      finalizeViewRounds     = 3;
         /**
          * False positive rate for bloom filter state replication (high fpr is good)
          */
-        private double                       fpr                    = 0.0125;
-        /**
-         * Identity attestation/verification
-         */
-        private GorgoneionParameters.Builder gorgoneion             = GorgoneionParameters.newBuilder();
+        private double   fpr                    = 0.0125;
         /**
          * Number of retries when joining until giving up
          */
-        private int                          joinRetries            = 500;
+        private int      joinRetries            = 500;
         /**
          * Maximum number of elements to transfer per type per update
          */
-        private int                          maximumTxfr            = 10;
+        private int      maximumTxfr            = 10;
         /**
          * Maximum pending joins
          * 
          */
-        private int                          maxPending             = 15;
+        private int      maxPending             = 15;
         /**
          * Minimum cardinality for bloom filters
          */
-        private int                          minimumBiffCardinality = 128;
+        private int      minimumBiffCardinality = 128;
         /**
          * Number of TTL rounds an accussed has to rebut the accusation
          */
-        private int                          rebuttalTimeout        = 2;
+        private int      rebuttalTimeout        = 2;
         /**
          * Max duration to delay retrying join operations
          */
-        private Duration                     retryDelay             = Duration.ofMillis(200);
+        private Duration retryDelay             = Duration.ofMillis(200);
         /**
          * Timeout for contacting seed gateways during seeding and join operations
          */
-        private Duration                     seedingTimout          = Duration.ofSeconds(5);
+        private Duration seedingTimout          = Duration.ofSeconds(5);
         /**
          * Max number of times to attempt validation when joining a view
          */
-        private int                          validationRetries      = 3;
+        private int      validationRetries      = 3;
 
         /**
          * Minimum number of rounds to check for view change
@@ -75,7 +71,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
                                   finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout,
-                                  gorgoneion.build(), validationRetries);
+                                  validationRetries);
         }
 
         public int getFinalizeViewRounds() {
@@ -84,10 +80,6 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public double getFpr() {
             return fpr;
-        }
-
-        public GorgoneionParameters.Builder getGorgoneion() {
-            return gorgoneion;
         }
 
         public int getJoinRetries() {
@@ -133,11 +125,6 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setFpr(double fpr) {
             this.fpr = fpr;
-            return this;
-        }
-
-        public Builder setGorgoneion(GorgoneionParameters.Builder gorgoneion) {
-            this.gorgoneion = gorgoneion;
             return this;
         }
 
