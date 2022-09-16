@@ -28,7 +28,7 @@ message Application {
 
 message SignedNonce {
     Nonce nonce = 1;
-    utils.Sig signature = 2;
+    repeated stereotomy.Validation_ signatures = 2;
 }
 
 message Nonce {

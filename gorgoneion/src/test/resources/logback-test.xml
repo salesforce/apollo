@@ -6,31 +6,9 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-                %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
-  %msg%n
-            </Pattern>
+            <Pattern>-%msg%n</Pattern>
         </encoder>
     </appender>
-    
-    <!-- SQL execution logging is logged to the LoggerListener logger at DEBUG level -->
-    <Logger name="org.jooq.tools.LoggerListener" level="info">
-        <AppenderRef ref="STDOUT" />
-    </Logger>
-
-    <!-- Other jOOQ related debug log output -->
-    <Logger name="org.jooq" level="info">
-        <AppenderRef ref="STDOUT" />
-    </Logger>
-
-    <logger name="org.jooq.Constants" level="warn" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="liquibase" level="warn" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
     <logger name="com.salesforce.apollo.comm" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -51,7 +29,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.gorgoneion" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

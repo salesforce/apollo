@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
@@ -202,12 +203,11 @@ public class Gorgoneion {
                          .setNoise(digestAlgo.random().toDigeste())
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
-        return member.getIdentifier()
-                     .getSigner()
-                     .thenApply(s -> SignedNonce.newBuilder()
-                                                .setNonce(nonce)
-                                                .setSignature(s.sign(nonce.toByteString()).toSig())
-                                                .build());
+        return member.getIdentifier().getSigner().thenApply(s -> {
+            var validations = new ArrayList<Validation_>();
+            validations.add(Validation_.newBuilder().setSignature(s.sign(nonce.toByteString()).toSig()).build());
+            return validations;
+        }).thenApply(validations -> SignedNonce.newBuilder().setNonce(nonce).addAllSignatures(validations).build());
     }
 
     private Ident identifier(Application application) {

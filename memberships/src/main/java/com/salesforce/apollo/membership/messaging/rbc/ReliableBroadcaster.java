@@ -57,7 +57,6 @@ import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomWindow;
 
 /**
  * Content agnostic reliable broadcast of messages.
@@ -68,7 +67,6 @@ import com.salesforce.apollo.utils.bloomFilters.BloomWindow;
 public class ReliableBroadcaster {
     @FunctionalInterface
     public interface MessageHandler {
-
         void message(Digest context, List<Msg> messages);
     }
 
@@ -175,22 +173,19 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final BloomWindow<Digest> delivered;
-        private final Semaphore           garbageCollecting = new Semaphore(1);
-        private final int                 highWaterMark;
-        private final int                 maxAge;
-        private final AtomicInteger       nonce             = new AtomicInteger(0);
-        private final AtomicInteger       round             = new AtomicInteger();
-        private final Map<Digest, state>  state             = new ConcurrentHashMap<>();
-        private final Semaphore           tickGate          = new Semaphore(1);
+        private final DigestWindow       delivered;
+        private final Semaphore          garbageCollecting = new Semaphore(1);
+        private final int                highWaterMark;
+        private final int                maxAge;
+        private final AtomicInteger      nonce             = new AtomicInteger(0);
+        private final AtomicInteger      round             = new AtomicInteger();
+        private final Map<Digest, state> state             = new ConcurrentHashMap<>();
+        private final Semaphore          tickGate          = new Semaphore(1);
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
-            delivered = new BloomWindow<>(params.deliveredCacheSize,
-                                          () -> new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                                                      params.bufferSize * 2, 0.000125),
-                                          2);
+            delivered = new DigestWindow(params.deliveredCacheSize, 3);
         }
 
         public void clear() {
