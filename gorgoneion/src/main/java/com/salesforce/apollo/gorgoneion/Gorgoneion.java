@@ -4,16 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies;
+package com.salesforce.apollo.gorgoneion;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,13 +18,13 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.fireflies.proto.Application;
-import com.salesfoce.apollo.fireflies.proto.Attestation;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
-import com.salesfoce.apollo.fireflies.proto.Invitation;
-import com.salesfoce.apollo.fireflies.proto.Nonce;
-import com.salesfoce.apollo.fireflies.proto.SignedAttestation;
-import com.salesfoce.apollo.fireflies.proto.SignedNonce;
+import com.salesfoce.apollo.gorgoneion.proto.Application;
+import com.salesfoce.apollo.gorgoneion.proto.Attestation;
+import com.salesfoce.apollo.gorgoneion.proto.Credentials;
+import com.salesfoce.apollo.gorgoneion.proto.Invitation;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
+import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
@@ -35,7 +32,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -51,72 +47,6 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class Gorgoneion {
-    public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>> verifier, Clock clock,
-                             Duration registrationTimeout, Function<SignedNonce, CompletableFuture<Any>> attester) {
-
-        public static Builder newBuilder() {
-            return new Builder();
-        }
-
-        public static class Builder {
-            private final static CompletableFuture<Any>     defaultAttester;
-            private final static CompletableFuture<Boolean> defaultVerifier;
-
-            static {
-                defaultAttester = new CompletableFuture<Any>();
-                defaultAttester.complete(Any.getDefaultInstance());
-                defaultVerifier = new CompletableFuture<Boolean>();
-                defaultVerifier.complete(true);
-            }
-
-            private Function<SignedNonce, CompletableFuture<Any>>           attester            = sn -> defaultAttester;
-            private Clock                                                   clock               = Clock.systemUTC();
-            private Duration                                                registrationTimeout = Duration.ofSeconds(30);
-            private Function<SignedAttestation, CompletableFuture<Boolean>> verifier            = sa -> defaultVerifier;
-
-            public Parameters build() {
-                return new Parameters(verifier, clock, registrationTimeout, attester);
-            }
-
-            public Function<SignedNonce, CompletableFuture<Any>> getAttester() {
-                return attester;
-            }
-
-            public Clock getClock() {
-                return clock;
-            }
-
-            public Duration getRegistrationTimeout() {
-                return registrationTimeout;
-            }
-
-            public Function<SignedAttestation, CompletableFuture<Boolean>> getVerifier() {
-                return verifier;
-            }
-
-            public Builder setAttester(Function<SignedNonce, CompletableFuture<Any>> attester) {
-                this.attester = attester;
-                return this;
-            }
-
-            public Builder setClock(Clock clock) {
-                this.clock = clock;
-                return this;
-            }
-
-            public Builder setRegistrationTimeout(Duration registrationTimeout) {
-                this.registrationTimeout = registrationTimeout;
-                return this;
-            }
-
-            public Builder setVerifier(Function<SignedAttestation, CompletableFuture<Boolean>> verifier) {
-                this.verifier = verifier;
-                return this;
-            }
-        }
-
-    }
-
     private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
     private final Context<Member>            context;
@@ -174,8 +104,7 @@ public class Gorgoneion {
     }
 
     @SuppressWarnings("unused")
-    private boolean completeValidation(Participant from, int majority, Digest v,
-                                       CompletableFuture<Validations> validated,
+    private boolean completeValidation(Member from, int majority, Digest v, CompletableFuture<Validations> validated,
                                        Optional<ListenableFuture<Invitation>> futureSailor,
                                        Map<Member, Validation_> validations) {
         if (futureSailor.isEmpty()) {

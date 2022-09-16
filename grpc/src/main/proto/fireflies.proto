@@ -5,10 +5,7 @@ option java_package = "com.salesfoce.apollo.fireflies.proto";
 option java_outer_classname = "FirefliesProto";
 option objc_class_prefix = "Ff";
 
-import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
 
 import "util.proto";
 import "stereotomy.proto";
@@ -155,57 +152,4 @@ message Gateway {
     utils.Biff members = 2;
     int32 cardinality = 3; 
     repeated SignedNote initialSeedSet = 4;
-}
-
-service Admissions {
-    rpc apply (Application) returns (SignedNonce) {}
-    rpc register (Credentials) returns (Invitation) {}
-    rpc enroll (Notarization) returns (google.protobuf.Empty) {}
-}
-
-message Application {
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
-}
-
-message SignedNonce {
-    Nonce nonce = 1;
-    utils.Sig signature = 2;
-}
-
-message Nonce {
-    stereotomy.Ident member = 1;
-    stereotomy.EventCoords issuer = 2;
-    utils.Digeste noise = 3;
-    google.protobuf.Timestamp timestamp = 4;
-    google.protobuf.Duration duration = 5;
-}
-
-message Credentials {
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
-    SignedNonce nonce = 3;
-    SignedAttestation attestation = 4;
-}
-
-message Invitation {
-    stereotomy.Validation_ validation = 1;
-}
-
-message Attestation {
-    stereotomy.KERL_ kerl = 1;
-    utils.Sig nonce = 2;
-    google.protobuf.Timestamp timestamp = 3;
-    google.protobuf.Any attestation = 4;
-}
-
-message SignedAttestation {
-    Attestation attestation = 1;
-    utils.Sig signature = 2;
-}
-
-message Notarization { 
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2; 
-    stereotomy.Validations validations = 3;
 }

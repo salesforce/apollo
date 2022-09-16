@@ -4,23 +4,22 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.gorgoneion.comm;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.fireflies.proto.AdmissionsGrpc;
-import com.salesfoce.apollo.fireflies.proto.AdmissionsGrpc.AdmissionsFutureStub;
-import com.salesfoce.apollo.fireflies.proto.Application;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
-import com.salesfoce.apollo.fireflies.proto.Invitation;
-import com.salesfoce.apollo.fireflies.proto.Notarization;
-import com.salesfoce.apollo.fireflies.proto.SignedNonce;
+import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc;
+import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsFutureStub;
+import com.salesfoce.apollo.gorgoneion.proto.Application;
+import com.salesfoce.apollo.gorgoneion.proto.Credentials;
+import com.salesfoce.apollo.gorgoneion.proto.Invitation;
+import com.salesfoce.apollo.gorgoneion.proto.Notarization;
+import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -29,7 +28,7 @@ import com.salesforce.apollo.membership.Member;
  */
 public class AdmissionsClient implements Admissions {
 
-    public static CreateClientCommunications<Admissions> getCreate(FireflyMetrics metrics) {
+    public static CreateClientCommunications<AdmissionsClient> getCreate(GorgoneionMetrics metrics) {
         return (t, f, c) -> new AdmissionsClient(c, t, metrics);
 
     }
@@ -37,9 +36,9 @@ public class AdmissionsClient implements Admissions {
     private final ManagedServerConnection channel;
     private final AdmissionsFutureStub    client;
     private final Member                  member;
-    private final FireflyMetrics          metrics;
+    private final GorgoneionMetrics       metrics;
 
-    public AdmissionsClient(ManagedServerConnection channel, Member member, FireflyMetrics metrics) {
+    public AdmissionsClient(ManagedServerConnection channel, Member member, GorgoneionMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = AdmissionsGrpc.newFutureStub(channel.channel).withCompression("gzip");
@@ -51,7 +50,7 @@ public class AdmissionsClient implements Admissions {
         if (metrics != null) {
             var serializedSize = application.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundJoin().update(serializedSize);
+            metrics.outboundApplication().update(serializedSize);
         }
 
         ListenableFuture<SignedNonce> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
@@ -61,7 +60,7 @@ public class AdmissionsClient implements Admissions {
                 try {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.inboundGateway().update(serializedSize);
+                    metrics.inboundApplication().update(serializedSize);
                 } catch (Throwable e) {
                     // nothing
                 }
@@ -80,12 +79,10 @@ public class AdmissionsClient implements Admissions {
         if (metrics != null) {
             var serializedSize = notarization.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundJoin().update(serializedSize);
+            metrics.outboundNotarization().update(serializedSize);
         }
 
-        ListenableFuture<Empty> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                                               .enroll(notarization);
-        return result;
+        return client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).enroll(notarization);
     }
 
     @Override
@@ -98,7 +95,7 @@ public class AdmissionsClient implements Admissions {
         if (metrics != null) {
             var serializedSize = credentials.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundJoin().update(serializedSize);
+            metrics.outboundCredentials().update(serializedSize);
         }
 
         ListenableFuture<Invitation> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
@@ -108,7 +105,7 @@ public class AdmissionsClient implements Admissions {
                 try {
                     var serializedSize = result.get().getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.inboundGateway().update(serializedSize);
+                    metrics.inboundInvitation().update(serializedSize);
                 } catch (Throwable e) {
                     // nothing
                 }

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.ViewManagement.MEMBERSHIP_FPR;
-import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
+import static com.salesforce.apollo.fireflies.comm.gossip.FfClient.getCreate;
 
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -52,15 +52,12 @@ import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
-import com.salesfoce.apollo.fireflies.proto.Application;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Notarization;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
@@ -68,7 +65,6 @@ import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.Seed_;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
-import com.salesfoce.apollo.fireflies.proto.SignedNonce;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.SignedViewChange;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -89,11 +85,13 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.ViewManagement.Ballot;
-import com.salesforce.apollo.fireflies.communications.Entrance;
-import com.salesforce.apollo.fireflies.communications.EntranceClient;
-import com.salesforce.apollo.fireflies.communications.EntranceServer;
-import com.salesforce.apollo.fireflies.communications.FfServer;
-import com.salesforce.apollo.fireflies.communications.Fireflies;
+import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
+import com.salesforce.apollo.fireflies.comm.entrance.EntranceClient;
+import com.salesforce.apollo.fireflies.comm.entrance.EntranceServer;
+import com.salesforce.apollo.fireflies.comm.entrance.EntranceService;
+import com.salesforce.apollo.fireflies.comm.gossip.FFService;
+import com.salesforce.apollo.fireflies.comm.gossip.FfServer;
+import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
@@ -549,26 +547,12 @@ public class View {
 
     public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {}
 
-    public class Service implements ServiceRouting {
-
-        /**
-         * @param request
-         * @param from
-         * @return
-         */
-        public SignedNonce apply(Application request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
-        }
-
-        public Empty enroll(Notarization request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
-        }
+    public class Service implements EntranceService, FFService, ServiceRouting {
 
         /**
          * Asynchronously add a member to the next view
          */
+        @Override
         public void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
             if (!started.get()) {
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
@@ -589,6 +573,7 @@ public class View {
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
+        @Override
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
                 log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
@@ -641,6 +626,7 @@ public class View {
             });
         }
 
+        @Override
         public Redirect seed(Registration registration, Digest from) {
             if (!started.get()) {
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
@@ -655,6 +641,7 @@ public class View {
          * @param state - update state
          * @param from
          */
+        @Override
         public void update(State request, Digest from) {
             if (!introduced.get()) {
                 log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
@@ -774,11 +761,12 @@ public class View {
         viewManagement.resetBootstrapView();
         var service = new Service();
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new FfServer(service, communications.getClientIdentityProvider(), r,
-                                                            exec, metrics),
+                                          r -> new FfServer(communications.getClientIdentityProvider(), r, exec,
+                                                            metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
-        this.approaches = gateway.create(node, context.getId(), service, service.getClass().getCanonicalName()
-        + ":approach", r -> new EntranceServer(service, gateway.getClientIdentityProvider(), r, exec, metrics),
+        this.approaches = gateway.create(node, context.getId(), service,
+                                         service.getClass().getCanonicalName() + ":approach",
+                                         r -> new EntranceServer(gateway.getClientIdentityProvider(), r, exec, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;

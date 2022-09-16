@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.fireflies.comm.entrance;
 
 import java.util.concurrent.Executor;
 
@@ -31,20 +31,17 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EntranceServer extends EntranceImplBase {
-    private final static Logger log = LoggerFactory.getLogger(FfServer.class);
+    private final static Logger log = LoggerFactory.getLogger(EntranceServer.class);
 
-    private final Executor exec;
-
-    private ClientIdentity identity;
-
+    private final Executor                 exec;
+    private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public EntranceServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
-                          FireflyMetrics metrics) {
+    public EntranceServer(ClientIdentity identity, RoutableService<Service> r, Executor exec, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
-        this.router = router;
+        this.router = r;
         this.exec = exec;
     }
 

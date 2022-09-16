@@ -4,20 +4,19 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.gorgoneion.comm;
 
 import java.io.IOException;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.fireflies.proto.Application;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
-import com.salesfoce.apollo.fireflies.proto.Invitation;
-import com.salesfoce.apollo.fireflies.proto.Notarization;
-import com.salesfoce.apollo.fireflies.proto.SignedNonce;
+import com.salesfoce.apollo.gorgoneion.proto.Application;
+import com.salesfoce.apollo.gorgoneion.proto.Credentials;
+import com.salesfoce.apollo.gorgoneion.proto.Invitation;
+import com.salesfoce.apollo.gorgoneion.proto.Notarization;
+import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.Link;
-import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -26,7 +25,7 @@ import com.salesforce.apollo.membership.Member;
  */
 public interface Admissions extends Link {
 
-    static Admissions getLocalLoopback(Node node) {
+    static Admissions getLocalLoopback(Member node) {
         return new Admissions() {
 
             @Override

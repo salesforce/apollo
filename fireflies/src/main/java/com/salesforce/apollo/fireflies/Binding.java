@@ -46,7 +46,7 @@ import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.fireflies.View.Service;
-import com.salesforce.apollo.fireflies.communications.Entrance;
+import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Entropy;
