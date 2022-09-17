@@ -15,3 +15,9 @@ service TestIt {
 message ByteMessage {
     bytes contents = 1;
 }
+
+message PeerCreds {
+    int32 pid = 1;
+    int32 uid = 2;
+    repeated int32 gids = 3;
+}

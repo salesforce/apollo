@@ -57,7 +57,6 @@ public class Gorgoneion {
 
     public Gorgoneion(ControlledIdentifierMember member, Context<Member> context, Parameters params,
                       DigestAlgorithm digestAlgo) {
-        super();
         this.member = member;
         this.context = context;
         this.params = params;
@@ -89,19 +88,23 @@ public class Gorgoneion {
         });
     }
 
-    private SignedAttestation attestation(SignedNonce nonce, Any proof) {
-        var now = params.clock().instant();
-        var attestation = Attestation.newBuilder().setAttestation(proof)
-//                                     .setKerl(member.kerl().get())
-                                     .setNonce(member.sign(nonce.toByteString()).toSig())
-                                     .setTimestamp(Timestamp.newBuilder()
-                                                            .setSeconds(now.getEpochSecond())
-                                                            .setNanos(now.getNano()))
-                                     .build();
-        return SignedAttestation.newBuilder()
-                                .setAttestation(attestation)
-                                .setSignature(member.sign(attestation.toByteString()).toSig())
-                                .build();
+    private CompletableFuture<SignedAttestation> attestation(SignedNonce nonce, Any proof) {
+        return member.kerl().thenApply(kerl -> {
+            var now = params.clock().instant();
+            var attestation = Attestation.newBuilder()
+                                         .setAttestation(proof)
+                                         .setKerl(kerl)
+                                         .setNonce(member.sign(nonce.toByteString()).toSig())
+                                         .setTimestamp(Timestamp.newBuilder()
+                                                                .setSeconds(now.getEpochSecond())
+                                                                .setNanos(now.getNano()))
+                                         .build();
+            return SignedAttestation.newBuilder()
+                                    .setAttestation(attestation)
+                                    .setSignature(member.sign(attestation.toByteString()).toSig())
+                                    .build();
+        });
+
     }
 
     @SuppressWarnings("unused")
@@ -173,14 +176,13 @@ public class Gorgoneion {
         return member.kerl()
                      .thenCompose(kerl -> params.attester()
                                                 .apply(nonce)
-                                                .thenApply(attestation -> Credentials.newBuilder()
-                                                                                     .setContext(context.getId()
-                                                                                                        .toDigeste())
-                                                                                     .setKerl(kerl)
-                                                                                     .setNonce(nonce)
-                                                                                     .setAttestation(attestation(nonce,
-                                                                                                                 attestation))
-                                                                                     .build()));
+                                                .thenCompose(attestation -> attestation(nonce, attestation))
+                                                .thenApply(sa -> Credentials.newBuilder()
+                                                                            .setContext(context.getId().toDigeste())
+                                                                            .setKerl(kerl)
+                                                                            .setNonce(nonce)
+                                                                            .setAttestation(sa)
+                                                                            .build()));
     }
 
     @SuppressWarnings("unused")
