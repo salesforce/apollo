@@ -58,13 +58,13 @@ public class AdmissionsServer extends AdmissionsImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            responseObserver.onNext(s.apply(request, from));
-            responseObserver.onCompleted();
+            s.apply(request, from, responseObserver, null);
         }), log));
     }
 
     @Override
     public void enroll(Notarization request, StreamObserver<Empty> responseObserver) {
+        var timer = metrics == null ? null : metrics.enrollDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
@@ -76,13 +76,13 @@ public class AdmissionsServer extends AdmissionsImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            responseObserver.onNext(s.enroll(request, from));
+            s.enroll(request, from, responseObserver, timer);
         }), log));
     }
 
     @Override
     public void register(Credentials request, StreamObserver<Invitation> responseObserver) {
-        var timer = metrics == null ? null : metrics.registerDuration();
+        var timer = metrics == null ? null : metrics.registerDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);

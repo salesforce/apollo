@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.gorgoneion.comm;
 
-import com.codahale.metrics.Timer;
+import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
@@ -23,10 +23,10 @@ import io.grpc.stub.StreamObserver;
  */
 public interface AdmissionsService {
 
-    SignedNonce apply(Application request, Digest from);
+    void apply(Application request, Digest from, StreamObserver<SignedNonce> responseObserver, Context timer);
 
-    Empty enroll(Notarization request, Digest from);
+    void enroll(Notarization request, Digest from, StreamObserver<Empty> responseObserver, Context timer);
 
-    void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver, Timer timer);
+    void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver, Context timer);
 
 }

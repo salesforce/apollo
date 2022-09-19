@@ -16,6 +16,8 @@ import com.salesforce.apollo.protocols.EdpointMetrics;
  */
 public interface GorgoneionMetrics extends EdpointMetrics {
 
+    Timer enrollDuration();
+
     Histogram inboundApplication();
 
     Histogram inboundCredentials();

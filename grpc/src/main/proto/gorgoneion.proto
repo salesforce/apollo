@@ -8,7 +8,6 @@ option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
 
 import "stereotomy.proto";
 import "util.proto";
@@ -36,7 +35,6 @@ message Nonce {
     stereotomy.EventCoords issuer = 2;
     utils.Digeste noise = 3;
     google.protobuf.Timestamp timestamp = 4;
-    google.protobuf.Duration duration = 5;
 }
 
 message Credentials {
