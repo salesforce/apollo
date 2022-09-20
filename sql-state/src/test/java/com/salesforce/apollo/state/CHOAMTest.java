@@ -247,6 +247,9 @@ public class CHOAMTest {
                                                                       .map(cb -> cb.height())
                                                                       .toList());
         } finally {
+            choams.values().forEach(e -> e.stop());
+            routers.values().forEach(e -> e.close());
+
             System.out.println("Final block height: " + members.stream()
                                                                .map(m -> updaters.get(m))
                                                                .map(ssm -> ssm.getCurrentBlock())
@@ -254,9 +257,26 @@ public class CHOAMTest {
                                                                .map(cb -> cb.height())
                                                                .toList());
         }
-
-        choams.values().forEach(e -> e.stop());
-        routers.values().forEach(e -> e.close());
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
+        assertTrue(members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(target) == 0)
+                          .count() == members.size(),
+                   "members did not end at same block: " + updaters.values()
+                                                                   .stream()
+                                                                   .map(ssm -> ssm.getCurrentBlock())
+                                                                   .filter(cb -> cb != null)
+                                                                   .map(cb -> cb.height())
+                                                                   .toList());
 
         record row(float price, int quantity) {}
 

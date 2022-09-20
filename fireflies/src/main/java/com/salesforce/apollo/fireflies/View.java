@@ -22,6 +22,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -815,7 +816,7 @@ public class View {
      */
     public void start(CompletableFuture<Void> onJoin, Duration d, List<Seed> seedpods,
                       ScheduledExecutorService scheduler) {
-        java.util.Objects.requireNonNull(onJoin, "Join completion must not be null");
+        Objects.requireNonNull(onJoin, "Join completion must not be null");
         if (!started.compareAndSet(false, true)) {
             return;
         }
