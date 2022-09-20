@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.gorgoneion.comm;
+package com.salesforce.apollo.gorgoneion.comm.admissions;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -20,6 +20,7 @@ import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -28,7 +29,7 @@ import com.salesforce.apollo.membership.Member;
  */
 public class AdmissionsClient implements Admissions {
 
-    public static CreateClientCommunications<AdmissionsClient> getCreate(GorgoneionMetrics metrics) {
+    public static CreateClientCommunications<Admissions> getCreate(GorgoneionMetrics metrics) {
         return (t, f, c) -> new AdmissionsClient(c, t, metrics);
 
     }

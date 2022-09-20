@@ -20,6 +20,10 @@ service Admissions {
     rpc enroll (Notarization) returns (google.protobuf.Empty) {}
 }
 
+service Endorsement {
+    rpc endorse (EndorseNonce)returns (stereotomy.Validation_) {}
+}
+
 message Application {
     utils.Digeste context = 1;
     stereotomy.KERL_ kerl = 2;
@@ -28,6 +32,11 @@ message Application {
 message SignedNonce {
     Nonce nonce = 1;
     repeated stereotomy.Validation_ signatures = 2;
+}
+
+message EndorseNonce {
+    utils.Digeste context = 1;
+    Nonce nonce = 2;
 }
 
 message Nonce {
