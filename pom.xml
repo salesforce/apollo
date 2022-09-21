@@ -46,8 +46,8 @@
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>19</maven.compiler.source>
+        <maven.compiler.target>19</maven.compiler.target>
         <graal.vm.version>22.2.0</graal.vm.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
@@ -495,7 +495,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <release>17</release>
+                    <release>19</release>
                 </configuration>
             </plugin>
             <plugin>
@@ -589,7 +589,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.4.0</version>
                 </plugin>
                 <!--This plugin's configuration is used to store Eclipse m2e settings 
 					only. It has no influence on the Maven build itself. -->
