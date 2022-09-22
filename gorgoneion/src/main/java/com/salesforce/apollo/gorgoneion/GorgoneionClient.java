@@ -7,7 +7,6 @@
 package com.salesforce.apollo.gorgoneion;
 
 import java.time.Clock;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +24,6 @@ import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
@@ -87,8 +85,7 @@ public class GorgoneionClient {
 
     @SuppressWarnings("unused")
     private boolean completeValidation(Member from, int majority, Digest v, CompletableFuture<Validations> validated,
-                                       Optional<ListenableFuture<Invitation>> futureSailor,
-                                       Map<Member, Validation_> validations) {
+                                       Optional<ListenableFuture<Invitation>> futureSailor) {
         if (futureSailor.isEmpty()) {
             return true;
         }
@@ -132,24 +129,16 @@ public class GorgoneionClient {
             return true;
         }
 
-        final var validation = invite.getValidation();
-        if (!validate(validation, from)) {
+        final var validations = invite.getValidations();
+        if (!validate(validations, from)) {
             return true;
         }
-        if (validations.put(from, validation) == null) {
-            if (validations.size() >= majority) {
-                validated.complete(Validations.newBuilder().build());
-                log.info("Validations acquired: {} majority: {} for view: {} context: {} on: {}", validations.size(),
-                         majority, v, context.getId(), member.getId());
-                return false;
-            }
-        }
-        log.info("Validation: {} majority not achieved: {} required: {} context: {} on: {}", v, validations.size(),
-                 majority, context.getId(), member.getId());
+        log.info("Validation: {} majority not achieved: {} required: {} context: {} on: {}", v,
+                 validations.getValidationsCount(), majority, context.getId(), member.getId());
         return true;
     }
 
-    private boolean validate(Validation_ validation, Member from) {
+    private boolean validate(Validations validation, Member from) {
         return true;
     }
 }

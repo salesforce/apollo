@@ -28,6 +28,7 @@ import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -116,7 +117,9 @@ public class Gorgoneion {
                 } else if (v == null) {
                     responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 } else {
-                    responseObserver.onNext(Invitation.newBuilder().setValidation(v).build());
+                    responseObserver.onNext(Invitation.newBuilder()
+                                                      .setValidations(Validations.newBuilder().addValidations(v))
+                                                      .build());
                     responseObserver.onCompleted();
                 }
             });
@@ -198,7 +201,7 @@ public class Gorgoneion {
 
     private boolean validate(Application request, Digest from) {
         // TODO Auto-generated method stub
-        return false;
+        return true;
     }
 
     private CompletableFuture<Validation_> validate(Credentials credentials) {

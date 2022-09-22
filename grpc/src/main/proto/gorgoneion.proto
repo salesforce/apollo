@@ -54,7 +54,7 @@ message Credentials {
 }
 
 message Invitation {
-    stereotomy.Validation_ validation = 1;
+    stereotomy.Validations validations = 1;
 }
 
 message Attestation {

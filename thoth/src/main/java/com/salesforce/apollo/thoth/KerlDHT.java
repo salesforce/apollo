@@ -332,7 +332,7 @@ public class KerlDHT implements ProtoKERLService {
                                                                                           identifier, isTimedOut, tally,
                                                                                           destination, "append events"),
                                              t -> completeIt(result, gathered));
-        return result.thenApply(ks -> null);
+        return result.thenApply(ks -> KeyState_.getDefaultInstance());
     }
 
     @Override
