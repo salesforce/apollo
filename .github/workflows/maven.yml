@@ -2,19 +2,19 @@ name: Java CI
 
 on: [push]
 
-env:
-  MAVEN_OPTS: --enable-preview
-
 jobs:
   build:
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v2
-      - name: 'Set up latest Oracle JDK 19'
-        uses: oracle-actions/setup-java@v1
+      - uses: graalvm/setup-graalvm@v1
         with:
-          website: oracle.com
-          release: 19
+          version: 'latest'
+          java-version: '17'
+          components: 'native-image'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Restore Maven cache
         uses: skjolber/maven-cache-github-action@v1
         with:
