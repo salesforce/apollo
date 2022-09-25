@@ -12,16 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
 import java.security.SecureRandom;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
@@ -75,20 +72,12 @@ public class GorgoneionTest {
         gorgonRouter.setMember(member);
         gorgonRouter.start();
 
-        // The async abstraction of the underlying attestation verification service
-        final Function<SignedAttestation, CompletableFuture<Boolean>> verifier = sa -> {
-            var fs = new CompletableFuture<Boolean>();
-            fs.complete(true);
-            return fs;
-        };
-
         // The kerl observer to publish admitted client KERLs to
         @SuppressWarnings("unused")
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(member, context, verifier, Clock.systemUTC(), DigestAlgorithm.DEFAULT, gorgonRouter,
-                                    null, ForkJoinPool.commonPool());
-//        gorgon.start(Duration.ofMillis(5), scheduler);
+        var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, gorgonRouter,
+                                    Executors.newSingleThreadScheduledExecutor(), null, ForkJoinPool.commonPool());
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());

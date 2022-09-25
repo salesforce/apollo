@@ -10,11 +10,9 @@ import java.io.IOException;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
-import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
@@ -38,11 +36,6 @@ public interface Admissions extends Link {
             }
 
             @Override
-            public ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout) {
-                return null;
-            }
-
-            @Override
             public Member getMember() {
                 return node;
             }
@@ -55,8 +48,6 @@ public interface Admissions extends Link {
     }
 
     ListenableFuture<SignedNonce> apply(Application application, Duration timeout);
-
-    ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout);
 
     ListenableFuture<Invitation> register(Credentials credentials, Duration timeout);
 }

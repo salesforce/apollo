@@ -6,16 +6,20 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import java.time.Clock;
-import java.util.ArrayList;
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
+
+import java.util.HashSet;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.function.Function;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Application;
@@ -24,15 +28,14 @@ import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
-import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -40,15 +43,16 @@ import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsClient;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
-import com.salesforce.apollo.gorgoneion.comm.gather.Endorsement;
-import com.salesforce.apollo.gorgoneion.comm.gather.EndorsementClient;
-import com.salesforce.apollo.gorgoneion.comm.gather.EndorsementServer;
-import com.salesforce.apollo.gorgoneion.comm.gather.EndorsementService;
+import com.salesforce.apollo.gorgoneion.comm.endorsement.Endorsement;
+import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementClient;
+import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementServer;
+import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -64,14 +68,19 @@ public class Gorgoneion {
         @Override
         public void apply(Application request, Digest from, StreamObserver<SignedNonce> responseObserver,
                           Timer.Context time) {
-            if (!validate(request, from)) {
+            if (!Gorgoneion.this.validate(request, from)) {
                 log.warn("Invalid application from: {} on: {}", from, member.getId());
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
                 return;
             }
             generateNonce(request).whenComplete((sn, t) -> {
                 if (t != null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
+                    if (t instanceof StatusRuntimeException sre) {
+                        responseObserver.onError(t);
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)
+                                                                                           .withDescription(t.toString())));
+                    }
                 } else if (sn == null) {
                     responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
                 } else {
@@ -82,31 +91,31 @@ public class Gorgoneion {
         }
 
         @Override
-        public void endorse(EndorseNonce request, Digest from, StreamObserver<Validation_> responseObserver,
-                            Timer.Context timer) {
-            if (!validate(request, from)) {
+        public CompletableFuture<Validation_> endorse(EndorseNonce request, Digest from) {
+            if (!Gorgoneion.this.validate(request, from)) {
                 log.warn("Invalid endorsement nonce from: {} on: {}", from, member.getId());
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid endorsement nonce")));
-                return;
+                var fs = new CompletableFuture<Validation_>();
+                fs.completeExceptionally(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid endorsement nonce")));
+                return fs;
             }
-            // TODO Auto-generated method stub
-
+            return Gorgoneion.this.endorse(request);
         }
 
         @Override
-        public void enroll(Notarization request, Digest from, StreamObserver<Empty> responseObserver,
-                           Timer.Context time) {
-            if (!validate(request, from)) {
+        public CompletableFuture<Empty> enroll(Notarization request, Digest from) {
+            if (!Gorgoneion.this.validate(request, from)) {
                 log.warn("Invalid notarization from: {} on: {}", from, member.getId());
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid notarization")));
-                return;
+                var fs = new CompletableFuture<Empty>();
+                fs.completeExceptionally(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid notarization")));
+                return fs;
             }
+            return Gorgoneion.this.enroll(request);
         }
 
         @Override
         public void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver,
                              Timer.Context timer) {
-            if (!validate(request, from)) {
+            if (!Gorgoneion.this.validate(request, from)) {
                 log.warn("Invalid credentials from: {} on: {}", from, member.getId());
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 return;
@@ -125,69 +134,117 @@ public class Gorgoneion {
             });
         }
 
+        @Override
+        public CompletableFuture<Validation_> validate(Credentials credentials, Digest id) {
+            // TODO Auto-generated method stub
+            return null;
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
     @SuppressWarnings("unused")
-    private final CommonCommunications<Admissions, AdmissionsService>     admissionsComm;
-    private final Clock                                                   clock;
-    private final DigestAlgorithm                                         digestAlgo;
-    @SuppressWarnings("unused")
-    private final CommonCommunications<Endorsement, EndorsementService>   endorsementComm;
-    private final ControlledIdentifierMember                              member;
-    private final Function<SignedAttestation, CompletableFuture<Boolean>> verifier;
+    private final CommonCommunications<Admissions, AdmissionsService>   admissionsComm;
+    private final Context<Member>                                       context;
+    private final CommonCommunications<Endorsement, EndorsementService> endorsementComm;
+    private final Executor                                              exec;
+    private final ControlledIdentifierMember                            member;
+    private final Parameters                                            parameters;
+    private final ScheduledExecutorService                              scheduler;
 
-    public Gorgoneion(ControlledIdentifierMember member, Context<Member> context,
-                      Function<SignedAttestation, CompletableFuture<Boolean>> verifier, Clock clock,
-                      DigestAlgorithm digestAlgo, Router router, GorgoneionMetrics metrics, Executor exec) {
-        this(member, context, verifier, clock, digestAlgo, router, metrics, router, exec);
+    public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context, Router router,
+                      ScheduledExecutorService scheduler, GorgoneionMetrics metrics, Executor exec) {
+        this(parameters, member, context, router, scheduler, metrics, router, exec);
     }
 
-    public Gorgoneion(ControlledIdentifierMember member, Context<Member> context,
-                      Function<SignedAttestation, CompletableFuture<Boolean>> verifier, Clock clock,
-                      DigestAlgorithm digestAlgo, Router admissionsRouter, GorgoneionMetrics metrics,
+    public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
+                      Router admissionsRouter, ScheduledExecutorService scheduler, GorgoneionMetrics metrics,
                       Router endorsementRouter, Executor exec) {
         this.member = member;
-        this.digestAlgo = digestAlgo;
-        this.clock = clock;
-        this.verifier = verifier;
+        this.context = context;
+        this.exec = exec;
+        this.parameters = parameters;
+        this.scheduler = scheduler;
 
         var service = new Service();
 
-        admissionsComm = admissionsRouter.create(member, context.getId(), (AdmissionsService) service, ":admissions",
+        admissionsComm = admissionsRouter.create(member, context.getId(), service, ":admissions",
                                                  r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
                                                                            r, exec, metrics),
                                                  AdmissionsClient.getCreate(metrics),
                                                  Admissions.getLocalLoopback(member));
 
-        endorsementComm = endorsementRouter.create(member, context.getId(), (EndorsementService) service,
-                                                   ":endorsement",
+        endorsementComm = endorsementRouter.create(member, context.getId(), service, ":endorsement",
                                                    r -> new EndorsementServer(admissionsRouter.getClientIdentityProvider(),
                                                                               r, exec, metrics),
                                                    EndorsementClient.getCreate(metrics),
-                                                   Endorsement.getLocalLoopback(member));
+                                                   Endorsement.getLocalLoopback(member, service));
+    }
+
+    private boolean completeValidation(Optional<ListenableFuture<Validation_>> futureSailor, Member from,
+                                       HashSet<Validation_> validations) {
+        if (futureSailor.isEmpty()) {
+            return true;
+        }
+        try {
+            var v = futureSailor.get().get();
+            validations.add(v);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException e) {
+            log.error("Error validating nonce on: {}", member.getId(), e.getCause());
+        }
+        return true;
+    }
+
+    private CompletableFuture<Validation_> endorse(EndorseNonce request) {
+        var fs = new CompletableFuture<Validation_>();
+        fs.complete(Validation_.newBuilder()
+                               .setValidator(member.getIdentifier().getCoordinates().toEventCoords())
+                               .setSignature(member.sign(request.toByteString()).toSig())
+                               .build());
+        return fs;
+    }
+
+    private CompletableFuture<Empty> enroll(Notarization request) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private CompletableFuture<SignedNonce> generateNonce(Application application) {
-        var now = clock.instant();
+        var generated = new CompletableFuture<SignedNonce>();
         final var identifier = identifier(application);
         if (identifier == null) {
             var fs = new CompletableFuture<SignedNonce>();
             fs.completeExceptionally(new IllegalArgumentException("No identifier"));
             return fs;
         }
+        var now = parameters.clock().instant();
         var nonce = Nonce.newBuilder()
                          .setMember(identifier)
                          .setIssuer(member.getIdentifier().getLastEstablishmentEvent().toEventCoords())
-                         .setNoise(digestAlgo.random().toDigeste())
+                         .setNoise(parameters.digestAlgorithm().random().toDigeste())
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
-        return member.getIdentifier().getSigner().thenApply(s -> {
-            var validations = new ArrayList<Validation_>();
-            validations.add(Validation_.newBuilder().setSignature(s.sign(nonce.toByteString()).toSig()).build());
-            return validations;
-        }).thenApply(validations -> SignedNonce.newBuilder().setNonce(nonce).addAllSignatures(validations).build());
+        var endorse = EndorseNonce.newBuilder().build();
+
+        var successors = context.successors(digestOf(identifier, parameters.digestAlgorithm()));
+        final var majority = context.activeCount() == 1 ? 0 : context.majority();
+        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
+        var validations = new HashSet<Validation_>();
+        redirecting.iterate((link, m) -> {
+            log.debug("Joining: {} contacting: {} on: {}", Identifier.from(identifier), link.getMember().getId(),
+                      member.getId());
+            return link.endorse(endorse, null);
+        }, (futureSailor, link, m) -> completeValidation(futureSailor, m, validations), () -> {
+            if (validations.size() <= majority) {
+                generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
+            } else {
+                generated.complete(SignedNonce.newBuilder().setNonce(nonce).addAllSignatures(validations).build());
+            }
+        }, scheduler, parameters.frequency());
+        return generated;
     }
 
     private Ident identifier(Application application) {
@@ -247,16 +304,16 @@ public class Gorgoneion {
 
     private boolean validate(EndorseNonce request, Digest from) {
         // TODO Auto-generated method stub
-        return false;
+        return true;
     }
 
     private boolean validate(Notarization request, Digest from) {
         // TODO Auto-generated method stub
-        return false;
+        return true;
     }
 
     private CompletableFuture<Validation_> verify(Credentials credentials) {
-        return verifier.apply(credentials.getAttestation()).thenCompose(success -> {
+        return parameters.verifier().apply(credentials.getAttestation()).thenCompose(success -> {
             if (!success) {
                 var fs = new CompletableFuture<Validation_>();
                 fs.complete(null);

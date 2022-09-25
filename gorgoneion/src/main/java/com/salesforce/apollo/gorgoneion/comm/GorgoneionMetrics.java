@@ -22,7 +22,9 @@ public interface GorgoneionMetrics extends EdpointMetrics {
 
     Histogram inboundCredentials();
 
-    Histogram inboundEndorseNonce();
+    Histogram inboundCredentialValidation();
+
+    Histogram inboundEndorse();
 
     Histogram inboundEnroll();
 
@@ -37,6 +39,8 @@ public interface GorgoneionMetrics extends EdpointMetrics {
     Histogram outboundEndorseNonce();
 
     Histogram outboundNotarization();
+
+    Histogram outboundValidateCredentials();
 
     Timer registerDuration();
 }

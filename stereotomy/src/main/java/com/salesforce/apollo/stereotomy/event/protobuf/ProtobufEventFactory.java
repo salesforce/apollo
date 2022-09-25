@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
@@ -28,6 +29,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
@@ -50,6 +52,47 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 public class ProtobufEventFactory implements EventFactory {
 
     public static final EventFactory INSTANCE = new ProtobufEventFactory();
+
+    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent event,
+                                  DigestAlgorithm algo) {
+        return algo.digest(event.getCoordinates().getIdentifier().toByteString());
+    }
+
+    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent event,
+                                  DigestAlgorithm algo) {
+        return algo.digest(event.getIdentifier().toByteString());
+    }
+
+    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event,
+                                  DigestAlgorithm algo) {
+        return algo.digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+    }
+
+    public static Digest digestOf(Ident identifier, DigestAlgorithm algo) {
+        return algo.digest(identifier.toByteString());
+    }
+
+    public static Digest digestOf(InteractionEvent event, DigestAlgorithm algo) {
+        return algo.digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+    }
+
+    public static Digest digestOf(final KeyEvent_ event, DigestAlgorithm algo) {
+        return switch (event.getEventCase()) {
+        case INCEPTION -> digestOf(event.getInception(), algo);
+        case INTERACTION -> digestOf(event.getInteraction(), algo);
+        case ROTATION -> digestOf(event.getRotation(), algo);
+        default -> null;
+        };
+    }
+
+    public static Digest digestOf(final KeyEventWithAttachments event, DigestAlgorithm algo) {
+        return switch (event.getEventCase()) {
+        case INCEPTION -> digestOf(event.getInception(), algo);
+        case INTERACTION -> digestOf(event.getInteraction(), algo);
+        case ROTATION -> digestOf(event.getRotation(), algo);
+        default -> null;
+        };
+    }
 
     public static KeyEvent from(KeyEvent_ ke) {
         return switch (ke.getEventCase()) {

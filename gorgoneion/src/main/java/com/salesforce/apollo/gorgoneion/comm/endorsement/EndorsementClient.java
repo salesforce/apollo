@@ -4,16 +4,19 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.gorgoneion.comm.gather;
+package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
+import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureStub;
+import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -49,7 +52,7 @@ public class EndorsementClient implements Endorsement {
     }
 
     @Override
-    public ListenableFuture<Validation_> gather(EndorseNonce nonce, Duration timeout) {
+    public ListenableFuture<Validation_> endorse(EndorseNonce nonce, Duration timeout) {
         if (metrics != null) {
             var serializedSize = nonce.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
@@ -73,8 +76,43 @@ public class EndorsementClient implements Endorsement {
     }
 
     @Override
+    public ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout) {
+        if (metrics != null) {
+            var serializedSize = notarization.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundNotarization().update(serializedSize);
+        }
+
+        return client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).enroll(notarization);
+    }
+
+    @Override
     public Member getMember() {
         return member;
+    }
+
+    @Override
+    public ListenableFuture<Validation_> validate(Credentials credentials, Duration timeout) {
+        if (metrics != null) {
+            var serializedSize = credentials.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundValidateCredentials().update(serializedSize);
+        }
+
+        ListenableFuture<Validation_> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                                     .validate(credentials);
+        result.addListener(() -> {
+            if (metrics != null) {
+                try {
+                    var serializedSize = result.get().getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundCredentialValidation().update(serializedSize);
+                } catch (Throwable e) {
+                    // nothing
+                }
+            }
+        }, r -> r.run());
+        return result;
     }
 
 }

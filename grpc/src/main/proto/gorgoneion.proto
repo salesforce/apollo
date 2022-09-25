@@ -17,11 +17,12 @@ package gorgoneion;
 service Admissions {
     rpc apply (Application) returns (SignedNonce) {}
     rpc register (Credentials) returns (Invitation) {}
-    rpc enroll (Notarization) returns (google.protobuf.Empty) {}
 }
 
 service Endorsement {
     rpc endorse (EndorseNonce)returns (stereotomy.Validation_) {}
+    rpc validate (Credentials)returns (stereotomy.Validation_) {}
+    rpc enroll (Notarization) returns (google.protobuf.Empty) {}
 }
 
 message Application {

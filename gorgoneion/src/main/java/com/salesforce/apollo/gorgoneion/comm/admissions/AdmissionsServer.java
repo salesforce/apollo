@@ -11,12 +11,10 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
 import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
-import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
@@ -60,24 +58,6 @@ public class AdmissionsServer extends AdmissionsImplBase {
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             s.apply(request, from, responseObserver, null);
-        }), log));
-    }
-
-    @Override
-    public void enroll(Notarization request, StreamObserver<Empty> responseObserver) {
-        var timer = metrics == null ? null : metrics.enrollDuration().time();
-        if (metrics != null) {
-            var serializedSize = request.getSerializedSize();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundEnroll().update(serializedSize);
-        }
-        Digest from = identity.getFrom();
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            s.enroll(request, from, responseObserver, timer);
         }), log));
     }
 

@@ -10,13 +10,11 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsFutureStub;
 import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
-import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -73,17 +71,6 @@ public class AdmissionsClient implements Admissions {
     @Override
     public void close() {
         channel.release();
-    }
-
-    @Override
-    public ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout) {
-        if (metrics != null) {
-            var serializedSize = notarization.getSerializedSize();
-            metrics.outboundBandwidth().mark(serializedSize);
-            metrics.outboundNotarization().update(serializedSize);
-        }
-
-        return client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).enroll(notarization);
     }
 
     @Override

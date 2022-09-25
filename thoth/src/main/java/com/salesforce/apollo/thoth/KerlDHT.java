@@ -7,6 +7,8 @@
 
 package com.salesforce.apollo.thoth;
 
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
+
 import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -42,15 +44,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
@@ -314,7 +312,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
-        Digest identifier = digestOf(event);
+        Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
             return complete(null);
         }
@@ -341,7 +339,7 @@ public class KerlDHT implements ProtoKERLService {
             return completeIt(Collections.emptyList());
         }
         final var event = kerl.getEventsList().get(0);
-        Digest identifier = digestOf(event);
+        Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
             return completeIt(Collections.emptyList());
         }
@@ -360,7 +358,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public CompletableFuture<KeyState_> append(KeyEvent_ event) {
-        Digest identifier = digestOf(event);
+        Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
             return complete(null);
         }
@@ -706,40 +704,6 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         result.completeExceptionally(new CompletionException("Unable to achieve majority write"));
-    }
-
-    private Digest digestOf(AttachmentEvent event) {
-        return digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
-    }
-
-    private Digest digestOf(InceptionEvent event) {
-        return digestAlgorithm().digest(event.getIdentifier().toByteString());
-    }
-
-    private Digest digestOf(InteractionEvent event) {
-        return digestAlgorithm().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
-    }
-
-    private Digest digestOf(final KeyEvent_ event) {
-        return switch (event.getEventCase()) {
-        case INCEPTION -> digestOf(event.getInception());
-        case INTERACTION -> digestOf(event.getInteraction());
-        case ROTATION -> digestOf(event.getRotation());
-        default -> null;
-        };
-    }
-
-    private Digest digestOf(final KeyEventWithAttachments event) {
-        return switch (event.getEventCase()) {
-        case INCEPTION -> digestOf(event.getInception());
-        case INTERACTION -> digestOf(event.getInteraction());
-        case ROTATION -> digestOf(event.getRotation());
-        default -> null;
-        };
-    }
-
-    private Digest digestOf(RotationEvent event) {
-        return digestAlgorithm().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private void initializeSchema() {
