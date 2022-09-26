@@ -58,7 +58,6 @@ public class GorgoneionClient {
                                                   .thenCompose(attestation -> attestation(nonce, attestation))
                                                   .thenApply(sa -> Credentials.newBuilder()
                                                                               .setContext(context.getId().toDigeste())
-                                                                              .setKerl(kerl)
                                                                               .setNonce(nonce)
                                                                               .setAttestation(sa)
                                                                               .build()));

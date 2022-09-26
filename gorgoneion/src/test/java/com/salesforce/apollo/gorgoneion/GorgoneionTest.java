@@ -10,10 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
@@ -73,10 +76,9 @@ public class GorgoneionTest {
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
-        @SuppressWarnings("unused")
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, gorgonRouter,
+        var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, observer, gorgonRouter,
                                     Executors.newSingleThreadScheduledExecutor(), null, ForkJoinPool.commonPool());
 
         // The registering client
@@ -121,6 +123,7 @@ public class GorgoneionTest {
                                                                   .setSeconds(now.getEpochSecond())
                                                                   .setNanos(now.getNano()))
                                            .setNonce(client.sign(signedNonce.toByteString()).toSig())
+                                           .setKerl(client.kerl().get())
                                            .setAttestation(attestationDocument)
                                            .build();
 
@@ -132,7 +135,6 @@ public class GorgoneionTest {
                                                                                                                .toSig())
                                                                                            .build())
                                                           .setNonce(signedNonce)
-                                                          .setKerl(client.kerl().get())
                                                           .build(),
                                                Duration.ofSeconds(1))
                                      .get(1, TimeUnit.SECONDS);
@@ -141,6 +143,6 @@ public class GorgoneionTest {
         assertEquals(1, invitation.getValidations().getValidationsCount());
 
         // Verify client KERL published
-//        verify(observer).publish(kerl, Collections.singletonList(invitation.getValidations()));
+        verify(observer, times(3)).publish(kerl, Collections.singletonList(invitation.getValidations()));
     }
 }

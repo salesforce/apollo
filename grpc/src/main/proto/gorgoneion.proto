@@ -48,10 +48,9 @@ message Nonce {
 }
 
 message Credentials {
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
-    SignedNonce nonce = 3;
-    SignedAttestation attestation = 4;
+    utils.Digeste context = 1; 
+    SignedNonce nonce = 2;
+    SignedAttestation attestation = 3;
 }
 
 message Invitation {
