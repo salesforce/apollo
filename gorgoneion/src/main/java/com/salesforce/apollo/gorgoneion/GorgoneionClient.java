@@ -7,8 +7,7 @@
 package com.salesforce.apollo.gorgoneion;
 
 import java.time.Clock;
-import java.util.Optional;
-import java.util.concurrent.CancellationException;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -19,18 +18,15 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
+import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-
-import io.grpc.StatusRuntimeException;
 
 /**
  * @author hal.hildebrand
@@ -40,27 +36,32 @@ public class GorgoneionClient {
     private static final Logger log = LoggerFactory.getLogger(GorgoneionClient.class);
 
     private final Function<SignedNonce, CompletableFuture<Any>> attester;
+    private final Admissions                                    client;
     private final Clock                                         clock;
-    private final Context<Member>                               context;
+    private final Digest                                        context;
     private final ControlledIdentifierMember                    member;
 
-    public GorgoneionClient(ControlledIdentifierMember member, Context<Member> context,
-                            Function<SignedNonce, CompletableFuture<Any>> attester, Clock clock) {
+    public GorgoneionClient(ControlledIdentifierMember member, Digest context,
+                            Function<SignedNonce, CompletableFuture<Any>> attester, Clock clock, Admissions client) {
         this.member = member;
         this.context = context;
         this.attester = attester;
         this.clock = clock;
+        this.client = client;
     }
 
-    public CompletableFuture<Credentials> credentials(SignedNonce nonce) {
+    public CompletableFuture<Invitation> apply(Duration timeout) {
+        var invitation = new CompletableFuture<Invitation>();
+        application().whenComplete((application, t) -> {
+            var fs = client.apply(application, timeout);
+            fs.addListener(() -> complete(fs, invitation, timeout), r -> r.run());
+        });
+        return invitation;
+    }
+
+    private CompletableFuture<Application> application() {
         return member.kerl()
-                     .thenCompose(kerl -> attester.apply(nonce)
-                                                  .thenCompose(attestation -> attestation(nonce, attestation))
-                                                  .thenApply(sa -> Credentials.newBuilder()
-                                                                              .setContext(context.getId().toDigeste())
-                                                                              .setNonce(nonce)
-                                                                              .setAttestation(sa)
-                                                                              .build()));
+                     .thenApply(kerl -> Application.newBuilder().setContext(context.toDigeste()).setKerl(kerl).build());
     }
 
     private CompletableFuture<SignedAttestation> attestation(SignedNonce nonce, Any proof) {
@@ -82,62 +83,41 @@ public class GorgoneionClient {
 
     }
 
-    @SuppressWarnings("unused")
-    private boolean completeValidation(Member from, int majority, Digest v, CompletableFuture<Validations> validated,
-                                       Optional<ListenableFuture<Invitation>> futureSailor) {
-        if (futureSailor.isEmpty()) {
-            return true;
-        }
-        Invitation invite;
+    private void complete(ListenableFuture<SignedNonce> fs, CompletableFuture<Invitation> invitation,
+                          Duration timeout) {
         try {
-            invite = futureSailor.get().get();
+            credentials(fs.get()).thenCompose(credentials -> {
+                var invited = client.register(credentials, timeout);
+                invited.addListener(() -> invite(invited, invitation), r -> r.run());
+                return invitation;
+            });
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return true;
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof StatusRuntimeException sre) {
-                switch (sre.getStatus().getCode()) {
-                case RESOURCE_EXHAUSTED:
-                    log.trace("Resource exhausted in validation: {} with: {} : {} on: {}", v, from.getId(),
-                              sre.getStatus(), member.getId());
-                    break;
-                case OUT_OF_RANGE:
-                    log.debug("View change in validation: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
-                              member.getId());
-//                    view.resetBootstrapView();
-//                    member.reset();
-//                    exec.execute(() -> seeding());
-                    return false;
-                case DEADLINE_EXCEEDED:
-                    log.trace("Validation timeout for view: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
-                              member.getId());
-                    break;
-                case UNAUTHENTICATED:
-                    log.trace("Validation unauthenticated for view: {} with: {} : {} on: {}", v, from.getId(),
-                              sre.getStatus(), member.getId());
-                    break;
-                default:
-                    log.warn("Failure in validation: {} with: {} : {} on: {}", v, from.getId(), sre.getStatus(),
-                             member.getId());
-                }
-            } else {
-                log.error("Failure in validation: {} with: {} on: {}", v, from.getId(), member.getId(), e.getCause());
-            }
-            return true;
-        } catch (CancellationException e) {
-            return true;
+            log.error("Error applying on: {}", member.getId(), e.getCause());
+            invitation.completeExceptionally(e.getCause());
         }
-
-        final var validations = invite.getValidations();
-        if (!validate(validations, from)) {
-            return true;
-        }
-        log.info("Validation: {} majority not achieved: {} required: {} context: {} on: {}", v,
-                 validations.getValidationsCount(), majority, context.getId(), member.getId());
-        return true;
     }
 
-    private boolean validate(Validations validation, Member from) {
-        return true;
+    private CompletableFuture<Credentials> credentials(SignedNonce nonce) {
+        return member.kerl()
+                     .thenCompose(kerl -> attester.apply(nonce)
+                                                  .thenCompose(attestation -> attestation(nonce, attestation))
+                                                  .thenApply(sa -> Credentials.newBuilder()
+                                                                              .setContext(context.toDigeste())
+                                                                              .setNonce(nonce)
+                                                                              .setAttestation(sa)
+                                                                              .build()));
+    }
+
+    private void invite(ListenableFuture<Invitation> invited, CompletableFuture<Invitation> invitation) {
+        try {
+            invitation.complete(invited.get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            log.error("Error applying on: {}", member.getId(), e.getCause());
+            invitation.completeExceptionally(e.getCause());
+        }
     }
 }

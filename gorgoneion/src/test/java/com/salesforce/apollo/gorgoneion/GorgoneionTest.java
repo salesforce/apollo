@@ -18,10 +18,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +58,67 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
  *
  */
 public class GorgoneionTest {
+
+    @Test
+    public void clientSmoke() throws Exception {
+        final var exec = Executors.newSingleThreadExecutor();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        final var prefix = UUID.randomUUID().toString();
+        final var serverMembers = new ConcurrentSkipListMap<Digest, Member>();
+        var member = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var context = Context.<Member>newBuilder().setCardinality(1).build();
+        context.activate(member);
+
+        // Gorgoneion service comms
+        var gorgonRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
+                                           ForkJoinPool.commonPool(), null);
+        gorgonRouter.setMember(member);
+        gorgonRouter.start();
+
+        // The kerl observer to publish admitted client KERLs to
+        var observer = mock(ProtoEventObserver.class);
+        final var parameters = Parameters.newBuilder().build();
+        @SuppressWarnings("unused")
+        var gorgon = new Gorgoneion(parameters, member, context, observer, gorgonRouter,
+                                    Executors.newSingleThreadScheduledExecutor(), null, ForkJoinPool.commonPool());
+
+        // The registering client
+        var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+
+        // Registering client comms
+        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
+                                           null);
+        AdmissionsService admissions = mock(AdmissionsService.class);
+        var clientComminications = clientRouter.create(member, context.getId(), admissions, ":admissions",
+                                                       r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
+                                                                                 r, exec, null),
+                                                       AdmissionsClient.getCreate(null),
+                                                       Admissions.getLocalLoopback(member));
+        clientRouter.setMember(client);
+        clientRouter.start();
+
+        // Admin client link
+        var admin = clientComminications.apply(member, client);
+
+        assertNotNull(admin);
+        Function<SignedNonce, CompletableFuture<Any>> attester = sn -> {
+            var fs = new CompletableFuture<Any>();
+            fs.complete(Any.getDefaultInstance());
+            return fs;
+        };
+
+        var gorgoneionClient = new GorgoneionClient(client, context.getId(), attester, parameters.clock(), admin);
+
+        Invitation invitation = gorgoneionClient.apply(Duration.ofSeconds(2)).get(3, TimeUnit.SECONDS);
+        assertNotNull(invitation);
+        assertNotEquals(Invitation.getDefaultInstance(), invitation);
+        assertEquals(1, invitation.getValidations().getValidationsCount());
+
+        // Verify client KERL published
+        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation.getValidations()));
+    }
 
     @Test
     public void smokin() throws Exception {
@@ -145,4 +208,5 @@ public class GorgoneionTest {
         // Verify client KERL published
         verify(observer, times(3)).publish(kerl, Collections.singletonList(invitation.getValidations()));
     }
+
 }
