@@ -14,7 +14,7 @@ import java.time.Duration;
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
-                         Duration seedingTimeout) {
+                         Duration seedingTimeout, int validationRetries) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -24,16 +24,15 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Number of TTL rounds to wait before finalizing a view change
          */
-        private int    finalizeViewRounds = 3;
+        private int      finalizeViewRounds     = 3;
         /**
          * False positive rate for bloom filter state replication (high fpr is good)
          */
-        private double fpr                = 0.0125;
+        private double   fpr                    = 0.0125;
         /**
          * Number of retries when joining until giving up
          */
-        private int    joinRetries        = 500;
-
+        private int      joinRetries            = 500;
         /**
          * Maximum number of elements to transfer per type per update
          */
@@ -60,13 +59,19 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          */
         private Duration seedingTimout          = Duration.ofSeconds(5);
         /**
+         * Max number of times to attempt validation when joining a view
+         */
+        private int      validationRetries      = 3;
+
+        /**
          * Minimum number of rounds to check for view change
          */
-        private int      viewChangeRounds       = 7;
+        private int viewChangeRounds = 7;
 
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
-                                  finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout);
+                                  finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout,
+                                  validationRetries);
         }
 
         public int getFinalizeViewRounds() {
@@ -103,6 +108,10 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Duration getSeedingTimout() {
             return seedingTimout;
+        }
+
+        public int getValidationRetries() {
+            return validationRetries;
         }
 
         public int getViewChangeRounds() {
@@ -151,6 +160,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setSeedingTimout(Duration seedingTimout) {
             this.seedingTimout = seedingTimout;
+            return this;
+        }
+
+        public Builder setValidationRetries(int validationRetries) {
+            this.validationRetries = validationRetries;
             return this;
         }
 

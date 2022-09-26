@@ -7,9 +7,9 @@
 package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +21,8 @@ import javax.naming.ldap.LdapName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
@@ -40,7 +42,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.
  */
 public interface Stereotomy {
 
-    record Decoded(Identifier identifier, JohnHancock signature) {}
+    record Decoded(EventCoordinates coordinates, JohnHancock signature) {}
 
     static Version currentVersion() {
         return new Version() {
@@ -81,7 +83,14 @@ public interface Stereotomy {
             getLogger().warn("Invalid certificate, missing \"DC\" of dn= {}", dn);
             return Optional.empty();
         }
-        return Optional.of(new Decoded(identifier(id), signature(signature)));
+        EventCoordinates keyCoords;
+        try {
+            keyCoords = EventCoordinates.from(EventCoords.parseFrom(Base64.getUrlDecoder().decode(id.getBytes())));
+        } catch (InvalidProtocolBufferException e) {
+            getLogger().debug("Unable to deserialize key event coordinates", e);
+            return Optional.empty();
+        }
+        return Optional.of(new Decoded(keyCoords, signature(signature)));
     }
 
     /**

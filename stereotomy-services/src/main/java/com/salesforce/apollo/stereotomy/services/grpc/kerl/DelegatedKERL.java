@@ -9,7 +9,6 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -61,15 +60,15 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> v) {
-        var validations = new TreeMap<>(v);
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                     Map<EventCoordinates, JohnHancock> validations) {
         return kerl.appendValidations(Validations.newBuilder()
                                                  .setCoordinates(coordinates.toEventCoords())
                                                  .addAllValidations(validations.entrySet()
                                                                                .stream()
                                                                                .map(e -> Validation_.newBuilder()
                                                                                                     .setValidator(e.getKey()
-                                                                                                                   .toIdent())
+                                                                                                                   .toEventCoords())
                                                                                                     .setSignature(e.getValue()
                                                                                                                    .toSig())
                                                                                                     .build())
@@ -110,12 +109,12 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
         return kerl.getValidations(coordinates.toEventCoords())
-                   .thenApply(v -> new TreeMap<>(v.getValidationsList()
-                                                  .stream()
-                                                  .collect(Collectors.toMap(val -> Identifier.from(val.getValidator()),
-                                                                            val -> JohnHancock.from(val.getSignature())))));
+                   .thenApply(v -> v.getValidationsList()
+                                    .stream()
+                                    .collect(Collectors.toMap(val -> EventCoordinates.from(val.getValidator()),
+                                                              val -> JohnHancock.from(val.getSignature()))));
     }
 
     @Override

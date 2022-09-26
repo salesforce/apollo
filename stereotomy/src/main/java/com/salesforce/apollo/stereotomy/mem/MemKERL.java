@@ -94,7 +94,7 @@ public class MemKERL implements KERL {
     private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
 
     // Order by <coordinateOrdering>
-    private final Map<String, Map<Identifier, JohnHancock>> validations = new ConcurrentHashMap<>();
+    private final Map<EventCoordinates, Map<EventCoordinates, JohnHancock>> validations = new ConcurrentHashMap<>();
 
     public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
@@ -133,9 +133,10 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> v) {
+    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                                     Map<EventCoordinates, JohnHancock> v) {
         var fs = new CompletableFuture<Void>();
-        validations.put(coordinateOrdering(coordinates), v);
+        validations.put(coordinates, v);
         fs.complete(null);
         return fs;
     }
@@ -176,9 +177,9 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
-        var fs = new CompletableFuture<Map<Identifier, JohnHancock>>();
-        fs.complete(validations.computeIfAbsent(coordinateOrdering(coordinates), k -> Collections.emptyMap()));
+    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Map<EventCoordinates, JohnHancock>>();
+        fs.complete(validations.computeIfAbsent(coordinates, k -> Collections.emptyMap()));
         return fs;
     }
 

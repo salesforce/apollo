@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 
 /**
  * @author hal.hildebrand
@@ -19,10 +20,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
  */
 public interface ProtoEventObserver {
 
-    CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl);
+    CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations);
 
     CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments);
 
-    CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events);
-
+    CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations);
 }

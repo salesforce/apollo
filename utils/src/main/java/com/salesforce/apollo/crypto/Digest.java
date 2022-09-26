@@ -116,6 +116,7 @@ public class Digest implements Comparable<Digest> {
 
     public Digest(Digeste d) {
         algorithm = DigestAlgorithm.fromDigestCode(d.getType());
+        assert d.getHashCount() == algorithm.longLength();
         hash = new long[d.getHashCount()];
         int i = 0;
         for (long l : d.getHashList()) {

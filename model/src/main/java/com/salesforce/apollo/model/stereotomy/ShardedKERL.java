@@ -29,7 +29,6 @@ import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -122,7 +121,7 @@ public class ShardedKERL extends UniKERL {
 
     @Override
     public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<Identifier, JohnHancock> validations) {
+                                                     Map<EventCoordinates, JohnHancock> validations) {
         // TODO Auto-generated method stub
         return null;
     }

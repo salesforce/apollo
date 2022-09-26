@@ -35,7 +35,7 @@ public interface Context<T extends Member> {
     abstract class Builder<Z extends Member> {
         protected int    bias    = 2;
         protected int    cardinality;
-        protected double epsilon = 0.01;
+        protected double epsilon = DEFAULT_EPSILON;
         protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
         protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
 
@@ -106,12 +106,20 @@ public interface Context<T extends Member> {
         }
     }
 
+    double DEFAULT_EPSILON = 0.99999;
+
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
+    static Digest hashFor(Digest ctxId, int ring, Digest d) {
+        return d.prefix(ctxId, ring);
+    }
+
+    static int majority(int rings, int bias) {
+        return (bias - 1) * toleranceLevel(rings, bias);
+    }
+
     static short minimalQuorum(int np, double bias) {
-        var nProcesses = (double) np;
-        short minimalQuorum = (short) (nProcesses - 1 - (nProcesses / bias) + 1);
-        return minimalQuorum;
+        return (short) (toleranceLevel(np, (int) bias) + 1);
     }
 
     static int minMajority(double pByz, int cardinality) {
@@ -161,9 +169,13 @@ public interface Context<T extends Member> {
 
             @Override
             public Context<Z> build() {
-                return new ContextImpl<Z>(id, cardinality, pByz, bias);
+                return new ContextImpl<Z>(id, Math.max(bias + 1, cardinality), pByz, bias, epsilon);
             }
         };
+    }
+
+    static int toleranceLevel(int rings, int bias) {
+        return ((rings - 1) / bias);
     }
 
     /**
@@ -254,6 +266,8 @@ public interface Context<T extends Member> {
      * byzantine members the context is designed to foil
      */
     int getBias();
+
+    double getEpsilon();
 
     /**
      * Answer the identifier of the context

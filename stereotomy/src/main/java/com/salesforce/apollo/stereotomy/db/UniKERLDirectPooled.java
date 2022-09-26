@@ -75,7 +75,7 @@ public class UniKERLDirectPooled {
 
         @Override
         public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                         Map<Identifier, JohnHancock> validations) {
+                                                         Map<EventCoordinates, JohnHancock> validations) {
             return kerl.appendValidations(coordinates, validations);
         }
 
@@ -119,7 +119,7 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
             return kerl.getValidations(coordinates);
         }
 

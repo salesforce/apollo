@@ -47,10 +47,10 @@ public class StereotomyValidator implements CertificateValidator {
         }
         final var qb64Id = qb64(basicId);
         Decoded decoder = decoded.get();
-        var verifier = verifiers.verifierFor(decoded.get().identifier());
+        var verifier = verifiers.verifierFor(decoded.get().coordinates());
         if (verifier.isEmpty()) {
-            throw new CertificateException(String.format("Cannot find verifier for identifier: %s",
-                                                         decoded.get().identifier()));
+            throw new CertificateException(String.format("Cannot find verifier for coordinates: %s",
+                                                         decoded.get().coordinates()));
         }
         if (!verifier.get().verify(decoder.signature(), qb64Id)) {
             throw new CertificateException(String.format("Cannot verify cert public key signature for %s", basicId));

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -27,8 +28,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -42,10 +41,10 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.fireflies.View.Authentication;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -61,13 +60,14 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
+    private static final int                                                   BIAS       = 3;
     private static final int                                                   CARDINALITY;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static boolean                                                     largeTests = Boolean.getBoolean("large_tests");
-    private static final double                                                P_BYZ      = 0.3;
+    private static final double                                                P_BYZ      = 0.1;
 
     static {
-        CARDINALITY = largeTests ? 1000 : 100;
+        CARDINALITY = largeTests ? 3000 : 100;
     }
 
     @BeforeAll
@@ -122,12 +122,12 @@ public class SwarmTest {
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(largeTests ? 50 : 5);
+        final var gossipDuration = Duration.ofMillis(largeTests ? 70 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
 
-        assertTrue(countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -136,7 +136,7 @@ public class SwarmTest {
                                            scheduler));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(largeTests ? 1200 : 30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
@@ -148,7 +148,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-        success = countdown.get().await(largeTests ? 1200 : 60, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -159,7 +159,7 @@ public class SwarmTest {
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(1200_000, 1_000, () -> {
+        success = Utils.waitForCondition(largeTests ? 2400_000 : 30, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
@@ -210,7 +210,7 @@ public class SwarmTest {
 
     private void initialize() {
         var parameters = Parameters.newBuilder()
-                                   .setMaxPending(largeTests ? 3 : 10)
+                                   .setMaxPending(largeTests ? 10 : 10)
                                    .setMaximumTxfr(largeTests ? 100 : 20)
                                    .build();
         registry = new MetricRegistry();
@@ -220,26 +220,27 @@ public class SwarmTest {
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
+        var ctxBuilder = Context.<Participant>newBuilder().setBias(BIAS).setpByz(P_BYZ).setCardinality(CARDINALITY);
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
-        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
+        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
         final var gatewayExec = ForkJoinPool.commonPool();
-        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix,
+            var comms = new LocalRouter(prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(200)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         commExec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix,
+            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
                                           ServerConnectionCache.newBuilder()
                                                                .setTarget(200)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
@@ -253,8 +254,7 @@ public class SwarmTest {
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, executor, () -> new Authentication("foo", authentication),
-                            id -> authentication);
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toList());
     }
 }

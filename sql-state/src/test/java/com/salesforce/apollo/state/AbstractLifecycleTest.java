@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -169,8 +170,9 @@ abstract public class AbstractLifecycleTest {
         testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
             localRouter.setMember(m);
             return localRouter;
@@ -222,6 +224,26 @@ abstract public class AbstractLifecycleTest {
 
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
+        assertTrue(members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(target) == 0)
+                          .count() == members.size(),
+                   "members did not end at same block: " + updaters.values()
+                                                                   .stream()
+                                                                   .map(ssm -> ssm.getCurrentBlock())
+                                                                   .filter(cb -> cb != null)
+                                                                   .map(cb -> cb.height())
+                                                                   .toList());
 
         System.out.println("Final state: " + members.stream()
                                                     .map(m -> updaters.get(m))

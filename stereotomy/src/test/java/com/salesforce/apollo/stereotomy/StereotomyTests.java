@@ -269,12 +269,17 @@ public class StereotomyTests {
         var decoded = Stereotomy.decode(cert);
         assertFalse(decoded.isEmpty());
 
-        assertEquals(i.getIdentifier(), decoded.get().identifier());
+        assertEquals(i.getIdentifier(), decoded.get().coordinates().getIdentifier());
         final var qb64Id = qb64(basicId);
 
         assertTrue(i.getVerifier().get().verify(decoded.get().signature(), qb64Id));
 
         var verifiers = new Verifiers() {
+            @Override
+            public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+                return (i.getIdentifier().equals(coordinates.getIdentifier())) ? i.getVerifier() : Optional.empty();
+            }
+
             @Override
             public Optional<Verifier> verifierFor(Identifier identifier) {
                 return (i.getIdentifier().equals(identifier)) ? i.getVerifier() : Optional.empty();

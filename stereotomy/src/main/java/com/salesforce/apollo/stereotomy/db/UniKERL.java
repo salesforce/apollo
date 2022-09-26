@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
@@ -210,7 +210,7 @@ abstract public class UniKERL implements KERL {
     }
 
     public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
-                                         Map<Identifier, JohnHancock> validations) {
+                                         Map<EventCoordinates, JohnHancock> validations) {
 
         final var id = dsl.select(COORDINATES.ID)
                           .from(COORDINATES)
@@ -225,13 +225,10 @@ abstract public class UniKERL implements KERL {
             return;
         }
         var result = new AtomicInteger();
-        validations.forEach((identifier, signature) -> {
-            var idRec = dsl.newRecord(IDENTIFIER);
-            idRec.setPrefix(identifier.toIdent().toByteArray());
-            idRec.merge();
+        validations.forEach((coords, signature) -> {
             var vRec = dsl.newRecord(VALIDATION);
             vRec.setFor(id.value1());
-            vRec.setValidator(idRec.getId());
+            vRec.setValidator(coords.toEventCoords().toByteArray());
             vRec.setSignature(signature.toSig().toByteArray());
             result.accumulateAndGet(vRec.merge(), (a, b) -> a + b);
         });
@@ -462,8 +459,8 @@ abstract public class UniKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
-        CompletableFuture<Map<Identifier, JohnHancock>> complete = new CompletableFuture<>();
+    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
+        CompletableFuture<Map<EventCoordinates, JohnHancock>> complete = new CompletableFuture<>();
         var resolved = dsl.select(COORDINATES.ID)
                           .from(COORDINATES)
                           .join(IDENTIFIER)
@@ -479,24 +476,23 @@ abstract public class UniKERL implements KERL {
             return complete;
         }
 
-        record validation(Ident identifier, Sig signature) {}
-        var validations = dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
+        record validation(EventCoords coordinates, Sig signature) {}
+        var validations = dsl.select(VALIDATION.VALIDATOR, VALIDATION.SIGNATURE)
                              .from(VALIDATION)
-                             .join(IDENTIFIER)
-                             .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
                              .where(VALIDATION.FOR.eq(resolved.value1()))
                              .fetch()
                              .stream()
                              .map(r -> {
                                  try {
-                                     return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
+                                     return new validation(EventCoords.parseFrom(r.value1()),
+                                                           Sig.parseFrom(r.value2()));
                                  } catch (InvalidProtocolBufferException e) {
                                      log.error("Error deserializing signature witness: {}", e);
                                      return null;
                                  }
                              })
                              .filter(s -> s != null)
-                             .collect(Collectors.toMap(v -> Identifier.from(v.identifier),
+                             .collect(Collectors.toMap(v -> EventCoordinates.from(v.coordinates),
                                                        v -> JohnHancock.from(v.signature)));
         complete.complete(validations);
         return complete;

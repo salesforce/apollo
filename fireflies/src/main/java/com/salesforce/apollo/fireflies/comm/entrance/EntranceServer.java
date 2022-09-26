@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.fireflies.comm.entrance;
 
 import java.util.concurrent.Executor;
 
@@ -12,10 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
+import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -30,24 +31,22 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EntranceServer extends EntranceImplBase {
-    private final static Logger log = LoggerFactory.getLogger(FfServer.class);
+    private final static Logger log = LoggerFactory.getLogger(EntranceServer.class);
 
-    private final Executor exec;
-
+    private final Executor                 exec;
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public EntranceServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
-                          FireflyMetrics metrics) {
+    public EntranceServer(ClientIdentity identity, RoutableService<Service> r, Executor exec, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
-        this.router = router;
+        this.router = r;
         this.exec = exec;
     }
 
     @Override
-    public void join(Credentials request, StreamObserver<Gateway> responseObserver) {
+    public void join(Join request, StreamObserver<Gateway> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundJoinDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
@@ -66,7 +65,7 @@ public class EntranceServer extends EntranceImplBase {
     }
 
     @Override
-    public void seed(Credentials request, StreamObserver<Redirect> responseObserver) {
+    public void seed(Registration request, StreamObserver<Redirect> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundSeedDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
@@ -79,15 +78,16 @@ public class EntranceServer extends EntranceImplBase {
             return;
         }
         exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var redirect = s.seed(request, from);
-            responseObserver.onNext(redirect);
+            var r = s.seed(request, from);
+            responseObserver.onNext(r);
             responseObserver.onCompleted();
             if (timer != null) {
-                var serializedSize = redirect.getSerializedSize();
+                var serializedSize = r.getSerializedSize();
                 metrics.outboundBandwidth().mark(serializedSize);
                 metrics.outboundRedirect().update(serializedSize);
                 timer.stop();
             }
+
         }), log));
     }
 }

@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -29,8 +30,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,10 +43,10 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.fireflies.View.Authentication;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -168,7 +167,7 @@ public class ChurnTest {
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
 
-            success = countdown.get().await(30, TimeUnit.SECONDS);
+            success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream()
                               .filter(e -> e.getContext().activeCount() != testViews.size() ||
                                            e.getContext().totalCount() != testViews.size())
@@ -287,18 +286,19 @@ public class ChurnTest {
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
-        SecretKeySpec authentication = new SecretKeySpec(new byte[] { 6, 6, 6 }, "HmacSHA256");
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
+        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix,
+            var comms = new LocalRouter(prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(CARDINALITY)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         exec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix,
+            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
                                           ServerConnectionCache.newBuilder()
                                                                .setTarget(CARDINALITY)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
@@ -311,8 +311,7 @@ public class ChurnTest {
             gateway.start();
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, exec, () -> new Authentication("foo", authentication),
-                            id -> authentication);
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }
 }

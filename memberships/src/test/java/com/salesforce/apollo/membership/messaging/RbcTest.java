@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -140,8 +141,9 @@ public class RbcTest {
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         messengers = members.stream().map(node -> {
-            var comms = new LocalRouter(prefix,
+            var comms = new LocalRouter(prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),

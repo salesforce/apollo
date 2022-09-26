@@ -21,3 +21,4 @@ pom.xml.bak
 **/.iml
 /conduit-ci/jenkins/jobs/
 /bc-src.zip
+/ff.log

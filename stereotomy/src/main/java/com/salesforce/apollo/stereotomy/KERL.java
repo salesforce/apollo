@@ -73,7 +73,8 @@ public interface KERL extends KEL {
 
     CompletableFuture<Void> append(List<AttachmentEvent> events);
 
-    CompletableFuture<Void> appendValidations(EventCoordinates coordinates, Map<Identifier, JohnHancock> validations);
+    CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
+                                              Map<EventCoordinates, JohnHancock> validations);
 
     default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
         var ksa = new AtomicReference<KeyStateWithAttachments>();
@@ -90,7 +91,7 @@ public interface KERL extends KEL {
         });
     }
 
-    CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates);
+    CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates);
 
     default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
         // TODO use a real DB query instead of this really expensive iterative lookup

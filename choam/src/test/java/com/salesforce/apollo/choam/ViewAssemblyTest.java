@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -130,9 +131,10 @@ public class ViewAssemblyTest {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
 
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         members.forEach(m -> {
-            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(2),
-                                      null);
+            var com = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder(),
+                                      Executors.newFixedThreadPool(2), null);
             communications.put(m, com);
             com.setMember(m);
         });

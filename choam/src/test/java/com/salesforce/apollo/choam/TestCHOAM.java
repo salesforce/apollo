@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -48,6 +49,7 @@ import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -124,8 +126,9 @@ public class TestCHOAM {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix,
+            var localRouter = new LocalRouter(prefix, serverMembers,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),

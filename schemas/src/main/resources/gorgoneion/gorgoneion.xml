@@ -3,54 +3,6 @@
       http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
     <changeSet author="hhildebrand" id="gorgoneion-1">
         <sql>create schema if not exists gorgoneion</sql>
-
-        <createTable tableName="passwords" schemaName="gorgoneion">
-            <column generationType="ALWAYS" name="id" type="IDENTITY">
-                <constraints nullable="false" primaryKey="true" primaryKeyName="passwords_pkey" />
-            </column>
-            <column name="username" type="VARCHAR(1024)">
-                <constraints nullable="false" />
-            </column>
-            <column name="passwordSalt" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="hashedPassword" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="keySalt" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="publicKey" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="privateKey" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="iv" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-            <column name="admin" type="BOOLEAN">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <createTable tableName="alias" schemaName="gorgoneion">
-            <column name="user" type="INT8">
-                <constraints nullable="false" primaryKey="true" primaryKeyName="identifier_pkey" />
-            </column>
-            <column name="alias" type="VARCHAR(1024)">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addUniqueConstraint columnNames="alias" tableName="alias" schemaName="gorgoneion" />
-
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="user"
-            baseTableName="alias" baseTableSchemaName="gorgoneion"
-            constraintName="user_passwords_fk"
-            referencedTableName="passwords" referencedColumnNames="id"
-            referencedTableSchemaName="gorgoneion" />
         
     </changeSet>
 </databaseChangeLog>

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -40,6 +41,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -217,8 +219,9 @@ public class DomainTest {
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
                                                                           Executors.newSingleThreadScheduledExecutor());
+        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.forEach((member, id) -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,

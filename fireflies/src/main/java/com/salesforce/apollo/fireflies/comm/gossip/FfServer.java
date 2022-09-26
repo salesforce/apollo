@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.fireflies.comm.gossip;
 
 import java.util.concurrent.Executor;
 
@@ -40,11 +40,10 @@ public class FfServer extends FirefliesImplBase {
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public FfServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
-                    FireflyMetrics metrics) {
+    public FfServer(ClientIdentity identity, RoutableService<Service> r, Executor exec, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
-        this.router = router;
+        this.router = r;
         this.exec = exec;
     }
 

@@ -4,17 +4,18 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies.communications;
+package com.salesforce.apollo.fireflies.comm.entrance;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Credentials;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
+import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
+import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -24,9 +25,9 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class EntranceClient implements Approach {
+public class EntranceClient implements Entrance {
 
-    public static CreateClientCommunications<Approach> getCreate(FireflyMetrics metrics) {
+    public static CreateClientCommunications<Entrance> getCreate(FireflyMetrics metrics) {
         return (t, f, c) -> new EntranceClient(c, t, metrics);
 
     }
@@ -54,7 +55,7 @@ public class EntranceClient implements Approach {
     }
 
     @Override
-    public ListenableFuture<Gateway> join(Credentials join, Duration timeout) {
+    public ListenableFuture<Gateway> join(Join join, Duration timeout) {
         if (metrics != null) {
             var serializedSize = join.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
@@ -77,13 +78,13 @@ public class EntranceClient implements Approach {
     }
 
     @Override
-    public ListenableFuture<Redirect> seed(Credentials join) {
+    public ListenableFuture<Redirect> seed(Registration registration) {
         if (metrics != null) {
-            var serializedSize = join.getSerializedSize();
+            var serializedSize = registration.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
             metrics.outboundSeed().update(serializedSize);
         }
-        ListenableFuture<Redirect> result = client.seed(join);
+        ListenableFuture<Redirect> result = client.seed(registration);
         result.addListener(() -> {
             if (metrics != null) {
                 try {

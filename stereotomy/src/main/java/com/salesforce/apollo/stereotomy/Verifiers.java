@@ -17,6 +17,8 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface Verifiers {
 
+    Optional<Verifier> verifierFor(EventCoordinates coordinates);
+
     Optional<Verifier> verifierFor(Identifier identifier);
 
 }

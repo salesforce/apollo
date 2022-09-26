@@ -4,14 +4,14 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.thoth.proto";
 option java_outer_classname = "ThothProto";
 option objc_class_prefix = "Tp";
-import "util.proto";
-import "stereotomy.proto";
-import "stereotomy-services.proto";
+
 import "google/protobuf/empty.proto";
 
+import "stereotomy.proto";
+import "stereotomy-services.proto";
+import "util.proto";
+
 package thoth;
-
-
 
 service KerlDht {
     rpc append (stereotomy.services.KeyEventsContext) returns (stereotomy.services.KeyStates) {}
@@ -65,6 +65,14 @@ message Get {
 } 
 
 message Interval {
-        utils.Digeste start = 1;
-        utils.Digeste end = 2;
+    utils.Digeste start = 1;
+    utils.Digeste end = 2;
+}
+
+message ViewState {
+    utils.Digeste crown = 1;
+    utils.Digeste previous = 2;
+    utils.Biff roots = 3;
+    int32 threshold = 4;
+    stereotomy.Validations validations = 5;
 }

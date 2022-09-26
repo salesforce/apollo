@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
@@ -29,13 +29,14 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
@@ -79,43 +80,50 @@ public class AniTest extends AbstractDhtTest {
         var v1 = controller.newIdentifier().get();
         var v2 = controller.newIdentifier().get();
         var v3 = controller.newIdentifier().get();
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
+        for (var id : List.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier())) {
+            roots.add(id.getDigest());
+        }
 
-        var ani = new Ani(identities.keySet().stream().findFirst().get(), threshold, timeout, kerl,
-                          Arrays.asList(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier()));
+        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, () -> threshold, () -> roots,
+                          () -> SigningThreshold.unweighted(3));
 
         // inception
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
-        var validations = new HashMap<Identifier, JohnHancock>();
+        var validations = new HashMap<EventCoordinates, JohnHancock>();
 
         ani.clearValidations();
-        validations.put(v1.getIdentifier(), v1.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v1.getCoordinates(), v1.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
 
         ani.clearValidations();
-        validations.put(v2.getIdentifier(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v2.getCoordinates(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(2, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
 
         ani.clearValidations();
-        validations.put(v3.getIdentifier(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v3.getCoordinates(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
-        assertTrue(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        retrieved = kerl.getValidations(inception.getCoordinates()).get();
+        assertEquals(3, retrieved.size());
+
+        assertTrue(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 
@@ -130,13 +138,15 @@ public class AniTest extends AbstractDhtTest {
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(e.getKey(), threshold, timeout,
+                                                                     e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  Collections.emptyList())));
+                                                                                  () -> threshold, () -> roots,
+                                                                                  () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
         // inception
@@ -146,8 +156,8 @@ public class AniTest extends AbstractDhtTest {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
-        ani.validate(inception).get();
-        final var success = ani.validate(inception).get(10, TimeUnit.SECONDS);
+        ani.validateRoot(inception).get();
+        final var success = ani.validateRoot(inception).get(10, TimeUnit.SECONDS);
         assertTrue(success);
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
@@ -169,49 +179,53 @@ public class AniTest extends AbstractDhtTest {
         var v2 = controller.newIdentifier().get();
         var v3 = controller.newIdentifier().get();
 
+        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
+        for (var id : List.of(v1.getIdentifier(), v2.getIdentifier(), v3.getIdentifier())) {
+            roots.add(id.getDigest());
+        }
+
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(e.getKey(), threshold, timeout,
+                                                                     e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  Arrays.asList(v1.getIdentifier(),
-                                                                                                v2.getIdentifier(),
-                                                                                                v3.getIdentifier()))));
+                                                                                  () -> threshold, () -> roots,
+                                                                                  () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
         // inception
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validate(inception).get(5, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(5, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
-        var validations = new HashMap<Identifier, JohnHancock>();
+        var validations = new HashMap<EventCoordinates, JohnHancock>();
 
         ani.clearValidations();
-        validations.put(v1.getIdentifier(), v1.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v1.getCoordinates(), v1.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(5, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(5, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
-        validations.put(v2.getIdentifier(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v2.getCoordinates(), v2.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(2, retrieved.size());
 
-        assertFalse(ani.validate(inception).get(120, TimeUnit.SECONDS));
+        assertFalse(ani.validateRoot(inception).get(120, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
-        validations.put(v3.getIdentifier(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
+        validations.put(v3.getCoordinates(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
-        var condition = ani.validate(inception).get();
+        var condition = ani.validateRoot(inception).get();
         assertTrue(condition);
         assertTrue(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
     }

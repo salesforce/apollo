@@ -49,12 +49,12 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
 
     @Override
     public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<Identifier, JohnHancock> validations) {
+                                                     Map<EventCoordinates, JohnHancock> validations) {
         return complete(kerl -> kerl.appendValidations(coordinates, validations));
     }
 
     @Override
-    public CompletableFuture<Map<Identifier, JohnHancock>> getValidations(EventCoordinates coordinates) {
+    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
         return complete(kerl -> kerl.getValidations(coordinates));
     }
 

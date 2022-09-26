@@ -146,7 +146,7 @@ message Attachment {
 }
 
 message Validation_ {
-    stereotomy.Ident validator = 1;
+    stereotomy.EventCoords validator = 1;
     utils.Sig signature = 2;
 }
 

@@ -47,6 +47,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Timer     outboundUpdateTimer;
     private final Timer     seedDuration;
     private final Meter     shunnedGossip;
+    private final Meter     viewChanges;
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -78,6 +79,7 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         seedDuration = registry.timer(name(context.shortString(), "ff.seed.duration"));
         shunnedGossip = registry.meter(name(context.shortString(), "ff.gossip.shunned"));
         inboundSeed = registry.histogram(name(context.shortString(), "ff.seed.inbound"));
+        viewChanges = registry.meter(name(context.shortString(), "ff.view.change"));
     }
 
     @Override
@@ -213,5 +215,10 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Meter shunnedGossip() {
         return shunnedGossip;
+    }
+
+    @Override
+    public Meter viewChanges() {
+        return viewChanges;
     }
 }
