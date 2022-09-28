@@ -9,6 +9,7 @@ package com.salesforce.apollo.gorgoneion;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -20,10 +21,12 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -91,11 +94,11 @@ public class GorgoneionTest {
         var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
                                            null);
         AdmissionsService admissions = mock(AdmissionsService.class);
-        var clientComminications = clientRouter.create(member, context.getId(), admissions, ":admissions",
+        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, exec, null),
                                                        AdmissionsClient.getCreate(null),
-                                                       Admissions.getLocalLoopback(member));
+                                                       Admissions.getLocalLoopback(client));
         clientRouter.setMember(client);
         clientRouter.start();
 
@@ -115,6 +118,79 @@ public class GorgoneionTest {
         assertNotNull(invitation);
         assertNotEquals(Invitation.getDefaultInstance(), invitation);
         assertEquals(1, invitation.getValidations().getValidationsCount());
+
+        // Verify client KERL published
+        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation.getValidations()));
+    }
+
+    @Test
+    public void multiSmoke() throws Exception {
+        final var exec = Executors.newSingleThreadExecutor();
+        final var scheduler = Executors.newSingleThreadScheduledExecutor();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        final var prefix = UUID.randomUUID().toString();
+        final var serverMembers = new ConcurrentSkipListMap<Digest, Member>();
+        final var members = IntStream.range(0, 10).mapToObj(i -> {
+            try {
+                return new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
+        }).toList();
+
+        // The kerl observer to publish admitted client KERLs to
+        var observer = mock(ProtoEventObserver.class);
+
+        var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
+        members.forEach(m -> context.activate(m));
+        final var parameters = Parameters.newBuilder().build();
+        @SuppressWarnings("unused")
+        final var gorgons = members.stream().map(m -> {
+            final var router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
+                                               ForkJoinPool.commonPool(), null);
+            router.setMember(m);
+            router.start();
+            return router;
+        })
+                                   .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getMember(),
+                                                            context, observer, r, scheduler, null,
+                                                            ForkJoinPool.commonPool()))
+                                   .toList();
+
+        // The registering client
+        var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+
+        // Registering client comms
+        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
+                                           null);
+        AdmissionsService admissions = mock(AdmissionsService.class);
+        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
+                                                       r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
+                                                                                 r, exec, null),
+                                                       AdmissionsClient.getCreate(null),
+                                                       Admissions.getLocalLoopback(client));
+        clientRouter.setMember(client);
+        clientRouter.start();
+
+        // Admin client link
+        var admin = clientComminications.apply(members.get(0), client);
+
+        assertNotNull(admin);
+        Function<SignedNonce, CompletableFuture<Any>> attester = sn -> {
+            var fs = new CompletableFuture<Any>();
+            fs.complete(Any.getDefaultInstance());
+            return fs;
+        };
+
+        var gorgoneionClient = new GorgoneionClient(client, context.getId(), attester, parameters.clock(), admin);
+
+        final var apply = gorgoneionClient.apply(Duration.ofSeconds(2));
+        Invitation invitation = apply.get(3, TimeUnit.SECONDS);
+        assertNotNull(invitation);
+        assertNotEquals(Invitation.getDefaultInstance(), invitation);
+        assertTrue(invitation.getValidations().getValidationsCount() >= context.majority());
 
         // Verify client KERL published
         verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation.getValidations()));
@@ -151,11 +227,11 @@ public class GorgoneionTest {
         var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
                                            null);
         AdmissionsService admissions = mock(AdmissionsService.class);
-        var clientComminications = clientRouter.create(member, context.getId(), admissions, ":admissions",
+        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, exec, null),
                                                        AdmissionsClient.getCreate(null),
-                                                       Admissions.getLocalLoopback(member));
+                                                       Admissions.getLocalLoopback(client));
         clientRouter.setMember(client);
         clientRouter.start();
 
@@ -208,5 +284,4 @@ public class GorgoneionTest {
         // Verify client KERL published
         verify(observer, times(3)).publish(kerl, Collections.singletonList(invitation.getValidations()));
     }
-
 }

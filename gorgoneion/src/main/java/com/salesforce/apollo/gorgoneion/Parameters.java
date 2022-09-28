@@ -35,7 +35,7 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
 
         private Clock                                                   clock               = Clock.systemUTC();
         private DigestAlgorithm                                         digestAlgorithm     = DigestAlgorithm.DEFAULT;
-        private Duration                                                frequency           = Duration.ofMillis(30);
+        private Duration                                                frequency           = Duration.ofMillis(5);
         private Duration                                                registrationTimeout = Duration.ofSeconds(30);
         private Function<SignedAttestation, CompletableFuture<Boolean>> verifier            = sa -> defaultVerifier;
 
