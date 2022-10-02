@@ -30,6 +30,8 @@ public interface GorgoneionMetrics extends EdpointMetrics {
 
     Histogram inboundInvitation();
 
+    Histogram inboundValidateCredentials();
+
     Histogram inboundValidation();
 
     Histogram outboundApplication();

@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Empty;
+import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementImplBase;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
@@ -91,6 +92,34 @@ public class EndorsementServer extends EndorsementImplBase {
                     responseObserver.onError(t);
                 } else {
                     responseObserver.onNext(e);
+                    responseObserver.onCompleted();
+                }
+                if (timer != null) {
+                    timer.close();
+                }
+            });
+        }), log));
+    }
+
+    @Override
+    public void validate(Credentials request, StreamObserver<Validation_> responseObserver) {
+        var timer = metrics == null ? null : metrics.registerDuration().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundValidateCredentials().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            s.validate(request, from).whenComplete((v, t) -> {
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    responseObserver.onNext(v);
                     responseObserver.onCompleted();
                 }
                 if (timer != null) {

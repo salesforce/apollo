@@ -323,7 +323,7 @@ public class Gorgoneion {
                          .setNoise(parameters.digestAlgorithm().random().toDigeste())
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
-        var endorse = EndorseNonce.newBuilder().build();
+        var endorse = EndorseNonce.newBuilder().setNonce(nonce).setContext(context.getId().toDigeste()).build();
 
         var successors = context.successors(digestOf(identifier, parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
@@ -334,7 +334,7 @@ public class Gorgoneion {
                       link.getMember().getId(), member.getId());
             return link.endorse(endorse, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeValidation(futureSailor, m, validations), () -> {
-            if (validations.size() <= majority) {
+            if (validations.size() < majority) {
                 generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
             } else {
                 generated.complete(SignedNonce.newBuilder().setNonce(nonce).addAllSignatures(validations).build());
@@ -375,7 +375,7 @@ public class Gorgoneion {
                       member.getId());
             return link.enroll(notarization, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeEnrollment(futureSailor, m, completed), () -> {
-            if (completed.size() <= majority) {
+            if (completed.size() < majority) {
                 invited.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment")));
             } else {
                 invited.complete(Invitation.newBuilder().setValidations(validations).build());
@@ -405,8 +405,8 @@ public class Gorgoneion {
                       link.getMember().getId(), member.getId());
             return link.validate(request, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeVerification(futureSailor, m, verifications), () -> {
-            if (verifications.size() <= majority) {
-                invited.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
+            if (verifications.size() < majority) {
+                invited.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required credential validations")));
             } else {
                 validated.complete(Validations.newBuilder()
                                               .setCoordinates(ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount()
