@@ -133,8 +133,8 @@ public class LocalRouter extends Router {
     private static final Context.Key<Member> CLIENT_ID_CONTEXT_KEY = Context.key("from.id");
     private static final ThreadIdentity      LOCAL_IDENTITY        = new ThreadIdentity();
     private static final Logger              log                   = LoggerFactory.getLogger(LocalRouter.class);
-    private final Executor                   executor;
 
+    private final Executor            executor;
     private GrpcServerLimiterBuilder  limitsBuilder;
     private Member                    member;
     private final String              prefix;

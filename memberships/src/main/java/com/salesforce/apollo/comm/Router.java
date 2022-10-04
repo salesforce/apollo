@@ -78,11 +78,9 @@ abstract public class Router {
         return AIMDLimit.newBuilder().initialLimit(100).maxLimit(1000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
-    protected final MutableHandlerRegistry registry;
-    protected final AtomicBoolean          started = new AtomicBoolean();
-
-    private final ServerConnectionCache cache;
-
+    protected final MutableHandlerRegistry        registry;
+    protected final AtomicBoolean                 started  = new AtomicBoolean();
+    private final ServerConnectionCache           cache;
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
 
     public Router(ServerConnectionCache cache, MutableHandlerRegistry registry) {

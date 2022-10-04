@@ -36,7 +36,7 @@ public class FfServer extends FirefliesImplBase {
 
     private final Executor exec;
 
-    private ClientIdentity                 identity;
+    private final ClientIdentity           identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 

@@ -33,7 +33,7 @@
 
     <properties>
         <jackson.version>2.13.2</jackson.version>
-        <dropwizard.version>2.1.1</dropwizard.version>
+        <dropwizard.version>2.1.2</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.71</bc.version>
@@ -43,6 +43,7 @@
         <liquibase.version>4.8.0</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
         <netty.version>4.1.77.Final</netty.version>
+        <native.maven.plugin.version>0.9.14</native.maven.plugin.version>
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -230,7 +231,12 @@
                 <artifactId>gorgoneion</artifactId>
                 <version>${project.version}</version>
             </dependency>
-
+            
+            <dependency>
+                <groupId>org.jboss.logging</groupId>
+                <artifactId>jboss-logging</artifactId>
+                <version>3.5.0.Final</version>
+            </dependency>
             <dependency>
                 <groupId>io.dropwizard</groupId>
                 <artifactId>dropwizard-dependencies</artifactId>
@@ -524,6 +530,14 @@
                                     <version>3.8.1</version>
                                 </requireMavenVersion>
                                 <dependencyConvergence />
+                                <requireJavaVersion>
+                                    <version>17</version>
+                                </requireJavaVersion>
+                                <requireJavaVendor>
+                                    <includes>
+                                        <include>GraalVM Community</include>
+                                    </includes>
+                                </requireJavaVendor>
                             </rules>
                         </configuration>
                     </execution>
@@ -546,7 +560,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
-                    <version>3.0.0-M2</version>
+                    <version>3.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -710,6 +724,28 @@
                             <goals>
                                 <goal>antlr4</goal>
                             </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.graalvm.buildtools</groupId>
+                    <artifactId>native-maven-plugin</artifactId>
+                    <version>${native.maven.plugin.version}</version>
+                    <extensions>true</extensions>
+                    <executions>
+                        <execution>
+                            <id>build-native</id>
+                            <goals>
+                                <goal>compile-no-fork</goal>
+                            </goals>
+                            <phase>package</phase>
+                        </execution>
+                        <execution>
+                            <id>test-native</id>
+                            <goals>
+                                <goal>test</goal>
+                            </goals>
+                            <phase>test</phase>
                         </execution>
                     </executions>
                 </plugin>
