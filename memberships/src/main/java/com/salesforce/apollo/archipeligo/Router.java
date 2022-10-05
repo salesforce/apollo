@@ -9,7 +9,6 @@ package com.salesforce.apollo.archipeligo;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
@@ -19,6 +18,18 @@ import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommu
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.BindableService;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.Context;
+import io.grpc.Contexts;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -27,14 +38,21 @@ import io.grpc.util.MutableHandlerRegistry;
  * @author hal.hildebrand
  *
  */
-abstract public class Router<Context, T, F> {
-    public class CommonCommunications<Client extends Link<T>, Service> implements BiFunction<T, F, Client> {
-        private final CreateClientCommunications<Client, T, F> createFunction;
-        private final Client                                   localLoopback;
-        private final RoutableService<Context, Service>        routing;
+abstract public class Router<Ctx, To, From> {
 
-        public CommonCommunications(RoutableService<Context, Service> routing,
-                                    CreateClientCommunications<Client, T, F> createFunction, Client localLoopback) {
+    @FunctionalInterface
+    public interface ClientConnector<Client, Ctx, To, From> {
+        Client connect(To to, From from, Ctx context);
+    }
+
+    public class CommonCommunications<Client extends Link<To>, Service>
+                                     implements ClientConnector<Client, Ctx, To, From> {
+        private final CreateClientCommunications<Client, To, From> createFunction;
+        private final Client                                       localLoopback;
+        private final RoutableService<Ctx, Service>                routing;
+
+        public CommonCommunications(RoutableService<Ctx, Service> routing,
+                                    CreateClientCommunications<Client, To, From> createFunction, Client localLoopback) {
             this.routing = routing;
             this.createFunction = createFunction;
             this.localLoopback = localLoopback;
@@ -42,18 +60,18 @@ abstract public class Router<Context, T, F> {
 
         @SuppressWarnings("unlikely-arg-type")
         @Override
-        public Client apply(T to, F from) {
+        public Client connect(To to, From from, Ctx context) {
             if (to == null) {
                 return null;
             }
             return started.get() ? to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction) : null;
         }
 
-        public void deregister(Context context) {
+        public void deregister(Ctx context) {
             routing.unbind(context);
         }
 
-        public void register(Context context, Service service) {
+        public void register(Ctx context, Service service) {
             routing.bind(context, service);
         }
     }
@@ -64,15 +82,52 @@ abstract public class Router<Context, T, F> {
         }
     }
 
-    private final static Logger log = LoggerFactory.getLogger(Router.class);
+    private static final Metadata.Key<String> CONTEXT_METADATA_KEY = Metadata.Key.of("from.Context",
+                                                                                     Metadata.ASCII_STRING_MARSHALLER);
+    private final static Logger               log                  = LoggerFactory.getLogger(Router.class);
 
-    protected final MutableHandlerRegistry                 registry;
-    protected final AtomicBoolean                          started  = new AtomicBoolean();
-    private final ServerConnectionCache<T, F>              cache;
-    private final Map<String, RoutableService<Context, ?>> services = new ConcurrentHashMap<>();
+    protected final MutableHandlerRegistry registry;
+    protected final ServerInterceptor      serverInterceptor;
+    protected final AtomicBoolean          started = new AtomicBoolean();
 
-    public Router(ServerConnectionCache<T, F> cache, MutableHandlerRegistry registry) {
-        this.cache = cache;
+    private final ServerConnectionCache<To, From> cache;
+    private final Context.Key<Ctx>                CLIENT_CONTEXT_KEY = Context.key("from.Context");
+    private final ClientInterceptor               clientInterceptor;
+
+    private final Map<String, RoutableService<Ctx, ?>> services = new ConcurrentHashMap<>();
+
+    public Router(ServerConnectionCache.Builder<To, From> builder, MutableHandlerRegistry registry,
+                  Function<String, Ctx> ctxDeser, Function<Ctx, String> ctxSer) {
+        serverInterceptor = new ServerInterceptor() {
+            @Override
+            public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                         final Metadata requestHeaders,
+                                                                         ServerCallHandler<ReqT, RespT> next) {
+                String id = requestHeaders.get(CONTEXT_METADATA_KEY);
+                if (id == null) {
+                    log.error("No context in call headers: {}", requestHeaders.keys());
+                    throw new IllegalStateException("No member ID in call");
+                }
+                @SuppressWarnings("unused")
+                var context = ctxDeser.apply(id);
+                return Contexts.interceptCall(Context.current(), call, requestHeaders, next);
+            }
+        };
+        clientInterceptor = new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                                       CallOptions callOptions, Channel next) {
+                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(CONTEXT_METADATA_KEY, ctxSer.apply(CLIENT_CONTEXT_KEY.get()));
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
+        this.cache = builder.build(clientInterceptor);
         this.registry = registry;
     }
 
@@ -83,29 +138,29 @@ abstract public class Router<Context, T, F> {
         cache.close();
     }
 
-    public <Client extends Link<T>, Service extends ServiceRouting> CommonCommunications<Client, Service> create(T member,
-                                                                                                                 Context context,
-                                                                                                                 Service service,
-                                                                                                                 Function<RoutableService<Context, Service>, BindableService> factory,
-                                                                                                                 CreateClientCommunications<Client, T, F> createFunction,
-                                                                                                                 Client localLoopback) {
+    public <Client extends Link<To>, Service extends ServiceRouting> CommonCommunications<Client, Service> create(To member,
+                                                                                                                  Ctx context,
+                                                                                                                  Service service,
+                                                                                                                  Function<RoutableService<Ctx, Service>, BindableService> factory,
+                                                                                                                  CreateClientCommunications<Client, To, From> createFunction,
+                                                                                                                  Client localLoopback) {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
     }
 
-    public <Client extends Link<T>, Service> CommonCommunications<Client, Service> create(T member, Context context,
-                                                                                          Service service,
-                                                                                          String routingLabel,
-                                                                                          Function<RoutableService<Context, Service>, BindableService> factory,
-                                                                                          CreateClientCommunications<Client, T, F> createFunction,
-                                                                                          Client localLoopback) {
+    public <Client extends Link<To>, Service> CommonCommunications<Client, Service> create(To member, Ctx context,
+                                                                                           Service service,
+                                                                                           String routingLabel,
+                                                                                           Function<RoutableService<Ctx, Service>, BindableService> factory,
+                                                                                           CreateClientCommunications<Client, To, From> createFunction,
+                                                                                           Client localLoopback) {
         @SuppressWarnings("unchecked")
-        RoutableService<Context, Service> routing = (RoutableService<Context, Service>) services.computeIfAbsent(routingLabel,
-                                                                                                                 c -> {
-                                                                                                                     RoutableService<Context, Service> route = new RoutableService<Context, Service>();
-                                                                                                                     BindableService bindableService = factory.apply(route);
-                                                                                                                     registry.addService(bindableService);
-                                                                                                                     return route;
-                                                                                                                 });
+        RoutableService<Ctx, Service> routing = (RoutableService<Ctx, Service>) services.computeIfAbsent(routingLabel,
+                                                                                                         c -> {
+                                                                                                             RoutableService<Ctx, Service> route = new RoutableService<Ctx, Service>();
+                                                                                                             BindableService bindableService = factory.apply(route);
+                                                                                                             registry.addService(bindableService);
+                                                                                                             return route;
+                                                                                                         });
         routing.bind(context, service);
         log.info("Communications created for: " + member);
         return new CommonCommunications<Client, Service>(routing, createFunction, localLoopback);

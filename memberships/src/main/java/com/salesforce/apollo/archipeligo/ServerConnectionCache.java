@@ -16,8 +16,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -27,6 +25,7 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 
 /**
@@ -63,8 +62,8 @@ public class ServerConnectionCache<To, From> {
         private Duration                          minIdle = Duration.ofMillis(100);
         private int                               target  = 0;
 
-        public ServerConnectionCache<To, From> build() {
-            return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics);
+        public ServerConnectionCache<To, From> build(ClientInterceptor clientInterceptor) {
+            return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics, clientInterceptor);
         }
 
         public Clock getClock() {
@@ -119,8 +118,8 @@ public class ServerConnectionCache<To, From> {
     }
 
     public class ManagedServerConnection implements Comparable<ManagedServerConnection> {
-        public final ManagedChannel channel;
-        public final To             to;
+        final ManagedChannel        channel;
+        final To                    to;
         private final AtomicInteger borrowed   = new AtomicInteger();
         private final Instant       created    = Instant.now(clock);
         private volatile Instant    lastUsed   = Instant.now(clock);
@@ -195,7 +194,7 @@ public class ServerConnectionCache<To, From> {
     }
 
     public static interface ServerConnectionFactory<To, From> {
-        ManagedChannel connectTo(To to, From from);
+        ManagedChannel connectTo(To to, From from, ClientInterceptor interceptor);
     }
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
@@ -205,6 +204,7 @@ public class ServerConnectionCache<To, From> {
     }
 
     private final Map<To, ManagedServerConnection>       cache = new HashMap<>();
+    private final ClientInterceptor                      clientInterceptor;
     private final Clock                                  clock;
     private final ServerConnectionFactory<To, From>      factory;
     private final ReentrantLock                          lock  = new ReentrantLock(true);
@@ -214,41 +214,13 @@ public class ServerConnectionCache<To, From> {
     private final int                                    target;
 
     public ServerConnectionCache(ServerConnectionFactory<To, From> factory, int target, Duration minIdle, Clock clock,
-                                 ServerConnectionCacheMetrics metrics) {
+                                 ServerConnectionCacheMetrics metrics, ClientInterceptor clientInterceptor) {
         this.factory = factory;
         this.target = target;
         this.minIdle = minIdle;
         this.clock = clock;
         this.metrics = metrics;
-    }
-
-    public <T> void apply(To to, From from, Consumer<T> action,
-                          CreateClientCommunications<T, To, From> createFunction) {
-        T client = borrow(to, from, createFunction);
-        if (client == null) {
-            return;
-        }
-        try {
-            action.accept(client);
-        } catch (Throwable e) {
-            log.debug("Cannot apply action from: {} to {}", target, from, to, e);
-        } finally {
-        }
-    }
-
-    public <T, R> R apply(To to, From from, Function<T, R> action,
-                          CreateClientCommunications<T, To, From> createFunction) {
-        T client = borrow(to, from, createFunction);
-        if (client == null) {
-            return null;
-        }
-        try {
-            return action.apply(client);
-        } catch (Throwable e) {
-            log.debug("Cannot apply action from: {} to {}", target, from, to, e);
-            return null;
-        } finally {
-        }
+        this.clientInterceptor = clientInterceptor;
     }
 
     public <T> T borrow(To to, From from, CreateClientCommunications<T, To, From> createFunction) {
@@ -257,7 +229,8 @@ public class ServerConnectionCache<To, From> {
                 log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, from, to);
             }
             ManagedServerConnection connection = cache.computeIfAbsent(to, member -> {
-                ManagedServerConnection conn = new ManagedServerConnection(to, factory.connectTo(to, from));
+                ManagedServerConnection conn = new ManagedServerConnection(to, factory.connectTo(to, from,
+                                                                                                 clientInterceptor));
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();
@@ -317,7 +290,6 @@ public class ServerConnectionCache<To, From> {
             }
             return null;
         });
-
     }
 
     private boolean close(ManagedServerConnection connection) {

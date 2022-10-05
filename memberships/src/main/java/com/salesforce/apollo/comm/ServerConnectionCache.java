@@ -16,8 +16,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -222,35 +220,6 @@ public class ServerConnectionCache {
         this.minIdle = minIdle;
         this.clock = clock;
         this.metrics = metrics;
-    }
-
-    public <T> void apply(Member to, SigningMember from, Consumer<T> action,
-                          CreateClientCommunications<T> createFunction) {
-        T client = borrow(to, from, createFunction);
-        if (client == null) {
-            return;
-        }
-        try {
-            action.accept(client);
-        } catch (Throwable e) {
-            log.debug("Cannot apply action from: {} to {}", target, from.getId(), to.getId(), e);
-        } finally {
-        }
-    }
-
-    public <T, R> R apply(Member to, SigningMember from, Function<T, R> action,
-                          CreateClientCommunications<T> createFunction) {
-        T client = borrow(to, from, createFunction);
-        if (client == null) {
-            return null;
-        }
-        try {
-            return action.apply(client);
-        } catch (Throwable e) {
-            log.debug("Cannot apply action from: {} to {}", target, from.getId(), to.getId(), e);
-            return null;
-        } finally {
-        }
     }
 
     public <T> T borrow(Member to, SigningMember from, CreateClientCommunications<T> createFunction) {
