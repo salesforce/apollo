@@ -42,6 +42,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -220,11 +221,13 @@ public class DomainTest {
         TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
                                                                           Executors.newSingleThreadScheduledExecutor());
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        identities.forEach((member, id) -> {
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
+        identities.forEach((d, id) -> {
+            final var member = new ControlledIdentifierMember(id);
+            var localRouter = new LocalRouter(member, prefix, serverMembers,
+                                              ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
-            var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
+            var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
                                                             .setScheduler(Executors.newSingleThreadScheduledExecutor())
@@ -233,7 +236,6 @@ public class DomainTest {
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(domain);
-            localRouter.setMember(domain.getMember());
             localRouter.start();
         });
 

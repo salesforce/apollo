@@ -134,40 +134,48 @@ public class LocalRouter extends Router {
     private static final ThreadIdentity      LOCAL_IDENTITY        = new ThreadIdentity();
     private static final Logger              log                   = LoggerFactory.getLogger(LocalRouter.class);
 
-    private final Executor            executor;
-    private GrpcServerLimiterBuilder  limitsBuilder;
-    private Member                    member;
-    private final String              prefix;
-    private Server                    server;
-    private final Map<Digest, Member> serverMembers;
+    private final GrpcServerLimiterBuilder limitsBuilder;
+    private final Member                   member;
+    private final String                   name;
+    private final Server                   server;
+    private final Map<Digest, Member>      serverMembers;
 
-    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers,
+    public LocalRouter(Member member, String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers,
                        ServerConnectionCache.Builder builder, Executor executor, LimitsRegistry limitsRegistry) {
-        this(prefix, serverMembers, () -> Router.defaultClientLimit(), builder, new MutableHandlerRegistry(),
+        this(member, prefix, serverMembers, () -> Router.defaultClientLimit(), builder, new MutableHandlerRegistry(),
              () -> Router.defaultServerLimit(), executor, limitsRegistry);
     }
 
-    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers, Supplier<Limit> clientLimit,
-                       ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
-                       Supplier<Limit> serverLimit, Executor executor, LimitsRegistry limitsRegistry) {
+    public LocalRouter(Member member, String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers,
+                       Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+                       MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor,
+                       LimitsRegistry limitsRegistry) {
         super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit, limitsRegistry, executor))
                      .build(),
               registry);
-
+        this.member = member;
         this.serverMembers = serverMembers;
         limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
+        name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
 
-        this.prefix = prefix;
-        this.executor = executor;
+        limitsBuilder.named(name(member.getId().shortString(), "service"));
+        server = InProcessServerBuilder.forName(name)
+                                       .executor(executor)
+                                       .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
+                                                                                   .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
+                                                                                   .build())
+                                       .intercept(interceptor())
+                                       .fallbackHandlerRegistry(registry)
+                                       .build();
     }
 
-    public LocalRouter(String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers, Supplier<Limit> clientLimit,
-                       ServerConnectionCache.Builder builder, Supplier<Limit> serverLimit, Executor executor,
-                       LimitsRegistry limitsRegistry) {
-        this(prefix, serverMembers, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor,
+    public LocalRouter(Member member, String prefix, ConcurrentSkipListMap<Digest, Member> serverMembers,
+                       Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder, Supplier<Limit> serverLimit,
+                       Executor executor, LimitsRegistry limitsRegistry) {
+        this(member, prefix, serverMembers, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor,
              limitsRegistry);
     }
 
@@ -186,8 +194,6 @@ public class LocalRouter extends Router {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
                                                 e);
-            } finally {
-                server = null;
             }
         }
     }
@@ -201,29 +207,11 @@ public class LocalRouter extends Router {
         return member;
     }
 
-    public void setMember(Member member) {
-        this.member = member;
-    }
-
     @Override
     public void start() {
-        if (member == null) {
-            throw new IllegalStateException("Must set member before starting");
-        }
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
-
-        limitsBuilder.named(name(member.getId().shortString(), "service"));
-        server = InProcessServerBuilder.forName(name)
-                                       .executor(executor)
-                                       .intercept(interceptor())
-                                       .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
-                                                                                   .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
-                                                                                   .build())
-                                       .fallbackHandlerRegistry(registry)
-                                       .build();
         try {
             serverMembers.put(member.getId(), member);
             server.start();

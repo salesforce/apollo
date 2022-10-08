@@ -128,11 +128,8 @@ public class TestKerlService {
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3);
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        serverRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
-        clientRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
-
-        serverRouter.setMember(serverMember);
-        clientRouter.setMember(clientMember);
+        serverRouter = new LocalRouter(serverMember, prefix, serverMembers, builder, exec, null);
+        clientRouter = new LocalRouter(clientMember, prefix, serverMembers, builder, exec, null);
 
         serverRouter.start();
         clientRouter.start();

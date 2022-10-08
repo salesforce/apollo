@@ -133,10 +133,9 @@ public class ViewAssemblyTest {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         members.forEach(m -> {
-            var com = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder(),
+            var com = new LocalRouter(m, prefix, serverMembers, ServerConnectionCache.newBuilder(),
                                       Executors.newFixedThreadPool(2), null);
             communications.put(m, com);
-            com.setMember(m);
         });
         context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
         for (Member m : members) {

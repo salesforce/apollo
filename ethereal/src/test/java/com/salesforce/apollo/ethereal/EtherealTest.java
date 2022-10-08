@@ -166,10 +166,10 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(pid);
             final var exec = Executors.newFixedThreadPool(2);
             executors.add(exec);
-            var com = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder(), exec,
+            final var member = members.get(i);
+            var com = new LocalRouter(member, prefix, serverMembers, ServerConnectionCache.newBuilder(), exec,
                                       metrics.limitsMetrics());
             comms.add(com);
-            final var member = members.get(i);
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
                                           (pb, last) -> {
                                               System.out.println("block: " + level.incrementAndGet() + " pid: " + pid);
@@ -195,7 +195,6 @@ public class EtherealTest {
                                             .build()
                                             .toByteString());
             }
-            com.setMember(members.get(i));
         }
         try {
             controllers.forEach(e -> e.start());

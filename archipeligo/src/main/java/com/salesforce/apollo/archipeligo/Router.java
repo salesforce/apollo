@@ -90,11 +90,10 @@ abstract public class Router<Ctx, To, From> {
     protected final ServerInterceptor      serverInterceptor;
     protected final AtomicBoolean          started = new AtomicBoolean();
 
-    private final ServerConnectionCache<To, From> cache;
-    private final Context.Key<Ctx>                CLIENT_CONTEXT_KEY = Context.key("from.Context");
-    private final ClientInterceptor               clientInterceptor;
-
-    private final Map<String, RoutableService<Ctx, ?>> services = new ConcurrentHashMap<>();
+    private final ServerConnectionCache<To, From>      cache;
+    private final Context.Key<Ctx>                     CLIENT_CONTEXT_KEY = Context.key("from.Context");
+    private final ClientInterceptor                    clientInterceptor;
+    private final Map<String, RoutableService<Ctx, ?>> services           = new ConcurrentHashMap<>();
 
     public Router(ServerConnectionCache.Builder<To, From> builder, MutableHandlerRegistry registry,
                   Function<String, Ctx> ctxDeser, Function<Ctx, String> ctxSer) {

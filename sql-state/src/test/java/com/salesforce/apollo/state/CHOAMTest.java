@@ -171,9 +171,9 @@ public class CHOAMTest {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
-                                              commExec, metrics.limitsMetrics());
-            localRouter.setMember(m);
+            var localRouter = new LocalRouter(m, prefix, serverMembers,
+                                              ServerConnectionCache.newBuilder().setTarget(30), commExec,
+                                              metrics.limitsMetrics());
             return localRouter;
         }));
         var scheduler = Executors.newScheduledThreadPool(2);

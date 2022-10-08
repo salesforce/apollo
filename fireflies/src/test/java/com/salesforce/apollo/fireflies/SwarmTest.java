@@ -234,23 +234,21 @@ public class SwarmTest {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix, serverMembers,
+            var comms = new LocalRouter(node, prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(200)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
                                         commExec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
+            var gateway = new LocalRouter(node, gatewayPrefix, gatewayMembers,
                                           ServerConnectionCache.newBuilder()
                                                                .setTarget(200)
                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                        : registry)),
                                           gatewayExec, metrics.limitsMetrics());
-            comms.setMember(node);
             comms.start();
             communications.add(comms);
 
-            gateway.setMember(node);
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,

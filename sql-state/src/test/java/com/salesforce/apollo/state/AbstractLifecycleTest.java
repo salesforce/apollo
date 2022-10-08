@@ -172,9 +172,9 @@ abstract public class AbstractLifecycleTest {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
+            var localRouter = new LocalRouter(m, prefix, serverMembers,
+                                              ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
-            localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream()

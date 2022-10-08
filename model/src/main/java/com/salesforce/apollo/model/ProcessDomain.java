@@ -28,9 +28,8 @@ import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewChangeListener;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined,
@@ -56,11 +55,11 @@ public class ProcessDomain extends Domain {
     private final Map<Digest, Managed> hostedDomains = new ConcurrentHashMap<>();
     private final UUID                 listener;
 
-    public ProcessDomain(Digest group, ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
+    public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                          InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
                          TransactionConfiguration txnConfig) {
-        super(id, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
+        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
@@ -76,7 +75,7 @@ public class ProcessDomain extends Domain {
 
     public CompletableFuture<CertificateWithPrivateKey> provision(Duration duration,
                                                                   SignatureAlgorithm signatureAlgorithm) {
-        return identifier.provision(Instant.now(), duration, signatureAlgorithm);
+        return member.getIdentifier().provision(Instant.now(), duration, signatureAlgorithm);
     }
 
     @Override

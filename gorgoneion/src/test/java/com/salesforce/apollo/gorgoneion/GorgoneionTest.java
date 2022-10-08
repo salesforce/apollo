@@ -75,9 +75,9 @@ public class GorgoneionTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
-                                           ForkJoinPool.commonPool(), null);
-        gorgonRouter.setMember(member);
+        var gorgonRouter = new LocalRouter(member, prefix, serverMembers,
+                                           ServerConnectionCache.newBuilder().setTarget(2), ForkJoinPool.commonPool(),
+                                           null);
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
@@ -91,15 +91,14 @@ public class GorgoneionTest {
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
-                                           null);
+        var clientRouter = new LocalRouter(client, prefix, serverMembers,
+                                           ServerConnectionCache.newBuilder().setTarget(2), exec, null);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, exec, null),
                                                        AdmissionsClient.getCreate(null),
                                                        Admissions.getLocalLoopback(client));
-        clientRouter.setMember(client);
         clientRouter.start();
 
         // Admin client link
@@ -148,9 +147,9 @@ public class GorgoneionTest {
         final var parameters = Parameters.newBuilder().build();
         @SuppressWarnings("unused")
         final var gorgons = members.stream().map(m -> {
-            final var router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
+            final var router = new LocalRouter(m, prefix, serverMembers,
+                                               ServerConnectionCache.newBuilder().setTarget(2),
                                                ForkJoinPool.commonPool(), null);
-            router.setMember(m);
             router.start();
             return router;
         })
@@ -163,15 +162,14 @@ public class GorgoneionTest {
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
-                                           null);
+        var clientRouter = new LocalRouter(client, prefix, serverMembers,
+                                           ServerConnectionCache.newBuilder().setTarget(2), exec, null);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, exec, null),
                                                        AdmissionsClient.getCreate(null),
                                                        Admissions.getLocalLoopback(client));
-        clientRouter.setMember(client);
         clientRouter.start();
 
         // Admin client link
@@ -209,9 +207,9 @@ public class GorgoneionTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
-                                           ForkJoinPool.commonPool(), null);
-        gorgonRouter.setMember(member);
+        var gorgonRouter = new LocalRouter(member, prefix, serverMembers,
+                                           ServerConnectionCache.newBuilder().setTarget(2), ForkJoinPool.commonPool(),
+                                           null);
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
@@ -224,15 +222,14 @@ public class GorgoneionTest {
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2), exec,
-                                           null);
+        var clientRouter = new LocalRouter(client, prefix, serverMembers,
+                                           ServerConnectionCache.newBuilder().setTarget(2), exec, null);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, exec, null),
                                                        AdmissionsClient.getCreate(null),
                                                        Admissions.getLocalLoopback(client));
-        clientRouter.setMember(client);
         clientRouter.start();
 
         // Admin client link

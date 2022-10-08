@@ -177,9 +177,9 @@ public class MembershipTests {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(cardinality),
+            var comm = new LocalRouter(m, prefix, serverMembers,
+                                       ServerConnectionCache.newBuilder().setTarget(cardinality),
                                        Executors.newFixedThreadPool(2), null);
-            comm.setMember(m);
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {

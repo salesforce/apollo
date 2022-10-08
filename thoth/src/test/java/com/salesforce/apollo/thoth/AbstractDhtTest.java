@@ -127,9 +127,9 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        LocalRouter router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
-                                             ForkJoinPool.commonPool(), null);
-        router.setMember(member);
+        LocalRouter router = new LocalRouter(member, prefix, serverMembers,
+                                             ServerConnectionCache.newBuilder().setTarget(2), ForkJoinPool.commonPool(),
+                                             null);
         routers.put(member, router);
         final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,

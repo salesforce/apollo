@@ -143,13 +143,12 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         messengers = members.stream().map(node -> {
-            var comms = new LocalRouter(prefix, serverMembers,
+            var comms = new LocalRouter(node, prefix, serverMembers,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
                                         Executors.newFixedThreadPool(2), metrics.limitsMetrics());
             communications.add(comms);
-            comms.setMember(node);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(), Executors.newFixedThreadPool(2), comms,
                                            metrics);

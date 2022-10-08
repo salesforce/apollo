@@ -46,6 +46,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -101,9 +102,11 @@ public class FireFliesTest {
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
+            final var member = new ControlledIdentifierMember(id);
+            var localRouter = new LocalRouter(member, prefix, serverMembers,
+                                              ServerConnectionCache.newBuilder().setTarget(30),
                                               ForkJoinPool.commonPool(), null);
-            var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
+            var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
                                                           .setScheduler(scheduler)
@@ -113,7 +116,6 @@ public class FireFliesTest {
                                          new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);
             routers.put(node, localRouter);
-            localRouter.setMember(node.getMember());
             localRouter.start();
         });
     }

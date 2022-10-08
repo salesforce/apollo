@@ -128,7 +128,7 @@ public class TestCHOAM {
         final var prefix = UUID.randomUUID().toString();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, serverMembers,
+            var localRouter = new LocalRouter(m, prefix, serverMembers,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
@@ -137,7 +137,6 @@ public class TestCHOAM {
                                                                                            "Comm Exec[" + m.getId()
                                                                                            + "]")),
                                               metrics.limitsMetrics());
-            localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
