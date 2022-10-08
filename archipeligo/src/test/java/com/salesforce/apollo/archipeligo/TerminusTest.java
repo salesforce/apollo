@@ -11,9 +11,11 @@ import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -22,10 +24,13 @@ import org.junit.jupiter.api.Test;
 
 import com.google.common.primitives.Ints;
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.PeerCreds;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 import io.grpc.CallOptions;
@@ -51,7 +56,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  */
 public class TerminusTest {
 
-    public static class TestServer extends TestItImplBase {
+    public static class ServerA extends TestItImplBase {
 
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
@@ -70,31 +75,57 @@ public class TerminusTest {
 
     }
 
+    public static class ServerB extends TestItImplBase {
+
+        @Override
+        public void ping(Any request, StreamObserver<Any> responseObserver) {
+            final var credentials = PEER_CREDENTIALS_CONTEXT_KEY.get();
+            if (credentials == null) {
+                responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("No credentials available")));
+                return;
+            }
+            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
+                                                        .setContents(ByteString.copyFromUtf8("Hello Server"))
+                                                        .build()));
+            responseObserver.onCompleted();
+        }
+
+    }
+
     @Test
     public void smokin() throws Exception {
-        Path socketPath = Path.of("target").resolve("smokin.socket");
-        Files.deleteIfExists(socketPath);
-        assertFalse(Files.exists(socketPath));
-
-        final var address = new DomainSocketAddress(socketPath.toFile());
-        var server = NettyServerBuilder.forAddress(address)
-                                       .protocolNegotiator(new DomainSocketNegotiator())
-                                       .channelType(getServerDomainSocketChannelClass())
-                                       .workerEventLoopGroup(getEventLoopGroup())
-                                       .bossEventLoopGroup(getEventLoopGroup())
-                                       .addService(new TestServer())
-                                       .intercept(new DomainSocketServerInterceptor())
-                                       .build();
-        server.start();
-        var ctx = DigestAlgorithm.DEFAULT.getOrigin();
-
         final var name = UUID.randomUUID().toString();
         ServerBuilder<?> builder = InProcessServerBuilder.forName(name);
         var terminus = new Terminus(builder);
         terminus.start();
-        terminus.register(ctx, address);
 
-        ClientInterceptor clientInterceptor = new ClientInterceptor() {
+        var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
+        terminus.register(ctxA, serverA());
+
+        var clientA = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
+                                                                        .intercept(clientInterceptor(ctxA))
+                                                                        .build());
+
+        var ctxB = DigestAlgorithm.DEFAULT.getLast();
+        terminus.register(ctxB, serverB());
+
+        var clientB = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
+                                                                        .intercept(clientInterceptor(ctxB))
+                                                                        .build());
+
+        var resultA = clientA.ping(Any.newBuilder().build());
+        assertNotNull(resultA);
+        var creds = resultA.unpack(PeerCreds.class);
+        assertNotNull(creds);
+
+        var resultB = clientB.ping(Any.newBuilder().build());
+        assertNotNull(resultB);
+        var msg = resultB.unpack(ByteMessage.class);
+        assertEquals("Hello Server", msg.getContents().toStringUtf8());
+    }
+
+    private ClientInterceptor clientInterceptor(Digest ctx) {
+        return new ClientInterceptor() {
             @Override
             public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                        CallOptions callOptions, Channel next) {
@@ -108,16 +139,41 @@ public class TerminusTest {
                 };
             }
         };
+    }
 
-        var stub = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
-                                                                     .intercept(clientInterceptor)
-                                                                     .build());
+    private DomainSocketAddress serverA() throws IOException {
+        Path socketPathA = Path.of("target").resolve("smokin.socket");
+        Files.deleteIfExists(socketPathA);
+        assertFalse(Files.exists(socketPathA));
 
-        var result = stub.ping(Any.newBuilder().build());
-        assertNotNull(result);
-        var creds = result.unpack(PeerCreds.class);
-        assertNotNull(creds);
+        final var address = new DomainSocketAddress(socketPathA.toFile());
+        var serverA = NettyServerBuilder.forAddress(address)
+                                        .protocolNegotiator(new DomainSocketNegotiator())
+                                        .channelType(getServerDomainSocketChannelClass())
+                                        .workerEventLoopGroup(getEventLoopGroup())
+                                        .bossEventLoopGroup(getEventLoopGroup())
+                                        .addService(new ServerA())
+                                        .intercept(new DomainSocketServerInterceptor())
+                                        .build();
+        serverA.start();
+        return address;
+    }
 
-        System.out.println("Success:\n" + creds);
+    private DomainSocketAddress serverB() throws IOException {
+        Path socketPathA = Path.of("target").resolve("smokinB.socket");
+        Files.deleteIfExists(socketPathA);
+        assertFalse(Files.exists(socketPathA));
+
+        final var address = new DomainSocketAddress(socketPathA.toFile());
+        var serverB = NettyServerBuilder.forAddress(address)
+                                        .protocolNegotiator(new DomainSocketNegotiator())
+                                        .channelType(getServerDomainSocketChannelClass())
+                                        .workerEventLoopGroup(getEventLoopGroup())
+                                        .bossEventLoopGroup(getEventLoopGroup())
+                                        .addService(new ServerB())
+                                        .intercept(new DomainSocketServerInterceptor())
+                                        .build();
+        serverB.start();
+        return address;
     }
 }

@@ -208,21 +208,6 @@ public class Terminus {
 
     }
 
-    private class Registry extends HandlerRegistry {
-        private final MethodDescriptor.Marshaller<byte[]> byteMarshaller = new ByteMarshaller();
-
-        @Override
-        public ServerMethodDefinition<?, ?> lookupMethod(String methodName, String authority) {
-            MethodDescriptor<byte[], byte[]> methodDescriptor = MethodDescriptor.newBuilder(byteMarshaller,
-                                                                                            byteMarshaller)
-                                                                                .setFullMethodName(methodName)
-                                                                                .setType(MethodDescriptor.MethodType.UNKNOWN)
-                                                                                .build();
-
-            return ServerMethodDefinition.create(methodDescriptor, new GrpcProxy<>());
-        }
-    }
-
     public static final Metadata.Key<String>         CONTEXT_METADATA_KEY = Metadata.Key.of("from.Context",
                                                                                             Metadata.ASCII_STRING_MARSHALLER);
     private static final io.grpc.Context.Key<Digest> CLIENT_CONTEXT_KEY   = io.grpc.Context.key("from.Context");
@@ -232,9 +217,11 @@ public class Terminus {
                                                                                             Metadata.ASCII_STRING_MARSHALLER);
 
     private final Map<Digest, DomainSocketAddress> enclaves = new ConcurrentSkipListMap<>();
-    private final Registry                         registry = new Registry();
     private final Server                           server;
 
+    /**
+     *
+     */
     public Terminus(ServerBuilder<?> builder) {
         final var interceptor = new ServerInterceptor() {
             @Override
@@ -249,6 +236,20 @@ public class Terminus {
 
                 return Contexts.interceptCall(io.grpc.Context.current().withValue(CLIENT_CONTEXT_KEY, digest(id)), call,
                                               requestHeaders, next);
+            }
+        };
+        final var registry = new HandlerRegistry() {
+            private final MethodDescriptor.Marshaller<byte[]> byteMarshaller = new ByteMarshaller();
+
+            @Override
+            public ServerMethodDefinition<?, ?> lookupMethod(String methodName, String authority) {
+                MethodDescriptor<byte[], byte[]> methodDescriptor = MethodDescriptor.newBuilder(byteMarshaller,
+                                                                                                byteMarshaller)
+                                                                                    .setFullMethodName(methodName)
+                                                                                    .setType(MethodDescriptor.MethodType.UNKNOWN)
+                                                                                    .build();
+
+                return ServerMethodDefinition.create(methodDescriptor, new GrpcProxy<>());
             }
         };
         this.server = builder.intercept(interceptor).fallbackHandlerRegistry(registry).build();
