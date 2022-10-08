@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.archipeligo.Router.SERVER_CONTEXT_KEY;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,19 +22,22 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
+ * Service implementation routable by Digest context
+ *
  * @author hal.hildebrand
  *
  */
-public class RoutableService<Context, Service> {
+public class RoutableService<Service> {
     private static final Logger log = LoggerFactory.getLogger(RoutableService.class);
 
-    private final Map<Context, Service> services = new ConcurrentHashMap<>();
+    private final Map<Digest, Service> services = new ConcurrentHashMap<>();
 
-    public void bind(Context context, Service service) {
+    public void bind(Digest context, Service service) {
         services.put(context, service);
     }
 
-    public void evaluate(StreamObserver<?> responseObserver, Digest context, Consumer<Service> c) {
+    public void evaluate(StreamObserver<?> responseObserver, Consumer<Service> c) {
+        var context = SERVER_CONTEXT_KEY.get();
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             log.error("Null context");
@@ -55,11 +58,7 @@ public class RoutableService<Context, Service> {
         }
     }
 
-    public void evaluate(StreamObserver<?> responseObserver, String id, Consumer<Service> c) {
-        evaluate(responseObserver, digest(id), c);
-    }
-
-    public void unbind(Context context) {
+    public void unbind(Digest context) {
         services.remove(context);
     }
 }

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.archipeligo;
 
+import static com.salesforce.apollo.archipeligo.Router.clientInterceptor;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.membership.Member;
 
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
@@ -53,17 +56,17 @@ import io.grpc.ManagedChannel;
  * @author hal.hildebrand
  *
  */
-public class ServerConnectionCache<To, From> {
+public class ServerConnectionCache<To extends Member, From extends Member> {
 
-    public static class Builder<To, From> {
+    public static class Builder<To extends Member, From extends Member> {
         private Clock                             clock   = Clock.systemUTC();
         private ServerConnectionFactory<To, From> factory = null;
         private ServerConnectionCacheMetrics      metrics;
         private Duration                          minIdle = Duration.ofMillis(100);
         private int                               target  = 0;
 
-        public ServerConnectionCache<To, From> build(ClientInterceptor clientInterceptor) {
-            return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics, clientInterceptor);
+        public ServerConnectionCache<To, From> build() {
+            return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics, clientInterceptor());
         }
 
         public Clock getClock() {
@@ -113,8 +116,8 @@ public class ServerConnectionCache<To, From> {
     }
 
     @FunctionalInterface
-    public static interface CreateClientCommunications<T, To, From> {
-        T create(To to, From from, ServerConnectionCache<To, From>.ManagedServerConnection connection);
+    public static interface CreateClientCommunications<Client, To extends Member, From extends Member> {
+        Client create(To to, From from, ServerConnectionCache<To, From>.ManagedServerConnection connection);
     }
 
     public class ManagedServerConnection implements Comparable<ManagedServerConnection> {
@@ -199,7 +202,7 @@ public class ServerConnectionCache<To, From> {
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
 
-    public static <To, From> Builder<To, From> newBuilder() {
+    public static <To extends Member, From extends Member> Builder<To, From> newBuilder() {
         return new Builder<>();
     }
 

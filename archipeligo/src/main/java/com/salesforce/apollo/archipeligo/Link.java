@@ -8,11 +8,16 @@ package com.salesforce.apollo.archipeligo;
 
 import java.io.Closeable;
 
+import com.salesforce.apollo.membership.Member;
+
 /**
+ * 
+ * A client side link
+ *
  * @author hal.hildebrand
  *
  */
-public interface Link<To> extends Closeable {
+public interface Link<To extends Member> extends Closeable {
 
     public To getMember();
 }

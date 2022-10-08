@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.archipeligo.Terminus.CONTEXT_METADATA_KEY;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
@@ -40,7 +39,6 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -88,11 +86,28 @@ public class TerminusTest {
         }
     }
 
+    public static ClientInterceptor clientInterceptor(Digest ctx) {
+        return new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                                       CallOptions callOptions, Channel next) {
+                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(Router.CONTEXT_METADATA_KEY, qb64(ctx));
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
+    }
+
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
-        ServerBuilder<?> builder = InProcessServerBuilder.forName(name);
-        var terminus = new Terminus(builder);
+        final var bridge = Path.of("target").resolve(UUID.randomUUID().toString());
+        var terminus = new Terminus(InProcessServerBuilder.forName(name), new DomainSocketAddress(bridge.toFile()));
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
@@ -120,25 +135,8 @@ public class TerminusTest {
         assertEquals("Hello Server", msg.getContents().toStringUtf8());
     }
 
-    private ClientInterceptor clientInterceptor(Digest ctx) {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(CONTEXT_METADATA_KEY, qb64(ctx));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
-    }
-
     private DomainSocketAddress serverA() throws IOException {
-        Path socketPathA = Path.of("target").resolve("smokin.socket");
+        Path socketPathA = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.deleteIfExists(socketPathA);
         assertFalse(Files.exists(socketPathA));
 
@@ -156,7 +154,7 @@ public class TerminusTest {
     }
 
     private DomainSocketAddress serverB() throws IOException {
-        Path socketPathA = Path.of("target").resolve("smokinB.socket");
+        Path socketPathA = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.deleteIfExists(socketPathA);
         assertFalse(Files.exists(socketPathA));
 
