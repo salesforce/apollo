@@ -14,7 +14,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -177,16 +177,11 @@ public class Terminus {
         }
     }
 
-    private static class GrpcProxy<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
-        private final Channel channel;
-
-        private GrpcProxy(Channel channel) {
-            this.channel = channel;
-        }
-
+    private class GrpcProxy<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
         @Override
         public ServerCall.Listener<ReqT> startCall(ServerCall<ReqT, RespT> serverCall, Metadata headers) {
-            ClientCall<ReqT, RespT> clientCall = channel.newCall(serverCall.getMethodDescriptor(), CallOptions.DEFAULT);
+            ClientCall<ReqT, RespT> clientCall = getChannel().newCall(serverCall.getMethodDescriptor(),
+                                                                      CallOptions.DEFAULT);
             CallProxy<ReqT, RespT> proxy = new CallProxy<>(serverCall, clientCall);
             clientCall.start(proxy.clientCallListener, headers);
             serverCall.request(1);
@@ -194,25 +189,12 @@ public class Terminus {
             return proxy.serverCallListener;
         }
 
-    }
-
-    private static class Registry extends HandlerRegistry {
-        private final MethodDescriptor.Marshaller<byte[]> byteMarshaller = new ByteMarshaller();
-        private final Map<Digest, DomainSocketAddress>    enclaves       = new ConcurrentHashMap<>();
-
-        @Override
-        public ServerMethodDefinition<?, ?> lookupMethod(String methodName, String authority) {
-            MethodDescriptor<byte[], byte[]> methodDescriptor = MethodDescriptor.newBuilder(byteMarshaller,
-                                                                                            byteMarshaller)
-                                                                                .setFullMethodName(methodName)
-                                                                                .setType(MethodDescriptor.MethodType.UNKNOWN)
-                                                                                .build();
+        private Channel getChannel() {
             var address = enclaves.get(Terminus.CLIENT_CONTEXT_KEY.get());
             if (address == null) {
                 return null;
             }
-
-            return ServerMethodDefinition.create(methodDescriptor, new GrpcProxy<>(handler(address)));
+            return handler(address);
         }
 
         private Channel handler(DomainSocketAddress address) {
@@ -223,19 +205,38 @@ public class Terminus {
                                       .usePlaintext()
                                       .build();
         }
+
     }
 
-    private static final io.grpc.Context.Key<Digest> CLIENT_CONTEXT_KEY   = io.grpc.Context.key("from.Context");
-    private static final Metadata.Key<String>        CONTEXT_METADATA_KEY = Metadata.Key.of("from.Context",
+    private class Registry extends HandlerRegistry {
+        private final MethodDescriptor.Marshaller<byte[]> byteMarshaller = new ByteMarshaller();
+
+        @Override
+        public ServerMethodDefinition<?, ?> lookupMethod(String methodName, String authority) {
+            MethodDescriptor<byte[], byte[]> methodDescriptor = MethodDescriptor.newBuilder(byteMarshaller,
+                                                                                            byteMarshaller)
+                                                                                .setFullMethodName(methodName)
+                                                                                .setType(MethodDescriptor.MethodType.UNKNOWN)
+                                                                                .build();
+
+            return ServerMethodDefinition.create(methodDescriptor, new GrpcProxy<>());
+        }
+    }
+
+    public static final Metadata.Key<String>         CONTEXT_METADATA_KEY = Metadata.Key.of("from.Context",
                                                                                             Metadata.ASCII_STRING_MARSHALLER);
+    private static final io.grpc.Context.Key<Digest> CLIENT_CONTEXT_KEY   = io.grpc.Context.key("from.Context");
     private static final Logger                      log                  = LoggerFactory.getLogger(Terminus.class);
+    @SuppressWarnings("unused")
     private static final Metadata.Key<String>        TARGET_METADATA_KEY  = Metadata.Key.of("to.Endpoint",
                                                                                             Metadata.ASCII_STRING_MARSHALLER);
 
-    private final Server server;
+    private final Map<Digest, DomainSocketAddress> enclaves = new ConcurrentSkipListMap<>();
+    private final Registry                         registry = new Registry();
+    private final Server                           server;
 
     public Terminus(ServerBuilder<?> builder) {
-        this.server = builder.intercept(new ServerInterceptor() {
+        final var interceptor = new ServerInterceptor() {
             @Override
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
@@ -249,7 +250,12 @@ public class Terminus {
                 return Contexts.interceptCall(io.grpc.Context.current().withValue(CLIENT_CONTEXT_KEY, digest(id)), call,
                                               requestHeaders, next);
             }
-        }).fallbackHandlerRegistry(new Registry()).build();
+        };
+        this.server = builder.intercept(interceptor).fallbackHandlerRegistry(registry).build();
+    }
+
+    public void register(Digest ctx, DomainSocketAddress address) {
+        enclaves.put(ctx, address);
     }
 
     public void start() throws IOException {
