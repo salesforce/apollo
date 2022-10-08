@@ -219,9 +219,6 @@ public class Terminus {
     private final Map<Digest, DomainSocketAddress> enclaves = new ConcurrentSkipListMap<>();
     private final Server                           server;
 
-    /**
-     *
-     */
     public Terminus(ServerBuilder<?> builder) {
         final var interceptor = new ServerInterceptor() {
             @Override

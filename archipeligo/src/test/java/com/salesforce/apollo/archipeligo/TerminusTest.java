@@ -57,7 +57,6 @@ import io.netty.channel.unix.DomainSocketAddress;
 public class TerminusTest {
 
     public static class ServerA extends TestItImplBase {
-
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
             final var credentials = PEER_CREDENTIALS_CONTEXT_KEY.get();
@@ -72,11 +71,9 @@ public class TerminusTest {
                                                       .build()));
             responseObserver.onCompleted();
         }
-
     }
 
     public static class ServerB extends TestItImplBase {
-
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
             final var credentials = PEER_CREDENTIALS_CONTEXT_KEY.get();
@@ -89,7 +86,6 @@ public class TerminusTest {
                                                         .build()));
             responseObserver.onCompleted();
         }
-
     }
 
     @Test
