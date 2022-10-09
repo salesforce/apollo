@@ -6,6 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>archipeligo</artifactId>
+    <name>Archipeligo: Context Based Isolate Routing</name>
 
     <dependencies>
         <dependency>

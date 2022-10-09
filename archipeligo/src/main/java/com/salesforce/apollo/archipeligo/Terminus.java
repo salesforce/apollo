@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.salesforce.apollo.crypto.Digest;
 
 import io.grpc.Channel;
-import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -35,11 +34,6 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Terminus {
-
-    @SuppressWarnings("unused")
-    private static final Metadata.Key<String> TARGET_METADATA_KEY = Metadata.Key.of("to.Endpoint",
-                                                                                    Metadata.ASCII_STRING_MARSHALLER);
-
     @SuppressWarnings("unused")
     private final DomainSocketAddress              bridge;
     private final Map<Digest, DomainSocketAddress> enclaves = new ConcurrentSkipListMap<>();

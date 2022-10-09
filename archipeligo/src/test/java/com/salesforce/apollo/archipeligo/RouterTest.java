@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -123,9 +124,8 @@ public class RouterTest {
         final var name = UUID.randomUUID().toString();
 
         var serverBuilder = InProcessServerBuilder.forName(name);
-        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> {
-            return InProcessChannelBuilder.forName(name).build();
-        });
+        var cacheBuilder = ServerConnectionCache.newBuilder()
+                                                .setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new Router<Member>(serverBuilder, cacheBuilder, null);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         Router<Member>.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA,
@@ -155,5 +155,7 @@ public class RouterTest {
         assertNotNull(resultB);
         msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server B", msg.getContents().toStringUtf8());
+
+        router.close(Duration.ofSeconds(1));
     }
 }

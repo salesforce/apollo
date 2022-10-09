@@ -272,6 +272,7 @@ public class ServerConnectionCache<To extends Member> {
                 @Override
                 public void start(Listener<ResponseT> responseListener, Metadata headers) {
                     headers.put(Router.CONTEXT_METADATA_KEY, qb64(context));
+                    headers.put(Router.TARGET_METADATA_KEY, qb64(delegate.getTo().getId()));
                     super.start(responseListener, headers);
                 }
             };

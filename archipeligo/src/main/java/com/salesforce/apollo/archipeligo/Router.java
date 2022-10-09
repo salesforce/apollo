@@ -89,10 +89,12 @@ public class Router<To extends Member> {
         }
     }
 
-    public static final Context.Key<Digest>  CLIENT_CONTEXT_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.Context");
     public static final Metadata.Key<String> CONTEXT_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.Context",
                                                                                     Metadata.ASCII_STRING_MARSHALLER);
     public static final Context.Key<Digest>  SERVER_CONTEXT_KEY   = Context.key("com.salesforce.apollo.archipeligo.Context.from");
+    public static final Context.Key<Digest>  SERVER_TARGET_KEY    = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
+    public static final Metadata.Key<String> TARGET_METADATA_KEY  = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.Endpoint",
+                                                                                    Metadata.ASCII_STRING_MARSHALLER);
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
@@ -102,14 +104,20 @@ public class Router<To extends Member> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
+                var ctxt = Context.current();
                 String id = requestHeaders.get(CONTEXT_METADATA_KEY);
                 if (id == null) {
                     log.error("No context id in call headers: {}", requestHeaders.keys());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No context ID in call"));
+                } else {
+                    ctxt = ctxt.withValue(SERVER_CONTEXT_KEY, digest(id));
+                }
+                String target = requestHeaders.get(TARGET_METADATA_KEY);
+                if (target != null) {
+                    ctxt = ctxt.withValue(SERVER_TARGET_KEY, digest(target));
                 }
 
-                return Contexts.interceptCall(io.grpc.Context.current().withValue(SERVER_CONTEXT_KEY, digest(id)), call,
-                                              requestHeaders, next);
+                return Contexts.interceptCall(ctxt, call, requestHeaders, next);
             }
         };
     }
