@@ -7,7 +7,6 @@
 package com.salesforce.apollo.archipeligo;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -26,20 +25,16 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.BindableService;
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
 import io.grpc.Context;
 import io.grpc.Contexts;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -48,32 +43,35 @@ import io.grpc.util.MutableHandlerRegistry;
  * @author hal.hildebrand
  *
  */
-public class Router<To extends Member, From extends Member> {
+public class Router<To extends Member> {
 
     @FunctionalInterface
-    public interface ClientConnector<Client, To extends Member, From extends Member> {
-        Client connect(To to, From from, Digest context);
+    public interface ClientConnector<Client, To extends Member> {
+        Client connect(To to);
     }
 
-    public class CommonCommunications<Client extends Link<To>, Service> implements ClientConnector<Client, To, From> {
-        private final CreateClientCommunications<Client, To, From> createFunction;
-        private final Client                                       localLoopback;
-        private final RoutableService<Service>                     routing;
+    public class CommonCommunications<Client extends Link<To>, Service> implements ClientConnector<Client, To> {
+        private final Digest                                 context;
+        private final CreateClientCommunications<Client, To> createFunction;
+        private final Member                                 from;
+        private final Client                                 localLoopback;
+        private final RoutableService<Service>               routing;
 
-        public CommonCommunications(RoutableService<Service> routing,
-                                    CreateClientCommunications<Client, To, From> createFunction, Client localLoopback) {
+        public CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
+                                    CreateClientCommunications<Client, To> createFunction, Client localLoopback) {
+            this.context = context;
             this.routing = routing;
             this.createFunction = createFunction;
             this.localLoopback = localLoopback;
+            this.from = from;
         }
 
-        @SuppressWarnings("unlikely-arg-type")
         @Override
-        public Client connect(To to, From from, Digest context) {
+        public Client connect(To to) {
             if (to == null) {
                 return null;
             }
-            return started.get() ? to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction) : null;
+            return started.get() ? (to.equals(from) ? localLoopback : cache.borrow(context, to, createFunction)) : null;
         }
 
         public void deregister(Digest context) {
@@ -98,23 +96,6 @@ public class Router<To extends Member, From extends Member> {
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
-    public static ClientInterceptor clientInterceptor() {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(CONTEXT_METADATA_KEY, qb64(CLIENT_CONTEXT_KEY.get()));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
-    }
-
     public static ServerInterceptor serverInterceptor() {
         return new ServerInterceptor() {
             @Override
@@ -124,7 +105,7 @@ public class Router<To extends Member, From extends Member> {
                 String id = requestHeaders.get(CONTEXT_METADATA_KEY);
                 if (id == null) {
                     log.error("No context id in call headers: {}", requestHeaders.keys());
-                    throw new IllegalStateException("No context ID in call");
+                    throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No context ID in call"));
                 }
 
                 return Contexts.interceptCall(io.grpc.Context.current().withValue(SERVER_CONTEXT_KEY, digest(id)), call,
@@ -133,16 +114,16 @@ public class Router<To extends Member, From extends Member> {
         };
     }
 
-    private final ServerConnectionCache<To, From> cache;
+    private final ServerConnectionCache<To>       cache;
     private final ClientIdentity                  clientIdentityProvider;
     private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
     private final Server                          server;
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
     private final AtomicBoolean                   started  = new AtomicBoolean();
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To, From> cacheBuilder,
+    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To> cacheBuilder,
                   ClientIdentity clientIdentityProvider) {
-        this.server = serverBuilder.intercept(serverInterceptor()).build();
+        this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
         this.clientIdentityProvider = clientIdentityProvider;
     }
@@ -164,7 +145,7 @@ public class Router<To extends Member, From extends Member> {
                                                                                                                   Digest context,
                                                                                                                   Service service,
                                                                                                                   Function<RoutableService<Service>, BindableService> factory,
-                                                                                                                  CreateClientCommunications<Client, To, From> createFunction,
+                                                                                                                  CreateClientCommunications<Client, To> createFunction,
                                                                                                                   Client localLoopback) {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
     }
@@ -173,7 +154,7 @@ public class Router<To extends Member, From extends Member> {
                                                                                            Service service,
                                                                                            String routingLabel,
                                                                                            Function<RoutableService<Service>, BindableService> factory,
-                                                                                           CreateClientCommunications<Client, To, From> createFunction,
+                                                                                           CreateClientCommunications<Client, To> createFunction,
                                                                                            Client localLoopback) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
@@ -184,7 +165,7 @@ public class Router<To extends Member, From extends Member> {
         });
         routing.bind(context, service);
         log.info("Communications created for: " + member);
-        return new CommonCommunications<Client, Service>(routing, createFunction, localLoopback);
+        return new CommonCommunications<Client, Service>(context, member, routing, createFunction, localLoopback);
     }
 
     public ClientIdentity getClientIdentityProvider() {
