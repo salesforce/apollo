@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipeligo.dmux;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
@@ -28,6 +28,7 @@ import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.PeerCreds;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.archipeligo.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -52,7 +53,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  * @author hal.hildebrand
  *
  */
-public class TerminusTest {
+public class IngressTest {
 
     public static class ServerA extends TestItImplBase {
         @Override
@@ -106,8 +107,7 @@ public class TerminusTest {
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
-        final var bridge = Path.of("target").resolve(UUID.randomUUID().toString());
-        var terminus = new Terminus(InProcessServerBuilder.forName(name), new DomainSocketAddress(bridge.toFile()));
+        var terminus = new Ingress(InProcessServerBuilder.forName(name));
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();

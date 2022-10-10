@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipeligo.dmux;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -26,7 +26,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 
 /**
- * Proxy from one GRPC server to another
+ * Proxy from one GRPC server to another GRPC server
  *
  * @author hal.hildebrand
  *

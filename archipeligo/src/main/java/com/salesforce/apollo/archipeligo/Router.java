@@ -104,20 +104,14 @@ public class Router<To extends Member> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                var ctxt = Context.current();
                 String id = requestHeaders.get(CONTEXT_METADATA_KEY);
                 if (id == null) {
                     log.error("No context id in call headers: {}", requestHeaders.keys());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No context ID in call"));
-                } else {
-                    ctxt = ctxt.withValue(SERVER_CONTEXT_KEY, digest(id));
-                }
-                String target = requestHeaders.get(TARGET_METADATA_KEY);
-                if (target != null) {
-                    ctxt = ctxt.withValue(SERVER_TARGET_KEY, digest(target));
                 }
 
-                return Contexts.interceptCall(ctxt, call, requestHeaders, next);
+                return Contexts.interceptCall(Context.current().withValue(SERVER_CONTEXT_KEY, digest(id)), call,
+                                              requestHeaders, next);
             }
         };
     }
