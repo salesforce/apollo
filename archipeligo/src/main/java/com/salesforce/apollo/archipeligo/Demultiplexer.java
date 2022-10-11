@@ -39,14 +39,27 @@ import io.grpc.StatusRuntimeException;
 public class Demultiplexer {
     private static final Logger log = LoggerFactory.getLogger(Demultiplexer.class);
 
-    private final Context.Key<String>  ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
-    private final Metadata.Key<String> routing;
-    private final Server               server;
-    private final AtomicBoolean        started          = new AtomicBoolean();
+    private final Context.Key<String> ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
+    private final Server              server;
+    private final AtomicBoolean       started          = new AtomicBoolean();
 
     public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing, Function<String, Channel> dmux) {
-        this.routing = routing;
-        server = serverBuilder.intercept(serverInterceptor()).fallbackHandlerRegistry(new GrpcProxy() {
+        var serverInterceptor = new ServerInterceptor() {
+            @Override
+            public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                         final Metadata requestHeaders,
+                                                                         ServerCallHandler<ReqT, RespT> next) {
+                String route = requestHeaders.get(routing);
+                if (route == null) {
+                    log.error("No route id in call header: {}", routing.name());
+                    throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No route ID in call, missing header: "
+                    + routing.name()));
+                }
+                return Contexts.interceptCall(Context.current().withValue(ROUTE_TARGET_KEY, route), call,
+                                              requestHeaders, next);
+            }
+        };
+        server = serverBuilder.intercept(serverInterceptor).fallbackHandlerRegistry(new GrpcProxy() {
             @Override
             protected Channel getChannel() {
                 return dmux.apply(ROUTE_TARGET_KEY.get());
@@ -71,23 +84,5 @@ public class Demultiplexer {
             return;
         }
         server.start();
-    }
-
-    private ServerInterceptor serverInterceptor() {
-        return new ServerInterceptor() {
-            @Override
-            public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
-                                                                         final Metadata requestHeaders,
-                                                                         ServerCallHandler<ReqT, RespT> next) {
-                String route = requestHeaders.get(routing);
-                if (route == null) {
-                    log.error("No route id in call header: {}", routing.name());
-                    throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No route ID in call, missing header: "
-                    + routing.name()));
-                }
-                return Contexts.interceptCall(Context.current().withValue(ROUTE_TARGET_KEY, route), call,
-                                              requestHeaders, next);
-            }
-        };
     }
 }
