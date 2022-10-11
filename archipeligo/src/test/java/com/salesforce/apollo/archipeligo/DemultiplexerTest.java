@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo.dmux;
+package com.salesforce.apollo.archipeligo;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
@@ -17,7 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +32,6 @@ import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.PeerCreds;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.archipeligo.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -45,6 +48,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.unix.DomainSocketAddress;
@@ -53,7 +57,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  * @author hal.hildebrand
  *
  */
-public class IngressTest {
+public class DemultiplexerTest {
 
     public static class ServerA extends TestItImplBase {
         @Override
@@ -107,18 +111,21 @@ public class IngressTest {
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
-        var terminus = new Ingress(InProcessServerBuilder.forName(name));
+        var routes = new HashMap<Digest, DomainSocketAddress>();
+        Function<Digest, Channel> dmux = d -> handler(routes.get(d));
+
+        var terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.CONTEXT_METADATA_KEY, dmux);
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
-        terminus.register(ctxA, serverA());
+        routes.put(ctxA, serverA());
 
         var clientA = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
                                                                         .intercept(clientInterceptor(ctxA))
                                                                         .build());
 
         var ctxB = DigestAlgorithm.DEFAULT.getLast();
-        terminus.register(ctxB, serverB());
+        routes.put(ctxB, serverB());
 
         var clientB = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
                                                                         .intercept(clientInterceptor(ctxB))
@@ -133,6 +140,15 @@ public class IngressTest {
         assertNotNull(resultB);
         var msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server", msg.getContents().toStringUtf8());
+    }
+
+    private Channel handler(DomainSocketAddress address) {
+        return NettyChannelBuilder.forAddress(address)
+                                  .eventLoopGroup(getEventLoopGroup())
+                                  .channelType(getChannelType())
+                                  .keepAliveTime(1, TimeUnit.MILLISECONDS)
+                                  .usePlaintext()
+                                  .build();
     }
 
     private DomainSocketAddress serverA() throws IOException {
