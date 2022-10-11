@@ -11,7 +11,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
@@ -56,14 +55,13 @@ public class LocalServer<To extends Member> {
     private static final class ThreadIdentity implements ClientIdentity {
         @Override
         public Digest getFrom() {
-            Member member = CLIENT_ID_CONTEXT_KEY.get();
-            return member == null ? null : member.getId();
+            return CLIENT_ID_CONTEXT_KEY.get();
         }
     }
 
     public static final Metadata.Key<String> AUTHORIZATION_METADATA_KEY = Metadata.Key.of("Authorization",
                                                                                           Metadata.ASCII_STRING_MARSHALLER);
-    private static final Context.Key<Member> CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
+    private static final Context.Key<Digest> CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
 
     private static final ThreadIdentity LOCAL_IDENTITY = new ThreadIdentity();
     private static final Logger         log            = LoggerFactory.getLogger(LocalServer.class);
@@ -74,12 +72,10 @@ public class LocalServer<To extends Member> {
     private final Member                   from;
     private final GrpcClientLimiterBuilder limitBuilder;
     private final String                   prefix;
-    private final Map<Digest, Member>      serverMembers;
 
     public LocalServer(String prefix, Member member, Supplier<Limit> clientLimit, Executor executor,
-                       Map<Digest, Member> serverMembers, LimitsRegistry limitsRegistry) {
+                       LimitsRegistry limitsRegistry) {
         this.from = member;
-        this.serverMembers = serverMembers;
         this.prefix = prefix;
         limitBuilder = new GrpcClientLimiterBuilder().limit(clientLimit.get()).blockOnLimit(false);
         if (limitsRegistry != null) {
@@ -154,13 +150,7 @@ public class LocalServer<To extends Member> {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Member member = serverMembers.get(digest(id));
-                if (member == null) {
-                    call.close(Status.UNAUTHENTICATED.withDescription("No member for id: " + id), null);
-                    return new ServerCall.Listener<ReqT>() {
-                    };
-                }
-                Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
+                Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };
