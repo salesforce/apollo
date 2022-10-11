@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,7 +14,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -27,17 +24,10 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.google.common.base.MoreObjects;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 
-import io.grpc.CallOptions;
-import io.grpc.ClientCall;
-import io.grpc.ConnectivityState;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 
 /**
  * 
@@ -220,97 +210,9 @@ public class ServerConnectionCache<To extends Member> {
         ManagedChannel connectTo(To to);
     }
 
-    static class ReleasableManagedChannel<To extends Member> extends ManagedChannel {
-
-        private final Digest                      context;
-        private final ManagedServerConnection<To> delegate;
-
-        ReleasableManagedChannel(Digest context, ManagedServerConnection<To> delegate) {
-            this.context = context;
-            this.delegate = delegate;
-        }
-
-        @Override
-        public String authority() {
-            return delegate.channel.authority();
-        }
-
-        @Override
-        public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-            return delegate.channel.awaitTermination(timeout, unit);
-        }
-
-        @Override
-        public void enterIdle() {
-            delegate.channel.enterIdle();
-        }
-
-        @Override
-        public ConnectivityState getState(boolean requestConnection) {
-            return delegate.channel.getState(requestConnection);
-        }
-
-        public To getTo() {
-            return delegate.to;
-        }
-
-        @Override
-        public boolean isShutdown() {
-            return delegate.channel.isShutdown();
-        }
-
-        @Override
-        public boolean isTerminated() {
-            return delegate.channel.isTerminated();
-        }
-
-        @Override
-        public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(MethodDescriptor<RequestT, ResponseT> methodDescriptor,
-                                                                             CallOptions callOptions) {
-            return new SimpleForwardingClientCall<RequestT, ResponseT>(delegate.channel.newCall(methodDescriptor,
-                                                                                                callOptions)) {
-                @Override
-                public void start(Listener<ResponseT> responseListener, Metadata headers) {
-                    headers.put(Router.CONTEXT_METADATA_KEY, qb64(context));
-                    headers.put(Router.TARGET_METADATA_KEY, qb64(delegate.getTo().getId()));
-                    super.start(responseListener, headers);
-                }
-            };
-        }
-
-        @Override
-        public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
-            delegate.channel.notifyWhenStateChanged(source, callback);
-        }
-
-        public void release() {
-            delegate.release();
-        }
-
-        @Override
-        public void resetConnectBackoff() {
-            delegate.channel.resetConnectBackoff();
-        }
-
-        @Override
-        public ManagedChannel shutdown() {
-            return delegate.channel.shutdown();
-        }
-
-        @Override
-        public ManagedChannel shutdownNow() {
-            return delegate.channel.shutdownNow();
-        }
-
-        @Override
-        public String toString() {
-            return MoreObjects.toStringHelper(this).add("delegate", delegate).toString();
-        }
-    }
-
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
 
-    public static <To extends Member, From extends Member> Builder<To> newBuilder() {
+    public static <To extends Member> Builder<To> newBuilder() {
         return new Builder<>();
     }
 

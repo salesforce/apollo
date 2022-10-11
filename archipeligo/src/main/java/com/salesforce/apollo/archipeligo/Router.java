@@ -44,7 +44,6 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class Router<To extends Member> {
-
     @FunctionalInterface
     public interface ClientConnector<Client, To extends Member> {
         Client connect(To to);
@@ -91,12 +90,13 @@ public class Router<To extends Member> {
 
     public static final Metadata.Key<String> CONTEXT_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.Context",
                                                                                     Metadata.ASCII_STRING_MARSHALLER);
-    public static final Context.Key<Digest>  SERVER_CONTEXT_KEY   = Context.key("com.salesforce.apollo.archipeligo.Context.from");
-    public static final Context.Key<Digest>  SERVER_TARGET_KEY    = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
-    public static final Metadata.Key<String> TARGET_METADATA_KEY  = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.Endpoint",
-                                                                                    Metadata.ASCII_STRING_MARSHALLER);
 
-    private final static Logger log = LoggerFactory.getLogger(Router.class);
+    public static final Context.Key<Digest> SERVER_CONTEXT_KEY = Context.key("com.salesforce.apollo.archipeligo.Context.from");
+
+    public static final Context.Key<Digest>  SERVER_TARGET_KEY   = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
+    public static final Metadata.Key<String> TARGET_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.Endpoint",
+                                                                                   Metadata.ASCII_STRING_MARSHALLER);
+    private final static Logger              log                 = LoggerFactory.getLogger(Router.class);
 
     public static ServerInterceptor serverInterceptor() {
         return new ServerInterceptor() {
