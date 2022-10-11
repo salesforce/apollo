@@ -111,21 +111,21 @@ public class DemultiplexerTest {
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
-        var routes = new HashMap<Digest, DomainSocketAddress>();
-        Function<Digest, Channel> dmux = d -> handler(routes.get(d));
+        var routes = new HashMap<String, DomainSocketAddress>();
+        Function<String, Channel> dmux = d -> handler(routes.get(d));
 
         var terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.CONTEXT_METADATA_KEY, dmux);
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
-        routes.put(ctxA, serverA());
+        routes.put(qb64(ctxA), serverA());
 
         var clientA = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
                                                                         .intercept(clientInterceptor(ctxA))
                                                                         .build());
 
         var ctxB = DigestAlgorithm.DEFAULT.getLast();
-        routes.put(ctxB, serverB());
+        routes.put(qb64(ctxB), serverB());
 
         var clientB = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
                                                                         .intercept(clientInterceptor(ctxB))

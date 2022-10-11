@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
@@ -17,8 +15,6 @@ import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.crypto.Digest;
 
 import io.grpc.Channel;
 import io.grpc.Context;
@@ -33,7 +29,9 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /**
- * GRPC outbound demultiplexer.
+ * GRPC demultiplexer. Maps from one inbound endpoint to multiple outbound
+ * servers via a routing function. Supplied Metadata key provides the routing
+ * key.
  *
  * @author hal.hildebrand
  *
@@ -41,12 +39,12 @@ import io.grpc.StatusRuntimeException;
 public class Demultiplexer {
     private static final Logger log = LoggerFactory.getLogger(Demultiplexer.class);
 
-    private final Context.Key<Digest>  ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
+    private final Context.Key<String>  ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
     private final Metadata.Key<String> routing;
     private final Server               server;
     private final AtomicBoolean        started          = new AtomicBoolean();
 
-    public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing, Function<Digest, Channel> dmux) {
+    public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing, Function<String, Channel> dmux) {
         this.routing = routing;
         server = serverBuilder.intercept(serverInterceptor()).fallbackHandlerRegistry(new GrpcProxy() {
             @Override
@@ -81,22 +79,14 @@ public class Demultiplexer {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String target = requestHeaders.get(routing);
-                if (target == null) {
+                String route = requestHeaders.get(routing);
+                if (route == null) {
                     log.error("No route id in call header: {}", routing.name());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No route ID in call, missing header: "
                     + routing.name()));
                 }
-                Digest id;
-                try {
-                    id = digest(target);
-                } catch (Throwable e) {
-                    log.error("Invalid route id in call header: {}", routing.name(), e);
-                    throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Invalid route ID in call: "
-                    + target).withCause(e));
-                }
-                return Contexts.interceptCall(Context.current().withValue(ROUTE_TARGET_KEY, id), call, requestHeaders,
-                                              next);
+                return Contexts.interceptCall(Context.current().withValue(ROUTE_TARGET_KEY, route), call,
+                                              requestHeaders, next);
             }
         };
     }
