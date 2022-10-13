@@ -19,6 +19,8 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.concurrency.limits.Limit;
+import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -44,6 +46,7 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class Router<To extends Member> {
+
     @FunctionalInterface
     public interface ClientConnector<Client, To extends Member> {
         Client connect(To to);
@@ -93,10 +96,15 @@ public class Router<To extends Member> {
 
     public static final Context.Key<Digest> SERVER_CONTEXT_KEY = Context.key("com.salesforce.apollo.archipeligo.Context.from");
 
-    public static final Context.Key<Digest>  SERVER_TARGET_KEY   = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
+    public static final Context.Key<Digest> SERVER_TARGET_KEY = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
+
     public static final Metadata.Key<String> TARGET_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.Endpoint",
                                                                                    Metadata.ASCII_STRING_MARSHALLER);
     private final static Logger              log                 = LoggerFactory.getLogger(Router.class);
+
+    public static Limit defaultServerLimit() {
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(1000).timeout(500, TimeUnit.MILLISECONDS).build();
+    }
 
     public static ServerInterceptor serverInterceptor() {
         return new ServerInterceptor() {
@@ -179,5 +187,6 @@ public class Router<To extends Member> {
             return;
         }
         server.start();
+        log.info("Started router: {}", server.getListenSockets());
     }
 }

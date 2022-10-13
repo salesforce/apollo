@@ -228,7 +228,7 @@ public class ServerConnectionCache<To extends Member> {
     public ServerConnectionCache(ServerConnectionFactory<To> factory, int target, Duration minIdle, Clock clock,
                                  ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
-        this.target = target;
+        this.target = Math.max(target, 1);
         this.minIdle = minIdle;
         this.clock = clock;
         this.metrics = metrics;
@@ -237,7 +237,7 @@ public class ServerConnectionCache<To extends Member> {
     public <T> T borrow(Digest context, To to, CreateClientCommunications<T, To> createFunction) {
         return lock(() -> {
             if (cache.size() >= target) {
-                log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, to);
+                log.debug("Cache target open connections exceeded: {}, opening to {}", target, to);
             }
             ManagedServerConnection<To> connection = cache.computeIfAbsent(to, member -> {
                 ManagedServerConnection<To> conn = new ManagedServerConnection<To>(to, factory.connectTo(to), this);
@@ -270,7 +270,7 @@ public class ServerConnectionCache<To extends Member> {
 
     public void close() {
         lock(() -> {
-            log.info("Closing connection cache: {}", this);
+            log.info("Closing connection cache");
             for (ManagedServerConnection<To> conn : new ArrayList<>(cache.values())) {
                 try {
                     conn.channel.shutdownNow();

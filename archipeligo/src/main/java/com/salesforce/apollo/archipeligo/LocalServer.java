@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
@@ -18,8 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.netflix.concurrency.limits.Limit;
-import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
-import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
 import com.salesforce.apollo.crypto.Digest;
@@ -67,20 +64,14 @@ public class LocalServer<To extends Member> {
     private static final Logger         log            = LoggerFactory.getLogger(LocalServer.class);
     private static final String         NAME_TEMPLATE  = "%s-%s";
 
-    private final ClientInterceptor        clientInterceptor;
-    private final Executor                 executor;
-    private final Member                   from;
-    private final GrpcClientLimiterBuilder limitBuilder;
-    private final String                   prefix;
+    private final ClientInterceptor clientInterceptor;
+    private final Executor          executor;
+    private final Member            from;
+    private final String            prefix;
 
-    public LocalServer(String prefix, Member member, Supplier<Limit> clientLimit, Executor executor,
-                       LimitsRegistry limitsRegistry) {
+    public LocalServer(String prefix, Member member, Executor executor) {
         this.from = member;
         this.prefix = prefix;
-        limitBuilder = new GrpcClientLimiterBuilder().limit(clientLimit.get()).blockOnLimit(false);
-        if (limitsRegistry != null) {
-            limitBuilder.metricRegistry(limitsRegistry);
-        }
         this.executor = executor;
         clientInterceptor = new ClientInterceptor() {
             @Override
@@ -98,9 +89,13 @@ public class LocalServer<To extends Member> {
         };
     }
 
+    public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Executor executor) {
+        return router(cacheBuilder, () -> Router.defaultServerLimit(), executor, null);
+    }
+
     public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit,
                              Executor executor, LimitsRegistry limitsRegistry) {
-        String name = String.format(NAME_TEMPLATE, prefix, from.getId());
+        String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -116,13 +111,9 @@ public class LocalServer<To extends Member> {
 
     private ManagedChannel connectTo(Member to) {
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
-        final InProcessChannelBuilder builder;
-        limitBuilder.named(name(from.getId().shortString(), "to", to.getId().shortString()));
-        builder = InProcessChannelBuilder.forName(name)
-                                         .executor(executor)
-                                         .intercept(clientInterceptor,
-                                                    new ConcurrencyLimitClientInterceptor(limitBuilder.build(),
-                                                                                          () -> Status.RESOURCE_EXHAUSTED.withDescription("Client concurrency limit reached")));
+        final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name)
+                                                                       .executor(executor)
+                                                                       .intercept(clientInterceptor);
         disableTrash(builder);
         InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
         return builder.build();
