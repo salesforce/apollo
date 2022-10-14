@@ -61,7 +61,7 @@ public class ServerConnectionCache<To extends Member> {
         private ServerConnectionFactory<To>  factory = null;
         private ServerConnectionCacheMetrics metrics;
         private Duration                     minIdle = Duration.ofMillis(100);
-        private int                          target  = 0;
+        private int                          target  = 10;
 
         public ServerConnectionCache<To> build() {
             return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics);
@@ -234,7 +234,7 @@ public class ServerConnectionCache<To extends Member> {
         this.metrics = metrics;
     }
 
-    public <T> T borrow(Digest context, To to, CreateClientCommunications<T, To> createFunction) {
+    public ReleasableManagedChannel<To> borrow(Digest context, To to) {
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening to {}", target, to);
@@ -264,8 +264,12 @@ public class ServerConnectionCache<To extends Member> {
             }
             log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.to, connection.borrowed,
                       connection.usageCount);
-            return createFunction.create(new ReleasableManagedChannel<To>(context, connection));
+            return new ReleasableManagedChannel<To>(context, connection);
         });
+    }
+
+    public <T> T borrow(Digest context, To to, CreateClientCommunications<T, To> createFunction) {
+        return createFunction.create(borrow(context, to));
     }
 
     public void close() {

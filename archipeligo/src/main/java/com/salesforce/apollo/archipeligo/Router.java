@@ -91,16 +91,17 @@ public class Router<To extends Member> {
         }
     }
 
-    public static final Metadata.Key<String> CONTEXT_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.Context",
-                                                                                    Metadata.ASCII_STRING_MARSHALLER);
+    public static final Context.Key<Digest>  CLIENT_ID_CONTEXT_KEY  = Context.key("com.salesforce.apollo.archipeligo.from.id");
+    public static final Metadata.Key<String> CLIENT_ID_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.id",
+                                                                                      Metadata.ASCII_STRING_MARSHALLER);
+    public static final Metadata.Key<String> CONTEXT_METADATA_KEY   = Metadata.Key.of("com.salesforce.apollo.archipeligo.context.id",
+                                                                                      Metadata.ASCII_STRING_MARSHALLER);
+    public static final Context.Key<Digest>  SERVER_CONTEXT_KEY     = Context.key("com.salesforce.apollo.archipeligo.context.id");
+    public static final Context.Key<Digest>  SERVER_TARGET_KEY      = Context.key("com.salesforce.apollo.archipeligo.to.id");
+    public static final Metadata.Key<String> TARGET_METADATA_KEY    = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.id",
+                                                                                      Metadata.ASCII_STRING_MARSHALLER);
 
-    public static final Context.Key<Digest> SERVER_CONTEXT_KEY = Context.key("com.salesforce.apollo.archipeligo.Context.from");
-
-    public static final Context.Key<Digest> SERVER_TARGET_KEY = Context.key("com.salesforce.apollo.archipeligo.to.Endpoint");
-
-    public static final Metadata.Key<String> TARGET_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.Endpoint",
-                                                                                   Metadata.ASCII_STRING_MARSHALLER);
-    private final static Logger              log                 = LoggerFactory.getLogger(Router.class);
+    private final static Logger log = LoggerFactory.getLogger(Router.class);
 
     public static Limit defaultServerLimit() {
         return AIMDLimit.newBuilder().initialLimit(100).maxLimit(1000).timeout(500, TimeUnit.MILLISECONDS).build();

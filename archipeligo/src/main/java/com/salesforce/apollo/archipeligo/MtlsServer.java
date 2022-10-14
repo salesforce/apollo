@@ -44,7 +44,7 @@ import io.netty.handler.ssl.ClientAuth;
  * @author hal.hildebrand
  *
  */
-public class MtlsServer<To extends Member> {
+public class MtlsServer<To extends Member> implements RouterSupplier<To> {
     private static final Provider PROVIDER_JSSE = Security.getProvider("SunJSSE");
     private static final String   TL_SV1_3      = "TLSv1.3";
 
@@ -71,6 +71,7 @@ public class MtlsServer<To extends Member> {
         });
     }
 
+    @Override
     public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit,
                              Executor executor, LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());

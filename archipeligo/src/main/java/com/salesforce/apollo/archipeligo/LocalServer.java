@@ -48,21 +48,9 @@ import io.grpc.internal.ManagedChannelImplBuilder;
  * @author hal.hildebrand
  *
  */
-public class LocalServer<To extends Member> {
-    private static final class ThreadIdentity implements ClientIdentity {
-        @Override
-        public Digest getFrom() {
-            return CLIENT_ID_CONTEXT_KEY.get();
-        }
-    }
-
-    public static final Metadata.Key<String> AUTHORIZATION_METADATA_KEY = Metadata.Key.of("Authorization",
-                                                                                          Metadata.ASCII_STRING_MARSHALLER);
-    private static final Context.Key<Digest> CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
-
-    private static final ThreadIdentity LOCAL_IDENTITY = new ThreadIdentity();
-    private static final Logger         log            = LoggerFactory.getLogger(LocalServer.class);
-    private static final String         NAME_TEMPLATE  = "%s-%s";
+public class LocalServer<To extends Member> implements RouterSupplier<To> {
+    private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
+    private static final String NAME_TEMPLATE = "%s-%s";
 
     private final ClientInterceptor clientInterceptor;
     private final Executor          executor;
@@ -81,7 +69,7 @@ public class LocalServer<To extends Member> {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(AUTHORIZATION_METADATA_KEY, qb64(from.getId()));
+                        headers.put(Router.CLIENT_ID_METADATA_KEY, qb64(from.getId()));
                         super.start(responseListener, headers);
                     }
                 };
@@ -89,10 +77,7 @@ public class LocalServer<To extends Member> {
         };
     }
 
-    public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Executor executor) {
-        return router(cacheBuilder, () -> Router.defaultServerLimit(), executor, null);
-    }
-
+    @Override
     public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit,
                              Executor executor, LimitsRegistry limitsRegistry) {
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
@@ -106,13 +91,19 @@ public class LocalServer<To extends Member> {
                                                                                                            .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                                            .build())
                                                                .intercept(serverInterceptor());
-        return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), LOCAL_IDENTITY);
+        return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
+            @Override
+            public Digest getFrom() {
+                return Router.CLIENT_ID_CONTEXT_KEY.get();
+            }
+        });
     }
 
     private ManagedChannel connectTo(Member to) {
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
         final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name)
                                                                        .executor(executor)
+                                                                       .usePlaintext()
                                                                        .intercept(clientInterceptor);
         disableTrash(builder);
         InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
@@ -136,12 +127,12 @@ public class LocalServer<To extends Member> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
+                String id = requestHeaders.get(Router.CLIENT_ID_METADATA_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, digest(id));
+                Context ctx = Context.current().withValue(Router.CLIENT_ID_CONTEXT_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

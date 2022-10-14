@@ -39,9 +39,10 @@ import io.grpc.StatusRuntimeException;
 public class Demultiplexer {
     private static final Logger log = LoggerFactory.getLogger(Demultiplexer.class);
 
-    private final Context.Key<String> ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
-    private final Server              server;
-    private final AtomicBoolean       started          = new AtomicBoolean();
+    private static final Context.Key<String> ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
+
+    private final Server        server;
+    private final AtomicBoolean started = new AtomicBoolean();
 
     public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing, Function<String, Channel> dmux) {
         var serverInterceptor = new ServerInterceptor() {

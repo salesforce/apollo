@@ -18,11 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.primitives.Ints;
@@ -43,6 +45,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -108,13 +111,32 @@ public class DemultiplexerTest {
         };
     }
 
+    private Server        serverA;
+    private Server        serverB;
+    private Demultiplexer terminus;
+
+    @AfterEach
+    public void after() throws InterruptedException {
+        if (terminus != null) {
+            terminus.close(Duration.ofSeconds(1));
+        }
+        if (serverA != null) {
+            serverA.shutdownNow();
+            serverA.awaitTermination();
+        }
+        if (serverB != null) {
+            serverB.shutdownNow();
+            serverB.awaitTermination();
+        }
+    }
+
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
         var routes = new HashMap<String, DomainSocketAddress>();
         Function<String, Channel> dmux = d -> handler(routes.get(d));
 
-        var terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.CONTEXT_METADATA_KEY, dmux);
+        terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.CONTEXT_METADATA_KEY, dmux);
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
@@ -146,7 +168,7 @@ public class DemultiplexerTest {
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(getEventLoopGroup())
                                   .channelType(getChannelType())
-                                  .keepAliveTime(1, TimeUnit.MILLISECONDS)
+                                  .keepAliveTime(1, TimeUnit.SECONDS)
                                   .usePlaintext()
                                   .build();
     }
@@ -157,14 +179,14 @@ public class DemultiplexerTest {
         assertFalse(Files.exists(socketPathA));
 
         final var address = new DomainSocketAddress(socketPathA.toFile());
-        var serverA = NettyServerBuilder.forAddress(address)
-                                        .protocolNegotiator(new DomainSocketNegotiator())
-                                        .channelType(getServerDomainSocketChannelClass())
-                                        .workerEventLoopGroup(getEventLoopGroup())
-                                        .bossEventLoopGroup(getEventLoopGroup())
-                                        .addService(new ServerA())
-                                        .intercept(new DomainSocketServerInterceptor())
-                                        .build();
+        serverA = NettyServerBuilder.forAddress(address)
+                                    .protocolNegotiator(new DomainSocketNegotiator())
+                                    .channelType(getServerDomainSocketChannelClass())
+                                    .workerEventLoopGroup(getEventLoopGroup())
+                                    .bossEventLoopGroup(getEventLoopGroup())
+                                    .addService(new ServerA())
+                                    .intercept(new DomainSocketServerInterceptor())
+                                    .build();
         serverA.start();
         return address;
     }
@@ -175,14 +197,14 @@ public class DemultiplexerTest {
         assertFalse(Files.exists(socketPathA));
 
         final var address = new DomainSocketAddress(socketPathA.toFile());
-        var serverB = NettyServerBuilder.forAddress(address)
-                                        .protocolNegotiator(new DomainSocketNegotiator())
-                                        .channelType(getServerDomainSocketChannelClass())
-                                        .workerEventLoopGroup(getEventLoopGroup())
-                                        .bossEventLoopGroup(getEventLoopGroup())
-                                        .addService(new ServerB())
-                                        .intercept(new DomainSocketServerInterceptor())
-                                        .build();
+        serverB = NettyServerBuilder.forAddress(address)
+                                    .protocolNegotiator(new DomainSocketNegotiator())
+                                    .channelType(getServerDomainSocketChannelClass())
+                                    .workerEventLoopGroup(getEventLoopGroup())
+                                    .bossEventLoopGroup(getEventLoopGroup())
+                                    .addService(new ServerB())
+                                    .intercept(new DomainSocketServerInterceptor())
+                                    .build();
         serverB.start();
         return address;
     }
