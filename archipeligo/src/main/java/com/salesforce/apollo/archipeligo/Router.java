@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
@@ -91,15 +92,16 @@ public class Router<To extends Member> {
         }
     }
 
-    public static final Context.Key<Digest>  CLIENT_ID_CONTEXT_KEY  = Context.key("com.salesforce.apollo.archipeligo.from.id");
-    public static final Metadata.Key<String> CLIENT_ID_METADATA_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.id",
+    public static final Context.Key<Digest>  CLIENT_CLIENT_ID_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.id.client");
+    public static final Metadata.Key<String> METADATA_CLIENT_ID_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.id",
                                                                                       Metadata.ASCII_STRING_MARSHALLER);
-    public static final Metadata.Key<String> CONTEXT_METADATA_KEY   = Metadata.Key.of("com.salesforce.apollo.archipeligo.context.id",
+    public static final Metadata.Key<String> METADATA_CONTEXT_KEY   = Metadata.Key.of("com.salesforce.apollo.archipeligo.context.id",
                                                                                       Metadata.ASCII_STRING_MARSHALLER);
-    public static final Context.Key<Digest>  SERVER_CONTEXT_KEY     = Context.key("com.salesforce.apollo.archipeligo.context.id");
-    public static final Context.Key<Digest>  SERVER_TARGET_KEY      = Context.key("com.salesforce.apollo.archipeligo.to.id");
-    public static final Metadata.Key<String> TARGET_METADATA_KEY    = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.id",
+    public static final Metadata.Key<String> METADATA_TARGET_KEY    = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.id",
                                                                                       Metadata.ASCII_STRING_MARSHALLER);
+    public static final Context.Key<Digest>  SERVER_CLIENT_ID_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.id.server");
+    public static final Context.Key<Digest>  SERVER_CONTEXT_KEY     = Context.key("com.salesforce.apollo.archipeligo.context.id.server");
+    public static final Context.Key<Digest>  SERVER_TARGET_KEY      = Context.key("com.salesforce.apollo.archipeligo.to.id.server");
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
@@ -113,7 +115,7 @@ public class Router<To extends Member> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(CONTEXT_METADATA_KEY);
+                String id = requestHeaders.get(METADATA_CONTEXT_KEY);
                 if (id == null) {
                     log.error("No context id in call headers: {}", requestHeaders.keys());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No context ID in call"));
@@ -127,6 +129,7 @@ public class Router<To extends Member> {
 
     private final ServerConnectionCache<To>       cache;
     private final ClientIdentity                  clientIdentityProvider;
+    private final Consumer<Digest>                contextRegistration;
     private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
     private final Server                          server;
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
@@ -134,9 +137,16 @@ public class Router<To extends Member> {
 
     public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To> cacheBuilder,
                   ClientIdentity clientIdentityProvider) {
+        this(serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
+        });
+    }
+
+    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To> cacheBuilder,
+                  ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
         this.clientIdentityProvider = clientIdentityProvider;
+        this.contextRegistration = contextRegistration;
     }
 
     public void close(Duration await) {
@@ -175,6 +185,7 @@ public class Router<To extends Member> {
             return route;
         });
         routing.bind(context, service);
+        contextRegistration.accept(context);
         log.info("Communications created for: " + member);
         return new CommonCommunications<Client, Service>(context, member, routing, createFunction, localLoopback);
     }

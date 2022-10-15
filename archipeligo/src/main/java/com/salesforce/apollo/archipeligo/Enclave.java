@@ -12,9 +12,10 @@ import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getS
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
-import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -44,11 +45,10 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.internal.ManagedChannelImplBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
@@ -61,14 +61,23 @@ import io.netty.channel.unix.DomainSocketAddress;
 public class Enclave<To extends Member> implements RouterSupplier<To> {
     private static final Logger log = LoggerFactory.getLogger(Enclave.class);
 
-    private final DomainSocketAddress bridge;
-    private final DomainSocketAddress endpoint;
-    private final Executor            executor;
+    private final DomainSocketAddress                       bridge;
+    private final Class<? extends io.netty.channel.Channel> channelType    = getChannelType();
+    private final Consumer<Digest>                          contextRegistration;
+    private final DomainSocketAddress                       endpoint;
+    private final EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
+    private final Executor                                  executor;
+    private final String                                    from;
+    private final Duration                                  keepAlive;
 
-    public Enclave(DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge) {
+    public Enclave(Digest from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
+                   Duration keepAlive, Consumer<Digest> contextRegistration) {
         this.bridge = bridge;
         this.executor = executor;
         this.endpoint = endpoint;
+        this.keepAlive = keepAlive;
+        this.contextRegistration = contextRegistration;
+        this.from = qb64(from);
     }
 
     /**
@@ -99,9 +108,9 @@ public class Enclave<To extends Member> implements RouterSupplier<To> {
         return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
-                return Router.CLIENT_ID_CONTEXT_KEY.get();
+                return Router.SERVER_CLIENT_ID_KEY.get();
             }
-        });
+        }, contextRegistration);
     }
 
     private ManagedChannel connectTo(Member to) {
@@ -113,32 +122,21 @@ public class Enclave<To extends Member> implements RouterSupplier<To> {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.TARGET_METADATA_KEY, qb64(to.getId()));
+                        headers.put(Router.METADATA_TARGET_KEY, qb64(to.getId()));
+                        headers.put(Router.METADATA_CLIENT_ID_KEY, from);
                         super.start(responseListener, headers);
                     }
                 };
             }
         };
         final var builder = NettyChannelBuilder.forAddress(bridge)
-                                               .eventLoopGroup(getEventLoopGroup())
-                                               .channelType(getChannelType())
-                                               .keepAliveTime(1, TimeUnit.MILLISECONDS)
+                                               .eventLoopGroup(eventLoopGroup)
+                                               .channelType(channelType)
+                                               .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
                                                .usePlaintext()
                                                .executor(executor)
                                                .intercept(clientInterceptor);
-        disableTrash(builder);
         return builder.build();
-    }
-
-    private void disableTrash(final NettyChannelBuilder builder) {
-        try {
-            final Method method = InProcessChannelBuilder.class.getDeclaredMethod("delegate");
-            method.setAccessible(true);
-            ManagedChannelImplBuilder delegate = (ManagedChannelImplBuilder) method.invoke(builder);
-            delegate.setTracingEnabled(false);
-        } catch (Throwable e) {
-            log.error("Can't disable trash", e);
-        }
     }
 
     private ServerInterceptor serverInterceptor() {
@@ -147,12 +145,12 @@ public class Enclave<To extends Member> implements RouterSupplier<To> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(Router.CLIENT_ID_METADATA_KEY);
+                String id = requestHeaders.get(Router.METADATA_CLIENT_ID_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(Router.CLIENT_ID_CONTEXT_KEY, digest(id));
+                Context ctx = Context.current().withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

@@ -69,7 +69,7 @@ public class LocalServer<To extends Member> implements RouterSupplier<To> {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.CLIENT_ID_METADATA_KEY, qb64(from.getId()));
+                        headers.put(Router.METADATA_CLIENT_ID_KEY, qb64(from.getId()));
                         super.start(responseListener, headers);
                     }
                 };
@@ -94,7 +94,7 @@ public class LocalServer<To extends Member> implements RouterSupplier<To> {
         return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
-                return Router.CLIENT_ID_CONTEXT_KEY.get();
+                return Router.SERVER_CLIENT_ID_KEY.get();
             }
         });
     }
@@ -127,12 +127,12 @@ public class LocalServer<To extends Member> implements RouterSupplier<To> {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(Router.CLIENT_ID_METADATA_KEY);
+                String id = requestHeaders.get(Router.METADATA_CLIENT_ID_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(Router.CLIENT_ID_CONTEXT_KEY, digest(id));
+                Context ctx = Context.current().withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

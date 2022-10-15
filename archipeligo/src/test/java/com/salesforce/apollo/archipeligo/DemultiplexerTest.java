@@ -103,7 +103,7 @@ public class DemultiplexerTest {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.CONTEXT_METADATA_KEY, qb64(ctx));
+                        headers.put(Router.METADATA_CONTEXT_KEY, qb64(ctx));
                         super.start(responseListener, headers);
                     }
                 };
@@ -136,7 +136,7 @@ public class DemultiplexerTest {
         var routes = new HashMap<String, DomainSocketAddress>();
         Function<String, Channel> dmux = d -> handler(routes.get(d));
 
-        terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.CONTEXT_METADATA_KEY, dmux);
+        terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.METADATA_CONTEXT_KEY, dmux);
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();

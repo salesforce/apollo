@@ -37,8 +37,7 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class Demultiplexer {
-    private static final Logger log = LoggerFactory.getLogger(Demultiplexer.class);
-
+    private static final Logger              log              = LoggerFactory.getLogger(Demultiplexer.class);
     private static final Context.Key<String> ROUTE_TARGET_KEY = Context.key(UUID.randomUUID().toString());
 
     private final Server        server;

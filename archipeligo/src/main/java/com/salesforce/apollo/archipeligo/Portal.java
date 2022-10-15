@@ -26,6 +26,7 @@ import io.grpc.ServerBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
@@ -39,15 +40,17 @@ import io.netty.channel.unix.DomainSocketAddress;
  */
 public class Portal<To extends Member> {
 
-    Map<String, DomainSocketAddress>  routes = new ConcurrentHashMap<>();
+    Map<String, DomainSocketAddress>  routes         = new ConcurrentHashMap<>();
     private final DomainSocketAddress bridge;
+    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
     private final Demultiplexer       inbound;
     private final Duration            keepAlive;
     private final Demultiplexer       outbound;
+    private final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
     public Portal(ServerBuilder<?> inbound, Function<String, Channel> outbound, DomainSocketAddress bridge,
                   Executor executor, Duration keepAlive) {
-        this.inbound = new Demultiplexer(inbound, Router.CONTEXT_METADATA_KEY, d -> handler(routes.get(d)));
+        this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(routes.get(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
                                                             .executor(executor)
                                                             .protocolNegotiator(new DomainSocketNegotiator())
@@ -55,7 +58,7 @@ public class Portal<To extends Member> {
                                                             .workerEventLoopGroup(getEventLoopGroup())
                                                             .bossEventLoopGroup(getEventLoopGroup())
                                                             .intercept(new DomainSocketServerInterceptor()),
-                                          Router.TARGET_METADATA_KEY, outbound);
+                                          Router.METADATA_TARGET_KEY, outbound);
         this.bridge = bridge;
         this.keepAlive = keepAlive;
     }
@@ -102,8 +105,8 @@ public class Portal<To extends Member> {
 
     private Channel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
-                                  .eventLoopGroup(getEventLoopGroup())
-                                  .channelType(getChannelType())
+                                  .eventLoopGroup(eventLoopGroup)
+                                  .channelType(channelType)
                                   .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
                                   .usePlaintext()
                                   .build();
