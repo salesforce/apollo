@@ -10,25 +10,23 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 import com.netflix.concurrency.limits.Limit;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.LimitsRegistry;
 
 /**
  * @author hal.hildebrand
- *
- * @param <To>
+ * 
  */
-public interface RouterSupplier<To extends Member> {
+public interface RouterSupplier {
 
-    default Router<To> router(Executor executor) {
+    default Router router(Executor executor) {
         return router(ServerConnectionCache.newBuilder(), () -> Router.defaultServerLimit(), executor, null);
     }
 
-    default Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Executor executor) {
+    default Router router(ServerConnectionCache.Builder cacheBuilder, Executor executor) {
         return router(cacheBuilder, () -> Router.defaultServerLimit(), executor, null);
     }
 
-    Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
-                      LimitsRegistry limitsRegistry);
+    Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+                  LimitsRegistry limitsRegistry);
 
 }

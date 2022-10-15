@@ -46,22 +46,22 @@ import io.grpc.util.MutableHandlerRegistry;
  * @author hal.hildebrand
  *
  */
-public class Router<To extends Member> {
+public class Router {
 
     @FunctionalInterface
-    public interface ClientConnector<Client, To extends Member> {
-        Client connect(To to);
+    public interface ClientConnector<Client> {
+        Client connect(Member to);
     }
 
-    public class CommonCommunications<Client extends Link<To>, Service> implements ClientConnector<Client, To> {
-        private final Digest                                 context;
-        private final CreateClientCommunications<Client, To> createFunction;
-        private final Member                                 from;
-        private final Client                                 localLoopback;
-        private final RoutableService<Service>               routing;
+    public class CommonCommunications<Client extends Link, Service> implements ClientConnector<Client> {
+        private final Digest                             context;
+        private final CreateClientCommunications<Client> createFunction;
+        private final Member                             from;
+        private final Client                             localLoopback;
+        private final RoutableService<Service>           routing;
 
         public CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
-                                    CreateClientCommunications<Client, To> createFunction, Client localLoopback) {
+                                    CreateClientCommunications<Client> createFunction, Client localLoopback) {
             this.context = context;
             this.routing = routing;
             this.createFunction = createFunction;
@@ -70,7 +70,7 @@ public class Router<To extends Member> {
         }
 
         @Override
-        public Client connect(To to) {
+        public Client connect(Member to) {
             if (to == null) {
                 return null;
             }
@@ -127,7 +127,7 @@ public class Router<To extends Member> {
         };
     }
 
-    private final ServerConnectionCache<To>       cache;
+    private final ServerConnectionCache           cache;
     private final ClientIdentity                  clientIdentityProvider;
     private final Consumer<Digest>                contextRegistration;
     private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
@@ -135,13 +135,13 @@ public class Router<To extends Member> {
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
     private final AtomicBoolean                   started  = new AtomicBoolean();
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To> cacheBuilder,
+    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider) {
         this(serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
         });
     }
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder<To> cacheBuilder,
+    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
@@ -162,21 +162,21 @@ public class Router<To extends Member> {
         }
     }
 
-    public <Client extends Link<To>, Service extends ServiceRouting> CommonCommunications<Client, Service> create(To member,
-                                                                                                                  Digest context,
-                                                                                                                  Service service,
-                                                                                                                  Function<RoutableService<Service>, BindableService> factory,
-                                                                                                                  CreateClientCommunications<Client, To> createFunction,
-                                                                                                                  Client localLoopback) {
+    public <Client extends Link, Service extends ServiceRouting> CommonCommunications<Client, Service> create(Member member,
+                                                                                                              Digest context,
+                                                                                                              Service service,
+                                                                                                              Function<RoutableService<Service>, BindableService> factory,
+                                                                                                              CreateClientCommunications<Client> createFunction,
+                                                                                                              Client localLoopback) {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
     }
 
-    public <Client extends Link<To>, Service> CommonCommunications<Client, Service> create(To member, Digest context,
-                                                                                           Service service,
-                                                                                           String routingLabel,
-                                                                                           Function<RoutableService<Service>, BindableService> factory,
-                                                                                           CreateClientCommunications<Client, To> createFunction,
-                                                                                           Client localLoopback) {
+    public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                       Service service,
+                                                                                       String routingLabel,
+                                                                                       Function<RoutableService<Service>, BindableService> factory,
+                                                                                       CreateClientCommunications<Client> createFunction,
+                                                                                       Client localLoopback) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
             RoutableService<Service> route = new RoutableService<Service>();

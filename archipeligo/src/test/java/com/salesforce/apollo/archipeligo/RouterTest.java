@@ -73,10 +73,10 @@ public class RouterTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub               client;
-        private final ReleasableManagedChannel<Member> connection;
+        private final TestItBlockingStub       client;
+        private final ReleasableManagedChannel connection;
 
-        public TestItClient(ReleasableManagedChannel<Member> c) {
+        public TestItClient(ReleasableManagedChannel c) {
             this.connection = c;
             client = TestItGrpc.newBlockingStub(c);
         }
@@ -97,7 +97,7 @@ public class RouterTest {
         }
     }
 
-    public static interface TestItService extends Link<Member> {
+    public static interface TestItService extends Link {
         Any ping(Any request);
     }
 
@@ -125,20 +125,16 @@ public class RouterTest {
         var serverBuilder = InProcessServerBuilder.forName(name);
         var cacheBuilder = ServerConnectionCache.newBuilder()
                                                 .setFactory(to -> InProcessChannelBuilder.forName(name).build());
-        var router = new Router<Member>(serverBuilder, cacheBuilder, null);
+        var router = new Router(serverBuilder, cacheBuilder, null);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA,
-                                                                                          new ServerA(), "A",
-                                                                                          r -> new Server(r),
-                                                                                          c -> new TestItClient(c),
-                                                                                          local);
+        Router.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA, new ServerA(),
+                                                                                  "A", r -> new Server(r),
+                                                                                  c -> new TestItClient(c), local);
 
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember, ctxB,
-                                                                                          new ServerB(), "A",
-                                                                                          r -> new Server(r),
-                                                                                          c -> new TestItClient(c),
-                                                                                          local);
+        Router.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember, ctxB, new ServerB(),
+                                                                                  "A", r -> new Server(r),
+                                                                                  c -> new TestItClient(c), local);
 
         router.start();
 

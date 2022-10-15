@@ -23,12 +23,12 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
-public class ReleasableManagedChannel<To extends Member> extends ManagedChannel {
+public class ReleasableManagedChannel extends ManagedChannel {
 
-    private final Digest                      context;
-    private final ManagedServerConnection<To> delegate;
+    private final Digest                  context;
+    private final ManagedServerConnection delegate;
 
-    ReleasableManagedChannel(Digest context, ManagedServerConnection<To> delegate) {
+    ReleasableManagedChannel(Digest context, ManagedServerConnection delegate) {
         this.context = context;
         this.delegate = delegate;
     }
@@ -53,7 +53,7 @@ public class ReleasableManagedChannel<To extends Member> extends ManagedChannel 
         return delegate.getChannel().getState(requestConnection);
     }
 
-    public To getTo() {
+    public Member getTo() {
         return delegate.getTo();
     }
 

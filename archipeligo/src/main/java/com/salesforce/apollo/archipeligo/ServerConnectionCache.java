@@ -54,24 +54,24 @@ import io.grpc.ManagedChannel;
  * @author hal.hildebrand
  *
  */
-public class ServerConnectionCache<To extends Member> {
+public class ServerConnectionCache {
 
-    public static class Builder<To extends Member> {
+    public static class Builder {
         private Clock                        clock   = Clock.systemUTC();
-        private ServerConnectionFactory<To>  factory = null;
+        private ServerConnectionFactory      factory = null;
         private ServerConnectionCacheMetrics metrics;
         private Duration                     minIdle = Duration.ofMillis(100);
         private int                          target  = 10;
 
-        public ServerConnectionCache<To> build() {
-            return new ServerConnectionCache<>(factory, target, minIdle, clock, metrics);
+        public ServerConnectionCache build() {
+            return new ServerConnectionCache(factory, target, minIdle, clock, metrics);
         }
 
         public Clock getClock() {
             return clock;
         }
 
-        public ServerConnectionFactory<To> getFactory() {
+        public ServerConnectionFactory getFactory() {
             return factory;
         }
 
@@ -87,47 +87,47 @@ public class ServerConnectionCache<To extends Member> {
             return target;
         }
 
-        public Builder<To> setClock(Clock clock) {
+        public Builder setClock(Clock clock) {
             this.clock = clock;
             return this;
         }
 
-        public Builder<To> setFactory(ServerConnectionFactory<To> factory) {
+        public Builder setFactory(ServerConnectionFactory factory) {
             this.factory = factory;
             return this;
         }
 
-        public Builder<To> setMetrics(ServerConnectionCacheMetrics metrics) {
+        public Builder setMetrics(ServerConnectionCacheMetrics metrics) {
             this.metrics = metrics;
             return this;
         }
 
-        public Builder<To> setMinIdle(Duration minIdle) {
+        public Builder setMinIdle(Duration minIdle) {
             this.minIdle = minIdle;
             return this;
         }
 
-        public Builder<To> setTarget(int target) {
+        public Builder setTarget(int target) {
             this.target = target;
             return this;
         }
     }
 
     @FunctionalInterface
-    public interface CreateClientCommunications<Client, To extends Member> {
-        Client create(ReleasableManagedChannel<To> releasableManagedChannel);
+    public interface CreateClientCommunications<Client> {
+        Client create(ReleasableManagedChannel releasableManagedChannel);
     }
 
-    public static class ManagedServerConnection<To extends Member> implements Comparable<ManagedServerConnection<To>> {
-        private final AtomicInteger             borrowed   = new AtomicInteger();
-        private final ManagedChannel            channel;
-        private final Instant                   created;
-        private volatile Instant                lastUsed;
-        private final ServerConnectionCache<To> scc;
-        private final To                        to;
-        private final AtomicInteger             usageCount = new AtomicInteger();
+    public static class ManagedServerConnection implements Comparable<ManagedServerConnection> {
+        private final AtomicInteger         borrowed   = new AtomicInteger();
+        private final ManagedChannel        channel;
+        private final Instant               created;
+        private volatile Instant            lastUsed;
+        private final ServerConnectionCache scc;
+        private final Member                to;
+        private final AtomicInteger         usageCount = new AtomicInteger();
 
-        public ManagedServerConnection(To id, ManagedChannel channel, ServerConnectionCache<To> scc) {
+        public ManagedServerConnection(Member id, ManagedChannel channel, ServerConnectionCache scc) {
             this.to = id;
             this.channel = channel;
             this.scc = scc;
@@ -136,7 +136,7 @@ public class ServerConnectionCache<To extends Member> {
         }
 
         @Override
-        public int compareTo(ManagedServerConnection<To> o) {
+        public int compareTo(ManagedServerConnection o) {
             return Integer.compare(usageCount.get(), o.usageCount.get());
         }
 
@@ -146,16 +146,14 @@ public class ServerConnectionCache<To extends Member> {
                 return true;
             if ((obj == null) || (getClass() != obj.getClass()))
                 return false;
-            @SuppressWarnings("unchecked")
-            ManagedServerConnection<To> other = (ManagedServerConnection<To>) obj;
-            return to.equals(other.to);
+            return to.equals(((ManagedServerConnection) obj).to);
         }
 
         public ManagedChannel getChannel() {
             return channel;
         }
 
-        public To getTo() {
+        public Member getTo() {
             return to;
         }
 
@@ -206,26 +204,26 @@ public class ServerConnectionCache<To extends Member> {
 
     }
 
-    public interface ServerConnectionFactory<To extends Member> {
-        ManagedChannel connectTo(To to);
+    public interface ServerConnectionFactory {
+        ManagedChannel connectTo(Member to);
     }
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
 
-    public static <To extends Member> Builder<To> newBuilder() {
-        return new Builder<>();
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
-    private final Map<To, ManagedServerConnection<To>>       cache = new HashMap<>();
-    private final Clock                                      clock;
-    private final ServerConnectionFactory<To>                factory;
-    private final ReentrantLock                              lock  = new ReentrantLock(true);
-    private final ServerConnectionCacheMetrics               metrics;
-    private final Duration                                   minIdle;
-    private final PriorityQueue<ManagedServerConnection<To>> queue = new PriorityQueue<>();
-    private final int                                        target;
+    private final Map<Member, ManagedServerConnection>   cache = new HashMap<>();
+    private final Clock                                  clock;
+    private final ServerConnectionFactory                factory;
+    private final ReentrantLock                          lock  = new ReentrantLock(true);
+    private final ServerConnectionCacheMetrics           metrics;
+    private final Duration                               minIdle;
+    private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
+    private final int                                    target;
 
-    public ServerConnectionCache(ServerConnectionFactory<To> factory, int target, Duration minIdle, Clock clock,
+    public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
                                  ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
         this.target = Math.max(target, 1);
@@ -234,13 +232,13 @@ public class ServerConnectionCache<To extends Member> {
         this.metrics = metrics;
     }
 
-    public ReleasableManagedChannel<To> borrow(Digest context, To to) {
+    public ReleasableManagedChannel borrow(Digest context, Member to) {
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening to {}", target, to);
             }
-            ManagedServerConnection<To> connection = cache.computeIfAbsent(to, member -> {
-                ManagedServerConnection<To> conn = new ManagedServerConnection<To>(to, factory.connectTo(to), this);
+            ManagedServerConnection connection = cache.computeIfAbsent(to, member -> {
+                ManagedServerConnection conn = new ManagedServerConnection(to, factory.connectTo(to), this);
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();
@@ -264,18 +262,18 @@ public class ServerConnectionCache<To extends Member> {
             }
             log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.to, connection.borrowed,
                       connection.usageCount);
-            return new ReleasableManagedChannel<To>(context, connection);
+            return new ReleasableManagedChannel(context, connection);
         });
     }
 
-    public <T> T borrow(Digest context, To to, CreateClientCommunications<T, To> createFunction) {
+    public <T> T borrow(Digest context, Member to, CreateClientCommunications<T> createFunction) {
         return createFunction.create(borrow(context, to));
     }
 
     public void close() {
         lock(() -> {
             log.info("Closing connection cache");
-            for (ManagedServerConnection<To> conn : new ArrayList<>(cache.values())) {
+            for (ManagedServerConnection conn : new ArrayList<>(cache.values())) {
                 try {
                     conn.channel.shutdownNow();
                     if (metrics != null) {
@@ -292,7 +290,7 @@ public class ServerConnectionCache<To extends Member> {
         });
     }
 
-    public void release(ManagedServerConnection<To> connection) {
+    public void release(ManagedServerConnection connection) {
         lock(() -> {
             if (connection.decrementBorrow()) {
                 log.debug("Releasing connection: {}", connection.to);
@@ -306,7 +304,7 @@ public class ServerConnectionCache<To extends Member> {
         });
     }
 
-    private boolean close(ManagedServerConnection<To> connection) {
+    private boolean close(ManagedServerConnection connection) {
         if (connection.isCloseable()) {
             try {
                 connection.channel.shutdownNow();
@@ -336,7 +334,7 @@ public class ServerConnectionCache<To extends Member> {
 
     private void manageConnections() {
 //        log.info("Managing connections: " + cache.size() + " idle: " + queue.size());
-        Iterator<ManagedServerConnection<To>> connections = queue.iterator();
+        Iterator<ManagedServerConnection> connections = queue.iterator();
         while (connections.hasNext() && cache.size() > target) {
             if (close(connections.next())) {
                 connections.remove();

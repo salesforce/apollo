@@ -58,7 +58,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  * @author hal.hildebrand
  *
  */
-public class Enclave<To extends Member> implements RouterSupplier<To> {
+public class Enclave<To extends Member> implements RouterSupplier {
     private static final Logger log = LoggerFactory.getLogger(Enclave.class);
 
     private final DomainSocketAddress                       bridge;
@@ -89,8 +89,8 @@ public class Enclave<To extends Member> implements RouterSupplier<To> {
     }
 
     @Override
-    public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit,
-                             Executor executor, LimitsRegistry limitsRegistry) {
+    public Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+                         LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -105,7 +105,7 @@ public class Enclave<To extends Member> implements RouterSupplier<To> {
                                                                                                        .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
-        return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
+        return new Router(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();

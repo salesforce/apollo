@@ -48,7 +48,7 @@ import io.grpc.internal.ManagedChannelImplBuilder;
  * @author hal.hildebrand
  *
  */
-public class LocalServer<To extends Member> implements RouterSupplier<To> {
+public class LocalServer<To extends Member> implements RouterSupplier {
     private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
     private static final String NAME_TEMPLATE = "%s-%s";
 
@@ -78,8 +78,8 @@ public class LocalServer<To extends Member> implements RouterSupplier<To> {
     }
 
     @Override
-    public Router<To> router(ServerConnectionCache.Builder<To> cacheBuilder, Supplier<Limit> serverLimit,
-                             Executor executor, LimitsRegistry limitsRegistry) {
+    public Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+                         LimitsRegistry limitsRegistry) {
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
@@ -91,7 +91,7 @@ public class LocalServer<To extends Member> implements RouterSupplier<To> {
                                                                                                            .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                                            .build())
                                                                .intercept(serverInterceptor());
-        return new Router<To>(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
+        return new Router(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();

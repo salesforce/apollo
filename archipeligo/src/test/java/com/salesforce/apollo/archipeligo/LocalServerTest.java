@@ -72,10 +72,10 @@ public class LocalServerTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub               client;
-        private final ReleasableManagedChannel<Member> connection;
+        private final TestItBlockingStub       client;
+        private final ReleasableManagedChannel connection;
 
-        public TestItClient(ReleasableManagedChannel<Member> c) {
+        public TestItClient(ReleasableManagedChannel c) {
             this.connection = c;
             client = TestItGrpc.newBlockingStub(c);
         }
@@ -96,7 +96,7 @@ public class LocalServerTest {
         }
     }
 
-    public static interface TestItService extends Link<Member> {
+    public static interface TestItService extends Link {
         Any ping(Any request);
     }
 
@@ -124,22 +124,19 @@ public class LocalServerTest {
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
 
-        RouterSupplier<Member> serverA = new LocalServer<>(prefix, memberA, ForkJoinPool.commonPool());
+        RouterSupplier serverA = new LocalServer<>(prefix, memberA, ForkJoinPool.commonPool());
         var routerA = serverA.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
 
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(),
-                                                                                           "A", r -> new Server(r),
-                                                                                           c -> new TestItClient(c),
-                                                                                           local);
+        Router.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
+                                                                                   r -> new Server(r),
+                                                                                   c -> new TestItClient(c), local);
 
-        RouterSupplier<Member> serverB = new LocalServer<>(prefix, memberB, ForkJoinPool.commonPool());
+        RouterSupplier serverB = new LocalServer<>(prefix, memberB, ForkJoinPool.commonPool());
         var routerB = serverB.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
 
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA,
-                                                                                             new ServerB(), "B",
-                                                                                             r -> new Server(r),
-                                                                                             c -> new TestItClient(c),
-                                                                                             local);
+        Router.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",
+                                                                                     r -> new Server(r),
+                                                                                     c -> new TestItClient(c), local);
 
         routerA.start();
         routerB.start();

@@ -94,10 +94,10 @@ public class EnclaveTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub               client;
-        private final ReleasableManagedChannel<Member> connection;
+        private final TestItBlockingStub       client;
+        private final ReleasableManagedChannel connection;
 
-        public TestItClient(ReleasableManagedChannel<Member> c) {
+        public TestItClient(ReleasableManagedChannel c) {
             this.connection = c;
             client = TestItGrpc.newBlockingStub(c);
         }
@@ -118,7 +118,7 @@ public class EnclaveTest {
         }
     }
 
-    public static interface TestItService extends Link<Member> {
+    public static interface TestItService extends Link {
         Any ping(Any request);
     }
 
@@ -139,24 +139,24 @@ public class EnclaveTest {
         };
     }
 
-    private EventLoopGroup      eventLoopGroup;
-    private final TestItService local = new TestItService() {
-
-                                          @Override
-                                          public void close() throws IOException {
-                                          }
-
-                                          @Override
-                                          public Member getMember() {
-                                              return null;
-                                          }
-
-                                          @Override
-                                          public Any ping(Any request) {
-                                              return null;
-                                          }
-                                      };
     private final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private EventLoopGroup                                  eventLoopGroup;
+    private final TestItService                             local       = new TestItService() {
+
+                                                                            @Override
+                                                                            public void close() throws IOException {
+                                                                            }
+
+                                                                            @Override
+                                                                            public Member getMember() {
+                                                                                return null;
+                                                                            }
+
+                                                                            @Override
+                                                                            public Any ping(Any request) {
+                                                                                return null;
+                                                                            }
+                                                                        };
 
     @AfterEach
     public void after() throws Exception {
@@ -198,11 +198,9 @@ public class EnclaveTest {
                                          portal.register(qb64(d), endpoint1);
                                      });
         var router1 = enclave1.router(ForkJoinPool.commonPool());
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA,
-                                                                                           new ServerA(), "A",
-                                                                                           r -> new Server(r),
-                                                                                           c -> new TestItClient(c),
-                                                                                           local);
+        Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
+                                                                                   "A", r -> new Server(r),
+                                                                                   c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave2 = new Enclave<>(serverMember2.getId(), endpoint2, ForkJoinPool.commonPool(), bridge,
@@ -210,11 +208,9 @@ public class EnclaveTest {
                                          portal.register(qb64(d), endpoint2);
                                      });
         var router2 = enclave2.router(ForkJoinPool.commonPool());
-        Router<Member>.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB,
-                                                                                           new ServerB(), "A",
-                                                                                           r -> new Server(r),
-                                                                                           c -> new TestItClient(c),
-                                                                                           local);
+        Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
+                                                                                   "A", r -> new Server(r),
+                                                                                   c -> new TestItClient(c), local);
 
         portal.start();
         router1.start();

@@ -17,7 +17,7 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public interface Link<To extends Member> extends Closeable {
+public interface Link extends Closeable {
 
-    public To getMember();
+    public Member getMember();
 }
