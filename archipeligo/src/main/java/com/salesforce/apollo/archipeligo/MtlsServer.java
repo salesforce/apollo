@@ -22,7 +22,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
-import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.MtlsClient;
 import com.salesforce.apollo.comm.grpc.MtlsServer.EnableCompressionInterceptor;
@@ -44,7 +43,7 @@ import io.netty.handler.ssl.ClientAuth;
  * @author hal.hildebrand
  *
  */
-public class MtlsServer<To extends Member> implements RouterSupplier {
+public class MtlsServer implements RouterSupplier {
     private static final Provider PROVIDER_JSSE = Security.getProvider("SunJSSE");
     private static final String   TL_SV1_3      = "TLSv1.3";
 

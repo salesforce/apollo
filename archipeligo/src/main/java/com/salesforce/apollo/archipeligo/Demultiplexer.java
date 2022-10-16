@@ -16,9 +16,9 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.grpc.Channel;
 import io.grpc.Context;
 import io.grpc.Contexts;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -43,7 +43,8 @@ public class Demultiplexer {
     private final Server        server;
     private final AtomicBoolean started = new AtomicBoolean();
 
-    public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing, Function<String, Channel> dmux) {
+    public Demultiplexer(ServerBuilder<?> serverBuilder, Metadata.Key<String> routing,
+                         Function<String, ManagedChannel> dmux) {
         var serverInterceptor = new ServerInterceptor() {
             @Override
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
@@ -61,7 +62,7 @@ public class Demultiplexer {
         };
         server = serverBuilder.intercept(serverInterceptor).fallbackHandlerRegistry(new GrpcProxy() {
             @Override
-            protected Channel getChannel() {
+            protected ManagedChannel getChannel() {
                 return dmux.apply(ROUTE_TARGET_KEY.get());
             }
         }.newRegistry()).build();

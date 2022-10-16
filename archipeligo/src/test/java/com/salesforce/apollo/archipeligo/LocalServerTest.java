@@ -87,7 +87,7 @@ public class LocalServerTest {
 
         @Override
         public Member getMember() {
-            return connection.getTo();
+            return connection.getMember();
         }
 
         @Override
@@ -124,14 +124,14 @@ public class LocalServerTest {
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
 
-        RouterSupplier serverA = new LocalServer<>(prefix, memberA, ForkJoinPool.commonPool());
+        RouterSupplier serverA = new LocalServer(prefix, memberA, ForkJoinPool.commonPool());
         var routerA = serverA.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
 
         Router.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
                                                                                    r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
-        RouterSupplier serverB = new LocalServer<>(prefix, memberB, ForkJoinPool.commonPool());
+        RouterSupplier serverB = new LocalServer(prefix, memberB, ForkJoinPool.commonPool());
         var routerB = serverB.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
 
         Router.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",

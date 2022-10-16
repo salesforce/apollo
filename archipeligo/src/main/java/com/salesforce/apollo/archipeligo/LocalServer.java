@@ -48,7 +48,7 @@ import io.grpc.internal.ManagedChannelImplBuilder;
  * @author hal.hildebrand
  *
  */
-public class LocalServer<To extends Member> implements RouterSupplier {
+public class LocalServer implements RouterSupplier {
     private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
     private static final String NAME_TEMPLATE = "%s-%s";
 
@@ -96,7 +96,7 @@ public class LocalServer<To extends Member> implements RouterSupplier {
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();
             }
-        });
+        }, executor);
     }
 
     private ManagedChannel connectTo(Member to) {

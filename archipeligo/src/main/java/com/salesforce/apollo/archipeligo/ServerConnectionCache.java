@@ -118,72 +118,6 @@ public class ServerConnectionCache {
         Client create(ReleasableManagedChannel releasableManagedChannel);
     }
 
-    public static class ManagedServerConnection implements Comparable<ManagedServerConnection> {
-        private final AtomicInteger         borrowed   = new AtomicInteger();
-        private final ManagedChannel        channel;
-        private final Instant               created;
-        private volatile Instant            lastUsed;
-        private final ServerConnectionCache scc;
-        private final Member                to;
-        private final AtomicInteger         usageCount = new AtomicInteger();
-
-        public ManagedServerConnection(Member id, ManagedChannel channel, ServerConnectionCache scc) {
-            this.to = id;
-            this.channel = channel;
-            this.scc = scc;
-            created = Instant.now(scc.clock);
-            lastUsed = Instant.now(scc.clock);
-        }
-
-        @Override
-        public int compareTo(ManagedServerConnection o) {
-            return Integer.compare(usageCount.get(), o.usageCount.get());
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj)
-                return true;
-            if ((obj == null) || (getClass() != obj.getClass()))
-                return false;
-            return to.equals(((ManagedServerConnection) obj).to);
-        }
-
-        public ManagedChannel getChannel() {
-            return channel;
-        }
-
-        public Member getTo() {
-            return to;
-        }
-
-        @Override
-        public int hashCode() {
-            return to.hashCode();
-        }
-
-        public boolean isCloseable() {
-            return lastUsed.plus(scc.minIdle).isBefore(Instant.now(scc.clock));
-        }
-
-        public void release() {
-            scc.release(this);
-        }
-
-        private boolean decrementBorrow() {
-            if (borrowed.decrementAndGet() == 0) {
-                lastUsed = Instant.now(scc.clock);
-                return true;
-            }
-            return false;
-        }
-
-        private boolean incrementBorrow() {
-            usageCount.incrementAndGet();
-            return borrowed.incrementAndGet() == 1;
-        }
-    }
-
     public static interface ServerConnectionCacheMetrics {
 
         Meter borrowRate();
@@ -206,6 +140,72 @@ public class ServerConnectionCache {
 
     public interface ServerConnectionFactory {
         ManagedChannel connectTo(Member to);
+    }
+
+    static class ManagedServerConnection implements Comparable<ManagedServerConnection> {
+        private final AtomicInteger         borrowed   = new AtomicInteger();
+        private final ManagedChannel        channel;
+        private final Instant               created;
+        private volatile Instant            lastUsed;
+        private final ServerConnectionCache scc;
+        private final Member                member;
+        private final AtomicInteger         usageCount = new AtomicInteger();
+
+        public ManagedServerConnection(Member id, ManagedChannel channel, ServerConnectionCache scc) {
+            this.member = id;
+            this.channel = channel;
+            this.scc = scc;
+            created = Instant.now(scc.clock);
+            lastUsed = Instant.now(scc.clock);
+        }
+
+        @Override
+        public int compareTo(ManagedServerConnection o) {
+            return Integer.compare(usageCount.get(), o.usageCount.get());
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if ((obj == null) || (getClass() != obj.getClass()))
+                return false;
+            return member.equals(((ManagedServerConnection) obj).member);
+        }
+
+        public ManagedChannel getChannel() {
+            return channel;
+        }
+
+        public Member getMember() {
+            return member;
+        }
+
+        @Override
+        public int hashCode() {
+            return member.hashCode();
+        }
+
+        public boolean isCloseable() {
+            return lastUsed.plus(scc.minIdle).isBefore(Instant.now(scc.clock));
+        }
+
+        public void release() {
+            scc.release(this);
+        }
+
+        private boolean decrementBorrow() {
+            if (borrowed.decrementAndGet() == 0) {
+                lastUsed = Instant.now(scc.clock);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean incrementBorrow() {
+            usageCount.incrementAndGet();
+            return borrowed.incrementAndGet() == 1;
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
@@ -254,13 +254,13 @@ public class ServerConnectionCache {
                 return null;
             }
             if (connection.incrementBorrow()) {
-                log.debug("Opened channel to {}, last used: {}", connection.to, connection.lastUsed);
+                log.debug("Opened channel to {}, last used: {}", connection.member, connection.lastUsed);
                 if (metrics != null) {
                     metrics.borrowRate().mark();
                 }
                 queue.remove(connection);
             }
-            log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.to, connection.borrowed,
+            log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.member, connection.borrowed,
                       connection.usageCount);
             return new ReleasableManagedChannel(context, connection);
         });
@@ -281,7 +281,7 @@ public class ServerConnectionCache {
                         metrics.openConnections().dec();
                     }
                 } catch (Throwable e) {
-                    log.debug("Error closing {}", conn.to);
+                    log.debug("Error closing {}", conn.member);
                 }
             }
             cache.clear();
@@ -293,7 +293,7 @@ public class ServerConnectionCache {
     public void release(ManagedServerConnection connection) {
         lock(() -> {
             if (connection.decrementBorrow()) {
-                log.debug("Releasing connection: {}", connection.to);
+                log.debug("Releasing connection: {}", connection.member);
                 queue.add(connection);
                 if (metrics != null) {
                     metrics.releaseRate().mark();
@@ -309,10 +309,10 @@ public class ServerConnectionCache {
             try {
                 connection.channel.shutdownNow();
             } catch (Throwable t) {
-                log.debug("Error closing {}", connection.to);
+                log.debug("Error closing {}", connection.member);
             }
-            log.debug("{} is closed", connection.to);
-            cache.remove(connection.to);
+            log.debug("{} is closed", connection.member);
+            cache.remove(connection.member);
             if (metrics != null) {
                 metrics.openConnections().dec();
                 metrics.closeConnectionRate().mark();

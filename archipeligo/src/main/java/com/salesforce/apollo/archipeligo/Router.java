@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -60,8 +61,9 @@ public class Router {
         private final Client                             localLoopback;
         private final RoutableService<Service>           routing;
 
-        public CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
-                                    CreateClientCommunications<Client> createFunction, Client localLoopback) {
+        public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
+                                                       CreateClientCommunications<Client> createFunction,
+                                                       Client localLoopback) {
             this.context = context;
             this.routing = routing;
             this.createFunction = createFunction;
@@ -130,6 +132,7 @@ public class Router {
     private final ServerConnectionCache           cache;
     private final ClientIdentity                  clientIdentityProvider;
     private final Consumer<Digest>                contextRegistration;
+    private final Executor                        executor;
     private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
     private final Server                          server;
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
@@ -137,16 +140,22 @@ public class Router {
 
     public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider) {
-        this(serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
-        });
+        this(serverBuilder, cacheBuilder, clientIdentityProvider, r -> r.run());
     }
 
     public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
-                  ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
+                  ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration, Executor executor) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
         this.clientIdentityProvider = clientIdentityProvider;
         this.contextRegistration = contextRegistration;
+        this.executor = executor;
+    }
+
+    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+                  ClientIdentity clientIdentityProvider, Executor executor) {
+        this(serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
+        }, executor);
     }
 
     public void close(Duration await) {
@@ -179,14 +188,14 @@ public class Router {
                                                                                        Client localLoopback) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
-            RoutableService<Service> route = new RoutableService<Service>();
+            var route = new RoutableService<Service>(executor);
             BindableService bindableService = factory.apply(route);
             registry.addService(bindableService);
             return route;
         });
         routing.bind(context, service);
         contextRegistration.accept(context);
-        log.info("Communications created for: " + member);
+        log.info("Communications created for: " + member.getId());
         return new CommonCommunications<Client, Service>(context, member, routing, createFunction, localLoopback);
     }
 
@@ -194,11 +203,15 @@ public class Router {
         return clientIdentityProvider;
     }
 
-    public void start() throws IOException {
+    public void start() {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        server.start();
+        try {
+            server.start();
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot start server", e);
+        }
         log.info("Started router: {}", server.getListenSockets());
     }
 }

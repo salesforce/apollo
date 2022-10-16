@@ -15,9 +15,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.google.common.io.ByteStreams;
 
 import io.grpc.CallOptions;
-import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.HandlerRegistry;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -180,14 +180,19 @@ abstract public class GrpcProxy implements ServerCallHandler<byte[], byte[]> {
 
     @Override
     public ServerCall.Listener<byte[]> startCall(ServerCall<byte[], byte[]> serverCall, Metadata headers) {
-        var clientCall = getChannel().newCall(serverCall.getMethodDescriptor(), CallOptions.DEFAULT);
-        var proxy = new CallProxy<>(serverCall, clientCall);
-        clientCall.start(proxy.clientCallListener, headers);
-        serverCall.request(1);
-        clientCall.request(1);
-        return proxy.serverCallListener;
+        final var channel = getChannel();
+        try {
+            var clientCall = channel.newCall(serverCall.getMethodDescriptor(), CallOptions.DEFAULT);
+            var proxy = new CallProxy<>(serverCall, clientCall);
+            clientCall.start(proxy.clientCallListener, headers);
+            serverCall.request(1);
+            clientCall.request(1);
+            return proxy.serverCallListener;
+        } finally {
+            channel.shutdown();
+        }
     }
 
-    protected abstract Channel getChannel();
+    protected abstract ManagedChannel getChannel();
 
 }

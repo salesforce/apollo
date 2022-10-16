@@ -21,7 +21,7 @@ import java.util.function.Function;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.membership.Member;
 
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.ServerBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
@@ -40,15 +40,15 @@ import io.netty.channel.unix.DomainSocketAddress;
  */
 public class Portal<To extends Member> {
 
-    Map<String, DomainSocketAddress>  routes         = new ConcurrentHashMap<>();
-    private final DomainSocketAddress bridge;
-    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
-    private final Demultiplexer       inbound;
-    private final Duration            keepAlive;
-    private final Demultiplexer       outbound;
-    private final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    Map<String, DomainSocketAddress>                        routes         = new ConcurrentHashMap<>();
+    private final DomainSocketAddress                       bridge;
+    private final Class<? extends io.netty.channel.Channel> channelType    = getChannelType();
+    private final EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
+    private final Demultiplexer                             inbound;
+    private final Duration                                  keepAlive;
+    private final Demultiplexer                             outbound;
 
-    public Portal(ServerBuilder<?> inbound, Function<String, Channel> outbound, DomainSocketAddress bridge,
+    public Portal(ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound, DomainSocketAddress bridge,
                   Executor executor, Duration keepAlive) {
         this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(routes.get(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
@@ -103,7 +103,7 @@ public class Portal<To extends Member> {
         inbound.start();
     }
 
-    private Channel handler(DomainSocketAddress address) {
+    private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)

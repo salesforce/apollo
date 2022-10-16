@@ -88,7 +88,7 @@ public class RouterTest {
 
         @Override
         public Member getMember() {
-            return connection.getTo();
+            return connection.getMember();
         }
 
         @Override

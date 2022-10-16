@@ -53,8 +53,8 @@ public class ReleasableManagedChannel extends ManagedChannel {
         return delegate.getChannel().getState(requestConnection);
     }
 
-    public Member getTo() {
-        return delegate.getTo();
+    public Member getMember() {
+        return delegate.getMember();
     }
 
     @Override
@@ -75,7 +75,7 @@ public class ReleasableManagedChannel extends ManagedChannel {
             @Override
             public void start(Listener<ResponseT> responseListener, Metadata headers) {
                 headers.put(Router.METADATA_CONTEXT_KEY, qb64(context));
-                headers.put(Router.METADATA_TARGET_KEY, qb64(delegate.getTo().getId()));
+                headers.put(Router.METADATA_TARGET_KEY, qb64(delegate.getMember().getId()));
                 super.start(responseListener, headers);
             }
         };

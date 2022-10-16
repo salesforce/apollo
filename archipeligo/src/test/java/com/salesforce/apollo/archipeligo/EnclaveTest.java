@@ -42,6 +42,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -109,7 +110,7 @@ public class EnclaveTest {
 
         @Override
         public Member getMember() {
-            return connection.getTo();
+            return connection.getMember();
         }
 
         @Override
@@ -193,20 +194,20 @@ public class EnclaveTest {
                                         Duration.ofMillis(1));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave<>(serverMember1.getId(), endpoint1, ForkJoinPool.commonPool(), bridge,
-                                     Duration.ofMillis(1), d -> {
-                                         portal.register(qb64(d), endpoint1);
-                                     });
+        var enclave1 = new Enclave(serverMember1.getId(), endpoint1, ForkJoinPool.commonPool(), bridge,
+                                   Duration.ofMillis(1), d -> {
+                                       portal.register(qb64(d), endpoint1);
+                                   });
         var router1 = enclave1.router(ForkJoinPool.commonPool());
         Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
                                                                                    "A", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave<>(serverMember2.getId(), endpoint2, ForkJoinPool.commonPool(), bridge,
-                                     Duration.ofMillis(1), d -> {
-                                         portal.register(qb64(d), endpoint2);
-                                     });
+        var enclave2 = new Enclave(serverMember2.getId(), endpoint2, ForkJoinPool.commonPool(), bridge,
+                                   Duration.ofMillis(1), d -> {
+                                       portal.register(qb64(d), endpoint2);
+                                   });
         var router2 = enclave2.router(ForkJoinPool.commonPool());
         Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
                                                                                    "A", r -> new Server(r),
@@ -234,7 +235,7 @@ public class EnclaveTest {
         router2.close(Duration.ofSeconds(1));
     }
 
-    private Channel handler(DomainSocketAddress address) {
+    private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)

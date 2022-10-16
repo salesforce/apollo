@@ -19,7 +19,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -43,6 +45,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Server;
@@ -111,9 +114,10 @@ public class DemultiplexerTest {
         };
     }
 
-    private Server        serverA;
-    private Server        serverB;
-    private Demultiplexer terminus;
+    private final List<ManagedChannel> opened = new ArrayList<>();
+    private Server                     serverA;
+    private Server                     serverB;
+    private Demultiplexer              terminus;
 
     @AfterEach
     public void after() throws InterruptedException {
@@ -128,13 +132,15 @@ public class DemultiplexerTest {
             serverB.shutdownNow();
             serverB.awaitTermination();
         }
+        opened.forEach(mc -> mc.shutdown());
+        opened.clear();
     }
 
     @Test
     public void smokin() throws Exception {
         final var name = UUID.randomUUID().toString();
         var routes = new HashMap<String, DomainSocketAddress>();
-        Function<String, Channel> dmux = d -> handler(routes.get(d));
+        Function<String, ManagedChannel> dmux = d -> handler(routes.get(d));
 
         terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.METADATA_CONTEXT_KEY, dmux);
         terminus.start();
@@ -142,29 +148,27 @@ public class DemultiplexerTest {
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();
         routes.put(qb64(ctxA), serverA());
 
-        var clientA = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
-                                                                        .intercept(clientInterceptor(ctxA))
-                                                                        .build());
-
         var ctxB = DigestAlgorithm.DEFAULT.getLast();
         routes.put(qb64(ctxB), serverB());
 
-        var clientB = TestItGrpc.newBlockingStub(InProcessChannelBuilder.forName(name)
-                                                                        .intercept(clientInterceptor(ctxB))
-                                                                        .build());
-
+        var channel = InProcessChannelBuilder.forName(name).intercept(clientInterceptor(ctxA)).build();
+        opened.add(channel);
+        var clientA = TestItGrpc.newBlockingStub(channel);
         var resultA = clientA.ping(Any.newBuilder().build());
         assertNotNull(resultA);
         var creds = resultA.unpack(PeerCreds.class);
         assertNotNull(creds);
 
+        channel = InProcessChannelBuilder.forName(name).intercept(clientInterceptor(ctxB)).build();
+        opened.add(channel);
+        var clientB = TestItGrpc.newBlockingStub(channel);
         var resultB = clientB.ping(Any.newBuilder().build());
         assertNotNull(resultB);
         var msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server", msg.getContents().toStringUtf8());
     }
 
-    private Channel handler(DomainSocketAddress address) {
+    private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(getEventLoopGroup())
                                   .channelType(getChannelType())

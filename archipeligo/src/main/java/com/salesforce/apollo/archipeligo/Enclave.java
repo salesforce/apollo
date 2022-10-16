@@ -58,7 +58,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  * @author hal.hildebrand
  *
  */
-public class Enclave<To extends Member> implements RouterSupplier {
+public class Enclave implements RouterSupplier {
     private static final Logger log = LoggerFactory.getLogger(Enclave.class);
 
     private final DomainSocketAddress                       bridge;
@@ -110,7 +110,7 @@ public class Enclave<To extends Member> implements RouterSupplier {
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();
             }
-        }, contextRegistration);
+        }, contextRegistration, executor);
     }
 
     private ManagedChannel connectTo(Member to) {
