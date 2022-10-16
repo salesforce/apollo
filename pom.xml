@@ -45,6 +45,7 @@
         <antlr4.version>4.9.3</antlr4.version>
         <netty.version>4.1.77.Final</netty.version>
         <native.maven.plugin.version>0.9.14</native.maven.plugin.version>
+        <junit.version>5.9.1</junit.version>
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -385,13 +386,13 @@
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter-engine</artifactId>
-                <version>5.6.3</version>
+                <version>${junit.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
-                <version>5.6.3</version>
+                <version>${junit.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>
