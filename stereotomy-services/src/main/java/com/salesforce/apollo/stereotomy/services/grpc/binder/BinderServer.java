@@ -6,22 +6,16 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.binder;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BindContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipeligo.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -30,19 +24,15 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class BinderServer extends BinderImplBase {
-    private final static Logger log = LoggerFactory.getLogger(BinderServer.class);
 
     private ClientIdentity                     identity;
     private final StereotomyMetrics            metrics;
     private final RoutableService<ProtoBinder> routing;
-    private final Executor                     exec;
 
-    public BinderServer(RoutableService<ProtoBinder> router, ClientIdentity identity, Executor exec,
-                        StereotomyMetrics metrics) {
+    public BinderServer(RoutableService<ProtoBinder> router, ClientIdentity identity, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = router;
-        this.exec = exec;
     }
 
     @Override
@@ -57,7 +47,7 @@ public class BinderServer extends BinderImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             var result = s.bind(request.getBinding());
             result.whenComplete((b, t) -> {
                 if (timer != null) {
@@ -70,7 +60,7 @@ public class BinderServer extends BinderImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 
     @Override
@@ -85,7 +75,7 @@ public class BinderServer extends BinderImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             var result = s.unbind(request.getIdentifier());
             result.whenComplete((b, t) -> {
                 if (timer != null) {
@@ -98,7 +88,7 @@ public class BinderServer extends BinderImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 
 }

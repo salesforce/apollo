@@ -7,11 +7,11 @@
 package com.salesforce.apollo.stereotomy.services.grpc;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
@@ -21,11 +21,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -41,17 +41,17 @@ import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServ
  */
 public class TestEventObserver {
 
-    private LocalRouter clientRouter;
-    private LocalRouter serverRouter;
+    private Router clientRouter;
+    private Router serverRouter;
 
     @AfterEach
     public void after() {
         if (serverRouter != null) {
-            serverRouter.close();
+            serverRouter.close(Duration.ofSeconds(1));
             serverRouter = null;
         }
         if (clientRouter != null) {
-            clientRouter.close();
+            clientRouter.close(Duration.ofSeconds(1));
             clientRouter = null;
         }
     }
@@ -69,9 +69,8 @@ public class TestEventObserver {
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3);
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        serverRouter = new LocalRouter(serverMember, prefix, serverMembers, builder, exec, null);
-        clientRouter = new LocalRouter(clientMember, prefix, serverMembers, builder, exec, null);
+        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
+        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
 
         serverRouter.start();
         clientRouter.start();
@@ -103,13 +102,13 @@ public class TestEventObserver {
 
         ClientIdentity identity = () -> clientMember.getId();
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                            r -> new EventObserverServer(r, identity, exec, null), null, null);
+                            r -> new EventObserverServer(r, identity, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new EventObserverServer(r, identity, exec, null),
+                                              r -> new EventObserverServer(r, identity, null),
                                               EventObserverClient.getCreate(context, null), null);
 
-        var client = clientComms.apply(serverMember, clientMember);
+        var client = clientComms.connect(serverMember);
 
         client.publishAttachments(Collections.emptyList()).get();
         client.publish(KERL_.getDefaultInstance(), Collections.emptyList()).get();

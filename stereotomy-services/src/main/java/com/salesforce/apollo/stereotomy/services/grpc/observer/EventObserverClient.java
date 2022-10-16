@@ -22,8 +22,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.Eve
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -37,8 +37,8 @@ public class EventObserverClient implements EventObserverService {
 
     public static CreateClientCommunications<EventObserverService> getCreate(Digest context,
                                                                              StereotomyMetrics metrics) {
-        return (t, f, c) -> {
-            return new EventObserverClient(context, c, t, metrics);
+        return (c) -> {
+            return new EventObserverClient(context, c, metrics);
         };
 
     }
@@ -72,18 +72,15 @@ public class EventObserverClient implements EventObserverService {
         };
     }
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel    channel;
     private final EventObserverFutureStub client;
     private final Digeste                 context;
-    private final Member                  member;
     private final StereotomyMetrics       metrics;
 
-    public EventObserverClient(Digest context, ManagedServerChannel channel, Member member,
-                               StereotomyMetrics metrics) {
+    public EventObserverClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
-        this.member = member;
         this.channel = channel;
-        this.client = EventObserverGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = EventObserverGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -94,7 +91,7 @@ public class EventObserverClient implements EventObserverService {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

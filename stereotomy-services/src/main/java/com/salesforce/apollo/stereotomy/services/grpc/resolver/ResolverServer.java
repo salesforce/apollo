@@ -7,20 +7,14 @@
 package com.salesforce.apollo.stereotomy.services.grpc.resolver;
 
 import java.util.Optional;
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
-import com.salesforce.apollo.comm.RoutableService;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.archipeligo.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -29,16 +23,13 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class ResolverServer extends ResolverImplBase {
-    private final static Logger log = LoggerFactory.getLogger(ResolverServer.class);
 
     private final StereotomyMetrics              metrics;
     private final RoutableService<ProtoResolver> routing;
-    private final Executor                       exec;
 
-    public ResolverServer(RoutableService<ProtoResolver> router, Executor exec, StereotomyMetrics metrics) {
+    public ResolverServer(RoutableService<ProtoResolver> router, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
-        this.exec = exec;
     }
 
     @Override
@@ -48,7 +39,7 @@ public class ResolverServer extends ResolverImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundLookupRequest().mark(request.getSerializedSize());
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             Optional<Binding> response = s.lookup(request.getIdentifier());
             if (response.isEmpty()) {
                 if (timer != null) {
@@ -66,6 +57,6 @@ public class ResolverServer extends ResolverImplBase {
             }
             responseObserver.onNext(response.get());
             responseObserver.onCompleted();
-        }), log));
+        });
     }
 }
