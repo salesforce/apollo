@@ -18,8 +18,8 @@ import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationFutureS
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -32,8 +32,8 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 public class ReconciliationClient implements ReconciliationService {
     public static CreateClientCommunications<ReconciliationService> getCreate(Digest context,
                                                                               StereotomyMetrics metrics) {
-        return (t, f, c) -> {
-            return new ReconciliationClient(context, c, t, metrics);
+        return (c) -> {
+            return new ReconciliationClient(context, c, metrics);
         };
     }
 
@@ -65,20 +65,17 @@ public class ReconciliationClient implements ReconciliationService {
         };
     }
 
-    private final ManagedServerChannel  channel;
+    private final ManagedServerChannel     channel;
     private final ReconciliationFutureStub client;
     @SuppressWarnings("unused")
     private final Digeste                  context;
-    private final Member                   member;
     @SuppressWarnings("unused")
     private final StereotomyMetrics        metrics;
 
-    public ReconciliationClient(Digest context, ManagedServerChannel channel, Member member,
-                                StereotomyMetrics metrics) {
+    public ReconciliationClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
-        this.member = member;
         this.channel = channel;
-        this.client = ReconciliationGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = ReconciliationGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -89,7 +86,7 @@ public class ReconciliationClient implements ReconciliationService {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

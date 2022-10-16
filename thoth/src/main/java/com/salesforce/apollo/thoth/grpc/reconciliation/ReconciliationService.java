@@ -12,7 +12,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipeligo.Link;
 
 /**
  * @author hal.hildebrand
