@@ -39,12 +39,12 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipeligo.EndpointProvider;
-import com.salesforce.apollo.archipeligo.MtlsServer;
-import com.salesforce.apollo.archipeligo.Router;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache;
-import com.salesforce.apollo.archipeligo.ServerConnectionCacheMetricsImpl;
-import com.salesforce.apollo.archipeligo.StandardEpProvider;
+import com.salesforce.apollo.archipelago.EndpointProvider;
+import com.salesforce.apollo.archipelago.MtlsServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipelago.StandardEpProvider;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;

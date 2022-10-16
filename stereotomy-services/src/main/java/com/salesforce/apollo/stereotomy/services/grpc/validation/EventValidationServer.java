@@ -12,7 +12,7 @@ import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.BoolValue;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorImplBase;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 

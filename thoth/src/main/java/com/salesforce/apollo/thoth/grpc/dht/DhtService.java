@@ -21,7 +21,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndVa
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
-import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipelago.Link;
 
 /**
  * @author hal.hildebrand

@@ -44,9 +44,9 @@ import org.junit.jupiter.api.BeforeEach;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.archipeligo.LocalServer;
-import com.salesforce.apollo.archipeligo.Router;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;

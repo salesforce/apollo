@@ -27,9 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.archipeligo.LocalServer;
-import com.salesforce.apollo.archipeligo.Router;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;

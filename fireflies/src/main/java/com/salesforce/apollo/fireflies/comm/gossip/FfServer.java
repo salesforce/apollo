@@ -12,7 +12,7 @@ import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;

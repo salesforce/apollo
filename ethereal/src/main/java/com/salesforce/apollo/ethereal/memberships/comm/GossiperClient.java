@@ -15,8 +15,8 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperFutureStub;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.archipeligo.ManagedServerChannel;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 
 /**

@@ -12,7 +12,7 @@ import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementImplBase;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.protocols.ClientIdentity;

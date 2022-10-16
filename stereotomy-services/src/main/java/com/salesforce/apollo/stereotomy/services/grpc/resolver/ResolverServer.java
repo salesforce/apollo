@@ -12,7 +12,7 @@ import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
 

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
-import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 
 /**

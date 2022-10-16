@@ -18,8 +18,8 @@ import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureStub;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.archipeligo.ManagedServerChannel;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 

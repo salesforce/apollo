@@ -33,9 +33,9 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
-import com.salesforce.apollo.archipeligo.LocalServer;
-import com.salesforce.apollo.archipeligo.Router;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;

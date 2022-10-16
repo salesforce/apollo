@@ -28,7 +28,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.TestChain;

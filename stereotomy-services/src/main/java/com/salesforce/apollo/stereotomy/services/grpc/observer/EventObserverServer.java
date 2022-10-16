@@ -14,7 +14,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;

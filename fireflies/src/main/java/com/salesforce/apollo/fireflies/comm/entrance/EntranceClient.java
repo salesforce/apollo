@@ -16,8 +16,8 @@ import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesforce.apollo.archipeligo.ManagedServerChannel;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.membership.Member;
 

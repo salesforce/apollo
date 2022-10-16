@@ -10,7 +10,7 @@ import java.io.IOException;
 
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
-import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 

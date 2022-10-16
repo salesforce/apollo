@@ -22,8 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.archipeligo.Link;
-import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.Link;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;

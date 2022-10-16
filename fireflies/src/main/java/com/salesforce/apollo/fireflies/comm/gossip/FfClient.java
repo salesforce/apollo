@@ -15,8 +15,8 @@ import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.archipeligo.ManagedServerChannel;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.membership.Member;
 

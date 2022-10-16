@@ -32,7 +32,7 @@ import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;

@@ -11,7 +11,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BindContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;

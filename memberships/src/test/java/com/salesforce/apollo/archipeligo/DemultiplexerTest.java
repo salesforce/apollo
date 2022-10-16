@@ -36,6 +36,8 @@ import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.PeerCreds;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.archipelago.Demultiplexer;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;

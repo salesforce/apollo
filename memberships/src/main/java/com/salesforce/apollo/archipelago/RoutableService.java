@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.archipeligo.Router.SERVER_CONTEXT_KEY;
+import static com.salesforce.apollo.archipelago.Router.SERVER_CONTEXT_KEY;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

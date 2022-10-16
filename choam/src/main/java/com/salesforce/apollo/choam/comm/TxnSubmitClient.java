@@ -10,8 +10,8 @@ import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.TransactionSubmissionGrpc;
 import com.salesfoce.apollo.choam.proto.TransactionSubmissionGrpc.TransactionSubmissionBlockingStub;
-import com.salesforce.apollo.archipeligo.ManagedServerChannel;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.membership.Member;
 

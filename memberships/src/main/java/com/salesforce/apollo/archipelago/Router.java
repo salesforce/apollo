@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;

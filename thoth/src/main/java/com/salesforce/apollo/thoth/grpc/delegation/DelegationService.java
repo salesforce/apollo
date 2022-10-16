@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.thoth.grpc.delegation;
 
-import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipelago.Link;
 
 /**
  * @author hal.hildebrand

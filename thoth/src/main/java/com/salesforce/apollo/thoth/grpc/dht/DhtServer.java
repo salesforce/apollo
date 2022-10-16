@@ -27,7 +27,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 

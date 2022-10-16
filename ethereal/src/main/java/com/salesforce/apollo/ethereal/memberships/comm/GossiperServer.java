@@ -12,7 +12,7 @@ import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperImplBase;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.archipeligo.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.MoreObjects;
-import com.salesforce.apollo.archipeligo.ServerConnectionCache.ReleasableManagedChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 

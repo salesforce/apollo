@@ -12,7 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 

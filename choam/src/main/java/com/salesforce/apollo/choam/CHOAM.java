@@ -65,7 +65,7 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Submitter;
 import com.salesforce.apollo.choam.comm.Terminal;
