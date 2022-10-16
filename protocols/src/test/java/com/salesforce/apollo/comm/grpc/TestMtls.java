@@ -71,10 +71,10 @@ public class TestMtls {
         InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getLocalHost(), Utils.allocatePort());
 
         MtlsServer server = server(serverAddress);
+        server.start();
+        server.bind(server());
+        MtlsClient client = client(serverAddress);
         try {
-            server.start();
-            server.bind(server());
-            MtlsClient client = client(serverAddress);
 
             for (int i = 0; i < 100; i++) {
                 Any tst = TestItGrpc.newBlockingStub(client.getChannel()).ping(Any.getDefaultInstance());
@@ -82,6 +82,7 @@ public class TestMtls {
                 assertNotNull(tst);
             }
         } finally {
+            client.stop();
             server.stop();
         }
     }

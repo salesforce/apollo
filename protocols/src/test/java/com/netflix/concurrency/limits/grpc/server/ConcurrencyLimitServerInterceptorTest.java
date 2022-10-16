@@ -20,7 +20,7 @@ import com.netflix.concurrency.limits.grpc.mockito.OptionalResultCaptor;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
 
 import io.grpc.CallOptions;
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Server;
@@ -45,15 +45,19 @@ public class ConcurrencyLimitServerInterceptorTest {
     Limiter<GrpcServerRequestContext>      limiter;
     OptionalResultCaptor<Limiter.Listener> listener;
 
-    private Channel channel;
-    private Server  server;
+    private ManagedChannel channel;
+    private Server         server;
 
     @AfterEach
     public void afterEachTest() {
         if (server != null) {
             server.shutdown();
+            server = null;
         }
-
+        if (channel != null) {
+            channel.shutdown();
+            channel = null;
+        }
     }
 
     @BeforeEach
