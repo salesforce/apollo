@@ -6,21 +6,15 @@
  */
 package com.salesforce.apollo.ethereal.memberships.comm;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperImplBase;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipeligo.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -29,18 +23,14 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class GossiperServer extends GossiperImplBase {
-    private static final Logger                    log = LoggerFactory.getLogger(GossiperServer.class);
-    private final Executor                         exec;
     private ClientIdentity                         identity;
     private final EtherealMetrics                  metrics;
     private final RoutableService<GossiperService> routing;
 
-    public GossiperServer(ClientIdentity identity, EtherealMetrics metrics, RoutableService<GossiperService> r,
-                          Executor exec) {
+    public GossiperServer(ClientIdentity identity, EtherealMetrics metrics, RoutableService<GossiperService> r) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = r;
-        this.exec = exec;
     }
 
     @Override
@@ -56,7 +46,7 @@ public class GossiperServer extends GossiperImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             Update response = s.gossip(request, from);
             if (timer != null) {
                 timer.stop();
@@ -66,7 +56,7 @@ public class GossiperServer extends GossiperImplBase {
             }
             responseObserver.onNext(response);
             responseObserver.onCompleted();
-        }), log));
+        });
     }
 
     @Override
@@ -82,14 +72,14 @@ public class GossiperServer extends GossiperImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             s.update(request, from);
             if (timer != null) {
                 timer.stop();
             }
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
-        }), log));
+        });
     }
 
 }

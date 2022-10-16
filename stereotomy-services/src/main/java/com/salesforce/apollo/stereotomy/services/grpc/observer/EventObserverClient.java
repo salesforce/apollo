@@ -23,7 +23,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
+;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -72,13 +72,13 @@ public class EventObserverClient implements EventObserverService {
         };
     }
 
-    private final ReleasableManagedChannel channel;
+    private final ManagedServerChannel channel;
     private final EventObserverFutureStub client;
     private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
 
-    public EventObserverClient(Digest context, ReleasableManagedChannel channel, Member member,
+    public EventObserverClient(Digest context, ManagedServerChannel channel, Member member,
                                StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;

@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -37,10 +36,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -158,7 +156,6 @@ public class EtherealTest {
         List<ExecutorService> executors = new ArrayList<>();
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         for (short i = 0; i < (short) NPROC; i++) {
             var level = new AtomicInteger();
             var ds = new SimpleDataSource();
@@ -167,8 +164,7 @@ public class EtherealTest {
             final var exec = Executors.newFixedThreadPool(2);
             executors.add(exec);
             final var member = members.get(i);
-            var com = new LocalRouter(member, prefix, serverMembers, ServerConnectionCache.newBuilder(), exec,
-                                      metrics.limitsMetrics());
+            var com = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder(), exec);
             comms.add(com);
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
                                           (pb, last) -> {
@@ -209,7 +205,7 @@ public class EtherealTest {
             controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
-            comms.forEach(e -> e.close());
+            comms.forEach(e -> e.close(Duration.ofSeconds(1)));
             executors.forEach(executor -> {
                 executor.shutdown();
                 try {

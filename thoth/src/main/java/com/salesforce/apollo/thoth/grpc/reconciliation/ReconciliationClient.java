@@ -19,7 +19,7 @@ import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
+;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -65,7 +65,7 @@ public class ReconciliationClient implements ReconciliationService {
         };
     }
 
-    private final ReleasableManagedChannel  channel;
+    private final ManagedServerChannel  channel;
     private final ReconciliationFutureStub client;
     @SuppressWarnings("unused")
     private final Digeste                  context;
@@ -73,7 +73,7 @@ public class ReconciliationClient implements ReconciliationService {
     @SuppressWarnings("unused")
     private final StereotomyMetrics        metrics;
 
-    public ReconciliationClient(Digest context, ReleasableManagedChannel channel, Member member,
+    public ReconciliationClient(Digest context, ManagedServerChannel channel, Member member,
                                 StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;

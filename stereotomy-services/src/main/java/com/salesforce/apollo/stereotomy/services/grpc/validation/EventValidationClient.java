@@ -19,7 +19,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
+;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -58,13 +58,13 @@ public class EventValidationClient implements EventValidationService {
         };
     }
 
-    private final ReleasableManagedChannel channel;
+    private final ManagedServerChannel channel;
     private final ValidatorFutureStub     client;
     private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
 
-    public EventValidationClient(Digest context, ReleasableManagedChannel channel, Member member,
+    public EventValidationClient(Digest context, ManagedServerChannel channel, Member member,
                                  StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;

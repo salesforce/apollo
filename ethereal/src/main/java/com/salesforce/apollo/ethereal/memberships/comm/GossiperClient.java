@@ -15,8 +15,8 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperFutureStub;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -26,21 +26,19 @@ import com.salesforce.apollo.membership.Member;
 public class GossiperClient implements Gossiper {
 
     public static CreateClientCommunications<Gossiper> getCreate(EtherealMetrics metrics) {
-        return (t, f, c) -> {
-            return new GossiperClient(c, t, metrics);
+        return (c) -> {
+            return new GossiperClient(c, metrics);
         };
 
     }
 
-    private final ReleasableManagedChannel channel;
-    private final GossiperFutureStub      client;
-    private final Member                  member;
-    private final EtherealMetrics         metrics;
+    private final ManagedServerChannel channel;
+    private final GossiperFutureStub   client;
+    private final EtherealMetrics      metrics;
 
-    public GossiperClient(ReleasableManagedChannel channel, Member member, EtherealMetrics metrics) {
-        this.member = member;
+    public GossiperClient(ManagedServerChannel channel, EtherealMetrics metrics) {
         this.channel = channel;
-        this.client = GossiperGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = GossiperGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -51,7 +49,7 @@ public class GossiperClient implements Gossiper {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override
@@ -83,7 +81,7 @@ public class GossiperClient implements Gossiper {
 
     @Override
     public String toString() {
-        return String.format("->[%s]", member);
+        return String.format("->[%s]", channel.getMember());
     }
 
     @Override

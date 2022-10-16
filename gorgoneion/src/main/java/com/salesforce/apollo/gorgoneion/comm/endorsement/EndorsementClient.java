@@ -19,7 +19,7 @@ import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureSt
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
+;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -34,12 +34,12 @@ public class EndorsementClient implements Endorsement {
 
     }
 
-    private final ReleasableManagedChannel channel;
+    private final ManagedServerChannel channel;
     private final EndorsementFutureStub   client;
     private final Member                  member;
     private final GorgoneionMetrics       metrics;
 
-    public EndorsementClient(ReleasableManagedChannel channel, Member member, GorgoneionMetrics metrics) {
+    public EndorsementClient(ManagedServerChannel channel, Member member, GorgoneionMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = EndorsementGrpc.newFutureStub(channel.channel).withCompression("gzip");

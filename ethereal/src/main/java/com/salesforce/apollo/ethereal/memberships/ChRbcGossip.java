@@ -25,11 +25,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.comm.RingCommunications;
-import com.salesforce.apollo.comm.RingCommunications.Destination;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.comm.Router.ServiceRouting;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
+import com.salesforce.apollo.archipeligo.Router.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Processor;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
@@ -39,6 +37,8 @@ import com.salesforce.apollo.ethereal.memberships.comm.GossiperService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.ring.RingCommunications;
+import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
@@ -105,8 +105,7 @@ public class ChRbcGossip {
         this.metrics = m;
         this.exec = exec;
         comm = communications.create((Member) member, context.getId(), new Terminal(), getClass().getCanonicalName(),
-                                     r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r,
-                                                             exec),
+                                     r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<>(context, member, this.comm, exec);
     }
