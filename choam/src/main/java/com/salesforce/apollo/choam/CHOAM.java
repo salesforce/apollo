@@ -65,6 +65,7 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Submitter;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -83,7 +84,6 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -320,7 +320,7 @@ public class CHOAM {
         @Override
         public SubmitResult submitTxn(Transaction transaction) {
             Member target = servers.next();
-            try (var link = submissionComm.apply(target, params.member())) {
+            try (var link = submissionComm.connect(target)) {
                 if (link == null) {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member().getId());
                     return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
@@ -707,14 +707,14 @@ public class CHOAM {
         comm = params.communications()
                      .create(params.member(), params.context().getId(), service, service.getClass().getCanonicalName(),
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
-                                                     params.metrics(), r, params.exec()),
+                                                     params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
         submissionComm = params.communications()
                                .create(params.member(), params.context().getId(), txnSubmission,
                                        txnSubmission.getClass().getCanonicalName(),
                                        r -> new TxnSubmitServer(params.communications().getClientIdentityProvider(),
-                                                                params.metrics(), r, params.exec()),
+                                                                params.metrics(), r),
                                        TxnSubmitClient.getCreate(params.metrics()),
                                        TxnSubmission.getLocalLoopback(params.member(), txnSubmission));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);

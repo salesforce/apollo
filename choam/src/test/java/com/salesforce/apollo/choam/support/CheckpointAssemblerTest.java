@@ -43,10 +43,10 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Slice;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -146,7 +146,7 @@ public class CheckpointAssemblerTest {
         });
         @SuppressWarnings("unchecked")
         CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
-        when(comm.apply(any(), any())).thenReturn(client);
+        when(comm.connect(any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint,

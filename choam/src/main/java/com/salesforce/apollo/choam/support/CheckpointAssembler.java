@@ -28,15 +28,15 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
-import com.salesforce.apollo.comm.RingIterator;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 

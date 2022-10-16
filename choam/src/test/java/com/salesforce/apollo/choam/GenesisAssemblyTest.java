@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -41,6 +40,9 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -49,9 +51,6 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
@@ -122,10 +121,9 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(m, prefix, serverMembers, ServerConnectionCache.newBuilder(),
-                                       Executors.newSingleThreadExecutor(), null);
+            var comm = new LocalServer(prefix, m, Executors.newSingleThreadExecutor()).router( ServerConnectionCache.newBuilder(),
+                                       Executors.newSingleThreadExecutor());
             return comm;
         }));
         CountDownLatch complete = new CountDownLatch(committee.activeCount());
@@ -138,8 +136,7 @@ public class GenesisAssemblyTest {
                                                                                        .getCanonicalName(),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r,
-                                                                                                        Executors.newSingleThreadExecutor()),
+                                                                                                        null, r),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -205,7 +202,7 @@ public class GenesisAssemblyTest {
             genii.values().forEach(r -> r.start());
             complete.await(15, TimeUnit.SECONDS);
         } finally {
-            communications.values().forEach(r -> r.close());
+            communications.values().forEach(r -> r.close(Duration.ofSeconds(1)));
             genii.values().forEach(r -> r.stop());
         }
     }

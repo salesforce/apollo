@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -36,15 +35,15 @@ import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.QualifiedBase64;
@@ -112,7 +111,7 @@ public class ViewAssemblyTest {
     public void after() {
         controllers.forEach(e -> e.stop());
         gossipers.forEach(e -> e.stop());
-        communications.values().forEach(e -> e.close());
+        communications.values().forEach(e -> e.close(Duration.ofSeconds(1)));
     }
 
     @BeforeEach
@@ -131,10 +130,10 @@ public class ViewAssemblyTest {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
 
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         members.forEach(m -> {
-            var com = new LocalRouter(m, prefix, serverMembers, ServerConnectionCache.newBuilder(),
-                                      Executors.newFixedThreadPool(2), null);
+            var com = new LocalServer(prefix, m,
+                                      Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder(),
+                                                                                  Executors.newFixedThreadPool(2));
             communications.put(m, com);
         });
         context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
@@ -194,8 +193,7 @@ public class ViewAssemblyTest {
                                                                                 r -> {
                                                                                     Router router = communications.get(m);
                                                                                     return new TerminalServer(router.getClientIdentityProvider(),
-                                                                                                              null, r,
-                                                                                                              Executors.newSingleThreadExecutor());
+                                                                                                              null, r);
                                                                                 }, TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback(m,
                                                                                                           servers.get(m)))));
