@@ -32,6 +32,7 @@
     </modules>
 
     <properties>
+        <micrometer.version>1.9.5</micrometer.version>
         <jackson.version>2.13.2</jackson.version>
         <dropwizard.version>2.1.2</dropwizard.version>
         <h2.version>2.1.212</h2.version>
@@ -230,6 +231,11 @@
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>gorgoneion</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
             </dependency>
 
             <dependency>

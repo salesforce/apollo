@@ -12,7 +12,7 @@ import com.codahale.metrics.Meter;
  * @author hal.hildebrand
  *
  */
-public interface EdpointMetrics {
+public interface EndpointMetrics {
 
     String INBOUND_BANDWIDTH  = "bandwidth.inbound";
     String OUTBOUND_BANDWIDTH = "bandwidth.outbound";
