@@ -29,7 +29,6 @@
         <module>pal-d</module>
         <module>pal</module>
         <module>gorgoneion</module>
-        <module>archipeligo</module>
     </modules>
 
     <properties>
@@ -232,7 +231,7 @@
                 <artifactId>gorgoneion</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            
+
             <dependency>
                 <groupId>org.jboss.logging</groupId>
                 <artifactId>jboss-logging</artifactId>
