@@ -25,8 +25,6 @@ import com.google.common.cache.LoadingCache;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
-import com.salesforce.apollo.comm.grpc.MtlsClient;
-import com.salesforce.apollo.comm.grpc.MtlsServer.EnableCompressionInterceptor;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
@@ -39,6 +37,10 @@ import com.salesforce.apollo.protocols.LimitsRegistry;
 
 import io.grpc.Context;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
@@ -58,6 +60,23 @@ import io.netty.handler.ssl.SslProvider;
  *
  */
 public class MtlsServer implements RouterSupplier {
+    /**
+     * Currently grpc-java doesn't return compressed responses, even if the client
+     * has sent a compressed payload. This turns on gzip compression for all
+     * responses.
+     */
+    public static class EnableCompressionInterceptor implements ServerInterceptor {
+        public final static EnableCompressionInterceptor SINGLETON = new EnableCompressionInterceptor();
+
+        @Override
+        public <ReqT, RespT> io.grpc.ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                             Metadata headers,
+                                                                             ServerCallHandler<ReqT, RespT> next) {
+            call.setCompression("gzip");
+            return next.startCall(call, headers);
+        }
+    }
+
     static final String           TL_SV1_3      = "TLSv1.3";
     private static final Provider PROVIDER_JSSE = Security.getProvider("SunJSSE");
 
