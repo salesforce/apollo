@@ -26,7 +26,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -46,6 +45,9 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
@@ -54,9 +56,6 @@ import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -112,7 +111,7 @@ public class CHOAMTest {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             routers = null;
         }
         if (choams != null) {
@@ -169,11 +168,11 @@ public class CHOAMTest {
         members.forEach(m -> context.activate(m));
         var commExec = ForkJoinPool.commonPool();
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(m, prefix, serverMembers,
-                                              ServerConnectionCache.newBuilder().setTarget(30), commExec,
-                                              metrics.limitsMetrics());
+            var localRouter = new LocalServer(prefix, m, commExec).router(
+                                                                          ServerConnectionCache.newBuilder()
+                                                                                               .setTarget(30),
+                                                                          commExec);
             return localRouter;
         }));
         var scheduler = Executors.newScheduledThreadPool(2);
@@ -248,7 +247,7 @@ public class CHOAMTest {
                                                                       .toList());
         } finally {
             choams.values().forEach(e -> e.stop());
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
 
             System.out.println("Final block height: " + members.stream()
                                                                .map(m -> updaters.get(m))
