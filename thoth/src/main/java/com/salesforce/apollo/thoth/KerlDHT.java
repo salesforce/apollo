@@ -56,11 +56,8 @@ import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.thoth.proto.ViewState;
 import com.salesfoce.apollo.utils.proto.Biff;
-import com.salesforce.apollo.comm.RingCommunications;
-import com.salesforce.apollo.comm.RingCommunications.Destination;
-import com.salesforce.apollo.comm.RingIterator;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
@@ -68,6 +65,9 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.ring.RingCommunications;
+import com.salesforce.apollo.ring.RingCommunications.Destination;
+import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
@@ -282,14 +282,13 @@ public class KerlDHT implements ProtoKERLService {
         this.frequency = frequency;
         this.scheduler = scheduler;
         dhtComms = communications.create(member, context.getId(), service, service.getClass().getCanonicalName(),
-                                         r -> new DhtServer(r, executor, metrics),
-                                         DhtClient.getCreate(context.getId(), metrics),
+                                         r -> new DhtServer(r, metrics), DhtClient.getCreate(context.getId(), metrics),
                                          DhtClient.getLocalLoopback(service, member));
         reconcileComms = communications.create(member, context.getId(), reconciliation,
                                                reconciliation.getClass().getCanonicalName(),
                                                r -> new ReconciliationServer(r,
                                                                              communications.getClientIdentityProvider(),
-                                                                             executor, metrics),
+                                                                             metrics),
                                                ReconciliationClient.getCreate(context.getId(), metrics),
                                                ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connectionPool = connectionPool;

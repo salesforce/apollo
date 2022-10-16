@@ -74,11 +74,9 @@ import com.salesfoce.apollo.fireflies.proto.ViewChangeGossip;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Biff;
-import com.salesforce.apollo.comm.RingCommunications;
-import com.salesforce.apollo.comm.RingCommunications.Destination;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.comm.Router.ServiceRouting;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -99,6 +97,8 @@ import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.ring.RingCommunications;
+import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -762,12 +762,11 @@ public class View {
         viewManagement.resetBootstrapView();
         var service = new Service();
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new FfServer(communications.getClientIdentityProvider(), r, exec,
-                                                            metrics),
+                                          r -> new FfServer(communications.getClientIdentityProvider(), r, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         this.approaches = gateway.create(node, context.getId(), service,
                                          service.getClass().getCanonicalName() + ":approach",
-                                         r -> new EntranceServer(gateway.getClientIdentityProvider(), r, exec, metrics),
+                                         r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;

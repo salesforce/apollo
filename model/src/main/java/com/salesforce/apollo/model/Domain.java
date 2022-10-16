@@ -146,21 +146,20 @@ abstract public class Domain {
         return Domain.class.getResource(resource);
     }
 
-    protected final CHOAM                                          choam;
-    protected final KERL                                           commonKERL;
-    protected final ControlledIdentifier<SelfAddressingIdentifier> identifier;
-    protected final ControlledIdentifierMember                     member;
-    protected final Mutator                                        mutator;
-    protected final Oracle                                         oracle;
-    protected final Parameters                                     params;
-    protected final SqlStateMachine                                sqlStateMachine;
-    protected final Connection                                     stateConnection;
+    protected final CHOAM                      choam;
+    protected final KERL                       commonKERL;
+    protected final ControlledIdentifierMember member;
+    protected final Mutator                    mutator;
+    protected final Oracle                     oracle;
+    protected final Parameters                 params;
+    protected final SqlStateMachine            sqlStateMachine;
+    protected final Connection                 stateConnection;
 
-    public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
-                  Path checkpointBaseDir, RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+    public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
+                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         var paramsClone = params.clone();
         var runtimeClone = runtime.clone();
-        this.member = new ControlledIdentifierMember(id);
+        this.member = member;
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
             if (!dir.mkdirs()) {
@@ -170,8 +169,7 @@ abstract public class Domain {
         if (!dir.isDirectory()) {
             throw new IllegalArgumentException("Must be a directory: " + checkpointBaseDir);
         }
-        var checkpointDir = new File(dir, qb64(id.getIdentifier().getDigest()));
-        this.identifier = id;
+        var checkpointDir = new File(dir, qb64(member.getIdentifier().getDigest()));
         sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
 
         paramsClone.getProducer().ethereal().setSigner(member);
@@ -222,7 +220,7 @@ abstract public class Domain {
      * @return the Identifier of the receiver
      */
     public Identifier getIdentifier() {
-        return identifier.getIdentifier();
+        return member.getIdentifier().getIdentifier();
     }
 
     /**
@@ -287,7 +285,7 @@ abstract public class Domain {
     private KERL_ kerl() {
         List<EventWithAttachments> kerl;
         try {
-            kerl = identifier.getKerl().get();
+            kerl = member.getIdentifier().getKerl().get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;

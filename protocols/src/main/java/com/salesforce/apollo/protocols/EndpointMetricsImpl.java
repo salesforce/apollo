@@ -13,7 +13,7 @@ import com.codahale.metrics.MetricRegistry;
  * @author hal.hildebrand
  *
  */
-public class EndpointMetricsImpl implements EdpointMetrics {
+public class EndpointMetricsImpl implements EndpointMetrics {
     private final Meter          inboundBandwidth;
     @SuppressWarnings("unused")
     private final LimitsRegistry limits;

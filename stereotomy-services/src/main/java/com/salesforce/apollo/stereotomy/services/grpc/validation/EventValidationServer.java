@@ -7,20 +7,14 @@
 package com.salesforce.apollo.stereotomy.services.grpc.validation;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.BoolValue;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorImplBase;
-import com.salesforce.apollo.comm.RoutableService;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -29,17 +23,13 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EventValidationServer extends ValidatorImplBase {
-    private final static Logger log = LoggerFactory.getLogger(EventValidationServer.class);
 
     private final StereotomyMetrics                     metrics;
     private final RoutableService<ProtoEventValidation> routing;
-    private final Executor                              exec;
 
-    public EventValidationServer(RoutableService<ProtoEventValidation> router, Executor exec,
-                                 StereotomyMetrics metrics) {
+    public EventValidationServer(RoutableService<ProtoEventValidation> router, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
-        this.exec = exec;
     }
 
     @Override
@@ -49,7 +39,7 @@ public class EventValidationServer extends ValidatorImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundValidatorRequest().mark(request.getSerializedSize());
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             CompletableFuture<Boolean> result = s.validate(request.getKeyEvent());
             result.whenComplete((r, t) -> {
                 if (timer != null) {
@@ -62,6 +52,6 @@ public class EventValidationServer extends ValidatorImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 }

@@ -12,7 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
 /**

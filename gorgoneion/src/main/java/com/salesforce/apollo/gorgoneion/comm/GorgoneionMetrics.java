@@ -8,13 +8,13 @@ package com.salesforce.apollo.gorgoneion.comm;
 
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface GorgoneionMetrics extends EdpointMetrics {
+public interface GorgoneionMetrics extends EndpointMetrics {
 
     Timer enrollDuration();
 

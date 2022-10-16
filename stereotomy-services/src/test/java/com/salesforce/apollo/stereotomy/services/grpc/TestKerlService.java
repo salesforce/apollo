@@ -10,20 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -52,17 +52,17 @@ public class TestKerlService {
     KERL                     kel;
     final StereotomyKeyStore ks = new MemKeyStore();
     SecureRandom             secureRandom;
-    private LocalRouter      clientRouter;
-    private LocalRouter      serverRouter;
+    private Router           clientRouter;
+    private Router           serverRouter;
 
     @AfterEach
     public void after() {
         if (serverRouter != null) {
-            serverRouter.close();
+            serverRouter.close(Duration.ofSeconds(1));
             serverRouter = null;
         }
         if (clientRouter != null) {
-            clientRouter.close();
+            clientRouter.close(Duration.ofSeconds(1));
             clientRouter = null;
         }
     }
@@ -127,12 +127,8 @@ public class TestKerlService {
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3);
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        serverRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
-        clientRouter = new LocalRouter(prefix, serverMembers, builder, exec, null);
-
-        serverRouter.setMember(serverMember);
-        clientRouter.setMember(clientMember);
+        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
+        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
 
         serverRouter.start();
         clientRouter.start();
@@ -140,14 +136,13 @@ public class TestKerlService {
         ProtoKERLService protoService = new ProtoKERLAdapter(kel);
 
         serverRouter.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
-                            r -> new KERLServer(r, exec, null), null, null);
+                            r -> new KERLServer(r, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService,
-                                              protoService.getClass().getCanonicalName(),
-                                              r -> new KERLServer(r, exec, null), KERLClient.getCreate(context, null),
-                                              null);
+                                              protoService.getClass().getCanonicalName(), r -> new KERLServer(r, null),
+                                              KERLClient.getCreate(context, null), null);
 
-        var client = clientComms.apply(serverMember, clientMember);
+        var client = clientComms.connect(serverMember);
         return client;
     }
 }

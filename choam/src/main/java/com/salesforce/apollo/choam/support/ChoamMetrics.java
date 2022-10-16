@@ -10,13 +10,13 @@ import com.codahale.metrics.Timer;
 import com.netflix.concurrency.limits.MetricRegistry;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
-import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ChoamMetrics extends EdpointMetrics {
+public interface ChoamMetrics extends EndpointMetrics {
 
     void dropped(int transactions, int validations, int reassemblies);
 

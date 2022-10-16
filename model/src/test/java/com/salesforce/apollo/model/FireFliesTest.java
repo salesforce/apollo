@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -34,18 +33,19 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -61,14 +61,14 @@ public class FireFliesTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final List<ProcessDomain>             domains = new ArrayList<>();
-    private final Map<ProcessDomain, LocalRouter> routers = new HashMap<>();
+    private final List<ProcessDomain>        domains = new ArrayList<>();
+    private final Map<ProcessDomain, Router> routers = new HashMap<>();
 
     @AfterEach
     public void after() {
         domains.forEach(n -> n.stop());
         domains.clear();
-        routers.values().forEach(r -> r.close());
+        routers.values().forEach(r -> r.close(Duration.ofSeconds(1)));
         routers.clear();
     }
 
@@ -98,12 +98,12 @@ public class FireFliesTest {
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
                                                                           Executors.newSingleThreadScheduledExecutor());
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
-                                              ForkJoinPool.commonPool(), null);
-            var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
+            final var member = new ControlledIdentifierMember(id);
+            var localRouter = new LocalServer(prefix, member,
+                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(30), ForkJoinPool.commonPool());
+            var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
                                                           .setScheduler(scheduler)
@@ -113,7 +113,6 @@ public class FireFliesTest {
                                          new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);
             routers.put(node, localRouter);
-            localRouter.setMember(node.getMember());
             localRouter.start();
         });
     }

@@ -18,8 +18,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderFutureStub;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -31,34 +31,22 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 public class BinderClient implements BinderService {
 
     public static CreateClientCommunications<BinderService> getCreate(Digest context, StereotomyMetrics metrics) {
-        return (t, f, c) -> {
-            return new BinderClient(context, c, t, metrics);
+        return (c) -> {
+            return new BinderClient(context, c, metrics);
         };
 
     }
 
-    private final ManagedServerConnection channel;
-    private final BinderFutureStub        client;
-    private final Member                  member;
-    private final StereotomyMetrics       metrics;
-    private final Digeste                 context;
+    private final ManagedServerChannel channel;
+    private final BinderFutureStub     client;
+    private final Digeste              context;
+    private final StereotomyMetrics    metrics;
 
-    public BinderClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
+    public BinderClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
-        this.member = member;
         this.channel = channel;
-        this.client = BinderGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = BinderGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
-    }
-
-    @Override
-    public void close() {
-        channel.release();
-    }
-
-    @Override
-    public Member getMember() {
-        return member;
     }
 
     @Override
@@ -87,6 +75,16 @@ public class BinderClient implements BinderService {
             f.complete(true);
         }, r -> r.run());
         return f;
+    }
+
+    @Override
+    public void close() {
+        channel.release();
+    }
+
+    @Override
+    public Member getMember() {
+        return channel.getMember();
     }
 
     @Override

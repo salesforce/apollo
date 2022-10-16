@@ -36,8 +36,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -50,8 +50,8 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 public class DhtClient implements DhtService {
 
     public static CreateClientCommunications<DhtService> getCreate(Digest context, StereotomyMetrics metrics) {
-        return (t, f, c) -> {
-            return new DhtClient(context, c, t, metrics);
+        return (c) -> {
+            return new DhtClient(context, c, metrics);
         };
     }
 
@@ -148,17 +148,15 @@ public class DhtClient implements DhtService {
         return fs;
     }
 
-    private final ManagedServerConnection channel;
-    private final KerlDhtFutureStub       client;
-    private final Digeste                 context;
-    private final Member                  member;
-    private final StereotomyMetrics       metrics;
+    private final ManagedServerChannel channel;
+    private final KerlDhtFutureStub    client;
+    private final Digeste              context;
+    private final StereotomyMetrics    metrics;
 
-    public DhtClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
+    public DhtClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
-        this.member = member;
         this.channel = channel;
-        this.client = KerlDhtGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = KerlDhtGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -461,7 +459,7 @@ public class DhtClient implements DhtService {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

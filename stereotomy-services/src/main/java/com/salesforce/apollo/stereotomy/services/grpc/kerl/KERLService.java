@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**

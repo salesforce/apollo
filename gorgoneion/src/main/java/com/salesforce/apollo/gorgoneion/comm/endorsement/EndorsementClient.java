@@ -18,8 +18,8 @@ import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureStub;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -30,19 +30,17 @@ import com.salesforce.apollo.membership.Member;
 public class EndorsementClient implements Endorsement {
 
     public static CreateClientCommunications<Endorsement> getCreate(GorgoneionMetrics metrics) {
-        return (t, f, c) -> new EndorsementClient(c, t, metrics);
+        return (c) -> new EndorsementClient(c, metrics);
 
     }
 
-    private final ManagedServerConnection channel;
-    private final EndorsementFutureStub   client;
-    private final Member                  member;
-    private final GorgoneionMetrics       metrics;
+    private final ManagedServerChannel  channel;
+    private final EndorsementFutureStub client;
+    private final GorgoneionMetrics     metrics;
 
-    public EndorsementClient(ManagedServerConnection channel, Member member, GorgoneionMetrics metrics) {
-        this.member = member;
+    public EndorsementClient(ManagedServerChannel channel, GorgoneionMetrics metrics) {
         this.channel = channel;
-        this.client = EndorsementGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = EndorsementGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -88,7 +86,7 @@ public class EndorsementClient implements Endorsement {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

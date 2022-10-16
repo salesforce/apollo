@@ -6,23 +6,17 @@
  */
 package com.salesforce.apollo.fireflies.comm.entrance;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -31,18 +25,15 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EntranceServer extends EntranceImplBase {
-    private final static Logger log = LoggerFactory.getLogger(EntranceServer.class);
 
-    private final Executor                 exec;
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public EntranceServer(ClientIdentity identity, RoutableService<Service> r, Executor exec, FireflyMetrics metrics) {
+    public EntranceServer(ClientIdentity identity, RoutableService<Service> r, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = r;
-        this.exec = exec;
     }
 
     @Override
@@ -58,7 +49,7 @@ public class EntranceServer extends EntranceImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             // async handling
             s.join(request, from, responseObserver, timer);
         });
@@ -77,7 +68,7 @@ public class EntranceServer extends EntranceImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             var r = s.seed(request, from);
             responseObserver.onNext(r);
             responseObserver.onCompleted();
@@ -87,7 +78,6 @@ public class EntranceServer extends EntranceImplBase {
                 metrics.outboundRedirect().update(serializedSize);
                 timer.stop();
             }
-
-        }), log));
+        });
     }
 }

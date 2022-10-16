@@ -83,14 +83,18 @@ public class DomainSocketTest {
                                                     .keepAliveTime(1, TimeUnit.MILLISECONDS)
                                                     .usePlaintext()
                                                     .build();
-        var stub = TestItGrpc.newBlockingStub(channel);
+        try {
+            var stub = TestItGrpc.newBlockingStub(channel);
 
-        var result = stub.ping(Any.newBuilder().build());
-        assertNotNull(result);
-        var creds = result.unpack(PeerCreds.class);
-        assertNotNull(creds);
+            var result = stub.ping(Any.newBuilder().build());
+            assertNotNull(result);
+            var creds = result.unpack(PeerCreds.class);
+            assertNotNull(creds);
 
-        System.out.println("Success:\n" + creds);
+            System.out.println("Success:\n" + creds);
+        } finally {
+            channel.shutdown();
+        }
     }
 
 }

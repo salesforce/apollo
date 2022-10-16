@@ -7,10 +7,6 @@
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
@@ -18,11 +14,10 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -31,18 +26,15 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EventObserverServer extends EventObserverImplBase {
-    private final static Logger log = LoggerFactory.getLogger(EventObserverServer.class);
 
-    private final Executor                       exec;
     private final ClientIdentity                 identity;
     private final StereotomyMetrics              metrics;
     private final RoutableService<EventObserver> routing;
 
-    public EventObserverServer(RoutableService<EventObserver> router, ClientIdentity identity, Executor exec,
+    public EventObserverServer(RoutableService<EventObserver> router, ClientIdentity identity,
                                StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
-        this.exec = exec;
         this.identity = identity;
     }
 
@@ -59,7 +51,7 @@ public class EventObserverServer extends EventObserverImplBase {
             return;
 
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             var result = s.publish(request.getKerl(), request.getValidationsList(), from);
             result.whenComplete((e, t) -> {
                 if (timer != null) {
@@ -72,7 +64,7 @@ public class EventObserverServer extends EventObserverImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 
     @Override
@@ -88,7 +80,7 @@ public class EventObserverServer extends EventObserverImplBase {
             return;
 
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             CompletableFuture<Void> result = s.publishAttachments(request.getAttachmentsList(), from);
             result.whenComplete((ks, t) -> {
                 if (timer != null) {
@@ -101,7 +93,7 @@ public class EventObserverServer extends EventObserverImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 
     @Override
@@ -117,7 +109,7 @@ public class EventObserverServer extends EventObserverImplBase {
             return;
 
         }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        routing.evaluate(responseObserver, s -> {
             var result = s.publishEvents(request.getKeyEventList(), request.getValidationsList(), from);
             result.whenComplete((e, t) -> {
                 if (timer != null) {
@@ -130,6 +122,6 @@ public class EventObserverServer extends EventObserverImplBase {
                     responseObserver.onCompleted();
                 }
             });
-        }), log));
+        });
     }
 }

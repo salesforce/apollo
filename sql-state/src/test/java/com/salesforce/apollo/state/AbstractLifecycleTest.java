@@ -26,7 +26,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -45,6 +44,9 @@ import org.junit.jupiter.api.BeforeEach;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
@@ -52,9 +54,6 @@ import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -128,7 +127,7 @@ abstract public class AbstractLifecycleTest {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             routers = null;
         }
         if (choams != null) {
@@ -170,11 +169,9 @@ abstract public class AbstractLifecycleTest {
         testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
-            localRouter.setMember(m);
+            var localRouter = new LocalServer(prefix, m,
+                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(30), Executors.newFixedThreadPool(2));
             return localRouter;
         }));
         choams = members.stream()
@@ -223,7 +220,7 @@ abstract public class AbstractLifecycleTest {
                                                           .toList());
 
         choams.values().forEach(e -> e.stop());
-        routers.values().forEach(e -> e.close());
+        routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
         final ULong target = updaters.values()
                                      .stream()
                                      .map(ssm -> ssm.getCurrentBlock())

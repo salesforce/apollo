@@ -12,14 +12,14 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetrics;
 import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class EtherealMetricsImpl extends EndpointMetricsImpl implements EtherealMetrics, EdpointMetrics {
+public class EtherealMetricsImpl extends EndpointMetricsImpl implements EtherealMetrics, EndpointMetrics {
     private final Histogram gossipReply;
     private final Histogram gossipResponse;
     private final Timer     gossipRoundDuration;

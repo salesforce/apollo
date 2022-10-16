@@ -17,9 +17,9 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -29,21 +29,19 @@ import com.salesforce.apollo.membership.Member;
 public class TerminalClient implements Terminal {
 
     public static CreateClientCommunications<Terminal> getCreate(ChoamMetrics metrics) {
-        return (t, f, c) -> new TerminalClient(c, t, metrics);
+        return (c) -> new TerminalClient(c, metrics);
 
     }
 
-    private final ManagedServerConnection channel;
+    private final ManagedServerChannel channel;
 
     private final TerminalFutureStub client;
-    private final Member             member;
     @SuppressWarnings("unused")
     private final ChoamMetrics       metrics;
 
-    public TerminalClient(ManagedServerConnection channel, Member member, ChoamMetrics metrics) {
-        this.member = member;
+    public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;
-        this.client = TerminalGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = TerminalGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -69,7 +67,7 @@ public class TerminalClient implements Terminal {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

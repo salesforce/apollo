@@ -16,7 +16,7 @@ import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
 /**

@@ -330,10 +330,9 @@ public class CompactContext {
         return new Builder(ctxBuilder);
     }
 
-    private final Digest    id;
-    private final Digest[]  ids;
-    private final short[][] ringMap;
-
+    private final Digest     id;
+    private final Digest[]   ids;
+    private final short[][]  ringMap;
     private final Digest[][] rings;
 
     public CompactContext(Digest id, int cardinality, double pByz, int bias, List<Digest> ids, double epsilon) {

@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -38,18 +37,17 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -80,7 +78,7 @@ public class TestCHOAM {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             routers = null;
         }
         if (choams != null) {
@@ -126,18 +124,9 @@ public class TestCHOAM {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, serverMembers,
-                                              ServerConnectionCache.newBuilder()
-                                                                   .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
-                                                                   .setTarget(CARDINALITY),
-                                              Executors.newFixedThreadPool(2,
-                                                                           r -> new Thread(r,
-                                                                                           "Comm Exec[" + m.getId()
-                                                                                           + "]")),
-                                              metrics.limitsMetrics());
-            localRouter.setMember(m);
+            var localRouter = new LocalServer(prefix, m,
+                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), Executors.newFixedThreadPool(2, r -> new Thread(r, "Comm Exec[" + m.getId() + "]")));
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -217,7 +206,7 @@ public class TestCHOAM {
             assertTrue(complete, "All clients did not complete: "
             + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             choams.values().forEach(e -> e.stop());
 
             System.out.println();

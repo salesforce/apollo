@@ -16,7 +16,7 @@ import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 

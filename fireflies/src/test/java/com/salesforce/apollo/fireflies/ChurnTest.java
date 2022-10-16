@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -37,16 +36,15 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -96,10 +94,10 @@ public class ChurnTest {
             views.clear();
         }
 
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
         communications.clear();
 
-        gateways.forEach(e -> e.close());
+        gateways.forEach(e -> e.close(Duration.ofSeconds(1)));
         gateways.clear();
     }
 
@@ -226,8 +224,8 @@ public class ChurnTest {
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 final var view = c.get(j);
                 view.stop();
-                r.get(j).close();
-                g.get(j).close();
+                r.get(j).close(Duration.ofSeconds(1));
+                g.get(j).close(Duration.ofSeconds(1));
                 removed.add(view.getNode().getId());
             }
             c = c.subList(0, c.size() - delta);
@@ -251,7 +249,7 @@ public class ChurnTest {
         }
 
         views.forEach(e -> e.stop());
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
 
         System.out.println();
 
@@ -286,28 +284,16 @@ public class ChurnTest {
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         final var exec = ForkJoinPool.commonPool();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(prefix, serverMembers,
-                                        ServerConnectionCache.newBuilder()
-                                                             .setTarget(CARDINALITY)
-                                                             .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                     : registry)),
-                                        exec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(gatewayPrefix, gatewayMembers,
-                                          ServerConnectionCache.newBuilder()
-                                                               .setTarget(CARDINALITY)
-                                                               .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                       : registry)),
-                                          exec, metrics.limitsMetrics());
-            comms.setMember(node);
+            var comms = new LocalServer(prefix, node,
+                                        exec).router(ServerConnectionCache.newBuilder().setTarget(CARDINALITY).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), exec);
+            var gateway = new LocalServer(gatewayPrefix, node,
+                                          exec).router(ServerConnectionCache.newBuilder().setTarget(CARDINALITY).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), exec);
             comms.start();
             communications.add(comms);
-            gateway.setMember(node);
             gateway.start();
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,

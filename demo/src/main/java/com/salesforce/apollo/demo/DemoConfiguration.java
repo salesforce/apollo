@@ -8,7 +8,7 @@ package com.salesforce.apollo.demo;
 
 import com.salesforce.apollo.choam.Parameters;
 
-import io.dropwizard.Configuration;
+import io.dropwizard.core.Configuration;
 
 /**
  * @author hal.hildebrand

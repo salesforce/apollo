@@ -16,8 +16,8 @@ import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -28,19 +28,17 @@ import com.salesforce.apollo.membership.Member;
 public class AdmissionsClient implements Admissions {
 
     public static CreateClientCommunications<Admissions> getCreate(GorgoneionMetrics metrics) {
-        return (t, f, c) -> new AdmissionsClient(c, t, metrics);
+        return (c) -> new AdmissionsClient(c, metrics);
 
     }
 
-    private final ManagedServerConnection channel;
-    private final AdmissionsFutureStub    client;
-    private final Member                  member;
-    private final GorgoneionMetrics       metrics;
+    private final ManagedServerChannel channel;
+    private final AdmissionsFutureStub client;
+    private final GorgoneionMetrics    metrics;
 
-    public AdmissionsClient(ManagedServerConnection channel, Member member, GorgoneionMetrics metrics) {
-        this.member = member;
+    public AdmissionsClient(ManagedServerChannel channel, GorgoneionMetrics metrics) {
         this.channel = channel;
-        this.client = AdmissionsGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = AdmissionsGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -75,7 +73,7 @@ public class AdmissionsClient implements Admissions {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

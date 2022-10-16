@@ -7,21 +7,15 @@
 
 package com.salesforce.apollo.thoth.grpc.reconciliation;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationImplBase;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -30,19 +24,15 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class ReconciliationServer extends ReconciliationImplBase {
-    private final static Logger log = LoggerFactory.getLogger(ReconciliationServer.class);
-
-    private final Executor                        exec;
     private final ClientIdentity                  identity;
     @SuppressWarnings("unused")
     private final StereotomyMetrics               metrics;
     private final RoutableService<Reconciliation> router;
 
-    public ReconciliationServer(RoutableService<Reconciliation> router, ClientIdentity identity, Executor exec,
+    public ReconciliationServer(RoutableService<Reconciliation> router, ClientIdentity identity,
                                 StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.router = router;
-        this.exec = exec;
         this.identity = identity;
     }
 
@@ -54,11 +44,11 @@ public class ReconciliationServer extends ReconciliationImplBase {
             return;
 
         }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             var update = s.reconcile(request, from);
             responseObserver.onNext(update);
             responseObserver.onCompleted();
-        }), log));
+        });
     }
 
     @Override
@@ -69,11 +59,11 @@ public class ReconciliationServer extends ReconciliationImplBase {
             return;
 
         }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             s.update(request, from);
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
-        }), log));
+        });
     }
 
 }

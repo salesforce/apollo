@@ -8,13 +8,13 @@ package com.salesforce.apollo.membership.messaging.rbc;
 
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface RbcMetrics extends EdpointMetrics {
+public interface RbcMetrics extends EndpointMetrics {
 
     Histogram gossipReply();
 

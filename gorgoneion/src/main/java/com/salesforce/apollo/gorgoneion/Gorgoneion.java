@@ -34,9 +34,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.comm.SliceIterator;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
@@ -52,6 +51,7 @@ import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -230,14 +230,14 @@ public class Gorgoneion {
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
                                                  r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
-                                                                           r, exec, metrics),
+                                                                           r, metrics),
                                                  AdmissionsClient.getCreate(metrics),
                                                  Admissions.getLocalLoopback(member));
 
         final var service = new Endorse();
         endorsementComm = endorsementRouter.create(member, context.getId(), service, ":endorsement",
                                                    r -> new EndorsementServer(admissionsRouter.getClientIdentityProvider(),
-                                                                              r, exec, metrics),
+                                                                              r, metrics),
                                                    EndorsementClient.getCreate(metrics),
                                                    Endorsement.getLocalLoopback(member, service));
     }

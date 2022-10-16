@@ -18,8 +18,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -33,8 +33,8 @@ public class EventValidationClient implements EventValidationService {
 
     public static CreateClientCommunications<EventValidationService> getCreate(Digest context,
                                                                                StereotomyMetrics metrics) {
-        return (t, f, c) -> {
-            return new EventValidationClient(context, c, t, metrics);
+        return (c) -> {
+            return new EventValidationClient(context, c, metrics);
         };
 
     }
@@ -58,18 +58,15 @@ public class EventValidationClient implements EventValidationService {
         };
     }
 
-    private final ManagedServerConnection channel;
-    private final ValidatorFutureStub     client;
-    private final Digeste                 context;
-    private final Member                  member;
-    private final StereotomyMetrics       metrics;
+    private final ManagedServerChannel channel;
+    private final ValidatorFutureStub  client;
+    private final Digeste              context;
+    private final StereotomyMetrics    metrics;
 
-    public EventValidationClient(Digest context, ManagedServerConnection channel, Member member,
-                                 StereotomyMetrics metrics) {
+    public EventValidationClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
-        this.member = member;
         this.channel = channel;
-        this.client = ValidatorGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = ValidatorGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -80,7 +77,7 @@ public class EventValidationClient implements EventValidationService {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

@@ -9,13 +9,13 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface FireflyMetrics extends EdpointMetrics {
+public interface FireflyMetrics extends EndpointMetrics {
 
     Meter accusations();
 

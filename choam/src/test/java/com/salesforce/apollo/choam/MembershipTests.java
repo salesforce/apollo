@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -28,17 +27,16 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -175,11 +173,9 @@ public class MembershipTests {
                            .toList();
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                       Executors.newFixedThreadPool(2), null);
-            comm.setMember(m);
+            var comm = new LocalServer(prefix, m,
+                                       Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(cardinality), Executors.newFixedThreadPool(2));
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -219,7 +215,7 @@ public class MembershipTests {
             choams = null;
         }
         if (routers != null) {
-            routers.values().forEach(e -> e.close());
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             routers = null;
         }
     }

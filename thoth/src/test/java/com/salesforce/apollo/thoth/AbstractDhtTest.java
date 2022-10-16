@@ -27,8 +27,9 @@ import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -61,7 +62,7 @@ public class AbstractDhtTest {
     protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected int                                                                majority;
-    protected final Map<SigningMember, LocalRouter>                              routers = new HashMap<>();
+    protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
     protected Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {
@@ -70,7 +71,7 @@ public class AbstractDhtTest {
 
     @AfterEach
     public void after() {
-        routers.values().forEach(r -> r.close());
+        routers.values().forEach(r -> r.close(Duration.ofMillis(1)));
         routers.clear();
         dhts.values().forEach(t -> t.stop());
         dhts.clear();
@@ -127,9 +128,9 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        LocalRouter router = new LocalRouter(prefix, serverMembers, ServerConnectionCache.newBuilder().setTarget(2),
-                                             ForkJoinPool.commonPool(), null);
-        router.setMember(member);
+        var router = new LocalServer(prefix, member,
+                                     ForkJoinPool.commonPool()).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                       ForkJoinPool.commonPool());
         routers.put(member, router);
         final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,

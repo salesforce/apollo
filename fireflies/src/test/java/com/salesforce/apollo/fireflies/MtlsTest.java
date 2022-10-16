@@ -39,14 +39,13 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.EndpointProvider;
-import com.salesforce.apollo.comm.MtlsRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
-import com.salesforce.apollo.comm.StandardEpProvider;
+import com.salesforce.apollo.archipelago.EndpointProvider;
+import com.salesforce.apollo.archipelago.MtlsServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipelago.StandardEpProvider;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
-import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -119,7 +118,7 @@ public class MtlsTest {
             views.clear();
         }
         if (communications != null) {
-            communications.forEach(e -> e.close());
+            communications.forEach(e -> e.close(Duration.ofSeconds(1)));
             communications.clear();
         }
     }
@@ -156,8 +155,8 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey), commExec,
-                                              clientContextSupplier);
+            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
+                                          commExec).router(builder, exec);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
                             DigestAlgorithm.DEFAULT, metrics, exec);

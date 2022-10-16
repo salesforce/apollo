@@ -14,7 +14,7 @@ import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
 /**
