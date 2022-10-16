@@ -16,7 +16,7 @@ import com.salesfoce.apollo.ethereal.proto.GossiperGrpc;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperFutureStub;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -32,12 +32,12 @@ public class GossiperClient implements Gossiper {
 
     }
 
-    private final ManagedServerConnection channel;
+    private final ReleasableManagedChannel channel;
     private final GossiperFutureStub      client;
     private final Member                  member;
     private final EtherealMetrics         metrics;
 
-    public GossiperClient(ManagedServerConnection channel, Member member, EtherealMetrics metrics) {
+    public GossiperClient(ReleasableManagedChannel channel, Member member, EtherealMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = GossiperGrpc.newFutureStub(channel.channel).withCompression("gzip");

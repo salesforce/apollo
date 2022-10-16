@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.comm;
+package com.salesforce.apollo.archipeligo;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -26,7 +26,6 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
 
 import io.grpc.ManagedChannel;
 
@@ -62,7 +61,7 @@ public class ServerConnectionCache {
         private ServerConnectionFactory      factory = null;
         private ServerConnectionCacheMetrics metrics;
         private Duration                     minIdle = Duration.ofMillis(100);
-        private int                          target  = 0;
+        private int                          target  = 10;
 
         public ServerConnectionCache build() {
             return new ServerConnectionCache(factory, target, minIdle, clock, metrics);
@@ -115,63 +114,8 @@ public class ServerConnectionCache {
     }
 
     @FunctionalInterface
-    public static interface CreateClientCommunications<T> {
-        T create(Member to, Member from, ManagedServerConnection connection);
-    }
-
-    public class ManagedServerConnection implements Comparable<ManagedServerConnection> {
-        public final ManagedChannel channel;
-        public final Digest         id;
-        private final AtomicInteger borrowed   = new AtomicInteger();
-        private final Instant       created    = Instant.now(clock);
-        private volatile Instant    lastUsed   = Instant.now(clock);
-        private final AtomicInteger usageCount = new AtomicInteger();
-
-        public ManagedServerConnection(Digest id, ManagedChannel channel) {
-            this.id = id;
-            this.channel = channel;
-        }
-
-        @Override
-        public int compareTo(ManagedServerConnection o) {
-            return Integer.compare(usageCount.get(), o.usageCount.get());
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj)
-                return true;
-            if ((obj == null) || (getClass() != obj.getClass()))
-                return false;
-            ManagedServerConnection other = (ManagedServerConnection) obj;
-            return id.equals(other.id);
-        }
-
-        @Override
-        public int hashCode() {
-            return id.hashCode();
-        }
-
-        public boolean isCloseable() {
-            return lastUsed.plus(minIdle).isBefore(Instant.now(clock));
-        }
-
-        public void release() {
-            ServerConnectionCache.this.release(this);
-        }
-
-        private boolean decrementBorrow() {
-            if (borrowed.decrementAndGet() == 0) {
-                lastUsed = Instant.now(clock);
-                return true;
-            }
-            return false;
-        }
-
-        private boolean incrementBorrow() {
-            usageCount.incrementAndGet();
-            return borrowed.incrementAndGet() == 1;
-        }
+    public interface CreateClientCommunications<Client> {
+        Client create(ManagedServerChannel channel);
     }
 
     public static interface ServerConnectionCacheMetrics {
@@ -194,8 +138,74 @@ public class ServerConnectionCache {
 
     }
 
-    public static interface ServerConnectionFactory {
-        ManagedChannel connectTo(Member to, SigningMember from);
+    public interface ServerConnectionFactory {
+        ManagedChannel connectTo(Member to);
+    }
+
+    static class ReleasableManagedChannel implements Comparable<ReleasableManagedChannel> {
+        private final AtomicInteger         borrowed   = new AtomicInteger();
+        private final ManagedChannel        channel;
+        private final Instant               created;
+        private volatile Instant            lastUsed;
+        private final Member                member;
+        private final ServerConnectionCache scc;
+        private final AtomicInteger         usageCount = new AtomicInteger();
+
+        public ReleasableManagedChannel(Member id, ManagedChannel channel, ServerConnectionCache scc) {
+            this.member = id;
+            this.channel = channel;
+            this.scc = scc;
+            created = Instant.now(scc.clock);
+            lastUsed = Instant.now(scc.clock);
+        }
+
+        @Override
+        public int compareTo(ReleasableManagedChannel o) {
+            return Integer.compare(usageCount.get(), o.usageCount.get());
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if ((obj == null) || (getClass() != obj.getClass()))
+                return false;
+            return member.equals(((ReleasableManagedChannel) obj).member);
+        }
+
+        public ManagedChannel getChannel() {
+            return channel;
+        }
+
+        public Member getMember() {
+            return member;
+        }
+
+        @Override
+        public int hashCode() {
+            return member.hashCode();
+        }
+
+        public boolean isCloseable() {
+            return lastUsed.plus(scc.minIdle).isBefore(Instant.now(scc.clock));
+        }
+
+        public void release() {
+            scc.release(this);
+        }
+
+        private boolean decrementBorrow() {
+            if (borrowed.decrementAndGet() == 0) {
+                lastUsed = Instant.now(scc.clock);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean incrementBorrow() {
+            usageCount.incrementAndGet();
+            return borrowed.incrementAndGet() == 1;
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
@@ -204,32 +214,31 @@ public class ServerConnectionCache {
         return new Builder();
     }
 
-    private final Map<Digest, ManagedServerConnection>   cache = new HashMap<>();
-    private final Clock                                  clock;
-    private final ServerConnectionFactory                factory;
-    private final ReentrantLock                          lock  = new ReentrantLock(true);
-    private final ServerConnectionCacheMetrics           metrics;
-    private final Duration                               minIdle;
-    private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
-    private final int                                    target;
+    private final Map<Member, ReleasableManagedChannel>   cache = new HashMap<>();
+    private final Clock                                   clock;
+    private final ServerConnectionFactory                 factory;
+    private final ReentrantLock                           lock  = new ReentrantLock(true);
+    private final ServerConnectionCacheMetrics            metrics;
+    private final Duration                                minIdle;
+    private final PriorityQueue<ReleasableManagedChannel> queue = new PriorityQueue<>();
+    private final int                                     target;
 
     public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
                                  ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
-        this.target = target;
+        this.target = Math.max(target, 1);
         this.minIdle = minIdle;
         this.clock = clock;
         this.metrics = metrics;
     }
 
-    public <T> T borrow(Member to, SigningMember from, CreateClientCommunications<T> createFunction) {
+    public ManagedServerChannel borrow(Digest context, Member to) {
         return lock(() -> {
             if (cache.size() >= target) {
-                log.debug("Cache target open connections exceeded: {}, opening from: {} to {}", target, from.getId(),
-                          to.getId());
+                log.debug("Cache target open connections exceeded: {}, opening to {}", target, to);
             }
-            ManagedServerConnection connection = cache.computeIfAbsent(to.getId(), member -> {
-                ManagedServerConnection conn = new ManagedServerConnection(to.getId(), factory.connectTo(to, from));
+            ReleasableManagedChannel connection = cache.computeIfAbsent(to, member -> {
+                ReleasableManagedChannel conn = new ReleasableManagedChannel(to, factory.connectTo(to), this);
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();
@@ -237,7 +246,7 @@ public class ServerConnectionCache {
                 return conn;
             });
             if (connection == null) {
-                log.warn("Failed to open channel to {} from {}", to.getId(), from.getId());
+                log.warn("Failed to open channel to {}", to);
                 if (metrics != null) {
                     metrics.failedOpenConnection().inc();
                     metrics.failedConnectionRate().mark();
@@ -245,23 +254,26 @@ public class ServerConnectionCache {
                 return null;
             }
             if (connection.incrementBorrow()) {
-                log.debug("Opened channel to {}, last used: {}, from: {}", connection.id, connection.lastUsed,
-                          from.getId());
+                log.debug("Opened channel to {}, last used: {}", connection.member, connection.lastUsed);
                 if (metrics != null) {
                     metrics.borrowRate().mark();
                 }
                 queue.remove(connection);
             }
-            log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.id, connection.borrowed,
+            log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.member, connection.borrowed,
                       connection.usageCount);
-            return createFunction.create(to, from, connection);
+            return new ManagedServerChannel(context, connection);
         });
+    }
+
+    public <T> T borrow(Digest context, Member to, CreateClientCommunications<T> createFunction) {
+        return createFunction.create(borrow(context, to));
     }
 
     public void close() {
         lock(() -> {
-            log.info("Closing connection cache: {}", this);
-            for (ManagedServerConnection conn : new ArrayList<>(cache.values())) {
+            log.info("Closing connection cache");
+            for (ReleasableManagedChannel conn : new ArrayList<>(cache.values())) {
                 try {
                     conn.channel.shutdownNow();
                     if (metrics != null) {
@@ -269,7 +281,7 @@ public class ServerConnectionCache {
                         metrics.openConnections().dec();
                     }
                 } catch (Throwable e) {
-                    log.debug("Error closing {}", conn.id);
+                    log.debug("Error closing {}", conn.member);
                 }
             }
             cache.clear();
@@ -278,10 +290,10 @@ public class ServerConnectionCache {
         });
     }
 
-    public void release(ManagedServerConnection connection) {
+    public void release(ReleasableManagedChannel connection) {
         lock(() -> {
             if (connection.decrementBorrow()) {
-                log.debug("Releasing connection: {}", connection.id);
+                log.debug("Releasing connection: {}", connection.member);
                 queue.add(connection);
                 if (metrics != null) {
                     metrics.releaseRate().mark();
@@ -290,18 +302,17 @@ public class ServerConnectionCache {
             }
             return null;
         });
-
     }
 
-    private boolean close(ManagedServerConnection connection) {
+    private boolean close(ReleasableManagedChannel connection) {
         if (connection.isCloseable()) {
             try {
                 connection.channel.shutdownNow();
             } catch (Throwable t) {
-                log.debug("Error closing {}", connection.id);
+                log.debug("Error closing {}", connection.member);
             }
-            log.debug("{} is closed", connection.id);
-            cache.remove(connection.id);
+            log.debug("{} is closed", connection.member);
+            cache.remove(connection.member);
             if (metrics != null) {
                 metrics.openConnections().dec();
                 metrics.closeConnectionRate().mark();
@@ -323,7 +334,7 @@ public class ServerConnectionCache {
 
     private void manageConnections() {
 //        log.info("Managing connections: " + cache.size() + " idle: " + queue.size());
-        Iterator<ManagedServerConnection> connections = queue.iterator();
+        Iterator<ReleasableManagedChannel> connections = queue.iterator();
         while (connections.hasNext() && cache.size() > target) {
             if (close(connections.next())) {
                 connections.remove();

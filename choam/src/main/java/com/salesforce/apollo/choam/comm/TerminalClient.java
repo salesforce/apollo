@@ -19,7 +19,7 @@ import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -33,14 +33,14 @@ public class TerminalClient implements Terminal {
 
     }
 
-    private final ManagedServerConnection channel;
+    private final ReleasableManagedChannel channel;
 
     private final TerminalFutureStub client;
     private final Member             member;
     @SuppressWarnings("unused")
     private final ChoamMetrics       metrics;
 
-    public TerminalClient(ManagedServerConnection channel, Member member, ChoamMetrics metrics) {
+    public TerminalClient(ReleasableManagedChannel channel, Member member, ChoamMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = TerminalGrpc.newFutureStub(channel.channel).withCompression("gzip");

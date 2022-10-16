@@ -15,7 +15,7 @@ import com.salesfoce.apollo.messaging.proto.RBCGrpc;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCFutureStub;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
-import com.salesforce.apollo.archipeligo.ReleasableManagedChannel;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
 import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
@@ -33,11 +33,11 @@ public class RbcClient implements ReliableBroadcast {
 
     }
 
-    private final ReleasableManagedChannel channel;
-    private final RBCFutureStub            client;
-    private final RbcMetrics               metrics;
+    private final ManagedServerChannel channel;
+    private final RBCFutureStub        client;
+    private final RbcMetrics           metrics;
 
-    public RbcClient(ReleasableManagedChannel c, RbcMetrics metrics) {
+    public RbcClient(ManagedServerChannel c, RbcMetrics metrics) {
         this.channel = c;
         this.client = RBCGrpc.newFutureStub(c).withCompression("gzip");
         this.metrics = metrics;

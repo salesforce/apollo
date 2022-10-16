@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.comm;
+package com.salesforce.apollo.ring;
 
 import java.net.SocketAddress;
 import java.util.function.Function;
 
+import com.salesforce.apollo.archipeligo.EndpointProvider;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.comm;
+package com.salesforce.apollo.ring;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -21,7 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.archipeligo.Link;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Entropy;
@@ -101,7 +102,7 @@ public class SliceIterator<Comm extends Link> {
 
     private Comm linkFor(int index) {
         try {
-            return comm.apply(slice.get(index), member);
+            return comm.connect(slice.get(index));
         } catch (Throwable e) {
             log.error("error opening connection to {}: {}", slice.get(index).getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());

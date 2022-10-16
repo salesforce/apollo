@@ -16,7 +16,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverBlockingStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -34,13 +34,13 @@ public class ResolverClient implements ResolverService {
 
     }
 
-    private final ManagedServerConnection channel;
+    private final ReleasableManagedChannel channel;
     private final ResolverBlockingStub    client;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
     private final Digeste                 context;
 
-    public ResolverClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
+    public ResolverClient(Digest context, ReleasableManagedChannel channel, Member member, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;

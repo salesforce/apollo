@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -35,10 +34,10 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
+import com.salesforce.apollo.archipeligo.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
@@ -117,7 +116,7 @@ public class RbcTest {
         if (messengers != null) {
             messengers.forEach(e -> e.stop());
         }
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofMillis(1)));
     }
 
     @Test
@@ -141,13 +140,9 @@ public class RbcTest {
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         messengers = members.stream().map(node -> {
-            var comms = new LocalRouter(node, prefix, serverMembers,
-                                        ServerConnectionCache.newBuilder()
-                                                             .setTarget(30)
-                                                             .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
+            var comms = new LocalServer(prefix, node,
+                                        r -> r.run()).router(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(new ServerConnectionCacheMetricsImpl(registry)), Executors.newFixedThreadPool(2));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(), Executors.newFixedThreadPool(2), comms,
@@ -188,7 +183,7 @@ public class RbcTest {
                 receiver.reset();
             }
         }
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofMillis(1)));
 
         System.out.println();
 

@@ -37,7 +37,7 @@ import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -148,13 +148,13 @@ public class DhtClient implements DhtService {
         return fs;
     }
 
-    private final ManagedServerConnection channel;
+    private final ReleasableManagedChannel channel;
     private final KerlDhtFutureStub       client;
     private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
 
-    public DhtClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
+    public DhtClient(Digest context, ReleasableManagedChannel channel, Member member, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;

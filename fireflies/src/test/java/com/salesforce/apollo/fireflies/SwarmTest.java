@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -35,16 +34,15 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipeligo.LocalServer;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache;
+import com.salesforce.apollo.archipeligo.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -100,10 +98,10 @@ public class SwarmTest {
             views.clear();
         }
 
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
         communications.clear();
 
-        gateways.forEach(e -> e.close());
+        gateways.forEach(e -> e.close(Duration.ofSeconds(1)));
         gateways.clear();
     }
 
@@ -198,7 +196,7 @@ public class SwarmTest {
                 assertTrue(testGraph.isSC());
             }
         }
-        communications.forEach(e -> e.close());
+        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
         views.forEach(view -> view.stop());
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
@@ -228,24 +226,14 @@ public class SwarmTest {
         final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
         final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
         final var gatewayExec = ForkJoinPool.commonPool();
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        ConcurrentSkipListMap<Digest, Member> gatewayMembers = new ConcurrentSkipListMap<>();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalRouter(node, prefix, serverMembers,
-                                        ServerConnectionCache.newBuilder()
-                                                             .setTarget(200)
-                                                             .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                     : registry)),
-                                        commExec, metrics.limitsMetrics());
-            var gateway = new LocalRouter(node, gatewayPrefix, gatewayMembers,
-                                          ServerConnectionCache.newBuilder()
-                                                               .setTarget(200)
-                                                               .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                       : registry)),
-                                          gatewayExec, metrics.limitsMetrics());
+            var comms = new LocalServer(prefix, node,
+                                        commExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), commExec);
+            var gateway = new LocalServer(gatewayPrefix, node,
+                                          gatewayExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), gatewayExec);
             comms.start();
             communications.add(comms);
 

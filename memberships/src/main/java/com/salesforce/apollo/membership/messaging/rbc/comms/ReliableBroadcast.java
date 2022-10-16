@@ -12,7 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipeligo.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 

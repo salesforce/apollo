@@ -115,7 +115,7 @@ public class ServerConnectionCache {
 
     @FunctionalInterface
     public interface CreateClientCommunications<Client> {
-        Client create(ReleasableManagedChannel releasableManagedChannel);
+        Client create(ManagedServerChannel channel);
     }
 
     public static interface ServerConnectionCacheMetrics {
@@ -142,16 +142,16 @@ public class ServerConnectionCache {
         ManagedChannel connectTo(Member to);
     }
 
-    static class ManagedServerConnection implements Comparable<ManagedServerConnection> {
+    static class ReleasableManagedChannel implements Comparable<ReleasableManagedChannel> {
         private final AtomicInteger         borrowed   = new AtomicInteger();
         private final ManagedChannel        channel;
         private final Instant               created;
         private volatile Instant            lastUsed;
-        private final ServerConnectionCache scc;
         private final Member                member;
+        private final ServerConnectionCache scc;
         private final AtomicInteger         usageCount = new AtomicInteger();
 
-        public ManagedServerConnection(Member id, ManagedChannel channel, ServerConnectionCache scc) {
+        public ReleasableManagedChannel(Member id, ManagedChannel channel, ServerConnectionCache scc) {
             this.member = id;
             this.channel = channel;
             this.scc = scc;
@@ -160,7 +160,7 @@ public class ServerConnectionCache {
         }
 
         @Override
-        public int compareTo(ManagedServerConnection o) {
+        public int compareTo(ReleasableManagedChannel o) {
             return Integer.compare(usageCount.get(), o.usageCount.get());
         }
 
@@ -170,7 +170,7 @@ public class ServerConnectionCache {
                 return true;
             if ((obj == null) || (getClass() != obj.getClass()))
                 return false;
-            return member.equals(((ManagedServerConnection) obj).member);
+            return member.equals(((ReleasableManagedChannel) obj).member);
         }
 
         public ManagedChannel getChannel() {
@@ -214,14 +214,14 @@ public class ServerConnectionCache {
         return new Builder();
     }
 
-    private final Map<Member, ManagedServerConnection>   cache = new HashMap<>();
-    private final Clock                                  clock;
-    private final ServerConnectionFactory                factory;
-    private final ReentrantLock                          lock  = new ReentrantLock(true);
-    private final ServerConnectionCacheMetrics           metrics;
-    private final Duration                               minIdle;
-    private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
-    private final int                                    target;
+    private final Map<Member, ReleasableManagedChannel>   cache = new HashMap<>();
+    private final Clock                                   clock;
+    private final ServerConnectionFactory                 factory;
+    private final ReentrantLock                           lock  = new ReentrantLock(true);
+    private final ServerConnectionCacheMetrics            metrics;
+    private final Duration                                minIdle;
+    private final PriorityQueue<ReleasableManagedChannel> queue = new PriorityQueue<>();
+    private final int                                     target;
 
     public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
                                  ServerConnectionCacheMetrics metrics) {
@@ -232,13 +232,13 @@ public class ServerConnectionCache {
         this.metrics = metrics;
     }
 
-    public ReleasableManagedChannel borrow(Digest context, Member to) {
+    public ManagedServerChannel borrow(Digest context, Member to) {
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening to {}", target, to);
             }
-            ManagedServerConnection connection = cache.computeIfAbsent(to, member -> {
-                ManagedServerConnection conn = new ManagedServerConnection(to, factory.connectTo(to), this);
+            ReleasableManagedChannel connection = cache.computeIfAbsent(to, member -> {
+                ReleasableManagedChannel conn = new ReleasableManagedChannel(to, factory.connectTo(to), this);
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();
@@ -262,7 +262,7 @@ public class ServerConnectionCache {
             }
             log.trace("Opened channel to {}, borrowed: {}, usage: {}", connection.member, connection.borrowed,
                       connection.usageCount);
-            return new ReleasableManagedChannel(context, connection);
+            return new ManagedServerChannel(context, connection);
         });
     }
 
@@ -273,7 +273,7 @@ public class ServerConnectionCache {
     public void close() {
         lock(() -> {
             log.info("Closing connection cache");
-            for (ManagedServerConnection conn : new ArrayList<>(cache.values())) {
+            for (ReleasableManagedChannel conn : new ArrayList<>(cache.values())) {
                 try {
                     conn.channel.shutdownNow();
                     if (metrics != null) {
@@ -290,7 +290,7 @@ public class ServerConnectionCache {
         });
     }
 
-    public void release(ManagedServerConnection connection) {
+    public void release(ReleasableManagedChannel connection) {
         lock(() -> {
             if (connection.decrementBorrow()) {
                 log.debug("Releasing connection: {}", connection.member);
@@ -304,7 +304,7 @@ public class ServerConnectionCache {
         });
     }
 
-    private boolean close(ManagedServerConnection connection) {
+    private boolean close(ReleasableManagedChannel connection) {
         if (connection.isCloseable()) {
             try {
                 connection.channel.shutdownNow();
@@ -334,7 +334,7 @@ public class ServerConnectionCache {
 
     private void manageConnections() {
 //        log.info("Managing connections: " + cache.size() + " idle: " + queue.size());
-        Iterator<ManagedServerConnection> connections = queue.iterator();
+        Iterator<ReleasableManagedChannel> connections = queue.iterator();
         while (connections.hasNext() && cache.size() > target) {
             if (close(connections.next())) {
                 connections.remove();

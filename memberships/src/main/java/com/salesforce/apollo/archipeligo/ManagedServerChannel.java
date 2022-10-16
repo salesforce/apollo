@@ -11,6 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.MoreObjects;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 
@@ -22,12 +23,12 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
-public class Server extends ManagedChannel {
+public class ManagedServerChannel extends ManagedChannel {
 
-    private final Digest context;
-    private final Server delegate;
+    private final Digest                   context;
+    private final ReleasableManagedChannel delegate;
 
-    Server(Digest context, Server delegate) {
+    ManagedServerChannel(Digest context, ReleasableManagedChannel delegate) {
         this.context = context;
         this.delegate = delegate;
     }

@@ -15,8 +15,8 @@ import com.salesfoce.apollo.messaging.proto.RBCGrpc;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCFutureStub;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 
@@ -27,21 +27,19 @@ import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 public class RbcClient implements ReliableBroadcast {
 
     public static CreateClientCommunications<ReliableBroadcast> getCreate(RbcMetrics metrics) {
-        return (t, f, c) -> {
-            return new RbcClient(c, t, metrics);
+        return (c) -> {
+            return new RbcClient(c, metrics);
         };
 
     }
 
-    private final ManagedServerConnection channel;
-    private final RBCFutureStub           client;
-    private final Member                  member;
-    private final RbcMetrics              metrics;
+    private final ManagedServerChannel channel;
+    private final RBCFutureStub            client;
+    private final RbcMetrics               metrics;
 
-    public RbcClient(ManagedServerConnection channel, Member member, RbcMetrics metrics) {
-        this.member = member;
-        this.channel = channel;
-        this.client = RBCGrpc.newFutureStub(channel.channel).withCompression("gzip");
+    public RbcClient(ManagedServerChannel c, RbcMetrics metrics) {
+        this.channel = c;
+        this.client = RBCGrpc.newFutureStub(c).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -52,7 +50,7 @@ public class RbcClient implements ReliableBroadcast {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override
@@ -89,7 +87,7 @@ public class RbcClient implements ReliableBroadcast {
 
     @Override
     public String toString() {
-        return String.format("->[%s]", member);
+        return String.format("->[%s]", channel.getMember());
     }
 
     @Override

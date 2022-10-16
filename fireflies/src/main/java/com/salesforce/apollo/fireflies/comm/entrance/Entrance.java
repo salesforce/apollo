@@ -14,7 +14,7 @@ import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.archipeligo.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 

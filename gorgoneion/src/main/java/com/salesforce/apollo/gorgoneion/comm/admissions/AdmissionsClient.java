@@ -17,7 +17,7 @@ import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.comm.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -32,12 +32,12 @@ public class AdmissionsClient implements Admissions {
 
     }
 
-    private final ManagedServerConnection channel;
+    private final ReleasableManagedChannel channel;
     private final AdmissionsFutureStub    client;
     private final Member                  member;
     private final GorgoneionMetrics       metrics;
 
-    public AdmissionsClient(ManagedServerConnection channel, Member member, GorgoneionMetrics metrics) {
+    public AdmissionsClient(ReleasableManagedChannel channel, Member member, GorgoneionMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = AdmissionsGrpc.newFutureStub(channel.channel).withCompression("gzip");

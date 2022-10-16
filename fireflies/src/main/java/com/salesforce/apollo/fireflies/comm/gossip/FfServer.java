@@ -6,23 +6,17 @@
  */
 package com.salesforce.apollo.fireflies.comm.gossip;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipeligo.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -32,19 +26,15 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class FfServer extends FirefliesImplBase {
-    private final static Logger log = LoggerFactory.getLogger(FfServer.class);
-
-    private final Executor exec;
 
     private final ClientIdentity           identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
 
-    public FfServer(ClientIdentity identity, RoutableService<Service> r, Executor exec, FireflyMetrics metrics) {
+    public FfServer(ClientIdentity identity, RoutableService<Service> r, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = r;
-        this.exec = exec;
     }
 
     @Override
@@ -60,7 +50,7 @@ public class FfServer extends FirefliesImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             Gossip gossip;
             try {
                 gossip = s.rumors(request, from);
@@ -76,7 +66,7 @@ public class FfServer extends FirefliesImplBase {
                 metrics.gossipReply().update(serializedSize);
                 timer.stop();
             }
-        }), log));
+        });
     }
 
     @Override
@@ -92,7 +82,7 @@ public class FfServer extends FirefliesImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        router.evaluate(responseObserver, s -> {
             try {
                 try {
                     s.update(request, from);
@@ -108,7 +98,7 @@ public class FfServer extends FirefliesImplBase {
             if (timer != null) {
                 timer.stop();
             }
-        }), log));
+        });
     }
 
 }

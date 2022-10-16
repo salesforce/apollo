@@ -15,8 +15,8 @@ import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -27,19 +27,17 @@ import com.salesforce.apollo.membership.Member;
 public class FfClient implements Fireflies {
 
     public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics) {
-        return (t, f, c) -> new FfClient(c, t, metrics);
+        return (c) -> new FfClient(c, metrics);
 
     }
 
-    private final ManagedServerConnection channel;
-    private final FirefliesFutureStub     client;
-    private final Member                  member;
-    private final FireflyMetrics          metrics;
+    private final ManagedServerChannel channel;
+    private final FirefliesFutureStub  client;
+    private final FireflyMetrics       metrics;
 
-    public FfClient(ManagedServerConnection channel, Member member, FireflyMetrics metrics) {
-        this.member = member;
+    public FfClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
-        this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = FirefliesGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -50,7 +48,7 @@ public class FfClient implements Fireflies {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override
@@ -81,7 +79,7 @@ public class FfClient implements Fireflies {
 
     @Override
     public String toString() {
-        return String.format("->[%s]", member);
+        return String.format("->[%s]", channel.getMember());
     }
 
     @Override

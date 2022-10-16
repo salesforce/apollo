@@ -16,8 +16,8 @@ import com.salesfoce.apollo.fireflies.proto.Gateway;
 import com.salesfoce.apollo.fireflies.proto.Join;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
+import com.salesforce.apollo.archipeligo.ManagedServerChannel;
+import com.salesforce.apollo.archipeligo.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.membership.Member;
 
@@ -28,19 +28,17 @@ import com.salesforce.apollo.membership.Member;
 public class EntranceClient implements Entrance {
 
     public static CreateClientCommunications<Entrance> getCreate(FireflyMetrics metrics) {
-        return (t, f, c) -> new EntranceClient(c, t, metrics);
+        return (c) -> new EntranceClient(c, metrics);
 
     }
 
-    private final ManagedServerConnection channel;
-    private final EntranceFutureStub      client;
-    private final Member                  member;
-    private final FireflyMetrics          metrics;
+    private final ManagedServerChannel channel;
+    private final EntranceFutureStub       client;
+    private final FireflyMetrics           metrics;
 
-    public EntranceClient(ManagedServerConnection channel, Member member, FireflyMetrics metrics) {
-        this.member = member;
+    public EntranceClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
-        this.client = EntranceGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = EntranceGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -51,7 +49,7 @@ public class EntranceClient implements Entrance {
 
     @Override
     public Member getMember() {
-        return member;
+        return channel.getMember();
     }
 
     @Override

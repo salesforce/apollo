@@ -6,23 +6,17 @@
  */
 package com.salesforce.apollo.membership.messaging.rbc.comms;
 
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
-import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.archipeligo.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -31,17 +25,14 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class RbcServer extends RBCImplBase {
-    private final Executor                 exec;
     private ClientIdentity                 identity;
-    private final Logger                   log = LoggerFactory.getLogger(RbcServer.class);
     private final RbcMetrics               metrics;
     private final RoutableService<Service> routing;
 
-    public RbcServer(ClientIdentity identity, RbcMetrics metrics, RoutableService<Service> r, Executor exec) {
+    public RbcServer(ClientIdentity identity, RbcMetrics metrics, RoutableService<Service> r) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = r;
-        this.exec = exec;
     }
 
     public ClientIdentity getClientIdentity() {
@@ -61,24 +52,22 @@ public class RbcServer extends RBCImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> {
-            routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-                try {
-                    Reconcile response = s.gossip(request, from);
-                    responseObserver.onNext(response);
-                    responseObserver.onCompleted();
-                    if (metrics != null) {
-                        var serializedSize = response.getSerializedSize();
-                        metrics.outboundBandwidth().mark(serializedSize);
-                        metrics.gossipReply().update(serializedSize);
-                    }
-                } finally {
-                    if (timer != null) {
-                        timer.stop();
-                    }
+        routing.evaluate(responseObserver, s -> {
+            try {
+                Reconcile response = s.gossip(request, from);
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    var serializedSize = response.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.gossipReply().update(serializedSize);
                 }
-            });
-        }, log));
+            } finally {
+                if (timer != null) {
+                    timer.stop();
+                }
+            }
+        });
     }
 
     @Override
@@ -94,19 +83,17 @@ public class RbcServer extends RBCImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        exec.execute(Utils.wrapped(() -> {
-            routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-                try {
-                    s.update(request, from);
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                } finally {
-                    if (timer != null) {
-                        timer.stop();
-                    }
+        routing.evaluate(responseObserver, s -> {
+            try {
+                s.update(request, from);
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } finally {
+                if (timer != null) {
+                    timer.stop();
                 }
-            });
-        }, log));
+            }
+        });
     }
 
 }

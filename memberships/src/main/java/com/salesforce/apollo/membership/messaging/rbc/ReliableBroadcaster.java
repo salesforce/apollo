@@ -40,11 +40,9 @@ import com.salesfoce.apollo.messaging.proto.AgedMessage;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
-import com.salesforce.apollo.comm.RingCommunications;
-import com.salesforce.apollo.comm.RingCommunications.Destination;
-import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.comm.Router.ServiceRouting;
+import com.salesforce.apollo.archipeligo.Router;
+import com.salesforce.apollo.archipeligo.Router.CommonCommunications;
+import com.salesforce.apollo.archipeligo.Router.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -53,6 +51,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
+import com.salesforce.apollo.ring.RingCommunications;
+import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -390,8 +390,7 @@ public class ReliableBroadcaster {
         this.exec = exec;
         buffer = new Buffer(context.timeToLive() + 1);
         this.comm = communications.create(member, context.getId(), new Service(),
-                                          r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r,
-                                                             exec),
+                                          r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
         gossiper = new RingCommunications<>(context, member, this.comm, exec);
     }
