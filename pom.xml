@@ -33,19 +33,20 @@
 
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
-        <jackson.version>2.13.2</jackson.version>
-        <dropwizard.version>2.1.2</dropwizard.version>
+        <jackson.version>2.13.4</jackson.version>
+        <dropwizard.version>4.0.0-beta.3</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.17.2</jooq.version>
-        <bc.version>1.71</bc.version>
-        <logback.version>1.2.11</logback.version>
-        <grpc.version>1.49.1</grpc.version>
+        <bc.version>1.72</bc.version>
+        <logback.version>1.4.4</logback.version>
+        <grpc.version>1.50.0</grpc.version>
         <protobuf.version>3.21.7</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
-        <netty.version>4.1.77.Final</netty.version>
+        <netty.version>4.1.79.Final</netty.version>
         <native.maven.plugin.version>0.9.14</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
+        <slf4j.version>2.0.3</slf4j.version>
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -69,17 +70,17 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>31.0.1-jre</version>
+                <version>31.1-jre</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
-                <version>1.7.32</version>
+                <version>${slf4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>jul-to-slf4j</artifactId>
-                <version>1.7.32</version>
+                <version>${slf4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.grpc</groupId>
@@ -258,6 +259,21 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-core</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-access</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>org.bouncycastle</groupId>
@@ -277,7 +293,7 @@
             <dependency>
                 <groupId>io.perfmark</groupId>
                 <artifactId>perfmark-api</artifactId>
-                <version>0.23.0</version>
+                <version>0.25.0</version>
             </dependency>
 
             <dependency>
@@ -294,7 +310,7 @@
             <dependency>
                 <groupId>javax.xml.bind</groupId>
                 <artifactId>jaxb-api</artifactId>
-                <version>2.3.1</version>
+                <version>2.4.0-b180830.0359</version>
             </dependency>
             <dependency>
                 <groupId>com.h2database</groupId>
@@ -309,7 +325,7 @@
             <dependency>
                 <groupId>org.locationtech.jts</groupId>
                 <artifactId>jts-core</artifactId>
-                <version>1.17.0</version>
+                <version>1.19.0</version>
             </dependency>
             <dependency>
                 <groupId>org.jooq</groupId>
@@ -334,7 +350,7 @@
             <dependency>
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
-                <version>1.32</version>
+                <version>1.33</version>
             </dependency>
             <dependency>
                 <groupId>com.mattbertolini</groupId>
@@ -344,7 +360,7 @@
             <dependency>
                 <groupId>org.roaringbitmap</groupId>
                 <artifactId>RoaringBitmap</artifactId>
-                <version>0.9.30</version>
+                <version>0.9.32</version>
             </dependency>
             <dependency>
                 <groupId>org.jooq</groupId>
@@ -359,12 +375,12 @@
             <dependency>
                 <groupId>org.knowm.xchart</groupId>
                 <artifactId>xchart</artifactId>
-                <version>3.8.1</version>
+                <version>3.8.2</version>
             </dependency>
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
-                <version>3.1.0</version>
+                <version>3.1.1</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
@@ -396,14 +412,9 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-                <version>${logback.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.mockito</groupId>
                 <artifactId>mockito-core</artifactId>
-                <version>4.0.0</version>
+                <version>4.8.0</version>
             </dependency>
             <dependency>
                 <groupId>guru.nidi</groupId>
@@ -419,7 +430,7 @@
             <dependency>
                 <groupId>com.github.oshi</groupId>
                 <artifactId>oshi-core</artifactId>
-                <version>6.1.5</version>
+                <version>6.2.2</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
