@@ -133,28 +133,30 @@ public class Router {
     private final ClientIdentity                  clientIdentityProvider;
     private final Consumer<Digest>                contextRegistration;
     private final Executor                        executor;
+    private final Member                          from;
     private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
     private final Server                          server;
     private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
     private final AtomicBoolean                   started  = new AtomicBoolean();
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+    public Router(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider) {
-        this(serverBuilder, cacheBuilder, clientIdentityProvider, r -> r.run());
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, r -> r.run());
     }
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+    public Router(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration, Executor executor) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
         this.clientIdentityProvider = clientIdentityProvider;
         this.contextRegistration = contextRegistration;
         this.executor = executor;
+        this.from = from;
     }
 
-    public Router(ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+    public Router(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                   ClientIdentity clientIdentityProvider, Executor executor) {
-        this(serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
         }, executor);
     }
 
@@ -201,6 +203,10 @@ public class Router {
 
     public ClientIdentity getClientIdentityProvider() {
         return clientIdentityProvider;
+    }
+
+    public Member getFrom() {
+        return from;
     }
 
     public void start() {

@@ -73,7 +73,7 @@ public class RouterTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub       client;
+        private final TestItBlockingStub   client;
         private final ManagedServerChannel connection;
 
         public TestItClient(ManagedServerChannel c) {
@@ -125,7 +125,7 @@ public class RouterTest {
         var serverBuilder = InProcessServerBuilder.forName(name);
         var cacheBuilder = ServerConnectionCache.newBuilder()
                                                 .setFactory(to -> InProcessChannelBuilder.forName(name).build());
-        var router = new Router(serverBuilder, cacheBuilder, null);
+        var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         Router.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA, new ServerA(),
                                                                                   "A", r -> new Server(r),

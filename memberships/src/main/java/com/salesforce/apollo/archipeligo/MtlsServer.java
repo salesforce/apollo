@@ -171,7 +171,7 @@ public class MtlsServer implements RouterSupplier {
                 }
             }
         };
-        return new Router(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity);
+        return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity);
     }
 
     private ManagedChannel connectTo(Member to) {

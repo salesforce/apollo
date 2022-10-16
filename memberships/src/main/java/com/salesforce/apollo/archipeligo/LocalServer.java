@@ -77,6 +77,10 @@ public class LocalServer implements RouterSupplier {
         };
     }
 
+    public Member getFrom() {
+        return from;
+    }
+
     @Override
     public Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
                          LimitsRegistry limitsRegistry) {
@@ -91,7 +95,7 @@ public class LocalServer implements RouterSupplier {
                                                                                                            .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                                            .build())
                                                                .intercept(serverInterceptor());
-        return new Router(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
+        return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();

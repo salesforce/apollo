@@ -95,7 +95,7 @@ public class EnclaveTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub       client;
+        private final TestItBlockingStub   client;
         private final ManagedServerChannel connection;
 
         public TestItClient(ManagedServerChannel c) {
@@ -194,8 +194,8 @@ public class EnclaveTest {
                                         Duration.ofMillis(1));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1.getId(), endpoint1, ForkJoinPool.commonPool(), bridge,
-                                   Duration.ofMillis(1), d -> {
+        var enclave1 = new Enclave(serverMember1, endpoint1, ForkJoinPool.commonPool(), bridge, Duration.ofMillis(1),
+                                   d -> {
                                        portal.register(qb64(d), endpoint1);
                                    });
         var router1 = enclave1.router(ForkJoinPool.commonPool());
@@ -204,8 +204,8 @@ public class EnclaveTest {
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2.getId(), endpoint2, ForkJoinPool.commonPool(), bridge,
-                                   Duration.ofMillis(1), d -> {
+        var enclave2 = new Enclave(serverMember2, endpoint2, ForkJoinPool.commonPool(), bridge, Duration.ofMillis(1),
+                                   d -> {
                                        portal.register(qb64(d), endpoint2);
                                    });
         var router2 = enclave2.router(ForkJoinPool.commonPool());

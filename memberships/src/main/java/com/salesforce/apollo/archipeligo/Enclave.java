@@ -67,17 +67,19 @@ public class Enclave implements RouterSupplier {
     private final DomainSocketAddress                       endpoint;
     private final EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
     private final Executor                                  executor;
-    private final String                                    from;
+    private final Member                                    from;
+    private final String                                    fromString;
     private final Duration                                  keepAlive;
 
-    public Enclave(Digest from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
+    public Enclave(Member from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
                    Duration keepAlive, Consumer<Digest> contextRegistration) {
         this.bridge = bridge;
         this.executor = executor;
         this.endpoint = endpoint;
         this.keepAlive = keepAlive;
         this.contextRegistration = contextRegistration;
-        this.from = qb64(from);
+        this.from = from;
+        this.fromString = qb64(from.getId());
     }
 
     /**
@@ -105,7 +107,7 @@ public class Enclave implements RouterSupplier {
                                                                                                        .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
-        return new Router(serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
+        return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();
@@ -123,7 +125,7 @@ public class Enclave implements RouterSupplier {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
                         headers.put(Router.METADATA_TARGET_KEY, qb64(to.getId()));
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, from);
+                        headers.put(Router.METADATA_CLIENT_ID_KEY, fromString);
                         super.start(responseListener, headers);
                     }
                 };
