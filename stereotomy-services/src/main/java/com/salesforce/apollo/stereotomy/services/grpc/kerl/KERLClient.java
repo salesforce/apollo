@@ -26,19 +26,14 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndVa
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceFutureStub;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidationsContext;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
@@ -49,9 +44,9 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
  */
 public class KERLClient implements KERLService {
 
-    public static CreateClientCommunications<KERLService> getCreate(Digest context, StereotomyMetrics metrics) {
+    public static CreateClientCommunications<KERLService> getCreate(StereotomyMetrics metrics) {
         return (c) -> {
-            return new KERLClient(context, c, metrics);
+            return new KERLClient(c, metrics);
         };
 
     }
@@ -139,11 +134,9 @@ public class KERLClient implements KERLService {
 
     private final ManagedServerChannel  channel;
     private final KERLServiceFutureStub client;
-    private final Digeste               context;
     private final StereotomyMetrics     metrics;
 
-    public KERLClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
-        this.context = context.toDigeste();
+    public KERLClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
         this.client = KERLServiceGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
@@ -152,7 +145,7 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<List<KeyState_>> append(KERL_ kerl) {
         Context timer = metrics == null ? null : metrics.appendKERLClient().time();
-        var request = KERLContext.newBuilder().setContext(context).build();
+        var request = KERLContext.newBuilder().setKerl(kerl).build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(bsize);
@@ -193,10 +186,7 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> keyEventList) {
         Context timer = metrics == null ? null : metrics.appendEventsClient().time();
-        KeyEventsContext request = KeyEventsContext.newBuilder()
-                                                   .addAllKeyEvent(keyEventList)
-                                                   .setContext(context)
-                                                   .build();
+        KeyEventsContext request = KeyEventsContext.newBuilder().addAllKeyEvent(keyEventList).build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(bsize);
@@ -239,7 +229,6 @@ public class KERLClient implements KERLService {
         var request = KeyEventWithAttachmentsContext.newBuilder()
                                                     .addAllEvents(eventsList)
                                                     .addAllAttachments(attachmentsList)
-                                                    .setContext(context)
                                                     .build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
@@ -275,7 +264,7 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = AttachmentsContext.newBuilder().addAllAttachments(attachments).setContext(context).build();
+        var request = AttachmentsContext.newBuilder().addAllAttachments(attachments).build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(bsize);
@@ -305,12 +294,11 @@ public class KERLClient implements KERLService {
     public CompletableFuture<Empty> appendValidations(Validations validations) {
         var f = new CompletableFuture<Empty>();
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = ValidationsContext.newBuilder().setValidations(validations).setContext(context).build();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+            metrics.outboundBandwidth().mark(validations.getSerializedSize());
+            metrics.outboundAppendWithAttachmentsRequest().mark(validations.getSerializedSize());
         }
-        var result = client.appendValidations(request);
+        var result = client.appendValidations(validations);
         result.addListener(() -> {
             if (timer != null) {
                 timer.stop();
@@ -328,20 +316,19 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
-            final var bsize = request.getSerializedSize();
+            final var bsize = coordinates.getSerializedSize();
             metrics.outboundBandwidth().mark(bsize);
             metrics.outboundGetAttachmentRequest().mark(bsize);
         }
         var f = new CompletableFuture<Attachment>();
-        ListenableFuture<Attachment> complete = client.getAttachment(request);
+        ListenableFuture<Attachment> complete = client.getAttachment(coordinates);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var attachment = client.getAttachment(coordinates).get();
                 final var serializedSize = attachment.getSerializedSize();
                 f.complete(attachment.equals(Attachment.getDefaultInstance()) ? null : attachment);
                 if (metrics != null) {
@@ -361,23 +348,19 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
         Context timer = metrics == null ? null : metrics.getKERLClient().time();
-        IdentifierContext request = IdentifierContext.newBuilder()
-                                                     .setIdentifier(identifier)
-                                                     .setContext(context)
-                                                     .build();
         if (metrics != null) {
-            final var bsize = request.getSerializedSize();
+            final var bsize = identifier.getSerializedSize();
             metrics.outboundBandwidth().mark(bsize);
             metrics.outboundGetKERLRequest().mark(bsize);
         }
         var f = new CompletableFuture<KERL_>();
-        ListenableFuture<KERL_> complete = client.getKERL(request);
+        ListenableFuture<KERL_> complete = client.getKERL(identifier);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
             try {
-                var kerl = client.getKERL(request).get();
+                var kerl = client.getKERL(identifier).get();
                 final var serializedSize = kerl.getSerializedSize();
                 if (metrics != null) {
                     metrics.inboundBandwidth().mark(serializedSize);
@@ -397,13 +380,12 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getKeyEventCoordsClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
-            final var bsize = request.getSerializedSize();
+            final var bsize = coordinates.getSerializedSize();
             metrics.outboundBandwidth().mark(bsize);
             metrics.outboundGetKeyEventCoordsRequest().mark(bsize);
         }
-        var result = client.getKeyEventCoords(request);
+        var result = client.getKeyEventCoords(coordinates);
         var f = new CompletableFuture<KeyEvent_>();
         result.addListener(() -> {
             if (timer != null) {
@@ -432,13 +414,12 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
-            final var bs = request.getSerializedSize();
+            final var bs = coordinates.getSerializedSize();
             metrics.outboundBandwidth().mark(bs);
             metrics.outboundGetKeyStateCoordsRequest().mark(bs);
         }
-        var result = client.getKeyStateCoords(request);
+        var result = client.getKeyStateCoords(coordinates);
         var f = new CompletableFuture<KeyState_>();
         result.addListener(() -> {
             if (timer != null) {
@@ -468,16 +449,12 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
         Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
-        IdentifierContext request = IdentifierContext.newBuilder()
-                                                     .setIdentifier(identifier)
-                                                     .setContext(context)
-                                                     .build();
         if (metrics != null) {
-            final var bs = request.getSerializedSize();
+            final var bs = identifier.getSerializedSize();
             metrics.outboundBandwidth().mark(bs);
             metrics.outboundGetKeyStateRequest().mark(bs);
         }
-        var result = client.getKeyState(request);
+        var result = client.getKeyState(identifier);
         var f = new CompletableFuture<KeyState_>();
         result.addListener(() -> {
             if (timer != null) {
@@ -507,13 +484,12 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
         Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
         if (metrics != null) {
-            final var bs = request.getSerializedSize();
+            final var bs = coords.getSerializedSize();
             metrics.outboundBandwidth().mark(bs);
             metrics.outboundGetKeyStateCoordsRequest().mark(bs);
         }
-        var result = client.getKeyStateWithAttachments(request);
+        var result = client.getKeyStateWithAttachments(coords);
         var f = new CompletableFuture<KeyStateWithAttachments_>();
         result.addListener(() -> {
             if (timer != null) {
@@ -543,13 +519,12 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coords) {
         Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
         if (metrics != null) {
-            final var bs = request.getSerializedSize();
+            final var bs = coords.getSerializedSize();
             metrics.outboundBandwidth().mark(bs);
             metrics.outboundGetKeyStateCoordsRequest().mark(bs);
         }
-        var result = client.getKeyStateWithEndorsementsAndValidations(request);
+        var result = client.getKeyStateWithEndorsementsAndValidations(coords);
         var f = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
         result.addListener(() -> {
             if (timer != null) {
@@ -584,20 +559,19 @@ public class KERLClient implements KERLService {
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coords) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
-        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
         if (metrics != null) {
-            final var bsize = request.getSerializedSize();
+            final var bsize = coords.getSerializedSize();
             metrics.outboundBandwidth().mark(bsize);
             metrics.outboundGetAttachmentRequest().mark(bsize);
         }
         var f = new CompletableFuture<Validations>();
-        ListenableFuture<Attachment> complete = client.getAttachment(request);
+        ListenableFuture<Attachment> complete = client.getAttachment(coords);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
             try {
-                var validations = client.getValidations(request).get();
+                var validations = client.getValidations(coords).get();
                 final var serializedSize = validations.getSerializedSize();
                 f.complete(validations.equals(Validations.getDefaultInstance()) ? null : validations);
                 if (metrics != null) {

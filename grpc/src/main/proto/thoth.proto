@@ -18,16 +18,16 @@ service KerlDht {
     rpc appendKERL (stereotomy.services.KERLContext) returns (stereotomy.services.KeyStates) {}
     rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (stereotomy.services.KeyStates) {}
     rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
-    rpc appendValidations (stereotomy.services.ValidationsContext) returns (google.protobuf.Empty) {}
+    rpc appendValidations (stereotomy.Validations) returns (google.protobuf.Empty) {}
     
-    rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
-    rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
-    rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
-    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
-    rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
-    rpc getValidations (stereotomy.services.EventContext) returns (stereotomy.Validations) {}
+    rpc getAttachment (stereotomy.EventCoords) returns (stereotomy.Attachment) {}
+    rpc getKeyEventCoords (stereotomy.EventCoords) returns (stereotomy.KeyEvent_) {}
+    rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateWithAttachments (stereotomy.EventCoords) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.EventCoords) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
+    rpc getKERL (stereotomy.Ident) returns (stereotomy.KERL_) {}
+    rpc getValidations (stereotomy.EventCoords) returns (stereotomy.Validations) {}
 }
 
 service Delegated {

@@ -85,7 +85,7 @@ public class TestEventValidation {
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
                                               r -> new EventValidationServer(r, null),
-                                              EventValidationClient.getCreate(context, null), null);
+                                              EventValidationClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

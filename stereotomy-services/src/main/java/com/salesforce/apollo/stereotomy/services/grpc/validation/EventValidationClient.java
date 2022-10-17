@@ -17,10 +17,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
@@ -31,10 +29,9 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
  */
 public class EventValidationClient implements EventValidationService {
 
-    public static CreateClientCommunications<EventValidationService> getCreate(Digest context,
-                                                                               StereotomyMetrics metrics) {
+    public static CreateClientCommunications<EventValidationService> getCreate(StereotomyMetrics metrics) {
         return (c) -> {
-            return new EventValidationClient(context, c, metrics);
+            return new EventValidationClient(c, metrics);
         };
 
     }
@@ -60,11 +57,9 @@ public class EventValidationClient implements EventValidationService {
 
     private final ManagedServerChannel channel;
     private final ValidatorFutureStub  client;
-    private final Digeste              context;
     private final StereotomyMetrics    metrics;
 
-    public EventValidationClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
-        this.context = context.toDigeste();
+    public EventValidationClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
         this.client = ValidatorGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
@@ -83,7 +78,7 @@ public class EventValidationClient implements EventValidationService {
     @Override
     public CompletableFuture<Boolean> validate(KeyEvent_ event) {
         Context timer = metrics == null ? null : metrics.validatorClient().time();
-        var request = KeyEventContext.newBuilder().setContext(context).setKeyEvent(event).build();
+        var request = KeyEventContext.newBuilder().setKeyEvent(event).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundValidatorRequest().mark(request.getSerializedSize());
