@@ -264,11 +264,7 @@ class Binding {
     }
 
     private Join join(Digest v) {
-        return Join.newBuilder()
-                   .setContext(context.getId().toDigeste())
-                   .setView(v.toDigeste())
-                   .setNote(node.getNote().getWrapped())
-                   .build();
+        return Join.newBuilder().setView(v.toDigeste()).setNote(node.getNote().getWrapped()).build();
     }
 
     private BiConsumer<? super Redirect, ? super Throwable> join(Duration duration, ScheduledExecutorService scheduler,
@@ -357,7 +353,6 @@ class Binding {
 
     private Registration registration() {
         return Registration.newBuilder()
-                           .setContext(context.getId().toDigeste())
                            .setView(view.bootstrapView().toDigeste())
                            .setKerl(node.kerl())
                            .setNote(node.note.getWrapped())
