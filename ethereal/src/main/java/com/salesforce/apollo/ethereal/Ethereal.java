@@ -194,7 +194,7 @@ public class Ethereal {
         return new Processor() {
             @Override
             public Gossip gossip(Digest context, int ring) {
-                final var builder = Gossip.newBuilder().setContext(context.toDigeste()).setRing(ring);
+                final var builder = Gossip.newBuilder().setRing(ring);
                 final var current = currentEpoch.get();
                 epochs.entrySet()
                       .stream()
