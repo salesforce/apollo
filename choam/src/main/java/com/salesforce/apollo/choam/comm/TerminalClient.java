@@ -12,7 +12,6 @@ import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
@@ -20,6 +19,7 @@ import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -71,8 +71,8 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ListenableFuture<ViewMember> join(JoinRequest join) {
-        return client.join(join);
+    public ListenableFuture<ViewMember> join(Digest nextView) {
+        return client.join(nextView.toDigeste());
     }
 
     public void release() {

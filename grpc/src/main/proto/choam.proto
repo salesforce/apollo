@@ -10,28 +10,18 @@ import "stereotomy.proto";
 package apollo.choam;
 
 service TransactionSubmission {
-    rpc submit (SubmitTransaction) returns (SubmitResult) {}
+    rpc submit (Transaction) returns (SubmitResult) {}
 }
 
 service Terminal {
     /* reconfiguration */
-    rpc join (JoinRequest) returns (ViewMember) {}
+    rpc join (utils.Digeste) returns (ViewMember) {}
 
     /* bootstrapping */
     rpc sync(Synchronize) returns (Initial) {}
     rpc fetchBlocks(BlockReplication) returns (Blocks) {}
     rpc fetchViewChain(BlockReplication) returns (Blocks) {}
     rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
-}
-
-message JoinRequest {
-    utils.Digeste context = 1;
-    utils.Digeste nextView = 2;
-}
-
-message SubmitTransaction {
-    utils.Digeste context = 1;
-    Transaction transaction = 2;
 }
 
 message SubmitResult {
@@ -174,9 +164,8 @@ message Validations {
 }
 
 message Synchronize {
-    utils.Digeste context = 1;
-    utils.Digeste from = 2;
-    uint64 height = 3;
+    utils.Digeste from = 1;
+    uint64 height = 2;
 }
 
 message Initial {
@@ -187,10 +176,9 @@ message Initial {
 }
 
 message BlockReplication {
-    utils.Digeste context = 1;
-    uint64 from = 2;
-    uint64 to = 3;
-    utils.Biff blocksBff = 4;
+    uint64 from = 1;
+    uint64 to = 2;
+    utils.Biff blocksBff = 3;
 }
 
 message Blocks {
@@ -198,9 +186,8 @@ message Blocks {
 }
 
 message CheckpointReplication {
-    utils.Digeste context = 1;
-    uint64 checkpoint = 2;
-    utils.Biff checkpointSegments = 3;
+    uint64 checkpoint = 1;
+    utils.Biff checkpointSegments = 2;
 }
 
 message CheckpointSegments {

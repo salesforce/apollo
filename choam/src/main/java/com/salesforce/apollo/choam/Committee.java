@@ -16,11 +16,9 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
 import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -79,7 +77,7 @@ public interface Committee {
 
     boolean isMember();
 
-    ViewMember join(JoinRequest request, Digest from);
+    ViewMember join(Digest nextView, Digest from);
 
     Logger log();
 
@@ -89,7 +87,7 @@ public interface Committee {
         throw new IllegalStateException("Should not be called on this implementation");
     }
 
-    default SubmitResult submit(SubmitTransaction request) {
+    default SubmitResult submit(Transaction request) {
         log().debug("Cannot submit txn, inactive committee: {} on: {}", getClass().getSimpleName(),
                     params().member().getId());
         return SubmitResult.newBuilder().setResult(Result.INACTIVE).build();

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.choam.comm;
 
 import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -16,6 +16,6 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Submitter {
 
-    SubmitResult submit(SubmitTransaction request, Digest from);
+    SubmitResult submit(Transaction request, Digest from);
 
 }

@@ -56,11 +56,9 @@ import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -238,8 +236,8 @@ public class CHOAM {
         }
 
         @Override
-        public ViewMember join(JoinRequest request, Digest from) {
-            return CHOAM.this.join(request, from);
+        public ViewMember join(Digest nextView, Digest from) {
+            return CHOAM.this.join(nextView, from);
         }
 
         @Override
@@ -293,15 +291,15 @@ public class CHOAM {
         }
 
         @Override
-        public ViewMember join(JoinRequest request, Digest from) {
-            if (!checkJoin(request, from)) {
-                log.debug("Join requested for invalid view: {} from: {} on: {}", Digest.from(request.getNextView()),
-                          from, params.member().getId());
+        public ViewMember join(Digest nextView, Digest from) {
+            if (!checkJoin(nextView, from)) {
+                log.debug("Join requested for invalid view: {} from: {} on: {}", nextView, from,
+                          params.member().getId());
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
             if (log.isDebugEnabled()) {
-                log.debug("Joining view: {} from: {} view member: {} on: {}", Digest.from(request.getNextView()), from,
+                log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
                           ViewContext.print(c.member, params.digestAlgorithm()), params.member().getId());
             }
             return c.member;
@@ -329,10 +327,7 @@ public class CHOAM {
 //                    log.trace("Submitting received txn: {} to: {} in: {} on: {}",
 //                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member().getId());
 //                }
-                return link.submit(SubmitTransaction.newBuilder()
-                                                    .setContext(params.context().getId().toDigeste())
-                                                    .setTransaction(transaction)
-                                                    .build());
+                return link.submit(transaction);
             } catch (StatusRuntimeException e) {
                 log.trace("Failed submitting txn: {} status:{} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), e.getStatus(), target.getId(), viewId,
@@ -387,10 +382,10 @@ public class CHOAM {
         }
 
         @Override
-        public SubmitResult submit(SubmitTransaction request) {
+        public SubmitResult submit(Transaction request) {
 //            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
 //                      params().member());
-            return producer.submit(request.getTransaction());
+            return producer.submit(request);
         }
     }
 
@@ -447,13 +442,13 @@ public class CHOAM {
         }
 
         @Override
-        public ViewMember join(JoinRequest request, Digest from) {
-            if (!checkJoin(request, from)) {
+        public ViewMember join(Digest nextView, Digest from) {
+            if (!checkJoin(nextView, from)) {
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
             if (log.isDebugEnabled()) {
-                log.debug("Joining view: {} from: {} view member: {} on: {}", Digest.from(request.getNextView()), from,
+                log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
                           ViewContext.print(c.member, params.digestAlgorithm()), params.member().getId());
             }
             return c.member;
@@ -510,7 +505,7 @@ public class CHOAM {
         }
 
         @Override
-        public ViewMember join(JoinRequest request, Digest from) {
+        public ViewMember join(Digest nextView, Digest from) {
             return ViewMember.getDefaultInstance();
         }
 
@@ -532,7 +527,7 @@ public class CHOAM {
 
     private class TransSubmission implements Submitter {
         @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
+        public SubmitResult submit(Transaction request, Digest from) {
             return CHOAM.this.submit(request, from);
         }
     }
@@ -812,13 +807,12 @@ public class CHOAM {
         }
     }
 
-    private boolean checkJoin(JoinRequest request, Digest from) {
+    private boolean checkJoin(Digest nextView, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
             log.debug("Request to join from non member: {} on: {}", from, params.member().getId());
             return false;
         }
-        Digest nextView = new Digest(request.getNextView());
         final var nextId = nextViewId.get();
         if (nextId == null) {
             log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
@@ -1061,12 +1055,12 @@ public class CHOAM {
         return false;
     }
 
-    private ViewMember join(JoinRequest request, Digest from) {
+    private ViewMember join(Digest nextView, Digest from) {
         final var c = current.get();
         if (c == null) {
             return ViewMember.getDefaultInstance();
         }
-        return c.join(request, from);
+        return c.join(nextView, from);
     }
 
     private void nextView() {
@@ -1236,7 +1230,7 @@ public class CHOAM {
      * 
      * @return
      */
-    private SubmitResult submit(SubmitTransaction request, Digest from) {
+    private SubmitResult submit(Transaction request, Digest from) {
         if (from == null) {
             return SubmitResult.getDefaultInstance();
         }
