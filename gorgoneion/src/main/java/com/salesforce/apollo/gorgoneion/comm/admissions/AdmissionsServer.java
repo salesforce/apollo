@@ -7,10 +7,10 @@
 package com.salesforce.apollo.gorgoneion.comm.admissions;
 
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -35,9 +35,9 @@ public class AdmissionsServer extends AdmissionsImplBase {
     }
 
     @Override
-    public void apply(Application request, StreamObserver<SignedNonce> responseObserver) {
+    public void apply(KERL_ application, StreamObserver<SignedNonce> responseObserver) {
         if (metrics != null) {
-            var serializedSize = request.getSerializedSize();
+            var serializedSize = application.getSerializedSize();
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundApplication().update(serializedSize);
         }
@@ -47,7 +47,7 @@ public class AdmissionsServer extends AdmissionsImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            s.apply(request, from, responseObserver, null);
+            s.apply(application, from, responseObserver, null);
         });
     }
 

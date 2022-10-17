@@ -13,10 +13,10 @@ import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.archipelago.Link;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
@@ -56,9 +56,9 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public ListenableFuture<ViewMember> join(JoinRequest join) {
+            public ListenableFuture<ViewMember> join(Digest nextView) {
                 SettableFuture<ViewMember> f = SettableFuture.create();
-                f.set(service.join(join, member.getId()));
+                f.set(service.join(nextView, member.getId()));
                 return f;
             }
 
@@ -75,7 +75,7 @@ public interface Terminal extends Link {
 
     ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
 
-    ListenableFuture<ViewMember> join(JoinRequest join);
+    ListenableFuture<ViewMember> join(Digest nextView);
 
     ListenableFuture<Initial> sync(Synchronize sync);
 }

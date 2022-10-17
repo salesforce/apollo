@@ -10,7 +10,7 @@ import java.util.Optional;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -33,14 +33,14 @@ public class ResolverServer extends ResolverImplBase {
     }
 
     @Override
-    public void lookup(IdentifierContext request, StreamObserver<Binding> responseObserver) {
+    public void lookup(Ident request, StreamObserver<Binding> responseObserver) {
         Context timer = metrics != null ? metrics.lookupService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundLookupRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            Optional<Binding> response = s.lookup(request.getIdentifier());
+            Optional<Binding> response = s.lookup(request);
             if (response.isEmpty()) {
                 if (timer != null) {
                     timer.stop();

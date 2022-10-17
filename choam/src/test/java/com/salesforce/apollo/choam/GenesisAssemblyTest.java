@@ -37,7 +37,6 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -105,7 +104,7 @@ public class GenesisAssemblyTest {
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
-            when(s.join(any(JoinRequest.class), any(Digest.class))).then(new Answer<ViewMember>() {
+            when(s.join(any(Digest.class), any(Digest.class))).then(new Answer<ViewMember>() {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();

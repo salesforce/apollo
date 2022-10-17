@@ -32,7 +32,6 @@ import com.chiralbehaviors.tron.Fsm;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -117,10 +116,6 @@ public class ViewAssembly {
         @Override
         public void gather() {
             log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member());
-            JoinRequest request = JoinRequest.newBuilder()
-                                             .setContext(params().context().getId().toDigeste())
-                                             .setNextView(nextViewId.toDigeste())
-                                             .build();
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
             reiterate.set(() -> committee.iterate((term, m) -> {
@@ -128,7 +123,7 @@ public class ViewAssembly {
                     return null;
                 }
                 log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
-                return term.join(request);
+                return term.join(nextViewId);
             }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate),
                                                   params().scheduler(), params().gossipDuration()));
             reiterate.get().run();

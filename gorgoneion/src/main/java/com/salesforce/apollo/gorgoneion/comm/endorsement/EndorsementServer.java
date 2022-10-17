@@ -8,8 +8,8 @@ package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementImplBase;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.RoutableService;
@@ -36,7 +36,7 @@ public class EndorsementServer extends EndorsementImplBase {
     }
 
     @Override
-    public void endorse(EndorseNonce request, StreamObserver<Validation_> responseObserver) {
+    public void endorse(Nonce request, StreamObserver<Validation_> responseObserver) {
         var timer = metrics == null ? null : metrics.registerDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();

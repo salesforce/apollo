@@ -135,7 +135,6 @@ public class Bootstrapper {
         start.set(store.firstGap(start.get(), end));
         store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()
-                                                       .setContext(params.context().getId().toDigeste())
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
                                                        .setTo(end.longValue())
@@ -266,7 +265,6 @@ public class Bootstrapper {
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()
-                                                       .setContext(params.context().getId().toDigeste())
                                                        .setBlocksBff(blocksBff.toBff())
                                                        .setFrom(start.get().longValue())
                                                        .setTo(end.longValue())
@@ -411,10 +409,7 @@ public class Bootstrapper {
             return;
         }
         HashMap<Digest, Initial> votes = new HashMap<>();
-        Synchronize s = Synchronize.newBuilder()
-                                   .setContext(params.context().getId().toDigeste())
-                                   .setHeight(anchor.height().longValue())
-                                   .build();
+        Synchronize s = Synchronize.newBuilder().setHeight(anchor.height().longValue()).build();
         final var randomCut = randomCut(params.digestAlgorithm());
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
                            params.scheduler()).iterate(randomCut, (link, ring) -> synchronize(s, link),

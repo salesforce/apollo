@@ -15,10 +15,9 @@ service Gossiper {
 }
 
 message Gossip {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    utils.Biff have = 3;
-    repeated Have haves = 4;
+    int32 ring = 1;
+    utils.Biff have = 2;
+    repeated Have haves = 3;
 }
 
 message Have {
@@ -43,10 +42,9 @@ message Update {
     repeated Missing missings = 4;
 }
 
-message ContextUpdate {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    Update update = 3;
+message ContextUpdate { 
+    int32 ring = 1;
+    Update update = 2;
 }
 
 message PreVote {

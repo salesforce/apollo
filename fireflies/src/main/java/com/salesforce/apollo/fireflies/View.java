@@ -1569,7 +1569,6 @@ public class View {
         }
 
         final SayWhat gossip = stable(() -> SayWhat.newBuilder()
-                                                   .setContext(context.getId().toDigeste())
                                                    .setView(currentView().toDigeste())
                                                    .setNote(node.getNote().getWrapped())
                                                    .setRing(ring)
@@ -1642,7 +1641,6 @@ public class View {
                                       update.getObservationsCount(), node.getId());
                             destination.link()
                                        .update(State.newBuilder()
-                                                    .setContext(context.getId().toDigeste())
                                                     .setView(currentView().toDigeste())
                                                     .setRing(destination.ring())
                                                     .setUpdate(update)

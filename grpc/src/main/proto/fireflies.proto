@@ -17,19 +17,17 @@ service Fireflies {
     rpc update (State) returns (google.protobuf.Empty) {}
 }
 
-message SayWhat {
-    utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    SignedNote note = 3;
-    int32 ring = 4;
-    Digests gossip = 5;
+message SayWhat { 
+    utils.Digeste view = 1;
+    SignedNote note = 2;
+    int32 ring = 3;
+    Digests gossip = 4;
 }
 
-message State {
-    utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    int32 ring = 3;
-    Update update = 4;
+message State { 
+    utils.Digeste view = 1;
+    int32 ring = 2;
+    Update update = 3;
 }
 
 message Accusation {
@@ -121,11 +119,10 @@ service Entrance {
     rpc join (Join) returns (Gateway) {}
 }
 
-message Registration {
-    utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    SignedNote note = 3;
-    stereotomy.KERL_ kerl = 4;
+message Registration { 
+    utils.Digeste view = 1;
+    SignedNote note = 2;
+    stereotomy.KERL_ kerl = 3;
 }
 
 message Redirect {
@@ -141,10 +138,9 @@ message Seed_ {
     stereotomy.KeyState_ keyState = 5;
 }
 
-message Join {
-    utils.Digeste context = 1;
-    utils.Digeste view = 2;
-    SignedNote note = 3;
+message Join { 
+    utils.Digeste view = 1;
+    SignedNote note = 2;
 }
 
 message Gateway { 

@@ -8,9 +8,9 @@ package com.salesforce.apollo.stereotomy.services.grpc.binder;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.BindContext;
+import com.salesfoce.apollo.stereotomy.event.proto.Binding;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -36,7 +36,7 @@ public class BinderServer extends BinderImplBase {
     }
 
     @Override
-    public void bind(BindContext request, StreamObserver<Empty> responseObserver) {
+    public void bind(Binding request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.bindService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -48,7 +48,7 @@ public class BinderServer extends BinderImplBase {
             return;
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.bind(request.getBinding());
+            var result = s.bind(request);
             result.whenComplete((b, t) -> {
                 if (timer != null) {
                     timer.stop();
@@ -64,7 +64,7 @@ public class BinderServer extends BinderImplBase {
     }
 
     @Override
-    public void unbind(IdentifierContext request, StreamObserver<Empty> responseObserver) {
+    public void unbind(Ident request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.unbindService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -76,7 +76,7 @@ public class BinderServer extends BinderImplBase {
             return;
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.unbind(request.getIdentifier());
+            var result = s.unbind(request);
             result.whenComplete((b, t) -> {
                 if (timer != null) {
                     timer.stop();

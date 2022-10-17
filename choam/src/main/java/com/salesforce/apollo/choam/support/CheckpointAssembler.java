@@ -92,11 +92,10 @@ public class CheckpointAssembler {
         IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
             segmentsBff.add(i);
         });
-        CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
-                                                                     .setContext(context.getId().toDigeste())
-                                                                     .setCheckpoint(height.longValue());
-        request.setCheckpointSegments(segmentsBff.toBff());
-        return request.build();
+        return CheckpointReplication.newBuilder()
+                                    .setCheckpoint(height.longValue())
+                                    .setCheckpointSegments(segmentsBff.toBff())
+                                    .build();
     }
 
     private boolean gossip(Optional<ListenableFuture<CheckpointSegments>> futureSailor) {

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.choam.comm;
 
 import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.TransactionSubmissionGrpc.TransactionSubmissionImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -34,7 +34,7 @@ public class TxnSubmitServer extends TransactionSubmissionImplBase {
     }
 
     @Override
-    public void submit(SubmitTransaction request, StreamObserver<SubmitResult> responseObserver) {
+    public void submit(Transaction request, StreamObserver<SubmitResult> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));

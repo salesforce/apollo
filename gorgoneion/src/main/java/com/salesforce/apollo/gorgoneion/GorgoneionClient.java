@@ -18,13 +18,11 @@ import org.slf4j.LoggerFactory;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 
@@ -38,13 +36,11 @@ public class GorgoneionClient {
     private final Function<SignedNonce, CompletableFuture<Any>> attester;
     private final Admissions                                    client;
     private final Clock                                         clock;
-    private final Digest                                        context;
     private final ControlledIdentifierMember                    member;
 
-    public GorgoneionClient(ControlledIdentifierMember member, Digest context,
-                            Function<SignedNonce, CompletableFuture<Any>> attester, Clock clock, Admissions client) {
+    public GorgoneionClient(ControlledIdentifierMember member, Function<SignedNonce, CompletableFuture<Any>> attester,
+                            Clock clock, Admissions client) {
         this.member = member;
-        this.context = context;
         this.attester = attester;
         this.clock = clock;
         this.client = client;
@@ -52,16 +48,11 @@ public class GorgoneionClient {
 
     public CompletableFuture<Invitation> apply(Duration timeout) {
         var invitation = new CompletableFuture<Invitation>();
-        application().whenComplete((application, t) -> {
+        member.kerl().whenComplete((application, t) -> {
             var fs = client.apply(application, timeout);
             fs.addListener(() -> complete(fs, invitation, timeout), r -> r.run());
         });
         return invitation;
-    }
-
-    private CompletableFuture<Application> application() {
-        return member.kerl()
-                     .thenApply(kerl -> Application.newBuilder().setContext(context.toDigeste()).setKerl(kerl).build());
     }
 
     private CompletableFuture<SignedAttestation> attestation(SignedNonce nonce, Any proof) {
@@ -104,7 +95,6 @@ public class GorgoneionClient {
                      .thenCompose(kerl -> attester.apply(nonce)
                                                   .thenCompose(attestation -> attestation(nonce, attestation))
                                                   .thenApply(sa -> Credentials.newBuilder()
-                                                                              .setContext(context.toDigeste())
                                                                               .setNonce(nonce)
                                                                               .setAttestation(sa)
                                                                               .build()));

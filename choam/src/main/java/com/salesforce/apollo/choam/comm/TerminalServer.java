@@ -11,10 +11,10 @@ import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.crypto.Digest;
@@ -78,14 +78,14 @@ public class TerminalServer extends TerminalImplBase {
     }
 
     @Override
-    public void join(JoinRequest request, StreamObserver<ViewMember> responseObserver) {
+    public void join(Digeste nextView, StreamObserver<ViewMember> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
         router.evaluate(responseObserver, s -> {
-            responseObserver.onNext(s.join(request, from));
+            responseObserver.onNext(s.join(Digest.from(nextView), from));
             responseObserver.onCompleted();
         });
     }

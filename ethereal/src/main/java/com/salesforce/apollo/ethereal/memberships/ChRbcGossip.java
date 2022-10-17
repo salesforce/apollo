@@ -214,7 +214,6 @@ public class ChRbcGossip {
             log.trace("gossip update with {} on: {}", destination.member(), member);
             destination.link()
                        .update(ContextUpdate.newBuilder()
-                                            .setContext(context.getId().toDigeste())
                                             .setRing(destination.ring())
                                             .setUpdate(processor.update(update))
                                             .build());

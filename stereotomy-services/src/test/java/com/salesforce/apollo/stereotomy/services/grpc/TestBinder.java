@@ -100,8 +100,7 @@ public class TestBinder {
                             r -> new BinderServer(r, ci, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new BinderServer(r, ci, null), BinderClient.getCreate(context, null),
-                                              null);
+                                              r -> new BinderServer(r, ci, null), BinderClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

@@ -10,10 +10,10 @@ import java.io.IOException;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
@@ -27,7 +27,7 @@ public interface Admissions extends Link {
         return new Admissions() {
 
             @Override
-            public ListenableFuture<SignedNonce> apply(Application application, Duration timeout) {
+            public ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout) {
                 return null;
             }
 
@@ -47,7 +47,7 @@ public interface Admissions extends Link {
         };
     }
 
-    ListenableFuture<SignedNonce> apply(Application application, Duration timeout);
+    ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout);
 
     ListenableFuture<Invitation> register(Credentials credentials, Duration timeout);
 }

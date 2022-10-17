@@ -13,7 +13,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.Link;
@@ -32,7 +32,7 @@ public interface Endorsement extends Link {
             }
 
             @Override
-            public ListenableFuture<Validation_> endorse(EndorseNonce nonce, Duration timer) {
+            public ListenableFuture<Validation_> endorse(Nonce nonce, Duration timer) {
                 SettableFuture<Validation_> f = SettableFuture.create();
                 service.endorse(nonce, member.getId()).whenComplete((e, t) -> {
                     if (t != null) {
@@ -77,7 +77,7 @@ public interface Endorsement extends Link {
         };
     }
 
-    ListenableFuture<Validation_> endorse(EndorseNonce nonce, Duration timer);
+    ListenableFuture<Validation_> endorse(Nonce nonce, Duration timer);
 
     ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout);
 

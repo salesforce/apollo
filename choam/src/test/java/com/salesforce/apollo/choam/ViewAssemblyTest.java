@@ -31,7 +31,6 @@ import org.mockito.stubbing.Answer;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
@@ -172,7 +171,7 @@ public class ViewAssemblyTest {
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             consensusPairs.put(m, keyPair);
             final PubKey consensus = QualifiedBase64.bs(keyPair.getPublic());
-            when(s.join(any(JoinRequest.class), any(Digest.class))).then(new Answer<ViewMember>() {
+            when(s.join(any(Digest.class), any(Digest.class))).then(new Answer<ViewMember>() {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     return ViewMember.newBuilder()

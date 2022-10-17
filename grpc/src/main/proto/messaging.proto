@@ -9,10 +9,9 @@ import "util.proto";
 
 package messaging; 
 
-message MessageBff {
-    utils.Digeste context = 1; 
-    int32 ring = 3;
-    utils.Biff digests = 4;
+message MessageBff { 
+    int32 ring = 1;
+    utils.Biff digests = 2;
 }
 
 message ByteMessage {
@@ -29,10 +28,9 @@ message Reconcile {
     utils.Biff digests = 2;
 }
 
-message ReconcileContext {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated  AgedMessage updates = 3;
+message ReconcileContext { 
+    int32 ring = 1;
+    repeated  AgedMessage updates = 2;
 }
 
 message AgedMessage {

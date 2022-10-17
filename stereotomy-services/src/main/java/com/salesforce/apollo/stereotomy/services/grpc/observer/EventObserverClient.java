@@ -21,10 +21,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverFutureStub;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
@@ -35,10 +33,9 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
  */
 public class EventObserverClient implements EventObserverService {
 
-    public static CreateClientCommunications<EventObserverService> getCreate(Digest context,
-                                                                             StereotomyMetrics metrics) {
+    public static CreateClientCommunications<EventObserverService> getCreate(StereotomyMetrics metrics) {
         return (c) -> {
-            return new EventObserverClient(context, c, metrics);
+            return new EventObserverClient(c, metrics);
         };
 
     }
@@ -74,11 +71,9 @@ public class EventObserverClient implements EventObserverService {
 
     private final ManagedServerChannel    channel;
     private final EventObserverFutureStub client;
-    private final Digeste                 context;
     private final StereotomyMetrics       metrics;
 
-    public EventObserverClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
-        this.context = context.toDigeste();
+    public EventObserverClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
         this.client = EventObserverGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
@@ -97,7 +92,7 @@ public class EventObserverClient implements EventObserverService {
     @Override
     public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations) {
         Context timer = metrics == null ? null : metrics.publishKERLClient().time();
-        var request = KERLContext.newBuilder().setContext(context).setKerl(kerl).addAllValidations(validations).build();
+        var request = KERLContext.newBuilder().setKerl(kerl).addAllValidations(validations).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundPublishKERLRequest().mark(request.getSerializedSize());
@@ -125,7 +120,7 @@ public class EventObserverClient implements EventObserverService {
     @Override
     public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
         Context timer = metrics == null ? null : metrics.publishAttachmentsClient().time();
-        var request = AttachmentsContext.newBuilder().setContext(context).addAllAttachments(attachments).build();
+        var request = AttachmentsContext.newBuilder().addAllAttachments(attachments).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundPublishAttachmentsRequest().mark(request.getSerializedSize());
@@ -156,7 +151,6 @@ public class EventObserverClient implements EventObserverService {
         KeyEventsContext request = KeyEventsContext.newBuilder()
                                                    .addAllKeyEvent(events)
                                                    .addAllValidations(validations)
-                                                   .setContext(context)
                                                    .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());

@@ -140,7 +140,7 @@ public class TestKerlService {
 
         var clientComms = clientRouter.create(clientMember, context, protoService,
                                               protoService.getClass().getCanonicalName(), r -> new KERLServer(r, null),
-                                              KERLClient.getCreate(context, null), null);
+                                              KERLClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
         return client;
