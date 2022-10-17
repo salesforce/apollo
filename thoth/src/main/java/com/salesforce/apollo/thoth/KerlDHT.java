@@ -873,7 +873,6 @@ public class KerlDHT implements ProtoKERLService {
         log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(),
                   member.getId(), keyIntervals);
         return link.reconcile(Intervals.newBuilder()
-                                       .setContext(context.getId().toDigeste())
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
                                        .setHave(populate(keyIntervals))
