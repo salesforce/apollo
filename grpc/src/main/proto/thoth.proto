@@ -47,22 +47,15 @@ message Update {
 }
 
 message Updating {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated stereotomy.KeyEvent_ events = 3; 
+    int32 ring = 1;
+    repeated stereotomy.KeyEvent_ events = 2; 
 }
 
-message Intervals {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated Interval intervals = 3;
-    utils.Biff have = 4;
-} 
-
-message Get {
-    utils.Digeste context = 1;
-    utils.Digeste identifier = 2;
-} 
+message Intervals { 
+    int32 ring = 1;
+    repeated Interval intervals = 2;
+    utils.Biff have = 3;
+}
 
 message Interval {
     utils.Digeste start = 1;
