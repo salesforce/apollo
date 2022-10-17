@@ -494,7 +494,6 @@ public class ReliableBroadcaster {
                   ring);
         try {
             return link.gossip(MessageBff.newBuilder()
-                                         .setContext(context.getId().toDigeste())
                                          .setRing(ring)
                                          .setDigests(buffer.forReconcilliation().toBff())
                                          .build());
@@ -529,7 +528,6 @@ public class ReliableBroadcaster {
             destination.link()
                        .update(ReconcileContext.newBuilder()
                                                .setRing(destination.ring())
-                                               .setContext(context.getId().toDigeste())
                                                .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
                                                                                destination.member().getId()))
                                                .build());
