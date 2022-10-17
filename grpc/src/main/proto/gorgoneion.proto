@@ -15,29 +15,19 @@ import "util.proto";
 package gorgoneion;
 
 service Admissions {
-    rpc apply (Application) returns (SignedNonce) {}
+    rpc apply (stereotomy.KERL_) returns (SignedNonce) {}
     rpc register (Credentials) returns (Invitation) {}
 }
 
 service Endorsement {
-    rpc endorse (EndorseNonce)returns (stereotomy.Validation_) {}
+    rpc endorse (Nonce)returns (stereotomy.Validation_) {}
     rpc validate (Credentials)returns (stereotomy.Validation_) {}
     rpc enroll (Notarization) returns (google.protobuf.Empty) {}
-}
-
-message Application {
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2;
 }
 
 message SignedNonce {
     Nonce nonce = 1;
     repeated stereotomy.Validation_ signatures = 2;
-}
-
-message EndorseNonce {
-    utils.Digeste context = 1;
-    Nonce nonce = 2;
 }
 
 message Nonce {
@@ -47,10 +37,9 @@ message Nonce {
     google.protobuf.Timestamp timestamp = 4;
 }
 
-message Credentials {
-    utils.Digeste context = 1; 
-    SignedNonce nonce = 2;
-    SignedAttestation attestation = 3;
+message Credentials { 
+    SignedNonce nonce = 1;
+    SignedAttestation attestation = 2;
 }
 
 message Invitation {
@@ -69,8 +58,7 @@ message SignedAttestation {
     utils.Sig signature = 2;
 }
 
-message Notarization { 
-    utils.Digeste context = 1;
-    stereotomy.KERL_ kerl = 2; 
-    stereotomy.Validations validations = 3;
+message Notarization {
+    stereotomy.KERL_ kerl = 1; 
+    stereotomy.Validations validations = 2;
 }

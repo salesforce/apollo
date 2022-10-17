@@ -7,10 +7,10 @@
 package com.salesforce.apollo.gorgoneion.comm.admissions;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.crypto.Digest;
 
 import io.grpc.stub.StreamObserver;
@@ -21,7 +21,7 @@ import io.grpc.stub.StreamObserver;
  */
 public interface AdmissionsService {
 
-    void apply(Application request, Digest from, StreamObserver<SignedNonce> responseObserver, Context timer);
+    void apply(KERL_ application, Digest from, StreamObserver<SignedNonce> responseObserver, Context timer);
 
     void register(Credentials request, Digest from, StreamObserver<Invitation> responseObserver, Context timer);
 

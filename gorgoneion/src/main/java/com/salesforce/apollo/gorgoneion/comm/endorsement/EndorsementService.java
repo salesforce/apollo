@@ -10,7 +10,7 @@ import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.crypto.Digest;
@@ -21,7 +21,7 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface EndorsementService {
 
-    CompletableFuture<Validation_> endorse(EndorseNonce request, Digest from);
+    CompletableFuture<Validation_> endorse(Nonce request, Digest from);
 
     CompletableFuture<Empty> enroll(Notarization request, Digest from);
 

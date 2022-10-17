@@ -13,9 +13,9 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.EndorseNonce;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureStub;
+import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
@@ -50,7 +50,7 @@ public class EndorsementClient implements Endorsement {
     }
 
     @Override
-    public ListenableFuture<Validation_> endorse(EndorseNonce nonce, Duration timeout) {
+    public ListenableFuture<Validation_> endorse(Nonce nonce, Duration timeout) {
         if (metrics != null) {
             var serializedSize = nonce.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);

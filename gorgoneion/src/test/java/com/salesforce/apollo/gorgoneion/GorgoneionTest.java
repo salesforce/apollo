@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
@@ -107,7 +106,7 @@ public class GorgoneionTest {
             return fs;
         };
 
-        var gorgoneionClient = new GorgoneionClient(client, context.getId(), attester, parameters.clock(), admin);
+        var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
         Invitation invitation = gorgoneionClient.apply(Duration.ofSeconds(2)).get(3, TimeUnit.SECONDS);
         assertNotNull(invitation);
@@ -176,7 +175,7 @@ public class GorgoneionTest {
             return fs;
         };
 
-        var gorgoneionClient = new GorgoneionClient(client, context.getId(), attester, parameters.clock(), admin);
+        var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
         final var apply = gorgoneionClient.apply(Duration.ofSeconds(2));
         Invitation invitation = apply.get(3, TimeUnit.SECONDS);
@@ -232,11 +231,7 @@ public class GorgoneionTest {
         // Apply for registration of the client's KERL, receiving the signed nonce from
         // the server
         final KERL_ kerl = client.kerl().get();
-        ListenableFuture<SignedNonce> fs = admin.apply(Application.newBuilder()
-                                                                  .setContext(context.getId().toDigeste())
-                                                                  .setKerl(kerl)
-                                                                  .build(),
-                                                       Duration.ofSeconds(1));
+        ListenableFuture<SignedNonce> fs = admin.apply(kerl, Duration.ofSeconds(1));
         assertNotNull(fs);
         var signedNonce = fs.get();
         assertNotNull(signedNonce.getNonce());
@@ -256,7 +251,6 @@ public class GorgoneionTest {
                                            .build();
 
         Invitation invitation = admin.register(Credentials.newBuilder()
-                                                          .setContext(context.getId().toDigeste())
                                                           .setAttestation(SignedAttestation.newBuilder()
                                                                                            .setAttestation(attestation)
                                                                                            .setSignature(client.sign(attestation.toByteString())

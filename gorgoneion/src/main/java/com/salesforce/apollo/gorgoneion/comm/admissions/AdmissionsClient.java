@@ -12,10 +12,10 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsFutureStub;
-import com.salesfoce.apollo.gorgoneion.proto.Application;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -43,7 +43,7 @@ public class AdmissionsClient implements Admissions {
     }
 
     @Override
-    public ListenableFuture<SignedNonce> apply(Application application, Duration timeout) {
+    public ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout) {
         if (metrics != null) {
             var serializedSize = application.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
