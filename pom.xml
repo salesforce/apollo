@@ -44,7 +44,7 @@
         <liquibase.version>4.8.0</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
         <netty.version>4.1.79.Final</netty.version>
-        <native.maven.plugin.version>0.9.14</native.maven.plugin.version>
+        <native.maven.plugin.version>0.9.15</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
 
@@ -455,10 +455,24 @@
 
     <pluginRepositories>
         <pluginRepository>
+            <id>graalvm-native-build-tools-snapshots</id>
+            <name>GraalVM native-build-tools Snapshots</name>
+            <url>https://raw.githubusercontent.com/graalvm/native-build-tools/snapshots</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
             <id>Maven Central</id>
             <url>https://mvnrepository.com/artifact/</url>
-            <snapshots>
+            <releases>
                 <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
@@ -473,6 +487,15 @@
                 <module>h2-deterministic</module>
             </modules>
         </profile>
+        <profile>
+            <id>demesnes</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>demesnes</module>
+            </modules>
+        </profile>
     </profiles>
 
     <build>
@@ -484,25 +507,6 @@
             </extension>
         </extensions>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>satisfy-liquibase</id>
-                        <phase>generate-sources</phase>
-                        <configuration>
-                            <tasks>
-                                <mkdir dir="${project.build.directory}/test-classes" />
-                                <mkdir dir="${project.build.directory}/classes" />
-                            </tasks>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -564,6 +568,30 @@
         </plugins>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>satisfy-liquibase</id>
+                            <phase>generate-sources</phase>
+                            <configuration>
+                                <tasks>
+                                    <mkdir dir="${project.build.directory}/test-classes" />
+                                    <mkdir dir="${project.build.directory}/classes" />
+                                </tasks>
+                            </configuration>
+                            <goals>
+                                <goal>run</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.graalvm.buildtools</groupId>
+                    <artifactId>native-maven-plugin</artifactId>
+                    <version>${native.maven.plugin.version}</version>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
@@ -742,28 +770,6 @@
                             <goals>
                                 <goal>antlr4</goal>
                             </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <groupId>org.graalvm.buildtools</groupId>
-                    <artifactId>native-maven-plugin</artifactId>
-                    <version>${native.maven.plugin.version}</version>
-                    <extensions>true</extensions>
-                    <executions>
-                        <execution>
-                            <id>build-native</id>
-                            <goals>
-                                <goal>compile-no-fork</goal>
-                            </goals>
-                            <phase>package</phase>
-                        </execution>
-                        <execution>
-                            <id>test-native</id>
-                            <goals>
-                                <goal>test</goal>
-                            </goals>
-                            <phase>test</phase>
                         </execution>
                     </executions>
                 </plugin>
