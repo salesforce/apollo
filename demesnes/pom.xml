@@ -16,13 +16,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.graalvm.buildtools</groupId>
-            <artifactId>graalvm-reachability-metadata</artifactId>
-            <version>${native.maven.plugin.version}</version>
-            <classifier>repository</classifier>
-            <type>zip</type>
-        </dependency>
-        <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>model</artifactId>
             <version>0.0.1-SNAPSHOT</version>
@@ -102,6 +95,15 @@
                     <fallback>true</fallback>
                     <sharedLibrary>true</sharedLibrary>
                 </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>graalvm-reachability-metadata</artifactId>
+                        <version>${native.maven.plugin.version}</version>
+                        <classifier>repository</classifier>
+                        <type>zip</type>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>
