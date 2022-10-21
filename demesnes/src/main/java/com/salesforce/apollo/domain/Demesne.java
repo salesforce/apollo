@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -42,6 +43,8 @@ import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -58,6 +61,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class Demesne {
+
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
@@ -80,7 +84,111 @@ public class Demesne {
         return ObjectHandles.getGlobal().create(targetString);
     }
 
-    private final List<ProcessDomain>        domains = new ArrayList<>();
+    public static void main(String[] argv) {
+        try {
+            final var demesne = new Demesne();
+            demesne.before();
+            demesne.smokin();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.exit(0);
+    }
+
+    @SuppressWarnings("unused")
+    public static void smoke(Oracle oracle) throws Exception {
+        // Namespace
+        var ns = Oracle.namespace("my-org");
+
+        // relations
+        var member = ns.relation("member");
+        var flag = ns.relation("flag");
+
+        // Group membersip
+        var userMembers = ns.subject("Users", member);
+        var adminMembers = ns.subject("Admins", member);
+        var helpDeskMembers = ns.subject("HelpDesk", member);
+        var managerMembers = ns.subject("Managers", member);
+        var technicianMembers = ns.subject("Technicians", member);
+        var abcTechMembers = ns.subject("ABCTechnicians", member);
+        var flaggedTechnicianMembers = ns.subject(abcTechMembers.name(), flag);
+
+        // Flagged subjects for testing
+        var egin = ns.subject("Egin", flag);
+        var ali = ns.subject("Ali", flag);
+        var gl = ns.subject("G l", flag);
+        var fuat = ns.subject("Fuat", flag);
+
+        // Subjects
+        var jale = ns.subject("Jale");
+        var irmak = ns.subject("Irmak");
+        var hakan = ns.subject("Hakan");
+        var demet = ns.subject("Demet");
+        var can = ns.subject("Can");
+        var burcu = ns.subject("Burcu");
+
+        // Map direct edges. Transitive edges added as a side effect
+        CompletableFuture.allOf(oracle.map(helpDeskMembers, adminMembers), oracle.map(ali, adminMembers),
+                                oracle.map(ali, userMembers), oracle.map(burcu, userMembers),
+                                oracle.map(can, userMembers), oracle.map(managerMembers, userMembers),
+                                oracle.map(technicianMembers, userMembers), oracle.map(demet, helpDeskMembers),
+                                oracle.map(egin, helpDeskMembers), oracle.map(egin, userMembers),
+                                oracle.map(fuat, managerMembers), oracle.map(gl, managerMembers),
+                                oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
+                                oracle.map(abcTechMembers, technicianMembers),
+                                oracle.map(flaggedTechnicianMembers, technicianMembers),
+                                oracle.map(jale, abcTechMembers))
+                         .get();
+
+        // Protected resource namespace
+        var docNs = Oracle.namespace("Document");
+        // Permission
+        var view = docNs.relation("View");
+        // Protected Object
+        var object123View = docNs.object("123", view);
+
+        // Users can View Document 123
+        Assertion tuple = userMembers.assertion(object123View);
+        oracle.add(tuple).get();
+
+        // Direct subjects that can View the document
+        var viewers = oracle.read(object123View);
+
+        // Direct objects that can User member can view
+        var viewable = oracle.read(userMembers);
+
+        // Assert flagged technicians can directly view the document
+        Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
+        oracle.add(grantTechs).get();
+
+        // Now have 2 direct subjects that can view the doc
+        viewers = oracle.read(object123View);
+
+        // flagged has direct view
+        viewable = oracle.read(flaggedTechnicianMembers);
+
+        // Filter direct on flagged relation
+        var flaggedViewers = oracle.read(flag, object123View);
+
+        // Transitive subjects that can view the document
+        var inferredViewers = oracle.expand(object123View);
+
+        // Transitive subjects filtered by flag predicate
+        var inferredFlaggedViewers = oracle.expand(flag, object123View);
+
+        // Remove them
+        oracle.remove(abcTechMembers, technicianMembers).get();
+
+        // Remove our assertion
+        oracle.delete(tuple).get();
+
+        // Some deletes
+        oracle.delete(abcTechMembers).get();
+        oracle.delete(flaggedTechnicianMembers).get();
+    }
+
+    private final List<ProcessDomain> domains = new ArrayList<>();
+
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
 
     public void before() throws Exception {
@@ -128,6 +236,7 @@ public class Demesne {
     }
 
     public void smokin() throws Exception {
+        long then = System.currentTimeMillis();
         final var gossipDuration = Duration.ofMillis(10);
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
@@ -156,6 +265,29 @@ public class Demesne {
         domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds, scheduler);
         });
+        System.out.println();
+        System.out.println("******");
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
+        domains.forEach(n -> n.start());
+        final var activated = Utils.waitForCondition(60_000, 1_000,
+                                                     () -> domains.stream().filter(c -> !c.active()).count() == 0);
+
+        if (!activated) {
+            System.out.println("Domains did not become active : "
+            + (domains.stream().filter(c -> !c.active()).toList()));
+        }
+        System.out.println();
+        System.out.println("******");
+        System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
+        var oracle = domains.get(0).getDelphi();
+        oracle.add(new Oracle.Namespace("test")).get();
+        smoke(oracle);
     }
 
     private Builder params() {
@@ -173,5 +305,4 @@ public class Demesne {
         params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;
     }
-
 }

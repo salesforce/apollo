@@ -1,0 +1,1106 @@
+[
+{
+  "name":"[B"
+},
+{
+  "name":"[Ljava.lang.String;"
+},
+{
+  "name":"[Lliquibase.pro.packaged.bW;"
+},
+{
+  "name":"[Lsun.security.pkcs.SignerInfo;"
+},
+{
+  "name":"ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.DateConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.LevelConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.LineSeparatorConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.LoggerConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.MessageConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.classic.pattern.ThreadConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.core.ConsoleAppender",
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"ch.qos.logback.core.OutputStreamAppender",
+  "methods":[{"name":"setEncoder","parameterTypes":["ch.qos.logback.core.encoder.Encoder"] }]
+},
+{
+  "name":"ch.qos.logback.core.encoder.LayoutWrappingEncoder",
+  "methods":[{"name":"setParent","parameterTypes":["ch.qos.logback.core.spi.ContextAware"] }]
+},
+{
+  "name":"ch.qos.logback.core.pattern.PatternLayoutEncoderBase",
+  "methods":[{"name":"setPattern","parameterTypes":["java.lang.String"] }]
+},
+{
+  "name":"ch.qos.logback.core.status.NopStatusListener",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.chiralbehaviors.tron.FsmExecutor",
+  "methods":[{"name":"fsm","parameterTypes":[] }]
+},
+{
+  "name":"com.datical.liquibase.ext.appdba.markunused.change.MarkUnsedChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.appdba.synonym.change.CreateSynonymChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.appdba.synonym.change.DropSynonymChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.license.LicenseValidationChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.checkconstraint.change.AddCheckConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.checkconstraint.change.DisableCheckConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.checkconstraint.change.DropCheckConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.checkconstraint.change.EnableCheckConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.databasepackage.change.CreatePackageBodyChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.databasepackage.change.CreatePackageChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.databasepackage.change.DropPackageBodyChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.databasepackage.change.DropPackageChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.function.change.CreateFunctionChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.function.change.DropFunctionChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.trigger.change.CreateTriggerChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.trigger.change.DisableTriggerChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.trigger.change.DropTriggerChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.trigger.change.EnableTriggerChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.datical.liquibase.ext.storedlogic.trigger.change.RenameTriggerChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.google.common.util.concurrent.AbstractFuture",
+  "fields":[
+    {"name":"listeners"}, 
+    {"name":"value"}, 
+    {"name":"waiters"}
+  ]
+},
+{
+  "name":"com.google.common.util.concurrent.AbstractFuture$Waiter",
+  "fields":[
+    {"name":"next"}, 
+    {"name":"thread"}
+  ]
+},
+{
+  "name":"com.google.protobuf.ExtensionRegistry",
+  "methods":[{"name":"getEmptyRegistry","parameterTypes":[] }]
+},
+{
+  "name":"com.salesfoce.apollo.ethereal.proto.Proof",
+  "methods":[
+    {"name":"getEncodedId","parameterTypes":[] }, 
+    {"name":"getHash","parameterTypes":[] }, 
+    {"name":"hasHash","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesfoce.apollo.ethereal.proto.Proof$Builder",
+  "queriedMethods":[
+    {"name":"clearEncodedId","parameterTypes":[] }, 
+    {"name":"clearHash","parameterTypes":[] }, 
+    {"name":"getEncodedId","parameterTypes":[] }, 
+    {"name":"getHash","parameterTypes":[] }, 
+    {"name":"getHashBuilder","parameterTypes":[] }, 
+    {"name":"hasHash","parameterTypes":[] }, 
+    {"name":"setEncodedId","parameterTypes":["long"] }, 
+    {"name":"setHash","parameterTypes":["com.salesfoce.apollo.utils.proto.Digeste"] }
+  ]
+},
+{
+  "name":"com.salesfoce.apollo.utils.proto.Digeste",
+  "methods":[
+    {"name":"getHashList","parameterTypes":[] }, 
+    {"name":"getType","parameterTypes":[] }
+  ],
+  "queriedMethods":[
+    {"name":"getHash","parameterTypes":["int"] }, 
+    {"name":"getHashCount","parameterTypes":[] }, 
+    {"name":"newBuilder","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesfoce.apollo.utils.proto.Digeste$Builder",
+  "queriedMethods":[
+    {"name":"addHash","parameterTypes":["long"] }, 
+    {"name":"clearHash","parameterTypes":[] }, 
+    {"name":"clearType","parameterTypes":[] }, 
+    {"name":"getHash","parameterTypes":["int"] }, 
+    {"name":"getHashCount","parameterTypes":[] }, 
+    {"name":"getHashList","parameterTypes":[] }, 
+    {"name":"getType","parameterTypes":[] }, 
+    {"name":"setHash","parameterTypes":["int","long"] }, 
+    {"name":"setType","parameterTypes":["int"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Combine$Merchantile",
+  "methods":[{"name":"regenerated","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Combine$Merchantile$4",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"start","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Combine$Merchantile$5",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"combine","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Combine$Merchantile$6",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"cancelTimer","parameterTypes":[] }, 
+    {"name":"regenerate","parameterTypes":[] }, 
+    {"name":"synchronizeContext","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Combine$Merchantile$7",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"combine","parameterTypes":[] }, 
+    {"name":"regenerateView","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Driven$Earner$1",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"checkAssembly","parameterTypes":[] }, 
+    {"name":"create","parameterTypes":["com.salesforce.apollo.ethereal.Ethereal$PreBlock","boolean"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Driven$Earner$4",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"start","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Driven$Earner$6",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"assembled","parameterTypes":[] }, 
+    {"name":"newEpoch","parameterTypes":["int","int"] }, 
+    {"name":"startProduction","parameterTypes":[] }, 
+    {"name":"viewComplete","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Driven$Transitions",
+  "methods":[{"name":"create","parameterTypes":["com.salesforce.apollo.ethereal.Ethereal$PreBlock","boolean"] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Genesis$BrickLayer$1",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"certify","parameterTypes":[] }, 
+    {"name":"process","parameterTypes":["com.salesforce.apollo.ethereal.Ethereal$PreBlock","boolean"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Genesis$BrickLayer$3",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"gather","parameterTypes":[] }, 
+    {"name":"nextEpoch","parameterTypes":["java.lang.Integer"] }, 
+    {"name":"process","parameterTypes":["com.salesforce.apollo.ethereal.Ethereal$PreBlock","boolean"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Genesis$BrickLayer$4",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"nextEpoch","parameterTypes":["java.lang.Integer"] }, 
+    {"name":"nominate","parameterTypes":[] }, 
+    {"name":"process","parameterTypes":["com.salesforce.apollo.ethereal.Ethereal$PreBlock","boolean"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Genesis$BrickLayer$5",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"publish","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$1",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"assembled","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$2",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"certified","parameterTypes":[] }, 
+    {"name":"certify","parameterTypes":[] }, 
+    {"name":"validation","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$3",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"assembly","parameterTypes":[] }, 
+    {"name":"gathered","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$4",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"nominate","parameterTypes":[] }, 
+    {"name":"nominated","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$6",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"complete","parameterTypes":[] }, 
+    {"name":"elect","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.choam.fsm.Reconfiguration$Reconfigure$7",
+  "queryAllDeclaredMethods":true,
+  "methods":[
+    {"name":"complete","parameterTypes":[] }, 
+    {"name":"completion","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.delphinius.AbstractOracle",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"addAssertion","parameterTypes":["java.sql.Connection","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String"] }, 
+    {"name":"addNamespace","parameterTypes":["java.sql.Connection","java.lang.String"] }, 
+    {"name":"deleteAssertion","parameterTypes":["java.sql.Connection","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String"] }, 
+    {"name":"deleteSubject","parameterTypes":["java.sql.Connection","java.lang.String","java.lang.String","java.lang.String","java.lang.String"] }, 
+    {"name":"mapSubject","parameterTypes":["java.sql.Connection","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String"] }, 
+    {"name":"removeSubject","parameterTypes":["java.sql.Connection","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String","java.lang.String"] }
+  ]
+},
+{
+  "name":"com.salesforce.apollo.delphinius.DomainMaintenance",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.model.Domain",
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"addMembers","parameterTypes":["java.sql.Connection","java.util.List","java.lang.String"] }]
+},
+{
+  "name":"com.salesforce.apollo.state.SqlStateMachine",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"com.salesforce.apollo.state.liquibase.MigrationAccessor",
+  "allPublicFields":true
+},
+{
+  "name":"com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.salesforce.apollo.stereotomy.db.UniKERL",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"appendEvent","parameterTypes":["java.sql.Connection","byte[]","java.lang.String","int"] }, 
+    {"name":"initializeKERL","parameterTypes":["java.sql.Connection"] }
+  ]
+},
+{
+  "name":"com.sun.org.apache.xerces.internal.impl.dv.xs.ExtendedSchemaDVFactoryImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.org.apache.xerces.internal.impl.dv.xs.SchemaDVFactoryImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.sun.rowset.providers.RIOptimisticProvider",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"deterministic.org.h2.Driver"
+},
+{
+  "name":"io.grpc.inprocess.InProcessChannelBuilder",
+  "methods":[{"name":"delegate","parameterTypes":[] }]
+},
+{
+  "name":"io.grpc.internal.DnsNameResolverProvider"
+},
+{
+  "name":"io.grpc.internal.PickFirstLoadBalancerProvider"
+},
+{
+  "name":"io.grpc.util.SecretRoundRobinLoadBalancerProvider$Provider"
+},
+{
+  "name":"java.beans.PropertyVetoException"
+},
+{
+  "name":"java.io.FilePermission"
+},
+{
+  "name":"java.lang.Object",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"java.lang.RuntimePermission"
+},
+{
+  "name":"java.lang.String"
+},
+{
+  "name":"java.net.NetPermission"
+},
+{
+  "name":"java.net.SocketPermission"
+},
+{
+  "name":"java.net.URLPermission",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.String","java.lang.String"] }]
+},
+{
+  "name":"java.nio.Buffer",
+  "fields":[{"name":"address"}]
+},
+{
+  "name":"java.security.AlgorithmParametersSpi"
+},
+{
+  "name":"java.security.AllPermission"
+},
+{
+  "name":"java.security.MessageDigestSpi"
+},
+{
+  "name":"java.security.SecureRandomParameters"
+},
+{
+  "name":"java.security.SecurityPermission"
+},
+{
+  "name":"java.security.interfaces.DSAPrivateKey"
+},
+{
+  "name":"java.security.interfaces.DSAPublicKey"
+},
+{
+  "name":"java.security.interfaces.RSAPrivateKey"
+},
+{
+  "name":"java.security.interfaces.RSAPublicKey"
+},
+{
+  "name":"java.security.spec.DSAParameterSpec"
+},
+{
+  "name":"java.sql.Types",
+  "allPublicFields":true
+},
+{
+  "name":"java.util.ArrayList",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"java.util.Date"
+},
+{
+  "name":"java.util.PropertyPermission"
+},
+{
+  "name":"java.util.concurrent.ScheduledThreadPoolExecutor",
+  "methods":[{"name":"setRemoveOnCancelPolicy","parameterTypes":["boolean"] }]
+},
+{
+  "name":"java.util.concurrent.atomic.LongAdder",
+  "queryAllPublicConstructors":true,
+  "methods":[
+    {"name":"<init>","parameterTypes":[] }, 
+    {"name":"add","parameterTypes":["long"] }
+  ],
+  "queriedMethods":[{"name":"sum","parameterTypes":[] }]
+},
+{
+  "name":"javax.security.auth.x500.X500Principal",
+  "fields":[{"name":"thisX500Name"}],
+  "methods":[{"name":"<init>","parameterTypes":["sun.security.x509.X500Name"] }]
+},
+{
+  "name":"liquibase.AbstractExtensibleObject",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.AbstractChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.AbstractSQLChange",
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"setSql","parameterTypes":["java.lang.String"] }]
+},
+{
+  "name":"liquibase.change.AbstractTableChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.AddColumnConfig",
+  "allDeclaredFields":true,
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.change.ChangeFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.change.ColumnConfig",
+  "allDeclaredFields":true,
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.change.ConstraintsConfig",
+  "allDeclaredFields":true
+},
+{
+  "name":"liquibase.change.core.AbstractModifyDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddAutoIncrementChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddColumnChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddDefaultValueChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddForeignKeyConstraintChange",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"<init>","parameterTypes":[] }, 
+    {"name":"getBaseColumnNames","parameterTypes":[] }, 
+    {"name":"getBaseTableCatalogName","parameterTypes":[] }, 
+    {"name":"getBaseTableName","parameterTypes":[] }, 
+    {"name":"getBaseTableSchemaName","parameterTypes":[] }, 
+    {"name":"getConstraintName","parameterTypes":[] }, 
+    {"name":"getDeferrable","parameterTypes":[] }, 
+    {"name":"getDeleteCascade","parameterTypes":[] }, 
+    {"name":"getInitiallyDeferred","parameterTypes":[] }, 
+    {"name":"getOnDelete","parameterTypes":[] }, 
+    {"name":"getOnUpdate","parameterTypes":[] }, 
+    {"name":"getReferencedColumnNames","parameterTypes":[] }, 
+    {"name":"getReferencedTableCatalogName","parameterTypes":[] }, 
+    {"name":"getReferencedTableName","parameterTypes":[] }, 
+    {"name":"getReferencedTableSchemaName","parameterTypes":[] }, 
+    {"name":"getReferencesUniqueColumn","parameterTypes":[] }, 
+    {"name":"getValidate","parameterTypes":[] }, 
+    {"name":"setBaseColumnNames","parameterTypes":["java.lang.String"] }, 
+    {"name":"setBaseTableCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setBaseTableName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setBaseTableSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setConstraintName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setDeferrable","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setDeleteCascade","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setInitiallyDeferred","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setOnDelete","parameterTypes":["java.lang.String"] }, 
+    {"name":"setOnUpdate","parameterTypes":["java.lang.String"] }, 
+    {"name":"setReferencedColumnNames","parameterTypes":["java.lang.String"] }, 
+    {"name":"setReferencedTableCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setReferencedTableName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setReferencedTableSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setReferencesUniqueColumn","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setValidate","parameterTypes":["java.lang.Boolean"] }
+  ]
+},
+{
+  "name":"liquibase.change.core.AddLookupTableChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddNotNullConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddPrimaryKeyChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.AddUniqueConstraintChange",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"<init>","parameterTypes":[] }, 
+    {"name":"getCatalogName","parameterTypes":[] }, 
+    {"name":"getClustered","parameterTypes":[] }, 
+    {"name":"getColumnNames","parameterTypes":[] }, 
+    {"name":"getConstraintName","parameterTypes":[] }, 
+    {"name":"getDeferrable","parameterTypes":[] }, 
+    {"name":"getDisabled","parameterTypes":[] }, 
+    {"name":"getForIndexCatalogName","parameterTypes":[] }, 
+    {"name":"getForIndexName","parameterTypes":[] }, 
+    {"name":"getForIndexSchemaName","parameterTypes":[] }, 
+    {"name":"getInitiallyDeferred","parameterTypes":[] }, 
+    {"name":"getSchemaName","parameterTypes":[] }, 
+    {"name":"getTableName","parameterTypes":[] }, 
+    {"name":"getTablespace","parameterTypes":[] }, 
+    {"name":"getValidate","parameterTypes":[] }, 
+    {"name":"setCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setClustered","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setColumnNames","parameterTypes":["java.lang.String"] }, 
+    {"name":"setConstraintName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setDeferrable","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setDisabled","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setForIndexCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setForIndexName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setForIndexSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setInitiallyDeferred","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTableName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTablespace","parameterTypes":["java.lang.String"] }, 
+    {"name":"setValidate","parameterTypes":["java.lang.Boolean"] }
+  ]
+},
+{
+  "name":"liquibase.change.core.AlterSequenceChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.CreateIndexChange",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"<init>","parameterTypes":[] }, 
+    {"name":"getCatalogName","parameterTypes":[] }, 
+    {"name":"getClustered","parameterTypes":[] }, 
+    {"name":"getColumns","parameterTypes":[] }, 
+    {"name":"getIndexName","parameterTypes":[] }, 
+    {"name":"getSchemaName","parameterTypes":[] }, 
+    {"name":"getTableName","parameterTypes":[] }, 
+    {"name":"getTablespace","parameterTypes":[] }, 
+    {"name":"isUnique","parameterTypes":[] }, 
+    {"name":"setCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setClustered","parameterTypes":["java.lang.Boolean"] }, 
+    {"name":"setIndexName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTableName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTablespace","parameterTypes":["java.lang.String"] }, 
+    {"name":"setUnique","parameterTypes":["java.lang.Boolean"] }
+  ]
+},
+{
+  "name":"liquibase.change.core.CreateProcedureChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.CreateSequenceChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.CreateTableChange",
+  "queryAllPublicMethods":true,
+  "methods":[
+    {"name":"<init>","parameterTypes":[] }, 
+    {"name":"getCatalogName","parameterTypes":[] }, 
+    {"name":"getColumns","parameterTypes":[] }, 
+    {"name":"getRemarks","parameterTypes":[] }, 
+    {"name":"getSchemaName","parameterTypes":[] }, 
+    {"name":"getTableName","parameterTypes":[] }, 
+    {"name":"getTablespace","parameterTypes":[] }, 
+    {"name":"setCatalogName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setRemarks","parameterTypes":["java.lang.String"] }, 
+    {"name":"setSchemaName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTableName","parameterTypes":["java.lang.String"] }, 
+    {"name":"setTablespace","parameterTypes":["java.lang.String"] }
+  ]
+},
+{
+  "name":"liquibase.change.core.CreateViewChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DeleteDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropAllForeignKeyConstraintsChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropColumnChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropDefaultValueChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropForeignKeyConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropIndexChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropNotNullConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropPrimaryKeyChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropProcedureChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropSequenceChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropTableChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropUniqueConstraintChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.DropViewChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.EmptyChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.ExecuteShellCommandChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.InsertDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.LoadDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.LoadUpdateDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.MergeColumnChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.ModifyDataTypeChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.OutputChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.RawSQLChange",
+  "queryAllPublicMethods":true,
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.change.core.RenameColumnChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.RenameSequenceChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.RenameTableChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.RenameViewChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.SQLFileChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.SetColumnRemarksChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.SetTableRemarksChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.StopChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.TagDatabaseChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.core.UpdateDataChange",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.change.custom.CustomChangeWrapper",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.configuration.LiquibaseConfiguration",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.database.jvm.JdbcConnection",
+  "methods":[{"name":"getWrappedConnection","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.BigIntType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.BlobType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.BooleanType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.CharType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.DateTimeType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.IntType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.datatype.core.VarcharType",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.executor.ExecutorService",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.executor.jvm.JdbcExecutor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.hub.HubServiceFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.license.LicenseServiceFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.lockservice.StandardLockService",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.logging.core.LogServiceFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.plugin.AbstractPlugin",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"liquibase.pro.packaged.gy",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.pro.packaged.mt",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.serializer.AbstractLiquibaseSerializable",
+  "allDeclaredFields":true
+},
+{
+  "name":"liquibase.sql.visitor.AppendSqlVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.sql.visitor.PrependSqlVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.sql.visitor.RegExpReplaceSqlVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"liquibase.sql.visitor.ReplaceSqlVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.h2.Driver"
+},
+{
+  "name":"org.jooq.impl.SQLDataType"
+},
+{
+  "name":"org.jooq.util.cubrid.CUBRIDDataType"
+},
+{
+  "name":"org.jooq.util.derby.DerbyDataType"
+},
+{
+  "name":"org.jooq.util.firebird.FirebirdDataType"
+},
+{
+  "name":"org.jooq.util.h2.H2DataType"
+},
+{
+  "name":"org.jooq.util.hsqldb.HSQLDBDataType"
+},
+{
+  "name":"org.jooq.util.ignite.IgniteDataType"
+},
+{
+  "name":"org.jooq.util.mariadb.MariaDBDataType"
+},
+{
+  "name":"org.jooq.util.mysql.MySQLDataType"
+},
+{
+  "name":"org.jooq.util.postgres.PostgresDataType"
+},
+{
+  "name":"org.jooq.util.sqlite.SQLiteDataType"
+},
+{
+  "name":"org.jooq.util.yugabytedb.YugabyteDBDataType"
+},
+{
+  "name":"sun.misc.Unsafe",
+  "allDeclaredFields":true,
+  "queriedMethods":[
+    {"name":"arrayBaseOffset","parameterTypes":["java.lang.Class"] }, 
+    {"name":"arrayIndexScale","parameterTypes":["java.lang.Class"] }, 
+    {"name":"copyMemory","parameterTypes":["long","long","long"] }, 
+    {"name":"copyMemory","parameterTypes":["java.lang.Object","long","java.lang.Object","long","long"] }, 
+    {"name":"getBoolean","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getByte","parameterTypes":["long"] }, 
+    {"name":"getByte","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getDouble","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getFloat","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getInt","parameterTypes":["long"] }, 
+    {"name":"getInt","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getLong","parameterTypes":["long"] }, 
+    {"name":"getLong","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"getObject","parameterTypes":["java.lang.Object","long"] }, 
+    {"name":"objectFieldOffset","parameterTypes":["java.lang.reflect.Field"] }, 
+    {"name":"putBoolean","parameterTypes":["java.lang.Object","long","boolean"] }, 
+    {"name":"putByte","parameterTypes":["long","byte"] }, 
+    {"name":"putByte","parameterTypes":["java.lang.Object","long","byte"] }, 
+    {"name":"putDouble","parameterTypes":["java.lang.Object","long","double"] }, 
+    {"name":"putFloat","parameterTypes":["java.lang.Object","long","float"] }, 
+    {"name":"putInt","parameterTypes":["long","int"] }, 
+    {"name":"putInt","parameterTypes":["java.lang.Object","long","int"] }, 
+    {"name":"putLong","parameterTypes":["long","long"] }, 
+    {"name":"putLong","parameterTypes":["java.lang.Object","long","long"] }, 
+    {"name":"putObject","parameterTypes":["java.lang.Object","long","java.lang.Object"] }
+  ]
+},
+{
+  "name":"sun.security.provider.DSA$SHA1withDSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.DSA$SHA256withDSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.DSAKeyFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.DSAParameters",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.MD5",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.NativePRNG",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.NativePRNG$Blocking",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA2$SHA256",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SHA5$SHA512",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.SecureRandom",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.provider.X509Factory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.RSAKeyFactory$Legacy",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.rsa.RSASignature$SHA256withRSA",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"sun.security.util.ObjectIdentifier"
+},
+{
+  "name":"sun.security.x509.AuthorityInfoAccessExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.AuthorityKeyIdentifierExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.BasicConstraintsExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.CRLDistributionPointsExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.CertificateExtensions"
+},
+{
+  "name":"sun.security.x509.CertificatePoliciesExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.ExtendedKeyUsageExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.KeyUsageExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.NetscapeCertTypeExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.SubjectAlternativeNameExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+  "name":"sun.security.x509.SubjectKeyIdentifierExtension",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+}
+]
