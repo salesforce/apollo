@@ -448,31 +448,27 @@
             <id>Maven Central</id>
             <url>https://mvnrepository.com/artifact/</url>
             <snapshots>
-                <enabled>true</enabled>
+                <enabled>false</enabled>
+                <updatePolicy>daily</updatePolicy>
             </snapshots>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>daily</updatePolicy>
+            </releases>
         </repository>
     </repositories>
 
     <pluginRepositories>
         <pluginRepository>
-            <id>graalvm-native-build-tools-snapshots</id>
-            <name>GraalVM native-build-tools Snapshots</name>
-            <url>https://raw.githubusercontent.com/graalvm/native-build-tools/snapshots</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </pluginRepository>
-        <pluginRepository>
             <id>Maven Central</id>
             <url>https://mvnrepository.com/artifact/</url>
             <releases>
                 <enabled>true</enabled>
+                <updatePolicy>daily</updatePolicy>
             </releases>
             <snapshots>
                 <enabled>false</enabled>
+                <updatePolicy>daily</updatePolicy>
             </snapshots>
         </pluginRepository>
     </pluginRepositories>

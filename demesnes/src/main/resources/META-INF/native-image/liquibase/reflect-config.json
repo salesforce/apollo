@@ -245,10 +245,6 @@
     "methods":[{"name":"<init>","parameterTypes":[] }]
   },
   {
-    "name":"liquibase.configuration.HubConfiguration",
-    "methods":[{"name":"<init>","parameterTypes":[] }]
-  },
-  {
     "name":"liquibase.database.core.H2Database",
     "methods":[{"name":"<init>","parameterTypes":[] }]
   },
