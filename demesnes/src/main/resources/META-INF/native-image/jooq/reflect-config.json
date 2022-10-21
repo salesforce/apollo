@@ -1,9 +1,5 @@
 [
   {
-    "name" : "org.postgresql.PGProperty",
-    "allDeclaredFields" : true
-  },
-  {
     "name": "java.time.LocalDate[]",
     "allPublicConstructors": true
   },

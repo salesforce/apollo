@@ -116,17 +116,18 @@
                     </execution>
                 </executions>
                 <configuration>
-                  <agent>
-                    <enabled>true</enabled>
-                    <options><!-- shared options -->
-                        <option>experimental-class-loader-support</option>
-                    </options>
-                    <options name="periodic-config"><!-- periodic-config options -->
-                        <option>config-write-period-secs=5</option>
-                        <option>config-write-initial-delay-secs=5</option>
-                    </options>
-                  </agent>
-                    <buildArgs> 
+                    <agent>
+                        <enabled>true</enabled>
+                        <options><!-- shared options -->
+                            <option>experimental-class-loader-support</option>
+                        </options>
+                        <options name="periodic-config"><!-- periodic-config options -->
+                            <option>config-write-period-secs=5</option>
+                            <option>config-write-initial-delay-secs=5</option>
+                        </options>
+                    </agent>
+                    <buildArgs>
+                     --enable-http
                      --initialize-at-build-time=org.jooq
                      --initialize-at-build-time=javax.sql.rowset.RowSetProvider
                      --initialize-at-build-time=org.slf4j.LoggerFactory
@@ -141,7 +142,6 @@
                      --trace-class-initialization=org.slf4j.MDC
                      </buildArgs>
                     <isDetectionRestrictedToModuleDependencies>false</isDetectionRestrictedToModuleDependencies>
-                    <debug>true</debug>
                     <verbose>true</verbose>
                     <metadataRepository>
                         <enabled>true</enabled>
