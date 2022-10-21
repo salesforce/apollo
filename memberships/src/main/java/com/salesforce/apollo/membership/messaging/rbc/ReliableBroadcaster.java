@@ -152,7 +152,8 @@ public class ReliableBroadcaster {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
-                         context.getId(), member.getId(), from, request.getRing(), predecessor.getId());
+                         context.getId(), member.getId(), from, request.getRing(),
+                         predecessor == null ? "<null>" : predecessor.getId());
                 return Reconcile.getDefaultInstance();
             }
             return Reconcile.newBuilder()
@@ -165,7 +166,8 @@ public class ReliableBroadcaster {
             Member predecessor = context.ring(reconcile.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages reconcile on {}:{} from: {} on ring: {} - not predecessor: {}",
-                         context.getId(), member.getId(), from, reconcile.getRing(), predecessor.getId());
+                         context.getId(), member.getId(), from, reconcile.getRing(),
+                         predecessor == null ? "<null>" : predecessor.getId());
                 return;
             }
             buffer.receive(reconcile.getUpdatesList());

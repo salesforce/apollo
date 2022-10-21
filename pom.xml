@@ -42,13 +42,10 @@
         <grpc.version>1.50.0</grpc.version>
         <protobuf.version>3.21.7</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
-        <antlr4.version>4.9.3</antlr4.version>
         <netty.version>4.1.79.Final</netty.version>
         <native.maven.plugin.version>0.9.15</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
-
-        <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -232,6 +229,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>gorgoneion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>demesnes</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -484,12 +486,13 @@
             </modules>
         </profile>
         <profile>
-            <id>demesnes</id>
+            <id>isolates</id>
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>
             <modules>
                 <module>demesnes</module>
+                <module>isolates</module>
             </modules>
         </profile>
     </profiles>
@@ -632,7 +635,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.8.1</version>
+                    <version>3.10.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
