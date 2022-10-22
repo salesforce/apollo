@@ -1,6 +1,8 @@
 name: Build Isolate
 
-on: [workflow_call]
+on:
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -8,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: graalvm/setup-graalvm@v1.1
         with:
           version: 'latest'
