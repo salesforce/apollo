@@ -1,4 +1,7 @@
-name: Java CI
+name: Build Isolate
+
+on:
+  workflow_call
 
 jobs:
   build:
