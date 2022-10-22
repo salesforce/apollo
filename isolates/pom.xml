@@ -10,7 +10,7 @@
     <description>Dynamic library for Apollo Domain Shards</description>
 
     <properties>
-        <mainClass>com.salesforce.apollo.domain.Demesne</mainClass>
+        <mainClass>com.salesforce.apollo.domain.Smokin</mainClass>
         <imageName>demesne</imageName>
     </properties>
 
@@ -102,46 +102,47 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <sharedLibrary>true</sharedLibrary>
                     <buildArgs>
-                     --enable-http
-                     --add-modules java.sql.rowset
-                     
-                     --initialize-at-build-time=org.jooq
-                     --initialize-at-build-time=javax.sql.rowset.RowSetProvider
-                     --initialize-at-build-time=org.slf4j.LoggerFactory
-                     --initialize-at-build-time=ch.qos.logback
-                     --initialize-at-build-time=org.bouncycastle
-                     
-                     --initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils
-                     --initialize-at-run-time=org.jooq.impl.Convert$_JSON
-                     --initialize-at-run-time=org.jooq.tools.Convert
-                     --initialize-at-run-time=org.jooq.impl.Convert$_XML
-                     --initialize-at-run-time=org.jooq.impl.DefaultRenderContext
-                     --initialize-at-run-time=io.netty.util.AbstractReferenceCounted
-                     --initialize-at-run-time=io.netty.channel.kqueue.KQueue
-                     --initialize-at-run-time=io.netty.channel.kqueue.Native
-                     --initialize-at-run-time=io.netty.channel.epoll.Native
-                     --initialize-at-run-time=io.netty.channel.epoll.Epoll
-                     --initialize-at-run-time=io.netty.channel.epoll.EpollEventLoop
-                     --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventLoop
-                     --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventArray
-                     --initialize-at-run-time=io.netty.channel.epoll.EpollEventArray
-                     
-                     --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper
-                     
-                     --trace-class-initialization=jakarta.xml.bind.ContextFinder
-                     --trace-class-initialization=org.slf4j.MDC
-                     --trace-class-initialization=io.netty.channel.DefaultFileRegion
-                     --trace-class-initialization=io.netty.channel.kqueue.KQueue
-                     --trace-class-initialization=io.netty.util.AbstractReferenceCounted
+                         --enable-http
+                         
+                         --auto-fallback
+                         
+                         --add-modules java.sql.rowset
+                         
+                         --initialize-at-build-time=org.jooq
+                         --initialize-at-build-time=javax.sql.rowset.RowSetProvider
+                         --initialize-at-build-time=org.slf4j.LoggerFactory
+                         --initialize-at-build-time=ch.qos.logback
+                         --initialize-at-build-time=org.bouncycastle
+                         
+                         --initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils
+                         --initialize-at-run-time=org.jooq.impl.Convert$_JSON
+                         --initialize-at-run-time=org.jooq.tools.Convert
+                         --initialize-at-run-time=org.jooq.impl.Convert$_XML
+                         --initialize-at-run-time=org.jooq.impl.DefaultRenderContext
+                         --initialize-at-run-time=io.netty.util.AbstractReferenceCounted
+                         --initialize-at-run-time=io.netty.channel.kqueue.KQueue
+                         --initialize-at-run-time=io.netty.channel.kqueue.Native
+                         --initialize-at-run-time=io.netty.channel.epoll.Native
+                         --initialize-at-run-time=io.netty.channel.epoll.Epoll
+                         --initialize-at-run-time=io.netty.channel.epoll.EpollEventLoop
+                         --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventLoop
+                         --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventArray
+                         --initialize-at-run-time=io.netty.channel.epoll.EpollEventArray
+                         --initialize-at-run-time=com.salesforce.apollo.domain.Demesne
+                         
+                         --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper 
+                         --trace-class-initialization=jakarta.xml.bind.ContextFinder
+                         --trace-class-initialization=org.slf4j.MDC
+                         --trace-class-initialization=io.netty.channel.DefaultFileRegion
+                         --trace-class-initialization=io.netty.channel.kqueue.KQueue
+                         --trace-class-initialization=io.netty.util.AbstractReferenceCounted
                      </buildArgs>
-                    <isDetectionRestrictedToModuleDependencies>false</isDetectionRestrictedToModuleDependencies>
                     <verbose>true</verbose>
                     <metadataRepository>
                         <enabled>true</enabled>
-                    </metadataRepository>
-                    <fallback>true</fallback>
-                    <verbose>true</verbose>
+                    </metadataRepository> 
                     <classpath>
                         <param>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
                     </classpath>
