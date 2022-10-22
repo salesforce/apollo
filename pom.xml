@@ -486,6 +486,15 @@
             </modules>
         </profile>
         <profile>
+            <id>demesnes</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>demesnes</module>
+            </modules>
+        </profile>
+        <profile>
             <id>isolates</id>
             <activation>
                 <activeByDefault>false</activeByDefault>

@@ -20,7 +20,7 @@ jobs:
         with:
           step: restore
       - name: Build with Maven
-        run: mvn -batch-mode  --update-snapshots clean install -Ppre --file pom.xml
+        run: mvn -batch-mode  --update-snapshots clean install -Ppre,demesnes --file pom.xml
       - name: Save Maven cache
         uses: skjolber/maven-cache-github-action@v1
         with:
