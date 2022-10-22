@@ -7,10 +7,14 @@
 package com.salesforce.apollo.domain;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,11 +33,16 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.word.Pointer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
+import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -46,42 +55,46 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.fireflies.View.Seed;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.ProcessDomain;
+import com.salesforce.apollo.model.SubDomain;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+
+import io.netty.channel.unix.DomainSocketAddress;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Demesne {
+    private static final int                      CARDINALITY     = 5;
+    private static final AtomicReference<Demesne> demesne         = new AtomicReference<>();
+    private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final Logger                   log             = LoggerFactory.getLogger(Demesne.class);
 
-    private static final int    CARDINALITY     = 5;
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-
-    @CEntryPoint
-    public static ObjectHandle launch(@CEntryPoint.IsolateThreadContext IsolateThread renderingContext,
-                                      CCharPointer cString) {
-        /* Convert the C string to the target Java string. */
-        String targetString = CTypeConversion.toJavaString(cString);
-        /*
-         * Encapsulate the target string in a handle that can be returned back to the
-         * source isolate.
-         */
-        try {
-            final var demesne = new Demesne();
-            demesne.before();
-            demesne.smokin();
-        } catch (Exception e) {
-            e.printStackTrace();
+    public static String launch(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException {
+        if (demesne.get() == null) {
+            return null;
         }
-        return ObjectHandles.getGlobal().create(targetString);
+        final var pretending = new Demesne(parameters, pwd);
+        if (!demesne.compareAndSet(null, pretending)) {
+            return null;
+        }
+        return pretending.getInbound();
     }
 
     public static void main(String[] argv) {
@@ -187,9 +200,102 @@ public class Demesne {
         oracle.delete(flaggedTechnicianMembers).get();
     }
 
-    private final List<ProcessDomain> domains = new ArrayList<>();
+    @CEntryPoint
+    private static ObjectHandle createByteBuffer(IsolateThread renderingContext, Pointer address, int length) {
+        ByteBuffer direct = CTypeConversion.asByteBuffer(address, length);
+        ByteBuffer copy = ByteBuffer.allocate(length);
+        copy.put(direct).rewind();
+        return ObjectHandles.getGlobal().create(copy);
+    }
 
+    private static String launch(ByteBuffer paramBytes, char[] pwd) throws InvalidProtocolBufferException,
+                                                                    GeneralSecurityException {
+        try {
+            return launch(DemesneParameters.parseFrom(paramBytes), pwd);
+        } finally {
+            Arrays.fill(pwd, ' ');
+        }
+    }
+
+    @CEntryPoint
+    private static ObjectHandle launch(@CEntryPoint.IsolateThreadContext IsolateThread domainContext,
+                                       IsolateThread controlContext, ObjectHandle parameters,
+                                       ObjectHandle ksPassword) throws GeneralSecurityException {
+        ByteBuffer paramBytes = ObjectHandles.getGlobal().get(parameters);
+        ObjectHandles.getGlobal().destroy(parameters);
+
+        char[] pwd = ObjectHandles.getGlobal().get(ksPassword);
+        ObjectHandles.getGlobal().destroy(ksPassword);
+
+        String canonicalPath;
+        try {
+            canonicalPath = launch(paramBytes, pwd);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Cannot launch demesne", e);
+            return ObjectHandles.getGlobal().create(' ');
+        } finally {
+            Arrays.fill(pwd, ' ');
+        }
+        return ObjectHandles.getGlobal().create(canonicalPath);
+    }
+
+    private final SubDomain                  domain;
+    private final List<ProcessDomain>        domains = new ArrayList<>();
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
+
+    private final Stereotomy stereotomy;
+
+    public Demesne() {
+        domain = null;
+        stereotomy = null;
+    }
+
+    public Demesne(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException {
+        final var kpa = parameters.getKeepAlive();
+        Duration keepAlive = Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
+        DomainSocketAddress inbound = new DomainSocketAddress(Path.of(parameters.getCommDirectory())
+                                                                  .resolve(getInbound())
+                                                                  .toFile());
+        DomainSocketAddress outbound = new DomainSocketAddress(Path.of(parameters.getCommDirectory())
+                                                                   .resolve(parameters.getOutbound())
+                                                                   .toFile());
+        KERL kerl = null;
+
+        final var password = Arrays.copyOf(pwd, pwd.length);
+        stereotomy = new StereotomyImpl(new JksKeyStore(KeyStore.getInstance("JKS"), () -> password), kerl,
+                                        SecureRandom.getInstanceStrong());
+
+        @SuppressWarnings("unchecked")
+        ControlledIdentifier<SelfAddressingIdentifier> identifier = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.controlOf(Identifier.from(parameters.getMember()));
+        ControlledIdentifierMember member = new ControlledIdentifierMember(identifier);
+        Context<? extends Member> context = Context.newBuilder().build();
+
+        var enclave = new Enclave(member, inbound, ForkJoinPool.commonPool(), outbound, keepAlive, ctxId -> {
+            throw new UnsupportedOperationException("Not yet implemented");
+        });
+        var router = enclave.router(ForkJoinPool.commonPool());
+        var params = Parameters.newBuilder();
+
+        var runtime = RuntimeParameters.newBuilder()
+                                       .setCommunications(router)
+                                       .setExec(ForkJoinPool.commonPool())
+                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                       .setKerl(() -> {
+                                           try {
+                                               return member.kerl().get();
+                                           } catch (InterruptedException e) {
+                                               Thread.currentThread().interrupt();
+                                               return null;
+                                           } catch (ExecutionException e) {
+                                               throw new IllegalStateException(e.getCause());
+                                           }
+                                       })
+                                       .setContext(context)
+                                       .setFoundation(parameters.getFoundation());
+        domain = new SubDomain(member, params, runtime,
+                               new TransactionConfiguration(ForkJoinPool.commonPool(),
+                                                            Executors.newSingleThreadScheduledExecutor()));
+    }
 
     public void before() throws Exception {
         var scheduler = Executors.newScheduledThreadPool(2);
@@ -288,6 +394,11 @@ public class Demesne {
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
+    }
+
+    private String getInbound() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private Builder params() {

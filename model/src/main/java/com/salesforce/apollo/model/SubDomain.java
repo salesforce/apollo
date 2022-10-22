@@ -8,7 +8,6 @@ package com.salesforce.apollo.model;
 
 import java.nio.file.Path;
 
-import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -22,7 +21,7 @@ public class SubDomain extends Domain {
     private final Domain parentDomain;
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
-                     Parameters.RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+                     RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         this(member, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig);
     }
 
@@ -32,7 +31,7 @@ public class SubDomain extends Domain {
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder params, String dbURL, Path checkpointBaseDir,
-                     Parameters.RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+                     RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         super(member, params, dbURL, checkpointBaseDir, runtime, txnConfig);
         this.parentDomain = null;
     }

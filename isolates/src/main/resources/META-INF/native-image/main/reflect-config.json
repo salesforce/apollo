@@ -908,6 +908,10 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"liquibase.pro.packaged.ms",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"liquibase.pro.packaged.mt",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },

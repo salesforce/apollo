@@ -82,6 +82,10 @@ public class Enclave implements RouterSupplier {
         this.fromString = qb64(from.getId());
     }
 
+    public void close() {
+        eventLoopGroup.shutdownGracefully();
+    }
+
     /**
      * 
      * @return the DomainSocketAddress for this Enclave
