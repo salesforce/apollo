@@ -7,9 +7,9 @@
 package com.salesforce.apollo.archipeligo;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

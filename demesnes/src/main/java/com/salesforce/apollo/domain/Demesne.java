@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.domain;
 
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -62,10 +62,18 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
+ * GraalVM Isolate for the Apollo SubDomain stack
+ *
  * @author hal.hildebrand
  *
  */
 public class Demesne {
+
+    public static final class NativeImpl {
+        @CEntryPoint(name = "Java_org_pkg_apinative_Native_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
+        public static native IsolateThread createIsolate();
+    }
+
     private static Class<? extends Channel>       channelType    = getChannelType();
     private static final AtomicReference<Demesne> demesne        = new AtomicReference<>();
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
@@ -78,7 +86,7 @@ public class Demesne {
     }
 
     @CEntryPoint
-    private static ObjectHandle createByteBuffer(IsolateThread renderingContext, Pointer address, int length) {
+    private static ObjectHandle createByteBuffer(IsolateThread outer, Pointer address, int length) {
         ByteBuffer direct = CTypeConversion.asByteBuffer(address, length);
         ByteBuffer copy = ByteBuffer.allocate(length);
         copy.put(direct).rewind();
@@ -140,13 +148,13 @@ public class Demesne {
     private final String     inbound;
     private final Stereotomy stereotomy;
 
-    public Demesne() {
+    Demesne() {
         domain = null;
         stereotomy = null;
         inbound = null;
     }
 
-    public Demesne(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
+    Demesne(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());

@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 

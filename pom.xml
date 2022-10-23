@@ -210,6 +210,16 @@
                 <artifactId>pal</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>domain-epoll</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>domain-kqueue</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
@@ -502,6 +512,28 @@
             <modules>
                 <module>demesnes</module>
                 <module>isolates</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>mac-domain</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <modules>
+                <module>domain-kqueue</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>linux-domain</id>
+            <activation>
+                <os>
+                    <name>linux</name>
+                </os>
+            </activation>
+            <modules>
+                <module>domain-epoll</module>
             </modules>
         </profile>
     </profiles>

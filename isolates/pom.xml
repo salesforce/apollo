@@ -1,11 +1,11 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>com.salesforce.apollo</groupId>
-    <artifactId>apollo.app</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-  </parent>
-  <artifactId>isolates</artifactId>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.salesforce.apollo</groupId>
+        <artifactId>apollo.app</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+    <artifactId>isolates</artifactId>
     <name>Isolates: Apollo Domain Shards</name>
     <description>Dynamic library for Apollo Domain Shards</description>
 
@@ -102,11 +102,11 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <sharedLibrary>true</sharedLibrary>
+                    <sharedLibrary>false</sharedLibrary>
                     <buildArgs>
                          --enable-http
                          
-                         --auto-fallback
+                         --no-fallback
                          
                          --add-modules java.sql.rowset
                          
@@ -122,15 +122,17 @@
                          --initialize-at-run-time=org.jooq.impl.Convert$_XML
                          --initialize-at-run-time=org.jooq.impl.DefaultRenderContext
                          --initialize-at-run-time=io.netty.util.AbstractReferenceCounted
-                         --initialize-at-run-time=io.netty.channel.kqueue.KQueue
-                         --initialize-at-run-time=io.netty.channel.kqueue.Native
                          --initialize-at-run-time=io.netty.channel.epoll.Native
                          --initialize-at-run-time=io.netty.channel.epoll.Epoll
                          --initialize-at-run-time=io.netty.channel.epoll.EpollEventLoop
+                         --initialize-at-run-time=io.netty.channel.kqueue.KQueue
+                         --initialize-at-run-time=io.netty.channel.kqueue.Native
                          --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventLoop
                          --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventArray
-                         --initialize-at-run-time=io.netty.channel.epoll.EpollEventArray
-                         --initialize-at-run-time=com.salesforce.apollo.domain.Demesne
+                         --initialize-at-run-time=io.netty.channel.unix.Errors
+                         --initialize-at-run-time=io.netty.channel.unix.IovArray
+                         --initialize-at-run-time=io.netty.channel.unix.Limits
+                         --initialize-at-run-time=com.salesforce.apollo.domain.Demesne 
                          
                          --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper 
                          --trace-class-initialization=jakarta.xml.bind.ContextFinder
@@ -142,7 +144,7 @@
                     <verbose>true</verbose>
                     <metadataRepository>
                         <enabled>true</enabled>
-                    </metadataRepository> 
+                    </metadataRepository>
                     <classpath>
                         <param>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
                     </classpath>
