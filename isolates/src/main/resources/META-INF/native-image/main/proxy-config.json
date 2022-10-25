@@ -1,14 +1,14 @@
 [
   {
-    "interfaces":["com.salesforce.apollo.choam.fsm.Combine$Transitions"]}
-  ,
+    "interfaces":["com.salesforce.apollo.choam.fsm.Combine$Transitions"]
+  },
   {
-    "interfaces":["com.salesforce.apollo.choam.fsm.Driven$Transitions"]}
-  ,
+    "interfaces":["com.salesforce.apollo.choam.fsm.Driven$Transitions"]
+  },
   {
-    "interfaces":["com.salesforce.apollo.choam.fsm.Genesis$Transitions"]}
-  ,
+    "interfaces":["com.salesforce.apollo.choam.fsm.Genesis$Transitions"]
+  },
   {
-    "interfaces":["com.salesforce.apollo.choam.fsm.Reconfiguration$Transitions"]}
-  
+    "interfaces":["com.salesforce.apollo.choam.fsm.Reconfiguration$Transitions"]
+  }
 ]

@@ -12,6 +12,7 @@
     <properties>
         <mainClass>com.salesforce.apollo.domain.Smokin</mainClass>
         <imageName>demesne</imageName>
+        <shared.library>true</shared.library>
     </properties>
 
     <dependencies>
@@ -102,12 +103,12 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <sharedLibrary>true</sharedLibrary>
+                    <sharedLibrary>${shared.library}</sharedLibrary>
                     <buildArgs>
+                         --enable-preview
                          --enable-http
                          --no-fallback
                          --add-modules java.sql.rowset
-                         --enable-all-security-services
                          
                          --initialize-at-build-time=org.jooq
                          --initialize-at-build-time=javax.sql.rowset.RowSetProvider
@@ -132,7 +133,7 @@
                          --initialize-at-run-time=io.netty.channel.unix.IovArray
                          --initialize-at-run-time=io.netty.channel.unix.Limits
                          --initialize-at-run-time=com.salesforce.apollo.domain.Demesne 
-                         
+
                          --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper 
                          --trace-class-initialization=jakarta.xml.bind.ContextFinder
                          --trace-class-initialization=org.slf4j.MDC

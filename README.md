@@ -9,7 +9,7 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
 ## Requirements
-Apollo requires the [GraalVM](https://www.graalvm.org) JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+Apollo requires the [GraalVM](https://www.graalvm.org) JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ### Install Maven
 See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
