@@ -129,6 +129,8 @@ public class EnclaveTest {
         Any ping(Any request);
     }
 
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
             @Override
@@ -146,24 +148,23 @@ public class EnclaveTest {
         };
     }
 
-    private final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
-    private EventLoopGroup                                  eventLoopGroup;
-    private final TestItService                             local       = new TestItService() {
+    private EventLoopGroup      eventLoopGroup;
+    private final TestItService local = new TestItService() {
 
-                                                                            @Override
-                                                                            public void close() throws IOException {
-                                                                            }
+                                          @Override
+                                          public void close() throws IOException {
+                                          }
 
-                                                                            @Override
-                                                                            public Member getMember() {
-                                                                                return null;
-                                                                            }
+                                          @Override
+                                          public Member getMember() {
+                                              return null;
+                                          }
 
-                                                                            @Override
-                                                                            public Any ping(Any request) {
-                                                                                return null;
-                                                                            }
-                                                                        };
+                                          @Override
+                                          public Any ping(Any request) {
+                                              return null;
+                                          }
+                                      };
 
     @AfterEach
     public void after() throws Exception {

@@ -59,6 +59,7 @@ import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
@@ -99,6 +100,8 @@ public class DemultiplexerTest {
         }
     }
 
+    private static final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
             @Override
@@ -116,7 +119,8 @@ public class DemultiplexerTest {
         };
     }
 
-    private final List<ManagedChannel> opened = new ArrayList<>();
+    private final EventLoopGroup       eventLoopGroup = getEventLoopGroup();
+    private final List<ManagedChannel> opened         = new ArrayList<>();
     private Server                     serverA;
     private Server                     serverB;
     private Demultiplexer              terminus;
@@ -172,8 +176,8 @@ public class DemultiplexerTest {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
-                                  .eventLoopGroup(getEventLoopGroup())
-                                  .channelType(getChannelType())
+                                  .eventLoopGroup(eventLoopGroup)
+                                  .channelType(channelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)
                                   .usePlaintext()
                                   .build();

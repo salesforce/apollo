@@ -102,13 +102,12 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <sharedLibrary>false</sharedLibrary>
+                    <sharedLibrary>true</sharedLibrary>
                     <buildArgs>
                          --enable-http
-                         
                          --no-fallback
-                         
                          --add-modules java.sql.rowset
+                         --enable-all-security-services
                          
                          --initialize-at-build-time=org.jooq
                          --initialize-at-build-time=javax.sql.rowset.RowSetProvider
@@ -141,7 +140,7 @@
                          --trace-class-initialization=io.netty.channel.kqueue.KQueue
                          --trace-class-initialization=io.netty.util.AbstractReferenceCounted
                      </buildArgs>
-                    <verbose>true</verbose>
+                    <verbose>false</verbose>
                     <metadataRepository>
                         <enabled>true</enabled>
                     </metadataRepository>

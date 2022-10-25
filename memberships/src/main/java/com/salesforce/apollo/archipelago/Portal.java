@@ -39,14 +39,14 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Portal<To extends Member> {
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
-    Map<String, DomainSocketAddress>                        routes         = new ConcurrentHashMap<>();
-    private final DomainSocketAddress                       bridge;
-    private final Class<? extends io.netty.channel.Channel> channelType    = getChannelType();
-    private final EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
-    private final Demultiplexer                             inbound;
-    private final Duration                                  keepAlive;
-    private final Demultiplexer                             outbound;
+    Map<String, DomainSocketAddress>  routes         = new ConcurrentHashMap<>();
+    private final DomainSocketAddress bridge;
+    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
+    private final Demultiplexer       inbound;
+    private final Duration            keepAlive;
+    private final Demultiplexer       outbound;
 
     public Portal(ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound, DomainSocketAddress bridge,
                   Executor executor, Duration keepAlive) {

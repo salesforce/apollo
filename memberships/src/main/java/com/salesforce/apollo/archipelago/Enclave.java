@@ -59,17 +59,17 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Enclave implements RouterSupplier {
-    private static final Logger log = LoggerFactory.getLogger(Enclave.class);
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
-    private final DomainSocketAddress                       bridge;
-    private final Class<? extends io.netty.channel.Channel> channelType    = getChannelType();
-    private final Consumer<Digest>                          contextRegistration;
-    private final DomainSocketAddress                       endpoint;
-    private final EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
-    private final Executor                                  executor;
-    private final Member                                    from;
-    private final String                                    fromString;
-    private final Duration                                  keepAlive;
+    private final DomainSocketAddress bridge;
+    private final Consumer<Digest>    contextRegistration;
+    private final DomainSocketAddress endpoint;
+    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
+    private final Executor            executor;
+    private final Member              from;
+    private final String              fromString;
+    private final Duration            keepAlive;
 
     public Enclave(Member from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
                    Duration keepAlive, Consumer<Digest> contextRegistration) {

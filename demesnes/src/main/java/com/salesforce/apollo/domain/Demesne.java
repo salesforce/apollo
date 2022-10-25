@@ -69,15 +69,13 @@ import io.netty.channel.unix.DomainSocketAddress;
  */
 public class Demesne {
 
-    public static final class NativeImpl {
-        @CEntryPoint(name = "Java_org_pkg_apinative_Native_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
-        public static native IsolateThread createIsolate();
-    }
-
-    private static Class<? extends Channel>       channelType    = getChannelType();
+    private static final Class<? extends Channel> channelType    = getChannelType();
     private static final AtomicReference<Demesne> demesne        = new AtomicReference<>();
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
     private static final Logger                   log            = LoggerFactory.getLogger(Demesne.class);
+
+    @CEntryPoint(name = "Java_org_pkg_apinative_Native_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
+    public static native IsolateThread createIsolate();
 
     @CEntryPoint
     private static boolean active(@CEntryPoint.IsolateThreadContext IsolateThread domainContext) throws GeneralSecurityException {
