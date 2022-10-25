@@ -34,7 +34,7 @@ You can, of course, use the "--also-make-dependents" argument for maven "-amd" i
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity boostrapping and secrets provisioning
-* MTLS network communication - Can use KERI for certificate authentication and generation.  Local communication simulation for simplified multinode simulation for single process (IDE) testing
+* MTLS network communication - KERI for MTLS certificate authentication.  Local communication simulation for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * Byzantine intrusion tolerant secure membership and communications overlay providing virtually synchronous, stable membership views.
 * Efficient and easy to reuse utility patterns for Fireflies ring style gossiping on membership contexts
@@ -49,18 +49,16 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 
 * [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
-* [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate dynamic library
+* [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate
 * [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
 * [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
 * [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
-* [Isolates](isolates/README.md) - GraalVM dynamic libray construction of Apollo domain enclaves.
+* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
-* [PAL](pal/README.md) - Permissive Action Link GRPC client, for secure bootstrapping of secets over unix domain sockets.
-* [PAL-D](pal-d/README.md) - Permissive Action Link GRPC server, for secure bootstrapping of secets over unix domain sockets.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
 * [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
 * [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.

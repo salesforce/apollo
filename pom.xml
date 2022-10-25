@@ -26,9 +26,8 @@
         <module>thoth</module>
         <module>liquibase-deterministic</module>
         <module>grpc</module>
-        <module>pal-d</module>
-        <module>pal</module>
         <module>gorgoneion</module>
+        <module>demesnes</module>
     </modules>
 
     <properties>
@@ -496,21 +495,11 @@
             </modules>
         </profile>
         <profile>
-            <id>demesnes</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <modules>
-                <module>demesnes</module>
-            </modules>
-        </profile>
-        <profile>
             <id>isolates</id>
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>
             <modules>
-                <module>demesnes</module>
                 <module>isolates</module>
             </modules>
         </profile>
@@ -542,7 +531,6 @@
                 <activeByDefault>false</activeByDefault>
             </activation>
             <modules>
-                <module>demesnes</module>
                 <module>isolates</module>
             </modules>
             <build>
