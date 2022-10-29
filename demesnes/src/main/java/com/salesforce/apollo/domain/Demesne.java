@@ -228,6 +228,10 @@ public class Demesne {
         return domain == null ? false : domain.active();
     }
 
+    public void start() {
+        domain.start();
+    }
+
     private String getInbound() {
         return inbound;
     }

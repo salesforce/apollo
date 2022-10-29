@@ -8,7 +8,6 @@ package com.salesforce.apollo.domain;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
@@ -94,7 +93,7 @@ public class DemesneTest {
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
         var demesne = new Demesne(parameters, ksPassword);
-        assertNotNull(demesne);
+        demesne.start();
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {

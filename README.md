@@ -30,7 +30,18 @@ Note that the  _install_  maven goal is **required**, as this installs the modul
 
 You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
 
+## Building Apollo Isolate Enclaves
+
+Currently, the integration between Eclipse and Graalvm is a bit....  interesting.  Consequently, generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile.  When you run this profile, you'll also need to set the property *eclipse.graalvm.jdk.workaround=true*.  Yes, I know, what a PITA.  Apologies, but to quote Martin Blank, "it's not me".
+
+Anyhow, this is all done so that you can actually import the *[demesnes](demesnes/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
+
+    mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
+
+This will add the *[demesnes](demesnes/README.md)* and *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *demesnes* module can build correctly.
+
 ## Some Features
+* Multitenant isolation enclaves using GraalVM Isolates
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity boostrapping and secrets provisioning
