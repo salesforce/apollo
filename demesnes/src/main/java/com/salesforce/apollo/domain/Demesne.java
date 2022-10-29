@@ -25,10 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.ObjectHandle;
-import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +42,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
@@ -74,21 +70,14 @@ public class Demesne {
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
     private static final Logger                   log            = LoggerFactory.getLogger(Demesne.class);
 
-    @CEntryPoint(name = "Java_org_pkg_apinative_Native_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
+    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
     public static native IsolateThread createIsolate();
 
-    @CEntryPoint
-    private static boolean active(@CEntryPoint.IsolateThreadContext IsolateThread domainContext) throws GeneralSecurityException {
+    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_active")
+    private static boolean active(Pointer jniEnv, Pointer clazz,
+                                  @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final var d = demesne.get();
         return d == null ? false : d.active();
-    }
-
-    @CEntryPoint
-    private static ObjectHandle createByteBuffer(IsolateThread outer, Pointer address, int length) {
-        ByteBuffer direct = CTypeConversion.asByteBuffer(address, length);
-        ByteBuffer copy = ByteBuffer.allocate(length);
-        copy.put(direct).rewind();
-        return ObjectHandles.getGlobal().create(copy);
     }
 
     private static ManagedChannel handler(DomainSocketAddress address) {
@@ -120,26 +109,20 @@ public class Demesne {
         return pretending.getInbound();
     }
 
-    @CEntryPoint
-    private static ObjectHandle launch(@CEntryPoint.IsolateThreadContext IsolateThread domainContext,
-                                       IsolateThread controlContext, ObjectHandle parameters,
-                                       ObjectHandle ksPassword) throws GeneralSecurityException, IOException {
-        ByteBuffer paramBytes = ObjectHandles.getGlobal().get(parameters);
-        ObjectHandles.getGlobal().destroy(parameters);
-
-        char[] pwd = ObjectHandles.getGlobal().get(ksPassword);
-        ObjectHandles.getGlobal().destroy(ksPassword);
+    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_launch")
+    private static String launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                                 byte[] parameters, char[] ksPassword) throws GeneralSecurityException, IOException {
 
         String canonicalPath;
         try {
-            canonicalPath = launch(paramBytes, pwd);
+            canonicalPath = launch(ByteBuffer.wrap(parameters), ksPassword);
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot launch demesne", e);
-            return ObjectHandles.getGlobal().create(' ');
+            return null;
         } finally {
-            Arrays.fill(pwd, ' ');
+            Arrays.fill(ksPassword, ' ');
         }
-        return ObjectHandles.getGlobal().create(canonicalPath);
+        return canonicalPath;
     }
 
     private final SubDomain  domain;
@@ -164,21 +147,29 @@ public class Demesne {
         final var password = Arrays.copyOf(pwd, pwd.length);
         Arrays.fill(pwd, ' ');
 
-        stereotomy = new StereotomyImpl(new JksKeyStore(KeyStore.getInstance("JKS"), () -> password),
-                                        new CachingKERL(f -> {
-                                            var channel = handler(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService())
-                                                                                                       .toFile()));
-                                            try {
-                                                var stub = KERLServiceGrpc.newFutureStub(channel);
-                                                return f.apply(new DelegatedKERL(new CommonKERLClient(stub, null),
-                                                                                 DigestAlgorithm.DEFAULT));
-                                            } finally {
-                                                channel.shutdown();
-                                            }
-                                        }), SecureRandom.getInstanceStrong());
+        final var keystore = KeyStore.getInstance("JKS");
+        keystore.load(parameters.getKeyStore().newInput(), password);
+        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), new CachingKERL(f -> {
+            var channel = handler(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService()).toFile()));
+            try {
+                var stub = KERLServiceGrpc.newFutureStub(channel);
+                return f.apply(new DelegatedKERL(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
+            } finally {
+                channel.shutdown();
+            }
+        }), SecureRandom.getInstanceStrong());
 
-        @SuppressWarnings("unchecked")
-        ControlledIdentifierMember member = new ControlledIdentifierMember((ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.controlOf(Identifier.from(parameters.getMember())));
+        ControlledIdentifierMember member;
+        try {
+            member = new ControlledIdentifierMember(stereotomy.controlOf((SelfAddressingIdentifier) Identifier.from(parameters.getMember()))
+                                                              .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            domain = null;
+            return;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Invalid state", e.getCause());
+        }
         Context<? extends Member> context = Context.newBuilder().build();
 
         domain = new SubDomain(member, Parameters.newBuilder(),
