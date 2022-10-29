@@ -25,7 +25,8 @@ message DemesneParameters {
     string control = 4;
     string outbound = 5;
     string enclosing = 6;
-    string kerlService = 7;
-    google.protobuf.Duration keepAlive = 8;
-    apollo.choam.FoundationSeal foundation = 9;
+    utils.Digeste kerlContext = 7;
+    string kerlService = 8;
+    google.protobuf.Duration keepAlive = 9;
+    apollo.choam.FoundationSeal foundation = 10;
 }

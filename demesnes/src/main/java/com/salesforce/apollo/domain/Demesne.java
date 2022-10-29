@@ -8,6 +8,7 @@ package com.salesforce.apollo.domain;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -34,8 +35,10 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.Enclave;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -51,7 +54,12 @@ import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
 
-import io.grpc.ManagedChannel;
+import io.grpc.CallOptions;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -80,13 +88,21 @@ public class Demesne {
         return d == null ? false : d.active();
     }
 
-    private static ManagedChannel handler(DomainSocketAddress address) {
-        return NettyChannelBuilder.forAddress(address)
-                                  .eventLoopGroup(eventLoopGroup)
-                                  .channelType(channelType)
-                                  .keepAliveTime(1, TimeUnit.SECONDS)
-                                  .usePlaintext()
-                                  .build();
+    private static ClientInterceptor clientInterceptor(Digest ctx) {
+        return new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                                       CallOptions callOptions, io.grpc.Channel next) {
+                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(Router.METADATA_CONTEXT_KEY, qb64(ctx));
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
     }
 
     private static String launch(ByteBuffer paramBytes, char[] pwd) throws GeneralSecurityException, IOException {
@@ -149,8 +165,17 @@ public class Demesne {
 
         final var keystore = KeyStore.getInstance("JKS");
         keystore.load(parameters.getKeyStore().newInput(), password);
+        Digest kerlContext = Digest.from(parameters.getKerlContext());
+
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), new CachingKERL(f -> {
-            var channel = handler(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService()).toFile()));
+            var channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService())
+                                                                                              .toFile()))
+                                             .intercept(clientInterceptor(kerlContext))
+                                             .eventLoopGroup(eventLoopGroup)
+                                             .channelType(channelType)
+                                             .keepAliveTime(1, TimeUnit.SECONDS)
+                                             .usePlaintext()
+                                             .build();
             try {
                 var stub = KERLServiceGrpc.newFutureStub(channel);
                 return f.apply(new DelegatedKERL(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
@@ -179,7 +204,7 @@ public class Demesne {
                                                                                new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound())
                                                                                                                     .toFile()),
                                                                                keepAlive, ctxId -> {
-                                                                                   throw new UnsupportedOperationException("Not yet implemented");
+                                                                                   registerContext(ctxId);
                                                                                }).router(ForkJoinPool.commonPool()))
                                                 .setExec(ForkJoinPool.commonPool())
                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor())
@@ -205,5 +230,10 @@ public class Demesne {
 
     private String getInbound() {
         return inbound;
+    }
+
+    private void registerContext(Digest ctxId) {
+        // TODO Auto-generated method stub
+
     }
 }
