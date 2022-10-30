@@ -107,6 +107,7 @@
                          --trace-class-initialization=io.netty.channel.DefaultFileRegion
                          --trace-class-initialization=io.netty.channel.kqueue.KQueue
                          --trace-class-initialization=io.netty.util.AbstractReferenceCounted
+                         --trace-class-initialization=io.netty.channel.epoll.Native
                      </buildArgs>
                     <verbose>false</verbose>
                     <metadataRepository>
