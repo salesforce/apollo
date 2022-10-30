@@ -91,6 +91,7 @@
                          --initialize-at-run-time=io.netty.channel.epoll.Native
                          --initialize-at-run-time=io.netty.channel.epoll.Epoll
                          --initialize-at-run-time=io.netty.channel.epoll.EpollEventLoop
+                         --initialize-at-run-time=io.netty.channel.kqueue.EpollEventArray
                          --initialize-at-run-time=io.netty.channel.kqueue.KQueue
                          --initialize-at-run-time=io.netty.channel.kqueue.Native
                          --initialize-at-run-time=io.netty.channel.kqueue.KQueueEventLoop
