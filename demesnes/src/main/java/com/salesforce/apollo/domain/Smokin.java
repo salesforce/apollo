@@ -25,8 +25,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.slf4j.LoggerFactory;
-
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -105,8 +103,6 @@ public class Smokin {
     }
 
     public static void main(String[] argv) {
-        final var demesnes = new Demesne();
-        LoggerFactory.getLogger(Smokin.class).info("Check: {}", demesnes.active());
         try {
             before();
             smokin();

@@ -18,12 +18,15 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
@@ -34,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.Parameters;
@@ -41,13 +45,15 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
@@ -105,20 +111,30 @@ public class Demesne {
         };
     }
 
-    private static String launch(ByteBuffer paramBytes, char[] pwd) throws GeneralSecurityException, IOException {
+    private static Digest digest(byte[] digest) {
         try {
-            return launch(DemesneParameters.parseFrom(paramBytes), pwd);
+            return Digest.from(Digeste.parseFrom(digest));
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Invalid digest: {}", digest);
+            throw new IllegalArgumentException("Invalid digest: " + digest, e);
+        }
+    }
+
+    private static String launch(Pointer jniEnv, ByteBuffer paramBytes, Pointer clazz,
+                                 char[] pwd) throws GeneralSecurityException, IOException {
+        try {
+            return launch(jniEnv, DemesneParameters.parseFrom(paramBytes), clazz, pwd);
         } finally {
             Arrays.fill(pwd, ' ');
         }
     }
 
-    private static String launch(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException,
-                                                                           IOException {
-        if (demesne.get() == null) {
+    private static String launch(Pointer jniEnv, DemesneParameters parameters, Pointer clazz,
+                                 char[] pwd) throws GeneralSecurityException, IOException {
+        if (demesne.get() != null) {
             return null;
         }
-        final var pretending = new Demesne(parameters, pwd);
+        final var pretending = new Demesne(jniEnv, parameters, clazz, pwd);
         if (!demesne.compareAndSet(null, pretending)) {
             return null;
         }
@@ -131,7 +147,7 @@ public class Demesne {
 
         String canonicalPath;
         try {
-            canonicalPath = launch(ByteBuffer.wrap(parameters), ksPassword);
+            canonicalPath = launch(jniEnv, ByteBuffer.wrap(parameters), clazz, ksPassword);
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot launch demesne", e);
             return null;
@@ -141,17 +157,38 @@ public class Demesne {
         return canonicalPath;
     }
 
-    private final SubDomain  domain;
-    private final String     inbound;
-    private final Stereotomy stereotomy;
+    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_viewChange")
+    private static void viewChange(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                                   byte[] viewId, byte[][] joins,
+                                   byte[][] leaves) throws GeneralSecurityException, IOException {
 
-    Demesne() {
-        domain = null;
-        stereotomy = null;
-        inbound = null;
+        final var current = demesne.get();
+        if (current == null) {
+            return;
+        }
+        current.viewChange(digest(viewId),
+                           IntStream.range(0, joins.length)
+                                    .mapToObj(i -> digest(joins[i]))
+                                    .filter(d -> d != null)
+                                    .toList(),
+                           IntStream.range(0, leaves.length)
+                                    .mapToObj(i -> digest(leaves[i]))
+                                    .filter(d -> d != null)
+                                    .toList());
     }
 
-    Demesne(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
+    private final Pointer       clazz;
+    private final SubDomain     domain;
+    private final String        inbound;
+    private final Pointer       jniEnv;
+    private final KERL          kerl;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final Stereotomy    stereotomy;
+
+    Demesne(Pointer jniEnv, DemesneParameters parameters, Pointer clazz, char[] pwd) throws GeneralSecurityException,
+                                                                                     IOException {
+        this.jniEnv = jniEnv;
+        this.clazz = clazz;
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
@@ -166,8 +203,7 @@ public class Demesne {
         final var keystore = KeyStore.getInstance("JKS");
         keystore.load(parameters.getKeyStore().newInput(), password);
         Digest kerlContext = Digest.from(parameters.getKerlContext());
-
-        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), new CachingKERL(f -> {
+        kerl = new CachingKERL(f -> {
             var channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService())
                                                                                               .toFile()))
                                              .intercept(clientInterceptor(kerlContext))
@@ -182,7 +218,9 @@ public class Demesne {
             } finally {
                 channel.shutdown();
             }
-        }), SecureRandom.getInstanceStrong());
+        });
+        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl,
+                                        SecureRandom.getInstanceStrong());
 
         ControlledIdentifierMember member;
         try {
@@ -195,7 +233,9 @@ public class Demesne {
         } catch (ExecutionException e) {
             throw new IllegalStateException("Invalid state", e.getCause());
         }
-        Context<? extends Member> context = Context.newBuilder().build();
+
+        var context = Context.newBuilder().build();
+        context.activate(member);
 
         domain = new SubDomain(member, Parameters.newBuilder(),
                                RuntimeParameters.newBuilder()
@@ -229,7 +269,17 @@ public class Demesne {
     }
 
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         domain.start();
+    }
+
+    public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+        domain.stop();
     }
 
     private String getInbound() {
@@ -238,6 +288,24 @@ public class Demesne {
 
     private void registerContext(Digest ctxId) {
         // TODO Auto-generated method stub
+    }
 
+    private void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
+        joining.stream().filter(id -> domain.getContext().isMember(id)).forEach(id -> {
+            EstablishmentEvent keyEvent;
+            try {
+                keyEvent = kerl.getKeyState(new SelfAddressingIdentifier(id))
+                               .thenApply(ks -> ks.getLastEstablishmentEvent())
+                               .thenCompose(coords -> kerl.getKeyEvent(coords))
+                               .thenApply(ke -> (EstablishmentEvent) ke)
+                               .get();
+                domain.activate(new IdentifierMember(keyEvent));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                log.error("Error retrieving last establishment event for: {}", id, e.getCause());
+            }
+        });
+        leaving.forEach(id -> domain.getContext().remove(id));
     }
 }
