@@ -10,7 +10,7 @@
     <description>Dynamic library for Apollo Domain Shards</description>
 
     <properties>
-        <imageName>demesne</imageName>
+        <imageName>libdemesne</imageName>
     </properties>
 
     <dependencies>
@@ -25,23 +25,10 @@
     </dependencies>
 
     <build>
-        <extensions>
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>1.7.0</version>
-            </extension>
-        </extensions>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.2.0</version>
-                <configuration>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                </configuration>
                 <executions>
                     <execution>
                         <id>assemble-all</id>
@@ -49,28 +36,63 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
+                        <configuration>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <artifactId>maven-jar-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.graalvm.buildtools</groupId>
-                <artifactId>native-maven-plugin</artifactId>
-                <extensions>true</extensions>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId> 
                 <executions>
                     <execution>
-                        <id>build-native</id>
+                        <phase>verify</phase>
                         <goals>
-                            <goal>compile-no-fork</goal>
+                            <goal>jar</goal>
                         </goals>
-                        <phase>package</phase>
+                        <configuration>
+                            <classifier>native</classifier>
+                            <includes>
+                                <include>**/natives/**</include>
+                            </includes>
+                        </configuration>
                     </execution>
                 </executions>
-                <configuration>
-                    <sharedLibrary>true</sharedLibrary>
-                    <buildArgs>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>os-x</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>${imageName}</imageName>
+                            <outputDirectory>${project.build.outputDirectory}/natives/osx_arm64</outputDirectory>
+                            <sharedLibrary>true</sharedLibrary>
+                            <buildArgs>
                          --enable-preview
                          --enable-http
                          --no-fallback
@@ -109,24 +131,26 @@
                          --trace-class-initialization=io.netty.util.AbstractReferenceCounted
                          --trace-class-initialization=io.netty.channel.epoll.Native
                      </buildArgs>
-                    <verbose>false</verbose>
-                    <metadataRepository>
-                        <enabled>true</enabled>
-                    </metadataRepository>
-                    <classpath>
-                        <param>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
-                    </classpath>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>graalvm-reachability-metadata</artifactId>
-                        <version>${native.maven.plugin.version}</version>
-                        <classifier>repository</classifier>
-                        <type>zip</type>
-                    </dependency>
-                </dependencies>
-            </plugin>
-        </plugins>
-    </build>
+                            <verbose>false</verbose>
+                            <metadataRepository>
+                                <enabled>true</enabled>
+                            </metadataRepository>
+                            <classpath>
+                                <param>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
+                            </classpath>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.graalvm.buildtools</groupId>
+                                <artifactId>graalvm-reachability-metadata</artifactId>
+                                <version>${native.maven.plugin.version}</version>
+                                <classifier>repository</classifier>
+                                <type>zip</type>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

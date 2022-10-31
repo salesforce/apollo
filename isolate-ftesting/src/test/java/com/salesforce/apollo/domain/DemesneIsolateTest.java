@@ -35,6 +35,7 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -48,8 +49,7 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
  * @author hal.hildebrand
  *
  */
-public class DemesneTest {
-
+public class DemesneIsolateTest {
     private static final Class<? extends ServerDomainSocketChannel> channelType    = getServerDomainSocketChannelClass();
     private EventLoopGroup                                          eventLoopGroup = getEventLoopGroup();
 
@@ -92,8 +92,9 @@ public class DemesneTest {
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        var demesne = new DemesneIsolate(null, parameters, null, ksPassword);
+        var demesne = new Demesne(parameters, ksPassword);
         demesne.start();
+        Utils.waitForCondition(1000, () -> demesne.active());
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {

@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.domain;
 
+import java.io.IOException;
 import java.util.List;
+
+import org.scijava.nativelib.NativeLoader;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.crypto.Digest;
@@ -21,7 +24,11 @@ public class Demesne {
     private static final String DEMESNE_SHARED_LIB_NAME = "demesne";
 
     static {
-        System.loadLibrary(DEMESNE_SHARED_LIB_NAME);
+        try {
+            NativeLoader.loadLibrary(DEMESNE_SHARED_LIB_NAME);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot load shared library: " + DEMESNE_SHARED_LIB_NAME, e);
+        }
     }
 
     private static native boolean active(long isolateId);

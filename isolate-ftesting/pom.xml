@@ -11,7 +11,7 @@
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>isolates</artifactId>
-            <classifier>jar-with-dependencies</classifier>
+            <classifier>native</classifier>
             <scope>test</scope>
         </dependency>
         <dependency>

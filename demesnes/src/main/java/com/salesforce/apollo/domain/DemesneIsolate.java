@@ -144,6 +144,7 @@ public class DemesneIsolate {
     @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_launch")
     private static void launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
                                byte[] parameters, char[] ksPassword) throws GeneralSecurityException, IOException {
+        log.info("Launch isolate: {} parameters: {} pswd: {}", isolateId, parameters.length, ksPassword.length);
         try {
             launch(jniEnv, ByteBuffer.wrap(parameters), clazz, ksPassword);
         } catch (InvalidProtocolBufferException e) {

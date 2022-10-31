@@ -251,9 +251,20 @@
                 <classifier>jar-with-dependencies</classifier>
             </dependency>
             <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>isolates</artifactId>
+                <version>${project.version}</version>
+                <classifier>native</classifier>
+            </dependency>
+            <dependency>
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-core</artifactId>
                 <version>${micrometer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.scijava</groupId>
+                <artifactId>native-lib-loader</artifactId>
+                <version>2.4.0</version>
             </dependency>
 
             <dependency>

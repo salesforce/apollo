@@ -19,6 +19,10 @@
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>model</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.scijava</groupId>
+            <artifactId>native-lib-loader</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>ch.qos.logback</groupId>
