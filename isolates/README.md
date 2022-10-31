@@ -1,3 +1,3 @@
 # Apollo Isolates
 
-This module produces the Demesne GraalVM native dynamic library for the Apollo stack
+This module produces the Demesne GraalVM native shared library for the Apollo stack
