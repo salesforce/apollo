@@ -1,0 +1,17 @@
+{
+  "types":[
+    {
+      "name":"byte[]"
+    },
+    {
+      "name":"java.util.CollSer"
+    },
+    {
+      "name":"java.util.ImmutableCollections$ListN"
+    }
+  ],
+  "lambdaCapturingTypes":[
+  ],
+  "proxies":[
+  ]
+}

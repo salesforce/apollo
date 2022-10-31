@@ -6,7 +6,7 @@
  */
 package io.grpc.netty;
 
-import java.io.IOException;
+import com.salesforce.apollo.comm.grpc.DomainSockets;
 
 import io.grpc.Attributes;
 import io.grpc.ChannelLogger;
@@ -19,8 +19,6 @@ import io.grpc.netty.ProtocolNegotiators.GrpcNegotiationHandler;
 import io.grpc.netty.ProtocolNegotiators.ProtocolNegotiationHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.epoll.EpollDomainSocketChannel;
-import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.unix.PeerCredentials;
 import io.netty.util.AsciiString;
 
@@ -78,22 +76,7 @@ public class DomainSocketNegotiatorHandler extends ProtocolNegotiationHandler {
 
     private void replaceOnActive(ChannelHandlerContext ctx) {
         ProtocolNegotiationEvent existingPne = getProtocolNegotiationEvent();
-        PeerCredentials credentials = null;
-        if (ctx.channel() instanceof KQueueDomainSocketChannel kq) {
-            try {
-                credentials = kq.peerCredentials();
-            } catch (IOException e) {
-                throw new IllegalStateException("Cannot get peer credentials for: " + ctx.channel(), e);
-            }
-        } else if (ctx.channel() instanceof EpollDomainSocketChannel ep) {
-            try {
-                credentials = ep.peerCredentials();
-            } catch (IOException e) {
-                throw new IllegalStateException("Cannot get peer credentials for: " + ctx.channel(), e);
-            }
-        } else {
-            throw new IllegalStateException("Cannot get peer credentials (unsupported) for: " + ctx.channel());
-        }
+        PeerCredentials credentials = DomainSockets.getPeerCredentials(ctx.channel());
         Attributes attrs = existingPne.getAttributes()
                                       .toBuilder()
                                       .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)

@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -129,6 +129,8 @@ public class EnclaveTest {
         Any ping(Any request);
     }
 
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
             @Override
@@ -146,24 +148,23 @@ public class EnclaveTest {
         };
     }
 
-    private final Class<? extends io.netty.channel.Channel> channelType = getChannelType();
-    private EventLoopGroup                                  eventLoopGroup;
-    private final TestItService                             local       = new TestItService() {
+    private EventLoopGroup      eventLoopGroup;
+    private final TestItService local = new TestItService() {
 
-                                                                            @Override
-                                                                            public void close() throws IOException {
-                                                                            }
+                                          @Override
+                                          public void close() throws IOException {
+                                          }
 
-                                                                            @Override
-                                                                            public Member getMember() {
-                                                                                return null;
-                                                                            }
+                                          @Override
+                                          public Member getMember() {
+                                              return null;
+                                          }
 
-                                                                            @Override
-                                                                            public Any ping(Any request) {
-                                                                                return null;
-                                                                            }
-                                                                        };
+                                          @Override
+                                          public Any ping(Any request) {
+                                              return null;
+                                          }
+                                      };
 
     @AfterEach
     public void after() throws Exception {

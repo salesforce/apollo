@@ -7,9 +7,9 @@
 package com.salesforce.apollo.comm.grpc;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,6 +33,7 @@ import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.netty.channel.Channel;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
@@ -60,17 +61,20 @@ public class DomainSocketTest {
 
     }
 
+    private static final Class<? extends Channel> channelType = getChannelType();
+
     @Test
     public void smokin() throws Exception {
         Path socketPath = Path.of("target").resolve("smokin.socket");
         Files.deleteIfExists(socketPath);
         assertFalse(Files.exists(socketPath));
 
+        final var eventLoopGroup = getEventLoopGroup();
         var server = NettyServerBuilder.forAddress(new DomainSocketAddress(socketPath.toFile()))
                                        .protocolNegotiator(new DomainSocketNegotiator())
                                        .channelType(getServerDomainSocketChannelClass())
-                                       .workerEventLoopGroup(getEventLoopGroup())
-                                       .bossEventLoopGroup(getEventLoopGroup())
+                                       .workerEventLoopGroup(eventLoopGroup)
+                                       .bossEventLoopGroup(eventLoopGroup)
                                        .addService(new TestServer())
                                        .intercept(new DomainSocketServerInterceptor())
                                        .build();
@@ -78,8 +82,8 @@ public class DomainSocketTest {
         assertTrue(Files.exists(socketPath));
 
         ManagedChannel channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(socketPath.toFile()))
-                                                    .eventLoopGroup(getEventLoopGroup())
-                                                    .channelType(getChannelType())
+                                                    .eventLoopGroup(eventLoopGroup)
+                                                    .channelType(channelType)
                                                     .keepAliveTime(1, TimeUnit.MILLISECONDS)
                                                     .usePlaintext()
                                                     .build();

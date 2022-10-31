@@ -52,6 +52,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -207,6 +208,10 @@ abstract public class Domain {
 
     public boolean active() {
         return choam.active();
+    }
+
+    public Context<Member> getContext() {
+        return choam.context();
     }
 
     /**

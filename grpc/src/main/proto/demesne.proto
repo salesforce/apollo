@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.demesne.proto";
+option java_outer_classname = "DemesneProto";
+option objc_class_prefix = "Dmsp";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+
+import "choam.proto";
+import "stereotomy.proto";
+import "util.proto";
+
+package apollo.demesne;
+
+service DemesneNet {
+    rpc gossip (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
+
+message DemesneParameters {
+    string commDirectory = 1;
+    stereotomy.Ident member = 2;
+    bytes keyStore = 3;
+    string control = 4;
+    string outbound = 5;
+    string enclosing = 6;
+    utils.Digeste kerlContext = 7;
+    string kerlService = 8;
+    google.protobuf.Duration keepAlive = 9;
+    apollo.choam.FoundationSeal foundation = 10;
+}

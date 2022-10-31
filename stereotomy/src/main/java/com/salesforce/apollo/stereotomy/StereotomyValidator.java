@@ -27,17 +27,7 @@ public class StereotomyValidator implements CertificateValidator {
         this.verifiers = verifiers;
     }
 
-    @Override
-    public void validateClient(X509Certificate[] chain) throws CertificateException {
-        validate(chain[0]);
-    }
-
-    @Override
-    public void validateServer(X509Certificate[] chain) throws CertificateException {
-        validate(chain[0]);
-    }
-
-    void validate(final X509Certificate cert) throws CertificateException {
+    public void validate(final X509Certificate cert) throws CertificateException {
         var publicKey = cert.getPublicKey();
         var basicId = new BasicIdentifier(publicKey);
 
@@ -55,5 +45,15 @@ public class StereotomyValidator implements CertificateValidator {
         if (!verifier.get().verify(decoder.signature(), qb64Id)) {
             throw new CertificateException(String.format("Cannot verify cert public key signature for %s", basicId));
         }
+    }
+
+    @Override
+    public void validateClient(X509Certificate[] chain) throws CertificateException {
+        validate(chain[0]);
+    }
+
+    @Override
+    public void validateServer(X509Certificate[] chain) throws CertificateException {
+        validate(chain[0]);
     }
 }

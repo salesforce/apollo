@@ -1,0 +1,99 @@
+[
+  {
+    "name": "java.time.LocalDate[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.LocalDateTime[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.LocalTime[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.ZonedDateTime[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.OffsetDateTime[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.OffsetTime[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.ZoneOffset[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.time.Instant[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.sql.Timestamp[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.math.BigInteger[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "java.math.BigDecimal[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.UNumber[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.DayToSecond[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.UByte[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.UInteger[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.ULong[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.Unsigned[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.UShort[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.YearToMonth[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.types.YearToSecond[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.RowId[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.Result[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.JSON[]",
+    "allPublicConstructors": true
+  },
+  {
+    "name": "org.jooq.JSONB[]",
+    "allPublicConstructors": true
+  }
+
+]

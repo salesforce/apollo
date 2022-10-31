@@ -57,7 +57,7 @@
         <!-- Test only deps below this line -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
+                <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -82,15 +82,8 @@
             </activation>
             <dependencies>
                 <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-kqueue</artifactId>
-                    <version>${netty.version}</version>
-                    <classifier>${os.detected.classifier}</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-epoll</artifactId>
-                    <version>${netty.version}</version>
+                    <groupId>com.salesforce.apollo</groupId>
+                    <artifactId>domain-kqueue</artifactId>
                 </dependency>
             </dependencies>
         </profile>
@@ -103,15 +96,9 @@
             </activation>
             <dependencies>
                 <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-kqueue</artifactId>
-                    <version>${netty.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-epoll</artifactId>
-                    <version>${netty.version}</version>
-                    <classifier>${os.detected.classifier}</classifier>
+                    <groupId>com.salesforce.apollo</groupId>
+                    <artifactId>domain-epoll</artifactId>
+                    <version>${project.version}</version>
                 </dependency>
             </dependencies>
         </profile>
