@@ -8,37 +8,8 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
-## Requirements
-Apollo requires the [GraalVM](https://www.graalvm.org) JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
-
-### Install Maven
-See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
-
-### Install GraalVM
-Apollo now requires the GraalVM for Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
-
-## Building Apollo
-**Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
-
-    mvn clean install -Ppre -DskipTests
-  
-This will perform a full build, including the deterministic SQL execution module.  After this is complete, you do not need to do this again. You can build Apollo normally, without the deterministic SQL module and to do so cd to the root directory of the repository and then:
-   
-    mvn clean install
-
-Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
-
-You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
-
-## Building Apollo Isolate Enclaves
-
-Currently, the integration between Eclipse and Graalvm is a bit....  interesting.  Consequently, generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile.  When you run this profile, you'll also need to set the property *eclipse.graalvm.jdk.workaround=true*.  Yes, I know, what a PITA.  Apologies, but to quote Martin Blank, "it's not me".
-
-Anyhow, this is all done so that you can actually import the *[demesnes](demesnes/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
-
-    mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
-
-This will add the *[demesnes](demesnes/README.md)* and *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *demesnes* module can build correctly.
+## Not A Coin Platform™
+Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.  No *Web3* as well.
 
 ## Some Features
 * Multitenant isolation enclaves using GraalVM Isolates
@@ -62,12 +33,15 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
 * [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate
 * [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
+* [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
+* [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
 * [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
 * [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
 * [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo domain enclaves.
+* [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
@@ -79,15 +53,48 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
 * [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
 
+## Requirements
+Apollo requires the [GraalVM](https://www.graalvm.org) JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+
+### Install Maven
+See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
+
+### Install GraalVM
+Apollo now requires the GraalVM for Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
+
+## Building Apollo
+**Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
+
+    mvn clean install -Ppre -DskipTests
+  
+This will perform a full build, including the deterministic SQL execution module.  After this is complete, you do not need to do this again. You can build Apollo normally, without the deterministic SQL module and to do so cd to the root directory of the repository and then:
+   
+    mvn clean install
+
+Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
+
+You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
+
+### Building Apollo Isolate Enclaves
+
+Currently, the integration between Eclipse and Graalvm is a bit....  interesting.  Consequently, generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile.  When you run this profile, you'll also need to set the property *eclipse.graalvm.jdk.workaround=true*.  Yes, I know, what a PITA.  Apologies, but to quote Martin Blank, "it's not me".
+
+Anyhow, this is all done so that you can actually import the *[demesnes](demesnes/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
+
+    mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
+
+This will add the *[demesnes](demesnes/README.md)* and *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *demesnes* module can build correctly.
+
+### Platform Specific Domain Socket Support
+
+Platform specific code for supporting Unix Domain Socket in GRPC Netty is segregated into two different modules: *[domain-epoll](domain-epoll)* and *[domain-kqueue](domain-kqueue)*.  These modules are added via platform specific profiles that are activated for the platform the build is running on.
+
 
 ## Protobuf and GRPC
 Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the Eclipse IDE Maven integration. To aleviate this,  _all_  grpc/proto generation occurs in one module, the aptly named  _grpc_  module.
 
 ## JOOQ
 Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore.  Unlike GRPC, the JOOQ code generation plays very nicely with the Eclipse IDE's Maven integration, so JOOQ code generation is included in the module that defines it.
-
-## Not A Coin Platform™
-Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
 ## WIP
 Note that Apollo Delphinius is very much a  _work_   _in_   _progress_ .  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed systems platform.
