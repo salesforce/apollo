@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.crypto;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -112,10 +113,25 @@ public class HexBloom {
     }
 
     public HexBloome toHexBloome() {
-        return HexBloome.newBuilder()
-                        .setCardinality(cardinality)
-                        .addAllCrowns(Arrays.asList(crowns).stream().map(d -> d.toDigeste()).toList())
-                        .setMembership(membership.toBff())
-                        .build();
+        var identity = new ArrayList<Function<Digest, Digest>>();
+        for (int i = 0; i < crowns.length; i++) {
+            identity.add(d -> d);
+        }
+        return toHexBloome(identity);
+    }
+
+    /**
+     * Answer the serialized receiver, with crowns hashed using the supplied hash
+     * functions
+     *
+     * @param hashes
+     * @return
+     */
+    public HexBloome toHexBloome(List<Function<Digest, Digest>> hashes) {
+        final var builder = HexBloome.newBuilder().setCardinality(cardinality).setMembership(membership.toBff());
+        for (int i = 0; i < crowns.length; i++) {
+            builder.addCrowns(hashes.get(i).apply(crowns[i]).toDigeste());
+        }
+        return builder.build();
     }
 }
