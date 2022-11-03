@@ -295,6 +295,10 @@ abstract public class BloomFilter<T> {
         return true;
     }
 
+    public boolean equivalent(BloomFilter<T> other) {
+        return h.equivalent(other.h) && bits.equals(other.bits);
+    }
+
     public double fpp(int n) {
         return h.fpp(n);
     }
