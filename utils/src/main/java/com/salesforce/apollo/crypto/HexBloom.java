@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.crypto;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 import com.salesfoce.apollo.utils.proto.HexBloome;
 import com.salesforce.apollo.utils.Entropy;
@@ -25,6 +25,49 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  *
  */
 public class HexBloom {
+
+    private static final double                   DEFAULT_FPR = 0.001;
+    private static final Function<Digest, Digest> IDENTITY    = d -> d;
+
+    /**
+     * Construct a HexBloom with a membership bloomfilter using the default false
+     * positive rate and the default hash transforms for each crown
+     *
+     * @param currentMembership - list of digests that correspond to the supplied
+     *                          crowns
+     * @param added             - digests added that are not present in the
+     *                          currentMembership list
+     * @param crowns            - the current crown state corresponding to the
+     *                          currentMembership
+     * @param removed           - digests removed that are present in the
+     *                          currentMembership list
+     * @return the HexBloom representing the new state
+     */
+    public static HexBloom construct(List<Digest> currentMembership, List<Digest> added, List<Digest> crowns,
+                                     List<Digest> removed) {
+        return construct(currentMembership, added, crowns, removed, hashes(crowns.size()), DEFAULT_FPR);
+    }
+
+    /**
+     * Construct a HexBloom with a membership bloomfilter using the default false
+     * positive rate
+     *
+     * @param currentMembership - list of digests that correspond to the supplied
+     *                          crowns
+     * @param added             - digests added that are not present in the
+     *                          currentMembership list
+     * @param crowns            - the current crown state corresponding to the
+     *                          currentMembership
+     * @param removed           - digests removed that are present in the
+     *                          currentMembership list
+     * @param hashes            - the list of functions for computing the hash of a
+     *                          digest for a given crown
+     * @return the HexBloom representing the new state
+     */
+    public static HexBloom construct(List<Digest> currentMembership, List<Digest> added, List<Digest> crowns,
+                                     List<Digest> removed, List<Function<Digest, Digest>> hashes) {
+        return construct(currentMembership, added, crowns, removed, hashes, DEFAULT_FPR);
+    }
 
     /**
      * Construct a HexBloom.
@@ -66,6 +109,46 @@ public class HexBloom {
 
     public static HexBloom from(HexBloome hb) {
         return new HexBloom(hb);
+    }
+
+    /**
+     * Answer the default hash for a crown positiion
+     *
+     * @param index
+     * @return the hash transform
+     */
+    public static Function<Digest, Digest> hash(int index) {
+        return index == 0 ? IDENTITY : d -> d.prefix(index);
+    }
+
+    /**
+     * Answer the default hash transforms for the number of crowns
+     *
+     * @param crowns
+     * @return
+     */
+    public static List<Function<Digest, Digest>> hashes(int crowns) {
+        return IntStream.range(0, crowns).mapToObj(i -> hash(i)).toList();
+    }
+
+    /**
+     * Answer the default wrapping hash for a crown positiion
+     *
+     * @param index
+     * @return the wrapping hash transform
+     */
+    public static Function<Digest, Digest> hashWrap(int index) {
+        return d -> d.prefix(index);
+    }
+
+    /**
+     * Answer the default wrapping hash transforms for the number of crowns
+     *
+     * @param crowns
+     * @return
+     */
+    public static List<Function<Digest, Digest>> hashWraps(int crowns) {
+        return IntStream.range(0, crowns).mapToObj(i -> hashWrap(i)).toList();
     }
 
     private final int           cardinality = 0;
@@ -113,15 +196,11 @@ public class HexBloom {
     }
 
     public HexBloome toHexBloome() {
-        var identity = new ArrayList<Function<Digest, Digest>>();
-        for (int i = 0; i < crowns.length; i++) {
-            identity.add(d -> d);
-        }
-        return toHexBloome(identity);
+        return toHexBloome(hashWraps(crowns.length));
     }
 
     /**
-     * Answer the serialized receiver, with crowns hashed using the supplied hash
+     * Answer the serialized receiver, with crowns hashed using the supplied hashes
      * functions
      *
      * @param hashes
@@ -133,5 +212,14 @@ public class HexBloom {
             builder.addCrowns(hashes.get(i).apply(crowns[i]).toDigeste());
         }
         return builder.build();
+    }
+
+    /**
+     * Answer the serialized receiver, using no transformation on the crowns
+     *
+     * @return
+     */
+    public HexBloome toIdentityHexBloome() {
+        return toHexBloome(IntStream.range(0, crowns.length).mapToObj(i -> IDENTITY).toList());
     }
 }
