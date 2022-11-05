@@ -167,8 +167,8 @@ public class FireFliesTest {
         domains.forEach(n -> n.start());
         final var activated = Utils.waitForCondition(60_000, 1_000,
                                                      () -> domains.stream().filter(c -> !c.active()).count() == 0);
-        assertTrue(activated,
-                   "Domains did not become active : " + (domains.stream().filter(c -> !c.active()).toList()));
+        assertTrue(activated, "Domains did not become active : "
+        + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
         System.out.println();
         System.out.println("******");
         System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "

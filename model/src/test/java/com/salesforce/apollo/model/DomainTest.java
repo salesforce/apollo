@@ -244,8 +244,8 @@ public class DomainTest {
         domains.forEach(n -> n.start());
         final var activated = Utils.waitForCondition(60_000, 1_000,
                                                      () -> domains.stream().filter(d -> !d.active()).count() == 0);
-        assertTrue(activated,
-                   "Domains did not fully activate: " + (domains.stream().filter(c -> !c.active()).toList()));
+        assertTrue(activated, "Domains did not fully activate: "
+        + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);

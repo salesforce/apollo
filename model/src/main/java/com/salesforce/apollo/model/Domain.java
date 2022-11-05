@@ -240,6 +240,10 @@ abstract public class Domain {
         return member;
     }
 
+    public String logState() {
+        return choam.logState();
+    }
+
     public void start() {
         choam.start();
     }
