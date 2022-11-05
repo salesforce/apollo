@@ -109,7 +109,7 @@ public class FireFliesTest {
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newScheduledThreadPool(1,
+                                                          .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                                          Utils.virtualThreadFactory()))
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(10,

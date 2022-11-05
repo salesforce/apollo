@@ -227,16 +227,16 @@ public class DomainTest {
                                               Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(2,
+                                                                                                                    Executors.newFixedThreadPool(5,
                                                                                                                                                  Utils.virtualThreadFactory()));
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(Executors.newScheduledThreadPool(1,
+                                                            .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                                            Utils.virtualThreadFactory()))
                                                             .setContext(context)
-                                                            .setExec(Executors.newFixedThreadPool(2,
+                                                            .setExec(Executors.newFixedThreadPool(10,
                                                                                                   Utils.virtualThreadFactory()))
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), ffParams, txnConfig);

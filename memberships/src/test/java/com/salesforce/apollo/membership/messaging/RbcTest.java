@@ -147,7 +147,7 @@ public class RbcTest {
                                                                                                        .router(ServerConnectionCache.newBuilder()
                                                                                                                                     .setTarget(30)
                                                                                                                                     .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                                                                                               Executors.newFixedThreadPool(5,
+                                                                                                               Executors.newFixedThreadPool(10,
                                                                                                                                             Utils.virtualThreadFactory()));
             communications.add(comms);
             comms.start();
@@ -158,7 +158,7 @@ public class RbcTest {
 
         System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(10),
-                                              Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory())));
+                                              Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
