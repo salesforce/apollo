@@ -126,7 +126,7 @@ public class ChurnTest {
 
         views.get(0)
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+                    Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -136,7 +136,7 @@ public class ChurnTest {
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                                           Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory())));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -164,7 +164,7 @@ public class ChurnTest {
             countdown.set(new CountDownLatch(toStart.size()));
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                               Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                                               Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory())));
 
             success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream()
@@ -289,21 +289,21 @@ public class ChurnTest {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                        Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
                                                                                                       .router(ServerConnectionCache.newBuilder()
                                                                                                                                    .setTarget(CARDINALITY)
                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                                                                                            : registry)),
-                                                                                                              Executors.newFixedThreadPool(2,
+                                                                                                              Executors.newFixedThreadPool(5,
                                                                                                                                            Thread.ofVirtual()
                                                                                                                                                  .factory()));
             var gateway = new LocalServer(gatewayPrefix, node,
-                                          Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                          Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
                                                                                                         .router(ServerConnectionCache.newBuilder()
                                                                                                                                      .setTarget(CARDINALITY)
                                                                                                                                      .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                                                                                              : registry)),
-                                                                                                                Executors.newFixedThreadPool(2,
+                                                                                                                Executors.newFixedThreadPool(5,
                                                                                                                                              Thread.ofVirtual()
                                                                                                                                                    .factory()));
             comms.start();
@@ -312,7 +312,7 @@ public class ChurnTest {
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
                             DigestAlgorithm.DEFAULT, metrics,
-                            Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                            Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()));
         }).collect(Collectors.toList());
     }
 }

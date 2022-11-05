@@ -142,7 +142,13 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node,
-                                        r -> r.run()).router(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(new ServerConnectionCacheMetricsImpl(registry)), Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                                        Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
+                                                                                                      .router(ServerConnectionCache.newBuilder()
+                                                                                                                                   .setTarget(30)
+                                                                                                                                   .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
+                                                                                                              Executors.newFixedThreadPool(5,
+                                                                                                                                           Thread.ofVirtual()
+                                                                                                                                                 .factory()));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(),
@@ -152,7 +158,7 @@ public class RbcTest {
 
         System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(10),
-                                              Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+                                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
