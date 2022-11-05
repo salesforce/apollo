@@ -312,7 +312,7 @@ abstract public class AbstractLifecycleTest {
                                                             .filter(e -> !e.getKey().equals(testSubject.getId()))
                                                             .map(e -> e.getValue())
                                                             .filter(c -> !c.active())
-                                                            .map(c -> c.getId())
+                                                            .map(c -> c.logState())
                                                             .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());

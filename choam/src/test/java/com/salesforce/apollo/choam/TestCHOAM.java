@@ -198,7 +198,7 @@ public class TestCHOAM {
                                                                .filter(c -> !c.active())
                                                                .count() == 0);
         assertTrue(activated, "System did not become active: "
-        + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList());
+        + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList());
 
         transactioneers.stream().forEach(e -> e.start());
         try {

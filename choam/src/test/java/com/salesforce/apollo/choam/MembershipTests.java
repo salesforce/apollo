@@ -93,14 +93,14 @@ public class MembershipTests {
 
         System.out.println("Transactioneer: " + txneer.getId());
 
-        boolean actived = Utils.waitForCondition(12_000, 1_000,
-                                                 () -> choams.entrySet()
-                                                             .stream()
-                                                             .filter(e -> !testSubject.getId().equals(e.getKey()))
-                                                             .map(e -> e.getValue())
-                                                             .filter(c -> !c.active())
-                                                             .count() == 0);
-        assertTrue(actived,
+        boolean active = Utils.waitForCondition(12_000, 1_000,
+                                                () -> choams.entrySet()
+                                                            .stream()
+                                                            .filter(e -> !testSubject.getId().equals(e.getKey()))
+                                                            .map(e -> e.getValue())
+                                                            .filter(c -> !c.active())
+                                                            .count() == 0);
+        assertTrue(active,
                    "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
                    + " inactive: "
                    + choams.entrySet()
@@ -108,7 +108,7 @@ public class MembershipTests {
                            .filter(e -> !testSubject.getId().equals(e.getKey()))
                            .map(e -> e.getValue())
                            .filter(c -> !c.active())
-                           .map(c -> c.getId())
+                           .map(c -> c.logState())
                            .toList());
 
         final var countdown = new CountDownLatch(1);

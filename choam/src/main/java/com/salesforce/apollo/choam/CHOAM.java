@@ -725,8 +725,8 @@ public class CHOAM {
     public boolean active() {
         final var c = current.get();
         HashedCertifiedBlock h = head.get();
-        return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c != null &&
-               c instanceof Administration && h != null && h.height().compareTo(ULong.valueOf(1)) >= 0;
+        return (c != null && h != null && transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) &&
+               c instanceof Administration && h.height().compareTo(ULong.valueOf(1)) >= 0;
     }
 
     public Context<Member> context() {
@@ -757,6 +757,18 @@ public class CHOAM {
         }
         return new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                                         : viewChange.block.getReconfigure().getId());
+    }
+
+    public String logState() {
+        final var c = current.get();
+        HashedCertifiedBlock h = head.get();
+        if (c == null) {
+            return "No committee on: %s".formatted(params.member().getId());
+        }
+        return "block: %s height: %s committee: %s state: %s on: %s  ".formatted(h.hash, h.height(),
+                                                                                 c.getClass().getSimpleName(),
+                                                                                 transitions.fsm().getCurrentState(),
+                                                                                 params.member().getId());
     }
 
     public void start() {
