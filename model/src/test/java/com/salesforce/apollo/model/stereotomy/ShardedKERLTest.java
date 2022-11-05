@@ -164,7 +164,7 @@ public class ShardedKERLTest {
         i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
-        i.rotate();Utils.virtualThreadFactory()
+        i.rotate();
         i.rotate();
         var opti = kerl.kerl(i.getIdentifier());
         assertNotNull(opti);

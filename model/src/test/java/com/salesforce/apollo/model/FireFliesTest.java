@@ -104,7 +104,7 @@ public class FireFliesTest {
                                               Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(5,
+                                                                                                                    Executors.newFixedThreadPool(10,
                                                                                                                                                  Utils.virtualThreadFactory()));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
@@ -147,7 +147,7 @@ public class FireFliesTest {
         domains.get(0)
                .getFoundation()
                .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(5, Utils.virtualThreadFactory())));
+                      Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));

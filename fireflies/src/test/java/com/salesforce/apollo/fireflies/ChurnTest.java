@@ -126,7 +126,7 @@ public class ChurnTest {
 
         views.get(0)
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(5, Utils.virtualThreadFactory()));
+                    Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -136,7 +136,7 @@ public class ChurnTest {
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(5, Utils.virtualThreadFactory())));
+                                           Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory())));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -289,20 +289,20 @@ public class ChurnTest {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
+                                        Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                       .router(ServerConnectionCache.newBuilder()
                                                                                                                                    .setTarget(CARDINALITY)
                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                                                                                            : registry)),
-                                                                                                              Executors.newFixedThreadPool(5,
+                                                                                                              Executors.newFixedThreadPool(2,
                                                                                                                                            Utils.virtualThreadFactory()));
             var gateway = new LocalServer(gatewayPrefix, node,
-                                          Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
+                                          Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                         .router(ServerConnectionCache.newBuilder()
                                                                                                                                      .setTarget(CARDINALITY)
                                                                                                                                      .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                                                                                              : registry)),
-                                                                                                                Executors.newFixedThreadPool(5,
+                                                                                                                Executors.newFixedThreadPool(2,
                                                                                                                                              Utils.virtualThreadFactory()));
             comms.start();
             communications.add(comms);
