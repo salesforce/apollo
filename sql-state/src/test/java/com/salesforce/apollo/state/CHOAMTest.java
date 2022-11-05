@@ -29,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -74,11 +73,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final int CARDINALITY;
-
+    private static final int               CARDINALITY;
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final boolean           LARGE_TESTS     = Boolean.getBoolean("large_tests");
+
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
@@ -166,13 +165,14 @@ public class CHOAMTest {
             }
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
-        var commExec = ForkJoinPool.commonPool();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m, commExec).router(
-                                                                          ServerConnectionCache.newBuilder()
-                                                                                               .setTarget(30),
-                                                                          commExec);
+            var localRouter = new LocalServer(prefix, m, Executors.newFixedThreadPool(2, Thread.ofVirtual()
+                                                                                               .factory())).router(ServerConnectionCache.newBuilder()
+                                                                                                                                        .setTarget(30),
+                                                                                                                   Executors.newFixedThreadPool(2,
+                                                                                                                                                Thread.ofVirtual()
+                                                                                                                                                      .factory()));
             return localRouter;
         }));
         var scheduler = Executors.newScheduledThreadPool(2);
@@ -202,13 +202,14 @@ public class CHOAMTest {
         assertTrue(activated, "System did not become active: "
         + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList()));
 
-        var txScheduler = Executors.newScheduledThreadPool(3);
-        var exec = Executors.newFixedThreadPool(LARGE_TESTS ? 100 : 3);
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
-                                                       countdown, txScheduler));
+                                                       countdown,
+                                                       Executors.newScheduledThreadPool(1,
+                                                                                        Thread.ofVirtual().factory())));
             }
         });
         System.out.println("Starting txns");
@@ -319,7 +320,9 @@ public class CHOAMTest {
                                                        .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(ForkJoinPool.commonPool())
+                                                       .setExec(Executors.newFixedThreadPool(2,
+                                                                                             Thread.ofVirtual()
+                                                                                                   .factory()))
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {

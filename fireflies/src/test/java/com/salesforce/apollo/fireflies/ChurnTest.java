@@ -23,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -104,7 +103,6 @@ public class ChurnTest {
     @Test
     public void churn() throws Exception {
         initialize();
-        final var scheduler = Executors.newScheduledThreadPool(2);
 
         Set<View> testViews = new HashSet<>();
 
@@ -126,7 +124,9 @@ public class ChurnTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         long then = System.currentTimeMillis();
 
-        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+        views.get(0)
+             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
+                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -136,7 +136,7 @@ public class ChurnTest {
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           scheduler));
+                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -163,7 +163,8 @@ public class ChurnTest {
             then = System.currentTimeMillis();
             countdown.set(new CountDownLatch(toStart.size()));
 
-            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds, scheduler));
+            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
+                                               Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
             success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream()
@@ -283,21 +284,35 @@ public class ChurnTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var exec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node,
-                                        exec).router(ServerConnectionCache.newBuilder().setTarget(CARDINALITY).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), exec);
+                                        Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                                                                                      .router(ServerConnectionCache.newBuilder()
+                                                                                                                                   .setTarget(CARDINALITY)
+                                                                                                                                   .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                                                                                           : registry)),
+                                                                                                              Executors.newFixedThreadPool(2,
+                                                                                                                                           Thread.ofVirtual()
+                                                                                                                                                 .factory()));
             var gateway = new LocalServer(gatewayPrefix, node,
-                                          exec).router(ServerConnectionCache.newBuilder().setTarget(CARDINALITY).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), exec);
+                                          Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                                                                                        .router(ServerConnectionCache.newBuilder()
+                                                                                                                                     .setTarget(CARDINALITY)
+                                                                                                                                     .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                                                                                             : registry)),
+                                                                                                                Executors.newFixedThreadPool(2,
+                                                                                                                                             Thread.ofVirtual()
+                                                                                                                                                   .factory()));
             comms.start();
             communications.add(comms);
             gateway.start();
             gateways.add(gateway);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, exec);
+                            DigestAlgorithm.DEFAULT, metrics,
+                            Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
         }).collect(Collectors.toList());
     }
 }

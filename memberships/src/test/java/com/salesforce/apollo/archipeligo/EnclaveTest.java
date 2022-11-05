@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
@@ -188,6 +188,8 @@ public class EnclaveTest {
         var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
+
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
                                                                .resolve(UUID.randomUUID().toString())
                                                                .toFile());
@@ -197,25 +199,22 @@ public class EnclaveTest {
                                                           .workerEventLoopGroup(getEventLoopGroup())
                                                           .bossEventLoopGroup(getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, ForkJoinPool.commonPool(),
-                                        Duration.ofMillis(1));
+                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, ForkJoinPool.commonPool(), bridge, Duration.ofMillis(1),
-                                   d -> {
-                                       portal.register(qb64(d), endpoint1);
-                                   });
-        var router1 = enclave1.router(ForkJoinPool.commonPool());
+        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
+            portal.register(qb64(d), endpoint1);
+        });
+        var router1 = enclave1.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
                                                                                    "A", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, ForkJoinPool.commonPool(), bridge, Duration.ofMillis(1),
-                                   d -> {
-                                       portal.register(qb64(d), endpoint2);
-                                   });
-        var router2 = enclave2.router(ForkJoinPool.commonPool());
+        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
+            portal.register(qb64(d), endpoint2);
+        });
+        var router2 = enclave2.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
                                                                                    "A", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);

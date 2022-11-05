@@ -96,6 +96,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
@@ -674,20 +675,13 @@ public class CHOAM {
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
         this.params = params;
-        executions = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Executions " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        executions = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Executions "
+        + params.member().getId()));
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics());
-        linear = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Linear " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
         combine.registerHandler((ctx, messages) -> {
             try {
                 linear.execute(() -> combine(messages));

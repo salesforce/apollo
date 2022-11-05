@@ -14,7 +14,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import org.junit.jupiter.api.Test;
 
@@ -30,9 +29,10 @@ public class KerlDhtTest extends AbstractDhtTest {
     public void smokin() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
+        dhts.values()
+            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
+                                      Duration.ofSeconds(1)));
 
         // inception
         var specification = IdentifierSpecification.newBuilder();

@@ -135,7 +135,9 @@ public class AniTest extends AbstractDhtTest {
 
         SigningThreshold threshold = SigningThreshold.unweighted(0);
         routers.values().forEach(lr -> lr.start());
-        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
+        dhts.values()
+            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
+                                  Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
         var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
@@ -170,7 +172,9 @@ public class AniTest extends AbstractDhtTest {
 
         SigningThreshold threshold = SigningThreshold.unweighted(3);
         routers.values().forEach(lr -> lr.start());
-        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
+        dhts.values()
+            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
+                                  Duration.ofSeconds(1)));
 
         var kerl = dhts.values().stream().findFirst().get().asKERL();
         var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);

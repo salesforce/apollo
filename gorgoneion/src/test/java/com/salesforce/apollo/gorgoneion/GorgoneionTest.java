@@ -22,7 +22,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.IntStream;
@@ -61,7 +60,7 @@ public class GorgoneionTest {
 
     @Test
     public void clientSmoke() throws Exception {
-        final var exec = Executors.newSingleThreadExecutor();
+        final var exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -72,7 +71,12 @@ public class GorgoneionTest {
 
         // Gorgoneion service comms
         var gorgonRouter = new LocalServer(prefix, member,
-                                           ForkJoinPool.commonPool()).router(ServerConnectionCache.newBuilder().setTarget(2), ForkJoinPool.commonPool());
+                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                                                                                         .router(ServerConnectionCache.newBuilder()
+                                                                                                                                      .setTarget(2),
+                                                                                                                 Executors.newFixedThreadPool(2,
+                                                                                                                                              Thread.ofVirtual()
+                                                                                                                                                    .factory()));
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
@@ -80,7 +84,8 @@ public class GorgoneionTest {
         final var parameters = Parameters.newBuilder().build();
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(parameters, member, context, observer, gorgonRouter,
-                                    Executors.newSingleThreadScheduledExecutor(), null, ForkJoinPool.commonPool());
+                                    Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
+                                    Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
@@ -119,8 +124,6 @@ public class GorgoneionTest {
 
     @Test
     public void multiSmoke() throws Exception {
-        final var exec = Executors.newSingleThreadExecutor();
-        final var scheduler = Executors.newSingleThreadScheduledExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -141,22 +144,36 @@ public class GorgoneionTest {
         final var parameters = Parameters.newBuilder().build();
         @SuppressWarnings("unused")
         final var gorgons = members.stream().map(m -> {
-            final var router = new LocalServer(prefix, m,
-                                               ForkJoinPool.commonPool()).router(ServerConnectionCache.newBuilder().setTarget(2), ForkJoinPool.commonPool());
+            final var router = new LocalServer(prefix, m, Executors.newFixedThreadPool(2, Thread.ofVirtual()
+                                                                                                .factory())).router(ServerConnectionCache.newBuilder()
+                                                                                                                                         .setTarget(2),
+                                                                                                                    Executors.newFixedThreadPool(2,
+                                                                                                                                                 Thread.ofVirtual()
+                                                                                                                                                       .factory()));
             router.start();
             return router;
         })
                                    .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getFrom(),
-                                                            context, observer, r, scheduler, null,
-                                                            ForkJoinPool.commonPool()))
+                                                            context, observer, r,
+                                                            Executors.newScheduledThreadPool(2,
+                                                                                             Thread.ofVirtual()
+                                                                                                   .factory()),
+                                                            null,
+                                                            Executors.newFixedThreadPool(2,
+                                                                                         Thread.ofVirtual().factory())))
                                    .toList();
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                        exec);
+        var clientRouter = new LocalServer(prefix, client,
+                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                                                                                         .router(ServerConnectionCache.newBuilder()
+                                                                                                                                      .setTarget(2),
+                                                                                                                 Executors.newFixedThreadPool(2,
+                                                                                                                                              Thread.ofVirtual()
+                                                                                                                                                    .factory()));
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
@@ -189,7 +206,7 @@ public class GorgoneionTest {
 
     @Test
     public void smokin() throws Exception {
-        final var exec = Executors.newSingleThreadExecutor();
+        final var exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -199,15 +216,17 @@ public class GorgoneionTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                        ForkJoinPool.commonPool());
+        var gorgonRouter = new LocalServer(prefix, member,
+                                           exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                        Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, observer, gorgonRouter,
-                                    Executors.newSingleThreadScheduledExecutor(), null, ForkJoinPool.commonPool());
+                                    Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
+                                    Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());

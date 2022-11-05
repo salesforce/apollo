@@ -152,18 +152,14 @@ public class TestCHOAM {
                 fail(e1);
             }
 //            params.getMvBuilder().setFileName(fn);
-            var nExec = new AtomicInteger();
             return new CHOAM(params.build(runtime.setMember(m)
                                                  .setMetrics(metrics)
                                                  .setCommunications(routers.get(m.getId()))
                                                  .setProcessor(processor)
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
-                                                 .setExec(Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec["
-                                                 + nExec.incrementAndGet() + ":" + m.getId() + "]")))
-                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(r -> new Thread(r,
-                                                                                                                          "Sched"
-                                                                                                                          + m.getId())))
+                                                 .setExec(Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
                                                  .build()));
         }));
     }
@@ -180,12 +176,10 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
-        var cnt = new AtomicInteger();
         choams.values().forEach(c -> {
-            final var txnCompletion = Executors.newFixedThreadPool(2, r -> new Thread(r, "Completion["
-            + cnt.incrementAndGet() + "]"));
-            final var txnExecutor = Executors.newFixedThreadPool(1, r -> new Thread(r, "txn exec"));
-            final var txScheduler = Executors.newScheduledThreadPool(1, r -> new Thread(r, "txn sched"));
+            final var txnCompletion = Executors.newFixedThreadPool(2, Utils.virtualThreadFactory());
+            final var txnExecutor = Executors.newFixedThreadPool(1, Utils.virtualThreadFactory());
+            final var txScheduler = Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(c.getSession(), txnCompletion, timeout, max, txScheduler,
                                                        countdown, txnExecutor));

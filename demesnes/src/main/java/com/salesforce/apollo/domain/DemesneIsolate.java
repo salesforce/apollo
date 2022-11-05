@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -255,14 +254,19 @@ public class DemesneIsolate {
         domain = new SubDomain(member, Parameters.newBuilder(),
                                RuntimeParameters.newBuilder()
                                                 .setCommunications(new Enclave(member, new DomainSocketAddress(address),
-                                                                               ForkJoinPool.commonPool(),
+                                                                               Executors.newFixedThreadPool(2,
+                                                                                                            Thread.ofVirtual()
+                                                                                                                  .factory()),
                                                                                new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound())
                                                                                                                     .toFile()),
                                                                                keepAlive, ctxId -> {
                                                                                    registerContext(ctxId);
-                                                                               }).router(ForkJoinPool.commonPool()))
-                                                .setExec(ForkJoinPool.commonPool())
-                                                .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                                               }).router(Executors.newFixedThreadPool(2,
+                                                                                                                      Thread.ofVirtual()
+                                                                                                                            .factory())))
+                                                .setExec(Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                                .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                               .factory()))
                                                 .setKerl(() -> {
                                                     try {
                                                         return member.kerl().get();
@@ -275,8 +279,10 @@ public class DemesneIsolate {
                                                 })
                                                 .setContext(context)
                                                 .setFoundation(parameters.getFoundation()),
-                               new TransactionConfiguration(ForkJoinPool.commonPool(),
-                                                            Executors.newSingleThreadScheduledExecutor()));
+                               new TransactionConfiguration(Executors.newFixedThreadPool(2,
+                                                                                         Thread.ofVirtual().factory()),
+                                                            Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                             .factory())));
     }
 
     public boolean active() {

@@ -21,7 +21,6 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -74,7 +73,6 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
-        var scheduler = Executors.newScheduledThreadPool(2);
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -96,19 +94,31 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
-                                                                          Executors.newSingleThreadScheduledExecutor());
+        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2,
+                                                                                                       Thread.ofVirtual()
+                                                                                                             .factory()),
+                                                                          Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                                           .factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member,
-                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(30), ForkJoinPool.commonPool());
+                                              Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()))
+                                                                                                              .router(ServerConnectionCache.newBuilder()
+                                                                                                                                           .setTarget(30),
+                                                                                                                      Executors.newFixedThreadPool(2,
+                                                                                                                                                   Thread.ofVirtual()
+                                                                                                                                                         .factory()));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(scheduler)
+                                                          .setScheduler(Executors.newScheduledThreadPool(2,
+                                                                                                         Thread.ofVirtual()
+                                                                                                               .factory()))
                                                           .setContext(context)
-                                                          .setExec(ForkJoinPool.commonPool())
+                                                          .setExec(Executors.newFixedThreadPool(2,
+                                                                                                Thread.ofVirtual()
+                                                                                                      .factory()))
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);
@@ -137,17 +147,19 @@ public class FireFliesTest {
             });
         });
         // start seed
-        final var scheduler = Executors.newScheduledThreadPool(2);
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
         domains.get(0)
                .getFoundation()
-               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(), scheduler);
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
+                      Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds, scheduler);
+            d.getFoundation()
+             .start(() -> started.get().countDown(), gossipDuration, seeds,
+                    Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
         });
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
 

@@ -64,7 +64,7 @@ public class TestResolver {
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3);
+        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
         serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
         clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
 

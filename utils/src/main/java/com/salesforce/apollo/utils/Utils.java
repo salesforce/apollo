@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -1060,6 +1061,22 @@ public class Utils {
         return (thread, throwable) -> {
             log.error("Uncaught exception on thread: {}", thread.getName(), throwable);
         };
+    }
+
+    public static ThreadFactory virtualThreadFactory() {
+        try {
+            return VThreadHack.virtualThreadFactory("");
+        } catch (Throwable e) {
+            return r -> new Thread(r);
+        }
+    }
+
+    public static ThreadFactory virtualThreadFactory(String string) {
+        try {
+            return VThreadHack.virtualThreadFactory(string);
+        } catch (Throwable e) {
+            return r -> new Thread(r, string);
+        }
     }
 
     public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {

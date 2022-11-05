@@ -22,8 +22,22 @@ import org.junit.jupiter.api.Test;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.limit.SettableLimit;
+import com.salesforce.apollo.utils.Utils;
 
 public class BlockingLimiterTest {
+    @Test
+    public void failOnHighTimeout() {
+        SettableLimit limit = SettableLimit.startingAt(1);
+        try {
+            @SuppressWarnings("unused")
+            BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build(),
+                                                                 Duration.ofDays(1));
+            fail();
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
+    }
+
     @Test
     public void test() {
         SettableLimit limit = SettableLimit.startingAt(10);
@@ -48,7 +62,7 @@ public class BlockingLimiterTest {
         int numThreads = 80;
         SettableLimit limit = SettableLimit.startingAt(1);
         BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
-        ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(numThreads, Utils.virtualThreadFactory());
         try {
             for (Future<?> future : IntStream.range(0, numThreads)
                                              .mapToObj(x -> executorService.submit(() -> limiter.acquire(null)
@@ -59,6 +73,20 @@ public class BlockingLimiterTest {
             }
         } finally {
             executorService.shutdown();
+        }
+    }
+
+    @Test
+    public void testNoTimeout() throws InterruptedException, ExecutionException, TimeoutException {
+        SettableLimit limit = SettableLimit.startingAt(1);
+        BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
+        limiter.acquire(null);
+        try {
+            CompletableFuture<Optional<Limiter.Listener>> future = CompletableFuture.supplyAsync(() -> limiter.acquire(null));
+            future.get(1, TimeUnit.SECONDS);
+            fail();
+        } catch (TimeoutException e) {
+            // expected
         }
     }
 
@@ -80,32 +108,5 @@ public class BlockingLimiterTest {
         var delta = timeout.minus(delay).abs().toMillis();
         assertTrue(delta <= 5,
                    "Delay was " + delay.toMillis() + " millis, expected: " + timeout.toMillis() + " millis");
-    }
-
-    @Test
-    public void testNoTimeout() throws InterruptedException, ExecutionException, TimeoutException {
-        SettableLimit limit = SettableLimit.startingAt(1);
-        BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
-        limiter.acquire(null);
-        try {
-            CompletableFuture<Optional<Limiter.Listener>> future = CompletableFuture.supplyAsync(() -> limiter.acquire(null));
-            future.get(1, TimeUnit.SECONDS);
-            fail();
-        } catch (TimeoutException e) {
-            // expected
-        }
-    }
-
-    @Test
-    public void failOnHighTimeout() {
-        SettableLimit limit = SettableLimit.startingAt(1);
-        try {
-            @SuppressWarnings("unused")
-            BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build(),
-                                                                 Duration.ofDays(1));
-            fail();
-        } catch (IllegalArgumentException e) {
-            // expected
-        }
     }
 }
