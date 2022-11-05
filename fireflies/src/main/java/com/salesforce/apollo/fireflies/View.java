@@ -556,7 +556,8 @@ public class View {
         @Override
         public void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
             if (!started.get()) {
-                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started"));
+                responseObserver.onError(new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not started")));
+                return;
             }
             viewManagement.join(join, from, responseObserver, timer);
         }
