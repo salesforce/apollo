@@ -1065,7 +1065,7 @@ public class Utils {
 
     public static ThreadFactory virtualThreadFactory() {
         try {
-            return VThreadHack.virtualThreadFactory("");
+            return Boolean.getBoolean("use.plat.threads") ? r -> new Thread(r) : VThreadHack.virtualThreadFactory();
         } catch (Throwable e) {
             return r -> new Thread(r);
         }

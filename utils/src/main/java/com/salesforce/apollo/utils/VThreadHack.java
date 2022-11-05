@@ -14,6 +14,10 @@ import java.util.concurrent.ThreadFactory;
  */
 public class VThreadHack {
 
+    public static ThreadFactory virtualThreadFactory() {
+        return Thread.ofVirtual().factory();
+    }
+
     public static ThreadFactory virtualThreadFactory(String name) {
         return Thread.ofVirtual().name(name).factory();
     }
