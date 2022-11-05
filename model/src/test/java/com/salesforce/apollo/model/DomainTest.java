@@ -218,31 +218,26 @@ public class DomainTest {
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(1,
-                                                                                                       Thread.ofVirtual()
-                                                                                                             .factory()),
+                                                                                                       Utils.virtualThreadFactory()),
                                                                           Executors.newScheduledThreadPool(1,
-                                                                                                           Thread.ofVirtual()
-                                                                                                                 .factory()));
+                                                                                                           Utils.virtualThreadFactory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member,
-                                              Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
+                                              Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(5,
-                                                                                                                                                 Thread.ofVirtual()
-                                                                                                                                                       .factory()));
+                                                                                                                    Executors.newFixedThreadPool(2,
+                                                                                                                                                 Utils.virtualThreadFactory()));
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                                           Thread.ofVirtual()
-                                                                                                                 .factory()))
+                                                            .setScheduler(Executors.newScheduledThreadPool(1,
+                                                                                                           Utils.virtualThreadFactory()))
                                                             .setContext(context)
-                                                            .setExec(Executors.newFixedThreadPool(5,
-                                                                                                  Thread.ofVirtual()
-                                                                                                        .factory()))
+                                                            .setExec(Executors.newFixedThreadPool(2,
+                                                                                                  Utils.virtualThreadFactory()))
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(domain);

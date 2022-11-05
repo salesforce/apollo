@@ -58,6 +58,7 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -255,18 +256,15 @@ public class DemesneIsolate {
                                RuntimeParameters.newBuilder()
                                                 .setCommunications(new Enclave(member, new DomainSocketAddress(address),
                                                                                Executors.newFixedThreadPool(2,
-                                                                                                            Thread.ofVirtual()
-                                                                                                                  .factory()),
+                                                                                                            Utils.virtualThreadFactory()),
                                                                                new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound())
                                                                                                                     .toFile()),
                                                                                keepAlive, ctxId -> {
                                                                                    registerContext(ctxId);
                                                                                }).router(Executors.newFixedThreadPool(2,
-                                                                                                                      Thread.ofVirtual()
-                                                                                                                            .factory())))
-                                                .setExec(Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
-                                                .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                                                                                               .factory()))
+                                                                                                                      Utils.virtualThreadFactory())))
+                                                .setExec(Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                                .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
                                                 .setKerl(() -> {
                                                     try {
                                                         return member.kerl().get();
@@ -280,9 +278,8 @@ public class DemesneIsolate {
                                                 .setContext(context)
                                                 .setFoundation(parameters.getFoundation()),
                                new TransactionConfiguration(Executors.newFixedThreadPool(2,
-                                                                                         Thread.ofVirtual().factory()),
-                                                            Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                                                                                             .factory())));
+                                                                                         Utils.virtualThreadFactory()),
+                                                            Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory())));
     }
 
     public boolean active() {

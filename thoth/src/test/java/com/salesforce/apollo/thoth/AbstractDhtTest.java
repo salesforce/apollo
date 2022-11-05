@@ -49,6 +49,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -128,17 +129,16 @@ public class AbstractDhtTest {
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
         var router = new LocalServer(prefix, member,
-                                     Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
+                                     Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                    .router(ServerConnectionCache.newBuilder()
                                                                                                                                 .setTarget(2),
                                                                                                            Executors.newFixedThreadPool(2,
-                                                                                                                                        Thread.ofVirtual()
-                                                                                                                                              .factory()));
+                                                                                                                                        Utils.virtualThreadFactory()));
         routers.put(member, router);
         dhts.put(member,
                  new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()), Duration.ofSeconds(10),
-                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
+                             Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()), Duration.ofSeconds(10),
+                             Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()), 0.0125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

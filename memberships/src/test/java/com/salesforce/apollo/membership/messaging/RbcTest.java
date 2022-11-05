@@ -54,6 +54,7 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -142,23 +143,22 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
+                                        Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
                                                                                                       .router(ServerConnectionCache.newBuilder()
                                                                                                                                    .setTarget(30)
                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                                                                                              Executors.newFixedThreadPool(5,
-                                                                                                                                           Thread.ofVirtual()
-                                                                                                                                                 .factory()));
+                                                                                                              Executors.newFixedThreadPool(10,
+                                                                                                                                           Utils.virtualThreadFactory()));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(),
-                                           Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()), comms,
+                                           Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()), comms,
                                            metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(10),
-                                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                                              Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);

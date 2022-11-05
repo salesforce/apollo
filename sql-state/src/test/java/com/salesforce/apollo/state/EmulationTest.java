@@ -21,6 +21,8 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.utils.Utils;
+
 /**
  * @author hal.hildebrand
  *
@@ -30,8 +32,8 @@ public class EmulationTest {
     @Test
     public void functional() throws Exception {
         // Resources to manage
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
 
         // How long to wait until timing out ;)
         Duration timeout = Duration.ofSeconds(3);

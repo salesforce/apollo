@@ -36,6 +36,7 @@ import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import liquibase.Liquibase;
@@ -135,9 +136,7 @@ public class AniTest extends AbstractDhtTest {
 
         SigningThreshold threshold = SigningThreshold.unweighted(0);
         routers.values().forEach(lr -> lr.start());
-        dhts.values()
-            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
-                                  Duration.ofSeconds(1)));
+        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()), Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
         var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
@@ -172,9 +171,7 @@ public class AniTest extends AbstractDhtTest {
 
         SigningThreshold threshold = SigningThreshold.unweighted(3);
         routers.values().forEach(lr -> lr.start());
-        dhts.values()
-            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
-                                  Duration.ofSeconds(1)));
+        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 
         var kerl = dhts.values().stream().findFirst().get().asKERL();
         var controller = new StereotomyImpl(new MemKeyStore(), kerl, entropy);

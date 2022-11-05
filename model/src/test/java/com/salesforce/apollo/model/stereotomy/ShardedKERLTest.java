@@ -43,6 +43,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -59,9 +60,9 @@ public class ShardedKERLTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
         Duration timeout = Duration.ofSeconds(1000);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
@@ -141,9 +142,9 @@ public class ShardedKERLTest {
 
     @Test
     public void direct() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
@@ -163,7 +164,7 @@ public class ShardedKERLTest {
         i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
-        i.rotate();
+        i.rotate();Utils.virtualThreadFactory()
         i.rotate();
         var opti = kerl.kerl(i.getIdentifier());
         assertNotNull(opti);

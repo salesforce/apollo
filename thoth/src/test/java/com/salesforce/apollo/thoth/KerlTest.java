@@ -43,6 +43,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -62,7 +63,7 @@ public class KerlTest extends AbstractDhtTest {
     @Test
     public void delegated() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
-                                                                              Thread.ofVirtual().factory());
+                                                                              Utils.virtualThreadFactory());
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
 
@@ -144,7 +145,7 @@ public class KerlTest extends AbstractDhtTest {
     public void direct() throws Exception {
         routers.values().forEach(r -> r.start());
         dhts.values()
-            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
+            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()),
                                       Duration.ofSeconds(1)));
 
         KERL kerl = dhts.values().stream().findFirst().get().asKERL();

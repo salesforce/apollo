@@ -167,12 +167,12 @@ public class CHOAMTest {
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m, Executors.newFixedThreadPool(2, Thread.ofVirtual()
-                                                                                               .factory())).router(ServerConnectionCache.newBuilder()
-                                                                                                                                        .setTarget(30),
-                                                                                                                   Executors.newFixedThreadPool(2,
-                                                                                                                                                Thread.ofVirtual()
-                                                                                                                                                      .factory()));
+            var localRouter = new LocalServer(prefix, m,
+                                              Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                                                                                            .router(ServerConnectionCache.newBuilder()
+                                                                                                                                         .setTarget(30),
+                                                                                                                    Executors.newFixedThreadPool(2,
+                                                                                                                                                 Utils.virtualThreadFactory()));
             return localRouter;
         }));
         var scheduler = Executors.newScheduledThreadPool(2);
@@ -209,7 +209,7 @@ public class CHOAMTest {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
                                                        countdown,
                                                        Executors.newScheduledThreadPool(1,
-                                                                                        Thread.ofVirtual().factory())));
+                                                                                        Utils.virtualThreadFactory())));
             }
         });
         System.out.println("Starting txns");
@@ -321,8 +321,7 @@ public class CHOAMTest {
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setExec(Executors.newFixedThreadPool(2,
-                                                                                             Thread.ofVirtual()
-                                                                                                   .factory()))
+                                                                                             Utils.virtualThreadFactory()))
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {

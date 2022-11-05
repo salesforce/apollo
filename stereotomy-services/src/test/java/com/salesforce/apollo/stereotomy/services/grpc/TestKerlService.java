@@ -43,6 +43,7 @@ import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLService;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -126,7 +127,7 @@ public class TestKerlService {
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
+        final var exec = Executors.newFixedThreadPool(3, Utils.virtualThreadFactory());
         serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
         clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
 

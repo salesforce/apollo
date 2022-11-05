@@ -22,6 +22,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -31,9 +32,9 @@ public class ShardedOracleTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
         Emulator emmy = new Emulator();
 
         emmy.start(Domain.boostrapMigration());

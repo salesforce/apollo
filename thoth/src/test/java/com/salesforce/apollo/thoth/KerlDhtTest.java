@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -31,7 +32,7 @@ public class KerlDhtTest extends AbstractDhtTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         routers.values().forEach(r -> r.start());
         dhts.values()
-            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
+            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()),
                                       Duration.ofSeconds(1)));
 
         // inception

@@ -168,12 +168,8 @@ abstract public class AbstractLifecycleTest {
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m, Executors.newSingleThreadExecutor(Thread.ofVirtual()
-                                                                                                 .factory())).router(ServerConnectionCache.newBuilder()
-                                                                                                                                          .setTarget(30),
-                                                                                                                     Executors.newFixedThreadPool(2,
-                                                                                                                                                  Thread.ofVirtual()
-                                                                                                                                                        .factory()));
+            var localRouter = new LocalServer(prefix, m,
+                                              Executors.newSingleThreadExecutor(Utils.virtualThreadFactory())).router(ServerConnectionCache.newBuilder().setTarget(30), Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()));
             return localRouter;
         }));
         choams = members.stream()
@@ -320,8 +316,7 @@ abstract public class AbstractLifecycleTest {
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
                                                countdown,
-                                               Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                                                                                .factory())));
+                                               Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory())));
         System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
@@ -356,11 +351,9 @@ abstract public class AbstractLifecycleTest {
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setExec(Executors.newFixedThreadPool(2,
-                                                                                             Thread.ofVirtual()
-                                                                                                   .factory()))
+                                                                                             Utils.virtualThreadFactory()))
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                                                                                                      .factory()))
+                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))
