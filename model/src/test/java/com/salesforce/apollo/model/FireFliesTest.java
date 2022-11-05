@@ -103,20 +103,20 @@ public class FireFliesTest {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member,
-                                              Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()))
-                                                                                                              .router(ServerConnectionCache.newBuilder()
-                                                                                                                                           .setTarget(30),
-                                                                                                                      Executors.newFixedThreadPool(2,
-                                                                                                                                                   Thread.ofVirtual()
-                                                                                                                                                         .factory()));
+                                              Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()))
+                                                                                                            .router(ServerConnectionCache.newBuilder()
+                                                                                                                                         .setTarget(30),
+                                                                                                                    Executors.newFixedThreadPool(5,
+                                                                                                                                                 Thread.ofVirtual()
+                                                                                                                                                       .factory()));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newScheduledThreadPool(2,
+                                                          .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                                          Thread.ofVirtual()
                                                                                                                .factory()))
                                                           .setContext(context)
-                                                          .setExec(Executors.newFixedThreadPool(2,
+                                                          .setExec(Executors.newFixedThreadPool(5,
                                                                                                 Thread.ofVirtual()
                                                                                                       .factory()))
                                                           .setCommunications(localRouter),
@@ -152,14 +152,14 @@ public class FireFliesTest {
         domains.get(0)
                .getFoundation()
                .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
+                      Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation()
              .start(() -> started.get().countDown(), gossipDuration, seeds,
-                    Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
+                    Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()));
         });
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
 

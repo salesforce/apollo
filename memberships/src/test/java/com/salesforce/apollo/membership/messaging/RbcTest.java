@@ -152,7 +152,7 @@ public class RbcTest {
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(),
-                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()), comms,
+                                           Executors.newFixedThreadPool(5, Thread.ofVirtual().factory()), comms,
                                            metrics);
         }).collect(Collectors.toList());
 
