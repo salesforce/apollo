@@ -104,12 +104,12 @@ public class FireFliesTest {
                                               Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(10,
+                                                                                                                    Executors.newFixedThreadPool(5,
                                                                                                                                                  Utils.virtualThreadFactory()));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newScheduledThreadPool(2,
+                                                          .setScheduler(Executors.newScheduledThreadPool(1,
                                                                                                          Utils.virtualThreadFactory()))
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(10,
