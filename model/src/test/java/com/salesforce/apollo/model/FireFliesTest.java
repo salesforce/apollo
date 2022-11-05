@@ -101,7 +101,7 @@ public class FireFliesTest {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member,
-                                              Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                              Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
                                                                                                                     Executors.newFixedThreadPool(5,

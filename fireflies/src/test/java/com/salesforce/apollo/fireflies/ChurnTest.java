@@ -289,21 +289,21 @@ public class ChurnTest {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                                                                      .router(ServerConnectionCache.newBuilder()
-                                                                                                                                   .setTarget(CARDINALITY)
-                                                                                                                                   .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                                                                                           : registry)),
-                                                                                                              Executors.newFixedThreadPool(2,
-                                                                                                                                           Utils.virtualThreadFactory()));
+                                        Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()))
+                                                                                                       .router(ServerConnectionCache.newBuilder()
+                                                                                                                                    .setTarget(CARDINALITY)
+                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                                                                                            : registry)),
+                                                                                                               Executors.newFixedThreadPool(5,
+                                                                                                                                            Utils.virtualThreadFactory()));
             var gateway = new LocalServer(gatewayPrefix, node,
-                                          Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                                                                        .router(ServerConnectionCache.newBuilder()
-                                                                                                                                     .setTarget(CARDINALITY)
-                                                                                                                                     .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                                                                                             : registry)),
-                                                                                                                Executors.newFixedThreadPool(2,
-                                                                                                                                             Utils.virtualThreadFactory()));
+                                          Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()))
+                                                                                                         .router(ServerConnectionCache.newBuilder()
+                                                                                                                                      .setTarget(CARDINALITY)
+                                                                                                                                      .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                                                                                              : registry)),
+                                                                                                                 Executors.newFixedThreadPool(5,
+                                                                                                                                              Utils.virtualThreadFactory()));
             comms.start();
             communications.add(comms);
             gateway.start();

@@ -143,12 +143,12 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                                                                      .router(ServerConnectionCache.newBuilder()
-                                                                                                                                   .setTarget(30)
-                                                                                                                                   .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                                                                                              Executors.newFixedThreadPool(5,
-                                                                                                                                           Utils.virtualThreadFactory()));
+                                        Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()))
+                                                                                                       .router(ServerConnectionCache.newBuilder()
+                                                                                                                                    .setTarget(30)
+                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
+                                                                                                               Executors.newFixedThreadPool(5,
+                                                                                                                                            Utils.virtualThreadFactory()));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(),

@@ -224,7 +224,7 @@ public class DomainTest {
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member,
-                                              Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                              Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
                                                                                                             .router(ServerConnectionCache.newBuilder()
                                                                                                                                          .setTarget(30),
                                                                                                                     Executors.newFixedThreadPool(2,

@@ -145,7 +145,7 @@ public class GorgoneionTest {
         @SuppressWarnings("unused")
         final var gorgons = members.stream().map(m -> {
             final var router = new LocalServer(prefix, m,
-                                               Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                               Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
                                                                                                              .router(ServerConnectionCache.newBuilder()
                                                                                                                                           .setTarget(2),
                                                                                                                      Executors.newFixedThreadPool(2,
