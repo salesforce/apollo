@@ -164,7 +164,7 @@ public class ChurnTest {
             countdown.set(new CountDownLatch(toStart.size()));
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                               Executors.newScheduledThreadPool(5, Utils.virtualThreadFactory())));
+                                               Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory())));
 
             success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream()
