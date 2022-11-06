@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -61,7 +62,8 @@ public class ChurnTest {
 
     private static final int                                                   CARDINALITY = 100;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static final double                                                P_BYZ       = 0.3;
+
+    private static final double P_BYZ = 0.3;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -84,7 +86,8 @@ public class ChurnTest {
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
-    private List<View>                              views;
+
+    private List<View> views;
 
     @AfterEach
     public void after() {
@@ -284,33 +287,24 @@ public class ChurnTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
+        final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
+        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
+        final var gatewayExec = ForkJoinPool.commonPool();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node,
-                                        Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()))
-                                                                                                       .router(ServerConnectionCache.newBuilder()
-                                                                                                                                    .setTarget(CARDINALITY)
-                                                                                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                                                                                            : registry)),
-                                                                                                               Executors.newFixedThreadPool(5,
-                                                                                                                                            Utils.virtualThreadFactory()));
+                                        commExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), commExec);
             var gateway = new LocalServer(gatewayPrefix, node,
-                                          Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()))
-                                                                                                         .router(ServerConnectionCache.newBuilder()
-                                                                                                                                      .setTarget(CARDINALITY)
-                                                                                                                                      .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
-                                                                                                                                                                                                              : registry)),
-                                                                                                                 Executors.newFixedThreadPool(5,
-                                                                                                                                              Utils.virtualThreadFactory()));
+                                          gatewayExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), gatewayExec);
             comms.start();
             communications.add(comms);
+
             gateway.start();
-            gateways.add(gateway);
+            gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics,
-                            Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()));
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toList());
     }
 }
