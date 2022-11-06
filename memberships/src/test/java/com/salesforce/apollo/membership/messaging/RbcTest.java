@@ -152,13 +152,13 @@ public class RbcTest {
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(),
-                                           Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()), comms,
+                                           Executors.newFixedThreadPool(10, Utils.virtualThreadFactory()), comms,
                                            metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
         messengers.forEach(view -> view.start(Duration.ofMillis(10),
-                                              Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
+                                              Executors.newScheduledThreadPool(5, Utils.virtualThreadFactory())));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
