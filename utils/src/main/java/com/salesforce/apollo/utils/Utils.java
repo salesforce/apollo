@@ -55,6 +55,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
@@ -739,6 +741,10 @@ public class Utils {
         } finally {
             lock.unlock();
         }
+    }
+
+    public static Executor newVirtualThreadPerTaskExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     public static File relativize(File parent, File child) {

@@ -21,7 +21,6 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -225,9 +224,10 @@ public class SwarmTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var executor = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism() * 2);
-        final var commExec = new ForkJoinPool(ForkJoinPool.getCommonPoolParallelism());
-        final var gatewayExec = ForkJoinPool.commonPool();
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
+        final var executor = exec;
+        final var commExec = exec;
+        final var gatewayExec = exec;
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),

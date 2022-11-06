@@ -217,18 +217,15 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(1,
-                                                                                                       Utils.virtualThreadFactory()),
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
                                                                           Executors.newScheduledThreadPool(1,
                                                                                                            Utils.virtualThreadFactory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member,
-                                              Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
-                                                                                                            .router(ServerConnectionCache.newBuilder()
-                                                                                                                                         .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(5,
-                                                                                                                                                 Utils.virtualThreadFactory()));
+            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
+                                                                                                .setTarget(30),
+                                                                           exec);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
@@ -236,8 +233,7 @@ public class DomainTest {
                                                             .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                                            Utils.virtualThreadFactory()))
                                                             .setContext(context)
-                                                            .setExec(Executors.newFixedThreadPool(10,
-                                                                                                  Utils.virtualThreadFactory()))
+                                                            .setExec(exec)
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(domain);

@@ -251,20 +251,20 @@ public class DemesneIsolate {
 
         var context = Context.newBuilder().build();
         context.activate(member);
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         domain = new SubDomain(member, Parameters.newBuilder(),
                                RuntimeParameters.newBuilder()
                                                 .setCommunications(new Enclave(member, new DomainSocketAddress(address),
-                                                                               Executors.newFixedThreadPool(2,
-                                                                                                            Utils.virtualThreadFactory()),
+                                                                               exec,
                                                                                new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound())
                                                                                                                     .toFile()),
                                                                                keepAlive, ctxId -> {
                                                                                    registerContext(ctxId);
-                                                                               }).router(Executors.newFixedThreadPool(2,
-                                                                                                                      Utils.virtualThreadFactory())))
-                                                .setExec(Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
+                                                                               }).router(exec))
+                                                .setExec(exec)
+                                                .setScheduler(Executors.newScheduledThreadPool(5,
+                                                                                               Utils.virtualThreadFactory()))
                                                 .setKerl(() -> {
                                                     try {
                                                         return member.kerl().get();
@@ -277,9 +277,9 @@ public class DemesneIsolate {
                                                 })
                                                 .setContext(context)
                                                 .setFoundation(parameters.getFoundation()),
-                               new TransactionConfiguration(Executors.newFixedThreadPool(2,
-                                                                                         Utils.virtualThreadFactory()),
-                                                            Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory())));
+                               new TransactionConfiguration(exec,
+                                                            Executors.newScheduledThreadPool(5,
+                                                                                             Utils.virtualThreadFactory())));
     }
 
     public boolean active() {

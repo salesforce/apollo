@@ -90,30 +90,26 @@ public class FireFliesTest {
             }
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(1,
-                                                                                                       Utils.virtualThreadFactory()),
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
                                                                           Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member,
-                                              Executors.newFixedThreadPool(5, Utils.virtualThreadFactory()))
-                                                                                                            .router(ServerConnectionCache.newBuilder()
-                                                                                                                                         .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(5,
-                                                                                                                                                 Utils.virtualThreadFactory()));
+            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
+                                                                                                .setTarget(30),
+                                                                           exec);
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
                                                           .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                                          Utils.virtualThreadFactory()))
                                                           .setContext(context)
-                                                          .setExec(Executors.newFixedThreadPool(10,
-                                                                                                Utils.virtualThreadFactory()))
+                                                          .setExec(exec)
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(node);

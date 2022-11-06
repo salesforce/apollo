@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -101,6 +102,7 @@ public class CHOAMTest {
     private File                baseDir;
     private File                checkpointDirBase;
     private Map<Digest, CHOAM>  choams;
+    private Executor            exec = Executors.newVirtualThreadPerTaskExecutor();
     private List<SigningMember> members;
     private MetricRegistry      registry;
     private Map<Digest, Router> routers;
@@ -167,17 +169,13 @@ public class CHOAMTest {
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m,
-                                              Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                                                                            .router(ServerConnectionCache.newBuilder()
-                                                                                                                                         .setTarget(30),
-                                                                                                                    Executors.newFixedThreadPool(2,
-                                                                                                                                                 Utils.virtualThreadFactory()));
+            var localRouter = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(30),
+                                                                      exec);
             return localRouter;
         }));
-        var scheduler = Executors.newScheduledThreadPool(2);
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context, metrics, scheduler);
+            return createCHOAM(entropy, params, m, context, metrics,
+                               Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
         }));
     }
 

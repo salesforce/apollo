@@ -21,7 +21,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -71,6 +73,7 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean> checkpointOccurred;
     private Map<Digest, AtomicInteger>   blocks;
     private Map<Digest, CHOAM>           choams;
+    private Executor                     exec = Utils.newVirtualThreadPerTaskExecutor();
     private List<SigningMember>          members;
     private MetricRegistry               registry;
     private Map<Digest, Router>          routers;
@@ -124,9 +127,10 @@ public class TestCHOAM {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
+        final var commExec = new ForkJoinPool();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalServer(prefix, m,
-                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), Executors.newFixedThreadPool(2, r -> new Thread(r, "Comm Exec[" + m.getId() + "]")));
+                                              commExec).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), commExec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -158,7 +162,7 @@ public class TestCHOAM {
                                                  .setProcessor(processor)
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
-                                                 .setExec(Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
+                                                 .setExec(exec)
                                                  .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
                                                  .build()));
         }));
@@ -177,12 +181,10 @@ public class TestCHOAM {
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
         choams.values().forEach(c -> {
-            final var txnCompletion = Executors.newFixedThreadPool(2, Utils.virtualThreadFactory());
-            final var txnExecutor = Executors.newFixedThreadPool(1, Utils.virtualThreadFactory());
             final var txScheduler = Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory());
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(), txnCompletion, timeout, max, txScheduler,
-                                                       countdown, txnExecutor));
+                transactioneers.add(new Transactioneer(c.getSession(), exec, timeout, max, txScheduler, countdown,
+                                                       exec));
             }
         });
 
