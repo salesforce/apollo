@@ -200,7 +200,6 @@ public class CHOAMTest {
         assertTrue(activated, "System did not become active: "
         + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList()));
 
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
