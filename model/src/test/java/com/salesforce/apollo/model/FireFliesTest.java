@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -61,6 +62,7 @@ public class FireFliesTest {
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     private final List<ProcessDomain>        domains = new ArrayList<>();
+    private ExecutorService                  exec    = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
 
     @AfterEach
@@ -90,7 +92,6 @@ public class FireFliesTest {
             }
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));

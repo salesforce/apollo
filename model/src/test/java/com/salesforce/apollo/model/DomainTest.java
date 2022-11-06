@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -182,7 +183,7 @@ public class DomainTest {
     }
 
     private final ArrayList<Domain> domains = new ArrayList<>();
-
+    private ExecutorService         exec    = Executors.newVirtualThreadPerTaskExecutor();
     private final ArrayList<Router> routers = new ArrayList<>();
 
     @AfterEach
@@ -217,7 +218,6 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
                                                                           Executors.newScheduledThreadPool(1,
                                                                                                            Utils.virtualThreadFactory()));
