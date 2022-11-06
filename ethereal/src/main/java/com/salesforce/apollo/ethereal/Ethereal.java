@@ -37,7 +37,6 @@ import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.Extender;
 import com.salesforce.apollo.ethereal.linear.TimingRound;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  *
@@ -95,7 +94,7 @@ public class Ethereal {
 
     public static ThreadPoolExecutor consumer(String label) {
         return new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(),
-                                      Utils.virtualThreadFactory("Ethereal Consumer[" + label + "]"),
+                                      Thread.ofVirtual().name("Ethereal Consumer[" + label + "]").factory(),
                                       (r, t) -> log.trace("Shutdown, cannot consume unit", t));
     }
 
