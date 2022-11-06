@@ -220,7 +220,8 @@ public class DomainTest {
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
                                                                           Executors.newScheduledThreadPool(1,
-                                                                                                           Utils.virtualThreadFactory()));
+                                                                                                           Thread.ofVirtual()
+                                                                                                                 .factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
@@ -231,7 +232,8 @@ public class DomainTest {
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
                                                             .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                                           Utils.virtualThreadFactory()))
+                                                                                                           Thread.ofVirtual()
+                                                                                                                 .factory()))
                                                             .setContext(context)
                                                             .setExec(exec)
                                                             .setCommunications(localRouter),

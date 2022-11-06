@@ -97,7 +97,8 @@ public class FireFliesTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                                                                          Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()));
+                                                                          Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                                           .factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
@@ -108,7 +109,8 @@ public class FireFliesTest {
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
                                                           .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                                         Utils.virtualThreadFactory()))
+                                                                                                         Thread.ofVirtual()
+                                                                                                               .factory()))
                                                           .setContext(context)
                                                           .setExec(exec)
                                                           .setCommunications(localRouter),
@@ -144,14 +146,14 @@ public class FireFliesTest {
         domains.get(0)
                .getFoundation()
                .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
+                      Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation()
              .start(() -> started.get().countDown(), gossipDuration, seeds,
-                    Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory()));
+                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         });
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
 

@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.state.Emulator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -37,9 +36,9 @@ public class StoredProceduresTest {
     @Test
     public void membership() throws Exception {
         var entropy = new Random(0x1638);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(100);
-        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
+        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 

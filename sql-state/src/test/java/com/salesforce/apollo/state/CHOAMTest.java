@@ -175,7 +175,7 @@ public class CHOAMTest {
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
+                               Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
         }));
     }
 
@@ -206,7 +206,7 @@ public class CHOAMTest {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
                                                        countdown,
                                                        Executors.newScheduledThreadPool(1,
-                                                                                        Utils.virtualThreadFactory())));
+                                                                                        Thread.ofVirtual().factory())));
             }
         });
         System.out.println("Starting txns");
@@ -317,8 +317,7 @@ public class CHOAMTest {
                                                        .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(Executors.newFixedThreadPool(2,
-                                                                                             Utils.virtualThreadFactory()))
+                                                       .setExec(exec)
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {

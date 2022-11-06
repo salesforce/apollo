@@ -43,7 +43,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -60,9 +59,9 @@ public class ShardedKERLTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1000);
-        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
+        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
@@ -142,9 +141,9 @@ public class ShardedKERLTest {
 
     @Test
     public void direct() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory());
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory());
+        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 

@@ -25,7 +25,7 @@ import com.salesforce.apollo.utils.Utils;
 public class LifoBlockingLimiterTest {
 
     private LifoBlockingLimiter<Integer> blockingLimiter;
-    private final Executor               executor = Executors.newFixedThreadPool(20, Utils.virtualThreadFactory());
+    private final Executor               executor = Utils.newVirtualThreadPerTaskExecutor();
     private SettableLimit                limit;
     private SimpleLimiter<Integer>       simpleLimiter;
 

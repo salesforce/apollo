@@ -123,7 +123,7 @@ public class SwarmTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0)
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
+                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -131,7 +131,7 @@ public class SwarmTest {
         countdown.set(new CountDownLatch(seeds.size() - 1));
         bootstrappers.subList(1, bootstrappers.size())
                      .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
+                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         // Test that all bootstrappers up
         var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
@@ -145,7 +145,7 @@ public class SwarmTest {
         // Start remaining views
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                   Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
+                                   Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
 

@@ -58,7 +58,6 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -264,7 +263,8 @@ public class DemesneIsolate {
                                                                                }).router(exec))
                                                 .setExec(exec)
                                                 .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                               Utils.virtualThreadFactory()))
+                                                                                               Thread.ofVirtual()
+                                                                                                     .factory()))
                                                 .setKerl(() -> {
                                                     try {
                                                         return member.kerl().get();
@@ -278,8 +278,8 @@ public class DemesneIsolate {
                                                 .setContext(context)
                                                 .setFoundation(parameters.getFoundation()),
                                new TransactionConfiguration(exec,
-                                                            Executors.newScheduledThreadPool(5,
-                                                                                             Utils.virtualThreadFactory())));
+                                                            Executors.newScheduledThreadPool(5, Thread.ofVirtual()
+                                                                                                      .factory())));
     }
 
     public boolean active() {

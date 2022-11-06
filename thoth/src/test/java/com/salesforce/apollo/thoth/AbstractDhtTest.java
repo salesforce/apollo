@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -49,7 +50,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -60,6 +60,7 @@ public class AbstractDhtTest {
 
     protected static final double                                                PBYZ    = 0.33;
     protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
+    protected Executor                                                           exec    = Executors.newVirtualThreadPerTaskExecutor();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected int                                                                majority;
     protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
@@ -128,17 +129,13 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        var router = new LocalServer(prefix, member,
-                                     Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()))
-                                                                                                   .router(ServerConnectionCache.newBuilder()
-                                                                                                                                .setTarget(2),
-                                                                                                           Executors.newFixedThreadPool(2,
-                                                                                                                                        Utils.virtualThreadFactory()));
+        var router = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                  exec);
         routers.put(member, router);
         dhts.put(member,
                  new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()), Duration.ofSeconds(10),
-                             Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()), 0.0125, null));
+                             exec, Duration.ofSeconds(10),
+                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

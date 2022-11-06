@@ -151,13 +151,15 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
-                                          Executors.newFixedThreadPool(2, Utils.virtualThreadFactory())).router(builder,
+                                          Executors.newFixedThreadPool(2, Thread.ofVirtual().factory())).router(
+                                                                                                                builder,
                                                                                                                 Executors.newFixedThreadPool(2,
-                                                                                                                                             Utils.virtualThreadFactory()));
+                                                                                                                                             Thread.ofVirtual()
+                                                                                                                                                   .factory()));
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
                             DigestAlgorithm.DEFAULT, metrics,
-                            Executors.newFixedThreadPool(2, Utils.virtualThreadFactory()));
+                            Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();
@@ -167,7 +169,7 @@ public class MtlsTest {
 
         views.get(0)
              .start(() -> countdown.get().countDown(), duration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory()));
+                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "KERNEL did not stabilize");
 
@@ -177,13 +179,13 @@ public class MtlsTest {
         countdown.set(new CountDownLatch(seedlings.size()));
 
         seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel,
-                                             Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
+                                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Seeds did not stabilize");
 
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
         views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds,
-                                         Executors.newScheduledThreadPool(2, Utils.virtualThreadFactory())));
+                                         Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()

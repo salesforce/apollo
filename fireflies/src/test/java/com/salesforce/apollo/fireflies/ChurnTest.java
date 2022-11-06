@@ -128,7 +128,7 @@ public class ChurnTest {
 
         views.get(0)
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory()));
+                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -138,7 +138,7 @@ public class ChurnTest {
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory())));
+                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -166,7 +166,7 @@ public class ChurnTest {
             countdown.set(new CountDownLatch(toStart.size()));
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                               Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory())));
+                                               Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
 
             success = countdown.get().await(60, TimeUnit.SECONDS);
             failed = testViews.stream()
