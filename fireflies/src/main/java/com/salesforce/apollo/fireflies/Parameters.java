@@ -14,13 +14,17 @@ import java.time.Duration;
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
-                         Duration seedingTimeout, int validationRetries) {
+                         Duration seedingTimeout, int validationRetries, int crowns) {
 
     public static Builder newBuilder() {
         return new Builder();
     }
 
     public static class Builder {
+        /**
+         * Number of crowns for the view's hexbloom
+         */
+        private int      crowns                 = 2;
         /**
          * Number of TTL rounds to wait before finalizing a view change
          */
@@ -62,16 +66,19 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          * Max number of times to attempt validation when joining a view
          */
         private int      validationRetries      = 3;
-
         /**
          * Minimum number of rounds to check for view change
          */
-        private int viewChangeRounds = 7;
+        private int      viewChangeRounds       = 7;
 
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
                                   finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout,
-                                  validationRetries);
+                                  validationRetries, crowns);
+        }
+
+        public int getCrowns() {
+            return crowns;
         }
 
         public int getFinalizeViewRounds() {
@@ -116,6 +123,11 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public int getViewChangeRounds() {
             return viewChangeRounds;
+        }
+
+        public Builder setCrowns(int crowns) {
+            this.crowns = crowns;
+            return this;
         }
 
         public Builder setFinalizeViewRounds(int finalizeViewRounds) {

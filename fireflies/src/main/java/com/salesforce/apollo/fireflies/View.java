@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.ViewManagement.MEMBERSHIP_FPR;
 import static com.salesforce.apollo.fireflies.comm.gossip.FfClient.getCreate;
 
 import java.io.InputStream;
@@ -107,7 +106,6 @@ import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -171,7 +169,6 @@ public class View {
             this.wrapped = wrapped;
             var n = Note.newBuilder()
                         .setEpoch(0)
-                        .setCurrentView(bootstrapView().toDigeste())
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
                         .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
@@ -683,7 +680,7 @@ public class View {
          * Notification of a view change event
          *
          * @param context - the context for which the view change has occurred
-         * @param viewId  - the Digest id of the new view
+         * @param viewId  - the Digest identity of the new view
          * @param joins   - the list of joining members ids
          * @param leaves  - the list of leaving members ids
          */
@@ -728,7 +725,6 @@ public class View {
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
     private final AtomicBoolean                               introduced          = new AtomicBoolean();
-    private volatile BloomFilter<Digest>                      membership;
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
     private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
@@ -760,7 +756,6 @@ public class View {
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         this.node = new Node(member, endpoint);
         viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo);
-        viewManagement.resetBootstrapView();
         var service = new Service();
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(communications.getClientIdentityProvider(), r, metrics),
@@ -771,7 +766,6 @@ public class View {
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
-        this.membership = new DigestBloomFilter(0x666, params.minimumBiffCardinality(), MEMBERSHIP_FPR);
     }
 
     /**
@@ -789,14 +783,6 @@ public class View {
      */
     public Context<Participant> getContext() {
         return context;
-    }
-
-    /**
-     * @return
-     */
-    public BloomFilter<Digest> getMembership() {
-        final var current = membership;
-        return current;
     }
 
     /**
@@ -1109,10 +1095,6 @@ public class View {
                                         viewChangeRounds));
     }
 
-    void setMembership(BloomFilter<Digest> bff) {
-        membership = bff;
-    }
-
     <T> T stable(Callable<T> call) {
         final var lock = viewChange.readLock();
         lock.lock();
@@ -1302,8 +1284,7 @@ public class View {
             }
             return false;
         }
-        final var current = membership;
-        if (!current.contains(note.getId())) {
+        if (!viewManagement.contains(note.getId())) {
             log.debug("Note: {} is not a member  on: {}", note.getId(), node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
@@ -1368,8 +1349,7 @@ public class View {
             return false;
         }
 
-        final var current = membership;
-        if (current.contains(note.getId())) {
+        if (viewManagement.contains(note.getId())) {
             log.trace("Already a member, ignoring join note from: {} on: {}", note.currentView(), currentView(),
                       note.getId(), node.getId());
             return false;
