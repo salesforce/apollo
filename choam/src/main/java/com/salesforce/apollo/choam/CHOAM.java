@@ -96,6 +96,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
@@ -674,20 +675,13 @@ public class CHOAM {
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
         this.params = params;
-        executions = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Executions " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        executions = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Executions "
+        + params.member().getId()));
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics());
-        linear = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Linear " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
         combine.registerHandler((ctx, messages) -> {
             try {
                 linear.execute(() -> combine(messages));
@@ -725,8 +719,8 @@ public class CHOAM {
     public boolean active() {
         final var c = current.get();
         HashedCertifiedBlock h = head.get();
-        return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c != null &&
-               c instanceof Administration && h != null && h.height().compareTo(ULong.valueOf(1)) >= 0;
+        return (c != null && h != null && transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) &&
+               c instanceof Administration && h.height().compareTo(ULong.valueOf(1)) >= 0;
     }
 
     public Context<Member> context() {
@@ -757,6 +751,18 @@ public class CHOAM {
         }
         return new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                                         : viewChange.block.getReconfigure().getId());
+    }
+
+    public String logState() {
+        final var c = current.get();
+        HashedCertifiedBlock h = head.get();
+        if (c == null) {
+            return "No committee on: %s".formatted(params.member().getId());
+        }
+        return "block: %s height: %s committee: %s state: %s on: %s  ".formatted(h.hash, h.height(),
+                                                                                 c.getClass().getSimpleName(),
+                                                                                 transitions.fsm().getCurrentState(),
+                                                                                 params.member().getId());
     }
 
     public void start() {

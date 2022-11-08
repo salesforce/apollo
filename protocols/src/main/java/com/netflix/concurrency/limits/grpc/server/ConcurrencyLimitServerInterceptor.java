@@ -85,18 +85,15 @@ public class ConcurrencyLimitServerInterceptor implements ServerInterceptor {
     }
 
     private static final Status LIMIT_EXCEEDED_STATUS = Status.UNAVAILABLE.withDescription("Server concurrency limit reached");
-
-    private static final Logger LOG = LoggerFactory.getLogger(ConcurrencyLimitServerInterceptor.class);
+    private static final Logger LOG                   = LoggerFactory.getLogger(ConcurrencyLimitServerInterceptor.class);
 
     public static Builder newBuilder(Limiter<GrpcServerRequestContext> grpcLimiter) {
         return new Builder(grpcLimiter);
     }
 
     private final Limiter<GrpcServerRequestContext> grpcLimiter;
-
-    private final Supplier<Status> statusSupplier;
-
-    private Supplier<Metadata> trailerSupplier;
+    private final Supplier<Status>                  statusSupplier;
+    private Supplier<Metadata>                      trailerSupplier;
 
     /**
      * @deprecated Use {@link ConcurrencyLimitServerInterceptor#newBuilder(Limiter)}

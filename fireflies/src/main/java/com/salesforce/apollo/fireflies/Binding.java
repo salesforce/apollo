@@ -36,10 +36,11 @@ import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.utils.proto.HexBloome;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.HexBloom;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
@@ -51,7 +52,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
 
@@ -60,21 +60,21 @@ import io.grpc.StatusRuntimeException;
  *
  */
 class Binding {
-    record Bound(Digest view, List<NoteWrapper> successors, int cardinality, BloomFilter<Digest> bff) {}
+    record Bound(HexBloom view, List<NoteWrapper> successors) {}
 
     private final static Logger log = LoggerFactory.getLogger(Binding.class);
 
-    final CommonCommunications<Entrance, Service> approaches;
-    private final Context<Participant>            context;
-    private final DigestAlgorithm                 digestAlgo;
-    private final Duration                        duration;
-    private final Executor                        exec;
-    private final FireflyMetrics                  metrics;
-    private final Node                            node;
-    private final Parameters                      params;
-    private final ScheduledExecutorService        scheduler;
-    private final List<Seed>                      seeds;
-    private final View                            view;
+    private final CommonCommunications<Entrance, Service> approaches;
+    private final Context<Participant>                    context;
+    private final DigestAlgorithm                         digestAlgo;
+    private final Duration                                duration;
+    private final Executor                                exec;
+    private final FireflyMetrics                          metrics;
+    private final Node                                    node;
+    private final Parameters                              params;
+    private final ScheduledExecutorService                scheduler;
+    private final List<Seed>                              seeds;
+    private final View                                    view;
 
     public Binding(View view, List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler,
                    Context<Participant> context, CommonCommunications<Entrance, Service> approaches, Node node,
@@ -171,8 +171,7 @@ class Binding {
     }
 
     private boolean completeGateway(Participant member, CompletableFuture<Bound> gateway,
-                                    Optional<ListenableFuture<Gateway>> futureSailor, HashMultiset<Biff> memberships,
-                                    HashMultiset<Digest> views, HashMultiset<Integer> cards,
+                                    Optional<ListenableFuture<Gateway>> futureSailor, HashMultiset<HexBloome> diadems,
                                     Set<SignedNote> initialSeedSet, Digest v, int majority) {
         if (futureSailor.isEmpty()) {
             return true;
@@ -228,34 +227,27 @@ class Binding {
             log.warn("No seeds in gateway returned from: {} on: {}", member.getId(), node.getId());
             return true;
         }
-        if (g.getMembers().equals(Biff.getDefaultInstance())) {
-            log.warn("No membership in join returned from: {} on: {}", member.getId(), node.getId());
-            return true;
-        }
-        var gatewayView = Digest.from(g.getView());
-        if (gatewayView.equals(Digest.NONE)) {
+
+        if (g.getDiadem().equals(HexBloome.getDefaultInstance())) {
             log.trace("Empty view in join returned from: {} on: {}", member.getId(), node.getId());
             return true;
         }
-        views.add(gatewayView);
-        cards.add(g.getCardinality());
-        memberships.add(g.getMembers());
+        diadems.add(g.getDiadem());
         initialSeedSet.addAll(g.getInitialSeedSetList());
 
-        var vs = views.entrySet()
-                      .stream()
-                      .filter(e -> e.getCount() >= majority)
-                      .map(e -> e.getElement())
-                      .findFirst()
-                      .orElse(null);
+        var vs = diadems.entrySet()
+                        .stream()
+                        .filter(e -> e.getCount() >= majority)
+                        .map(e -> e.getElement())
+                        .findFirst()
+                        .orElse(null);
         if (vs != null) {
-            if (validate(g, vs, gateway, memberships, cards, initialSeedSet, majority)) {
+            if (validate(v, g, gateway, diadems, initialSeedSet, majority)) {
                 return false;
             }
         }
-        log.debug("Gateway received, view count: {} cardinality: {} memberships: {} majority: {} from: {} view: {} context: {} on: {}",
-                  views.size(), cards.size(), memberships.size(), majority, member.getId(), gatewayView,
-                  this.context.getId(), node.getId());
+        log.debug("Gateway received, view count: {} majority: {} from: {} view: {} context: {} on: {}", diadems.size(),
+                  majority, member.getId(), v, this.context.getId(), node.getId());
         return true;
     }
 
@@ -309,10 +301,8 @@ class Binding {
         var regate = new AtomicReference<Runnable>();
         var retries = new AtomicInteger();
 
-        HashMultiset<Biff> biffs = HashMultiset.create();
+        HashMultiset<HexBloome> diadems = HashMultiset.create();
         HashSet<SignedNote> initialSeedSet = new HashSet<>();
-        HashMultiset<Digest> views = HashMultiset.create();
-        HashMultiset<Integer> cards = HashMultiset.create();
 
         final var cardinality = redirect.getCardinality();
 
@@ -328,15 +318,13 @@ class Binding {
             redirecting.iterate((link, m) -> {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
                 return link.join(join, params.seedingTimeout());
-            }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, biffs, views, cards,
+            }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, diadems,
                                                           initialSeedSet, v, majority),
                                 () -> {
                                     if (retries.get() < params.joinRetries()) {
                                         log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v,
                                                   retries.incrementAndGet(), params.joinRetries(), node.getId());
-                                        biffs.clear();
-                                        views.clear();
-                                        cards.clear();
+                                        diadems.clear();
                                         initialSeedSet.clear();
                                         scheduler.schedule(exec(() -> regate.get().run()),
                                                            Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
@@ -353,7 +341,7 @@ class Binding {
 
     private Registration registration() {
         return Registration.newBuilder()
-                           .setView(view.bootstrapView().toDigeste())
+                           .setView(view.currentView().toDigeste())
                            .setKerl(node.kerl())
                            .setNote(node.note.getWrapped())
                            .build();
@@ -362,7 +350,6 @@ class Binding {
     private NoteWrapper seedFor(Seed seed) {
         SignedNote seedNote = SignedNote.newBuilder()
                                         .setNote(Note.newBuilder()
-                                                     .setCurrentView(view.currentView().toDigeste())
                                                      .setHost(seed.endpoint().getHostName())
                                                      .setPort(seed.endpoint().getPort())
                                                      .setCoordinates(seed.coordinates().toEventCoords())
@@ -374,32 +361,25 @@ class Binding {
         return new NoteWrapper(seedNote, digestAlgo);
     }
 
-    private boolean validate(Gateway g, Digest v, CompletableFuture<Bound> gateway, HashMultiset<Biff> memberships,
-                             HashMultiset<Integer> cards, Set<SignedNote> successors, int majority) {
-        final var max = cards.entrySet()
+    private boolean validate(Digest v, Gateway g, CompletableFuture<Bound> gateway, HashMultiset<HexBloome> hexes,
+                             Set<SignedNote> successors, int majority) {
+        final var max = hexes.entrySet()
                              .stream()
                              .filter(e -> e.getCount() >= majority)
-                             .mapToInt(e -> e.getElement())
+                             .map(e -> e.getElement())
                              .findFirst();
-        var cardinality = max.orElse(-1);
-        if (cardinality > 0) {
-            var members = memberships.entrySet()
-                                     .stream()
-                                     .filter(e -> e.getCount() >= majority)
-                                     .map(e -> e.getElement())
-                                     .findFirst()
-                                     .orElse(null);
-            if (members != null) {
-                if (gateway.complete(new Bound(v,
-                                               successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
-                                               cardinality, BloomFilter.from(g.getMembers())))) {
-                    log.info("Gateway acquired: {} context: {} on: {}", v, this.context.getId(), node.getId());
-                }
-                return true;
+        var hex = max.orElse(null);
+        if (hex != null) {
+            final var hexBloom = new HexBloom(hex);
+            if (gateway.complete(new Bound(hexBloom,
+                                           successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
+                log.info("Gateway acquired: {} context: {} on: {}", hexBloom.compact(), this.context.getId(),
+                         node.getId());
             }
+            return true;
         }
-        log.info("Gateway: {} majority not achieved: {} required: {} count: {} context: {} on: {}", v, cardinality,
-                 majority, cards.size(), this.context.getId(), node.getId());
+        log.info("Gateway: {} majority not achieved: {} context: {} on: {}", v, majority, this.context.getId(),
+                 node.getId());
         return false;
     }
 }

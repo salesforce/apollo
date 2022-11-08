@@ -31,9 +31,9 @@ public class ShardedOracleTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor();
+        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
 
         emmy.start(Domain.boostrapMigration());

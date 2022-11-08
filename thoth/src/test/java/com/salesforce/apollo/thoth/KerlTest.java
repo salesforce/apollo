@@ -61,7 +61,8 @@ public class KerlTest extends AbstractDhtTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
+                                                                              Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
 
@@ -141,9 +142,10 @@ public class KerlTest extends AbstractDhtTest {
 
     @Test
     public void direct() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
+        dhts.values()
+            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
+                                      Duration.ofSeconds(1)));
 
         KERL kerl = dhts.values().stream().findFirst().get().asKERL();
 

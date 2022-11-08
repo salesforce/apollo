@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -60,6 +60,7 @@ public class AbstractDhtTest {
 
     protected static final double                                                PBYZ    = 0.33;
     protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
+    protected Executor                                                           exec    = Executors.newVirtualThreadPerTaskExecutor();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected int                                                                majority;
     protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
@@ -128,14 +129,13 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(2);
-        var router = new LocalServer(prefix, member,
-                                     ForkJoinPool.commonPool()).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                       ForkJoinPool.commonPool());
+        var router = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                  exec);
         routers.put(member, router);
-        final var scheduler = Executors.newScheduledThreadPool(2);
         dhts.put(member,
                  new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             ForkJoinPool.commonPool(), Duration.ofSeconds(10), scheduler, 0.0125, null));
+                             exec, Duration.ofSeconds(10),
+                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

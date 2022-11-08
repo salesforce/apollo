@@ -144,8 +144,6 @@ message Join {
 }
 
 message Gateway { 
-    utils.Digeste view = 1;
-    utils.Biff members = 2;
-    int32 cardinality = 3; 
-    repeated SignedNote initialSeedSet = 4;
+    utils.HexBloome diadem = 1;
+    repeated SignedNote initialSeedSet = 2;
 }

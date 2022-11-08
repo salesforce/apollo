@@ -69,3 +69,9 @@ message CausalMessage {
     google.protobuf.Any content = 3;
     repeated Digeste parents = 4;
 }
+
+message HexBloome {
+    repeated Digeste crowns = 1;
+    Biff membership = 2;
+    int32 cardinality = 3;
+}

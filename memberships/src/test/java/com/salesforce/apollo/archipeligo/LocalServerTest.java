@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 
@@ -79,7 +79,7 @@ public class LocalServerTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub       client;
+        private final TestItBlockingStub   client;
         private final ManagedServerChannel connection;
 
         public TestItClient(ManagedServerChannel c) {
@@ -130,16 +130,17 @@ public class LocalServerTest {
         final var memberB = new SigningMemberImpl(Utils.getMember(1));
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
 
-        RouterSupplier serverA = new LocalServer(prefix, memberA, ForkJoinPool.commonPool());
-        var routerA = serverA.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+        RouterSupplier serverA = new LocalServer(prefix, memberA, exec);
+        var routerA = serverA.router(ServerConnectionCache.newBuilder(), exec);
 
         Router.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
                                                                                    r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
-        RouterSupplier serverB = new LocalServer(prefix, memberB, ForkJoinPool.commonPool());
-        var routerB = serverB.router(ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+        RouterSupplier serverB = new LocalServer(prefix, memberB, exec);
+        var routerB = serverB.router(ServerConnectionCache.newBuilder(), exec);
 
         Router.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",
                                                                                      r -> new Server(r),

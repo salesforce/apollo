@@ -161,7 +161,7 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            final var exec = Executors.newFixedThreadPool(2);
+            final var exec = Executors.newFixedThreadPool(2, Thread.ofVirtual().factory());
             executors.add(exec);
             final var member = members.get(i);
             var com = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder(), exec);
@@ -179,7 +179,7 @@ public class EtherealTest {
                                               }
                                           }, consumers.get(i));
 
-            var e = Executors.newFixedThreadPool(3);
+            var e = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
             executors.add(e);
             var gossiper = new ChRbcGossip(context, member, controller.processor(), com, e, metrics);
             gossipers.add(gossiper);
@@ -196,7 +196,7 @@ public class EtherealTest {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
             gossipers.forEach(e -> {
-                final var sched = Executors.newSingleThreadScheduledExecutor();
+                final var sched = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });

@@ -59,6 +59,7 @@ class Transactioneer {
             inFlight.remove(futureSailor.get());
             if (t != null) {
                 if (completed.get() < max) {
+                    System.out.println("Retrying");
                     scheduler.schedule(() -> {
                         try {
                             decorate(mutator.getSession().submit(update.get(), timeout, scheduler));

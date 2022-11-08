@@ -490,6 +490,10 @@ public abstract class Hash<M> {
         };
     }
 
+    public boolean equivalent(Hash<M> other) {
+        return getK() == other.getK() && getM() == other.getM() && getSeed() == other.getSeed();
+    }
+
     public double fpp(int n) {
         return fpp(k, m, n);
     }

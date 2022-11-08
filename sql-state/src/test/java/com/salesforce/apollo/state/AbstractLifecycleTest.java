@@ -30,7 +30,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,11 +71,10 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 abstract public class AbstractLifecycleTest {
-    protected static final int                      CARDINALITY = 5;
-    protected static final Random                   entropy     = new Random();
-    protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
-    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-    private static final List<Transaction>          GENESIS_DATA;
+    protected static final int             CARDINALITY = 5;
+    protected static final Random          entropy     = new Random();
+    protected static final Executor        txExecutor  = Executors.newVirtualThreadPerTaskExecutor();
+    private static final List<Transaction> GENESIS_DATA;
 
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 //    static {
@@ -117,6 +115,7 @@ abstract public class AbstractLifecycleTest {
     protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
     private File                                 baseDir;
     private File                                 checkpointDirBase;
+    private Executor                             exec             = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<Member, Parameters>        parameters       = new HashMap<>();
     private List<Transactioneer>                 transactioneers;
 
@@ -170,8 +169,8 @@ abstract public class AbstractLifecycleTest {
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m,
-                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(30), Executors.newFixedThreadPool(2));
+            var localRouter = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(30),
+                                                                      exec);
             return localRouter;
         }));
         choams = members.stream()
@@ -312,12 +311,14 @@ abstract public class AbstractLifecycleTest {
                                                             .filter(e -> !e.getKey().equals(testSubject.getId()))
                                                             .map(e -> e.getValue())
                                                             .filter(c -> !c.active())
-                                                            .map(c -> c.getId())
+                                                            .map(c -> c.logState())
                                                             .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
-                                               countdown, txScheduler));
+                                               countdown,
+                                               Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                .factory())));
         System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
@@ -351,9 +352,10 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(Executors.newFixedThreadPool(2))
+                                                       .setExec(exec)
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
+                                                                                                                      .factory()))
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))

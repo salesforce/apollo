@@ -9,7 +9,7 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
 ## Not A Coin Platform™
-Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.  No *Web3* as well.
+Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
 ## Some Features
 * Multitenant isolation enclaves using GraalVM Isolates
@@ -25,33 +25,6 @@ Apollo isn't designed for coins, rather as essentially a distributed multitenant
 * Dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines
 * JDBC accessible, SQL store backed, materialized views maintained by a SQL state machine.  Supports DDL, DML, stored procedures, functions and triggers.
 * Google Zanzibar functionality providing Relation Based Access Control hosted on SQL state machines.
-
-## Modules
-Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse.  Each module is a Maven module under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
-
-* [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
-* [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
-* [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate
-* [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
-* [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
-* [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
-* [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
-* [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
-* [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
-* [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
-* [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
-* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo domain enclaves.
-* [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
-* [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
-* [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
-* [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
-* [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
-* [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.
-* [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure.  KEL, KERL and other fundamental identity, key and trust management
-* [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
-* [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing KERI decentralized identity
-* [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
-* [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
 
 ## Requirements
 Apollo requires the [GraalVM](https://www.graalvm.org) JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
@@ -88,6 +61,33 @@ This will add the *[demesnes](demesnes/README.md)* and *[isolates](isolates/READ
 ### Platform Specific Domain Socket Support
 
 Platform specific code for supporting Unix Domain Socket in GRPC Netty is segregated into two different modules: *[domain-epoll](domain-epoll)* and *[domain-kqueue](domain-kqueue)*.  These modules are added via platform specific profiles that are activated for the platform the build is running on.
+
+## Modules
+Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse.  Each module is a Maven module under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
+
+* [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
+* [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
+* [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate
+* [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
+* [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
+* [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
+* [Ethereal](ethereal/README.md) - Aleph asynchronous BFT atomic broadcast (consensus block production)
+* [Fireflies](fireflies/README.md) - Byzantine intrusion tolerant, virtually synchronous membership service and secure communications overlay
+* [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
+* [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
+* [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
+* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo domain enclaves.
+* [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
+* [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
+* [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
+* [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
+* [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
+* [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.
+* [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure.  KEL, KERL and other fundamental identity, key and trust management
+* [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
+* [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing KERI decentralized identity
+* [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
+* [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
 
 
 ## Protobuf and GRPC
@@ -132,6 +132,12 @@ This module must be built so please run the following once from the top level of
     mvn clean install -Ppre -DskipTests
 
 from the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding this module will have no adverse effect on the rest of the build.
+
+### Enable Preview On The JRE
+
+This is important as well, as Apollo makes use of the Project Loom Virtual Threads preview.  This is taken care of in the Maven build, however in your IDE, you'll need to add
+*--enable-preview* as a default flag passed to the JRE.  In Eclipse, when you import the GraalVM, there is a setting to define default flags:
+<p><img src="media/enable-preview.png" alt="drawing" width="600"/></p>
 
 ### Eclipse M2E issues with ${os.detected.classifier}
 

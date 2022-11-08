@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -182,7 +183,7 @@ public class DomainTest {
     }
 
     private final ArrayList<Domain> domains = new ArrayList<>();
-
+    private ExecutorService         exec    = Executors.newVirtualThreadPerTaskExecutor();
     private final ArrayList<Router> routers = new ArrayList<>();
 
     @AfterEach
@@ -217,19 +218,24 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
-                                                                          Executors.newSingleThreadScheduledExecutor());
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
+                                                                          Executors.newScheduledThreadPool(1,
+                                                                                                           Thread.ofVirtual()
+                                                                                                                 .factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member,
-                                              Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(30), Executors.newFixedThreadPool(2));
+            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
+                                                                                                .setTarget(30),
+                                                                           exec);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                            .setScheduler(Executors.newScheduledThreadPool(5,
+                                                                                                           Thread.ofVirtual()
+                                                                                                                 .factory()))
                                                             .setContext(context)
-                                                            .setExec(Executors.newFixedThreadPool(3))
+                                                            .setExec(exec)
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), ffParams, txnConfig);
             domains.add(domain);
@@ -244,8 +250,8 @@ public class DomainTest {
         domains.forEach(n -> n.start());
         final var activated = Utils.waitForCondition(60_000, 1_000,
                                                      () -> domains.stream().filter(d -> !d.active()).count() == 0);
-        assertTrue(activated,
-                   "Domains did not fully activate: " + (domains.stream().filter(c -> !c.active()).toList()));
+        assertTrue(activated, "Domains did not fully activate: "
+        + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);

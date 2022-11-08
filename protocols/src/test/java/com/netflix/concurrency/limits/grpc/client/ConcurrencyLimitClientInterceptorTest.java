@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.grpc.StringMarshaller;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -61,7 +62,7 @@ public class ConcurrencyLimitClientInterceptorTest {
                                              .build();
 
         AtomicLong counter = new AtomicLong();
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()).scheduleAtFixedRate(() -> {
             System.out.println(" " + counter.getAndSet(0) + " : " + limiter.toString());
         }, 1, 1, TimeUnit.SECONDS);
 

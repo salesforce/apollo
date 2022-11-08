@@ -139,18 +139,21 @@ public class RbcTest {
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
         members.forEach(m -> context.activate(m));
 
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
-            var comms = new LocalServer(prefix, node,
-                                        r -> r.run()).router(ServerConnectionCache.newBuilder().setTarget(30).setMetrics(new ServerConnectionCacheMetricsImpl(registry)), Executors.newFixedThreadPool(2));
+            var comms = new LocalServer(prefix, node, exec).router(
+                                                                   ServerConnectionCache.newBuilder()
+                                                                                        .setTarget(30)
+                                                                                        .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
+                                                                   exec);
             communications.add(comms);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), Executors.newFixedThreadPool(2), comms,
-                                           metrics);
+            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        messengers.forEach(view -> view.start(Duration.ofMillis(10), Executors.newScheduledThreadPool(1)));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10), Executors.newScheduledThreadPool(3)));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
