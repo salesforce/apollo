@@ -76,10 +76,6 @@ public class SessionTest {
         Function<SubmittedTransaction, SubmitResult> service = stx -> {
             ForkJoinPool.commonPool().execute(() -> {
                 try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                }
-                try {
                     stx.onCompletion()
                        .complete(ByteMessage.parseFrom(stx.transaction().getContent()).getContents().toStringUtf8());
                 } catch (InvalidProtocolBufferException e) {

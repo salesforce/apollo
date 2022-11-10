@@ -40,18 +40,16 @@ class Transactioneer {
     private final ByteMessage                tx        = ByteMessage.newBuilder()
                                                                     .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                                     .build();
-    private final Executor                   txnCompletion;
     private final Executor                   txnExecutor;
 
-    Transactioneer(Session session, Executor txnCompletion, Duration timeout, int max,
-                   ScheduledExecutorService scheduler, CountDownLatch countdown, Executor txnScheduler) {
+    Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
+                   CountDownLatch countdown, Executor txnScheduler) {
         this.session = session;
         this.timeout = timeout;
         this.max = max;
         this.scheduler = scheduler;
         this.countdown = countdown;
         this.txnExecutor = txnScheduler;
-        this.txnCompletion = txnCompletion;
     }
 
     public int getCompleted() {
@@ -89,7 +87,7 @@ class Transactioneer {
                     }, log));
                 }
             }
-        }, txnCompletion));
+        }, txnExecutor));
         inFlight.add(futureSailor.get());
     }
 

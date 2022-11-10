@@ -126,11 +126,10 @@ public class TestCHOAM {
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m,
-                                              exec).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), exec);
-            return localRouter;
-        }));
+        routers = members.stream()
+                         .collect(Collectors.toMap(m -> m.getId(),
+                                                   m -> new LocalServer(prefix, m,
+                                                                        exec).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), exec)));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -178,13 +177,13 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
+        var txExec = Utils.newVirtualThreadPerTaskExecutor();
         choams.values().forEach(c -> {
-            final var txScheduler = Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory());
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(),
-                                                       Executors.newSingleThreadExecutor(Utils.virtualThreadFactory()),
-                                                       timeout, max, txScheduler, countdown,
-                                                       Executors.newSingleThreadExecutor(Utils.virtualThreadFactory())));
+                transactioneers.add(new Transactioneer(c.getSession(), timeout, max,
+                                                       Executors.newScheduledThreadPool(5,
+                                                                                        Utils.virtualThreadFactory()),
+                                                       countdown, txExec));
             }
         });
 

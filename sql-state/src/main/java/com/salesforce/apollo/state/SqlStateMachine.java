@@ -902,16 +902,18 @@ public class SqlStateMachine {
 
     private void publishEvents() {
         try (ResultSet events = getEvents.executeQuery()) {
-            while (events.next()) {
-                String channel = events.getString(2);
-                JsonNode body;
-                try {
-                    body = MAPPER.readTree(events.getString(3));
-                } catch (JsonProcessingException e) {
-                    log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
-                    continue;
+            if (events != null) {
+                while (events.next()) {
+                    String channel = events.getString(2);
+                    JsonNode body;
+                    try {
+                        body = MAPPER.readTree(events.getString(3));
+                    } catch (JsonProcessingException e) {
+                        log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                        continue;
+                    }
+                    trampoline.publish(new Event(channel, body));
                 }
-                trampoline.publish(new Event(channel, body));
             }
         } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
         } catch (SQLException e) {

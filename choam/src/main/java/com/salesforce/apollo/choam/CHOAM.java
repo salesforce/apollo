@@ -981,16 +981,19 @@ public class CHOAM {
                  params.member().getId());
         for (int i = 0; i < execs.size(); i++) {
             var exec = execs.get(i);
+            final var index = i;
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
-            try {
-                params.processor()
-                      .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
-                               stxn == null ? null : stxn.onCompletion());
-            } catch (Throwable t) {
-                log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
-                          params.member().getId());
-            }
+            executions.execute(() -> {
+                try {
+                    params.processor()
+                          .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                                   stxn == null ? null : stxn.onCompletion());
+                } catch (Throwable t) {
+                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash,
+                              h.height(), params.member().getId());
+                }
+            });
         }
     }
 
