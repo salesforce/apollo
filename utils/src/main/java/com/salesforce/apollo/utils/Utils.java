@@ -55,7 +55,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.Lock;
@@ -743,7 +743,7 @@ public class Utils {
         }
     }
 
-    public static Executor newVirtualThreadPerTaskExecutor() {
+    public static ExecutorService newVirtualThreadPerTaskExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }
 

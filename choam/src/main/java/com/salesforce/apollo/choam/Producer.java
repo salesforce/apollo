@@ -66,9 +66,6 @@ public class Producer {
 
         @Override
         public void assembled() {
-            if (!reconfigured.compareAndSet(false, true)) {
-                return;
-            }
             final var slate = assembly.get().getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get(),
@@ -185,7 +182,6 @@ public class Producer {
     private final Map<Digest, PendingBlock>         pending            = new ConcurrentHashMap<>();
     private final BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
     private final AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
-    private final AtomicBoolean                     reconfigured       = new AtomicBoolean();
     private final AtomicBoolean                     started            = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;

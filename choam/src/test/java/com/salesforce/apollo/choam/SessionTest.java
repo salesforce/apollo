@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -72,12 +73,14 @@ public class SessionTest {
                                                                                                                            entropy).newIdentifier()
                                                                                                                                    .get()))
                                                               .build());
+        var gate = new CountDownLatch(1);
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, SubmitResult> service = stx -> {
             ForkJoinPool.commonPool().execute(() -> {
                 try {
-                    Thread.sleep(100);
+                    gate.await();
                 } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
                 }
                 try {
                     stx.onCompletion()
@@ -93,6 +96,7 @@ public class SessionTest {
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
         var result = session.submit(tx, null, exec);
         assertEquals(1, session.submitted());
+        gate.countDown();
         assertEquals(content, result.get(1, TimeUnit.SECONDS));
         assertEquals(0, session.submitted());
     }

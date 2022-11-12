@@ -61,7 +61,7 @@ public class MutatorTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -71,7 +71,7 @@ public class MutatorTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -95,7 +95,7 @@ public class MutatorTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setCall(call).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         CallResult result = (CallResult) success.get(1, TimeUnit.SECONDS);
         assertNotNull(result);
@@ -112,7 +112,7 @@ public class MutatorTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setBatched(batch.build()).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         var batchResult = (List<?>) success.get(1, TimeUnit.SECONDS);
         assertNotNull(batchResult);

@@ -16,6 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -87,8 +88,6 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
 
         final Duration timeout = Duration.ofSeconds(6);
-        final var scheduler = Executors.newScheduledThreadPool(1);
-
         var txneer = choams.get(members.get(0).getId());
 
         System.out.println("Transactioneer: " + txneer.getId());
@@ -112,8 +111,10 @@ public class MembershipTests {
                            .toList());
 
         final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
-                                                scheduler, countdown, Executors.newSingleThreadExecutor());
+        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1,
+                                                Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory()),
+                                                countdown,
+                                                Executors.newSingleThreadExecutor(Utils.virtualThreadFactory()));
 
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
@@ -187,9 +188,9 @@ public class MembershipTests {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
                     if (f != null) {
-                        f.complete(new Object());
+                        f.completeAsync(() -> new Object(), executor);
                     }
                 }
             };

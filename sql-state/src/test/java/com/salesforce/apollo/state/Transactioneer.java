@@ -19,11 +19,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
+import com.salesforce.apollo.utils.Utils;
 
 class Transactioneer {
     private final static Random              entropy   = new Random();
+    private final static Logger              log       = LoggerFactory.getLogger(Transactioneer.class);
     private final AtomicInteger              completed = new AtomicInteger();
     private final CountDownLatch             countdown;
     private final Executor                   executor;
@@ -59,24 +64,27 @@ class Transactioneer {
             inFlight.remove(futureSailor.get());
             if (t != null) {
                 if (completed.get() < max) {
-                    System.out.println("Retrying");
                     scheduler.schedule(() -> {
-                        try {
-                            decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
-                        } catch (InvalidTransaction e) {
-                            e.printStackTrace();
-                        }
+                        executor.execute(Utils.wrapped(() -> {
+                            try {
+                                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
+                            } catch (InvalidTransaction e) {
+                                e.printStackTrace();
+                            }
+                        }, log));
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
                 final var complete = completed.incrementAndGet();
                 if (complete < max) {
                     scheduler.schedule(() -> {
-                        try {
-                            decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
-                        } catch (InvalidTransaction e) {
-                            e.printStackTrace();
-                        }
+                        executor.execute(Utils.wrapped(() -> {
+                            try {
+                                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
+                            } catch (InvalidTransaction e) {
+                                e.printStackTrace();
+                            }
+                        }, log));
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 } else if (complete >= max) {
                     if (inFlight.size() == 0) {

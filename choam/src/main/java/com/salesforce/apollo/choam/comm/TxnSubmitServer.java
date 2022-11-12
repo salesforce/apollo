@@ -40,15 +40,13 @@ public class TxnSubmitServer extends TransactionSubmissionImplBase {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
-        router.evaluate(responseObserver,
-
-                        s -> {
-                            try {
-                                responseObserver.onNext(s.submit(request, from));
-                                responseObserver.onCompleted();
-                            } catch (StatusRuntimeException e) {
-                                responseObserver.onError(e);
-                            }
-                        });
+        router.evaluate(responseObserver, s -> {
+            try {
+                responseObserver.onNext(s.submit(request, from));
+                responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
+            }
+        });
     }
 }

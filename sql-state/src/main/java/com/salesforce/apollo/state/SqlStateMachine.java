@@ -25,6 +25,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -195,7 +196,7 @@ public class SqlStateMachine {
 
         @Override
         public void execute(int index, Digest txnHash, Transaction tx,
-                            @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                            @SuppressWarnings("rawtypes") CompletableFuture onComplete, Executor executor) {
             boolean closed;
             try {
                 closed = connection().isClosed();
@@ -214,7 +215,7 @@ public class SqlStateMachine {
                 return;
             }
             withContext(() -> {
-                SqlStateMachine.this.execute(index, txnHash, txn, onComplete);
+                SqlStateMachine.this.execute(index, txnHash, txn, onComplete, executor);
             });
 
         }
@@ -228,7 +229,7 @@ public class SqlStateMachine {
             });
             int i = 0;
             for (Transaction txn : initialization) {
-                execute(i, Digest.NONE, txn, null);
+                execute(i, Digest.NONE, txn, null, r -> r.run());
             }
             log.debug("Genesis executed on: {}", url);
         }
@@ -789,11 +790,12 @@ public class SqlStateMachine {
     }
 
     @SuppressWarnings("unchecked")
-    private void complete(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Object results) {
+    private void complete(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Object results,
+                          Executor executor) {
         if (onCompletion == null) {
             return;
         }
-        onCompletion.complete(results);
+        onCompletion.completeAsync(() -> results, executor);
     }
 
     private void dropAll(Drop drop) throws LiquibaseException {
@@ -823,7 +825,7 @@ public class SqlStateMachine {
     }
 
     private void execute(int index, Digest txnHash, Txn tx,
-                         @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
+                         @SuppressWarnings("rawtypes") CompletableFuture onCompletion, Executor executor) {
         log.debug("executing: {}", tx.getExecutionCase());
         var executing = executingBlock.get();
         updateCurrent(executing.height, executing.blkHash, index, txnHash);
@@ -841,7 +843,7 @@ public class SqlStateMachine {
             case MIGRATION -> acceptMigration(tx.getMigration());
             default -> null;
             };
-            this.complete(onCompletion, results);
+            this.complete(onCompletion, results, executor);
         } catch (JdbcSQLNonTransientConnectionException e) {
             // ignore
         } catch (Exception e) {
@@ -902,16 +904,18 @@ public class SqlStateMachine {
 
     private void publishEvents() {
         try (ResultSet events = getEvents.executeQuery()) {
-            while (events.next()) {
-                String channel = events.getString(2);
-                JsonNode body;
-                try {
-                    body = MAPPER.readTree(events.getString(3));
-                } catch (JsonProcessingException e) {
-                    log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
-                    continue;
+            if (events != null) {
+                while (events.next()) {
+                    String channel = events.getString(2);
+                    JsonNode body;
+                    try {
+                        body = MAPPER.readTree(events.getString(3));
+                    } catch (JsonProcessingException e) {
+                        log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                        continue;
+                    }
+                    trampoline.publish(new Event(channel, body));
                 }
-                trampoline.publish(new Event(channel, body));
             }
         } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
         } catch (SQLException e) {

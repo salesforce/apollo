@@ -17,11 +17,13 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -40,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -62,6 +65,7 @@ import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
@@ -94,6 +98,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
@@ -256,7 +261,7 @@ public class CHOAM {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
+        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete, Executor executor);
 
         default void genesis(Digest hash, List<Transaction> initialization) {
         }
@@ -675,12 +680,17 @@ public class CHOAM {
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
         this.params = params;
-        executions = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Executions "
-        + params.member().getId()));
+        executions = Utils.newVirtualThreadPerTaskExecutor();
+
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
-                                          params.metrics() == null ? null : params.metrics().getCombineMetrics());
+                                          params.metrics() == null ? null : params.metrics().getCombineMetrics(),
+                                          new MessageAdapter(any -> true,
+                                                             (Function<Any, Digest>) any -> signatureHash(any),
+                                                             (Function<Any, List<Digest>>) any -> Collections.emptyList(),
+                                                             (m, any) -> any,
+                                                             (Function<AgedMessageOrBuilder, Any>) am -> am.getContent()));
         linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
         combine.registerHandler((ctx, messages) -> {
             try {
@@ -912,7 +922,7 @@ public class CHOAM {
     private void combine(Msg m) {
         CertifiedBlock block;
         try {
-            block = CertifiedBlock.parseFrom(m.content());
+            block = m.content().unpack(CertifiedBlock.class);
         } catch (InvalidProtocolBufferException e) {
             log.debug("unable to parse block content from {} on: {}", m.source(), params.member().getId());
             return;
@@ -981,12 +991,13 @@ public class CHOAM {
                  params.member().getId());
         for (int i = 0; i < execs.size(); i++) {
             var exec = execs.get(i);
+            final var index = i;
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
                 params.processor()
-                      .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
-                               stxn == null ? null : stxn.onCompletion());
+                      .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                               stxn == null ? null : stxn.onCompletion(), executions);
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
                           params.member().getId());
@@ -1229,6 +1240,20 @@ public class CHOAM {
                                    .build();
             }
         };
+    }
+
+    private Digest signatureHash(Any any) {
+        CertifiedBlock cb;
+        try {
+            cb = any.unpack(CertifiedBlock.class);
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException(e);
+        }
+        return cb.getCertificationsList()
+                 .stream()
+                 .map(cert -> JohnHancock.from(cert.getSignature()))
+                 .map(sig -> sig.toDigest(params.digestAlgorithm()))
+                 .reduce(Digest.from(cb.getBlock().getHeader().getBodyHash()), (a, b) -> a.xor(b));
     }
 
     /**

@@ -13,6 +13,16 @@
         </encoder>
     </appender>
 
+    <!--
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>sql-state-log.txt </file>
+        <append>false</append>
+        <encoder>
+            <pattern>%-4relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    -->
+
     <logger name="org.jooq.Constants" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -27,33 +37,9 @@
 
     <logger name="liquibase" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger> 
-
-    <logger name="com.salesforce.apollo.state" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
     </logger>
 
     <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
- 
-    <logger name="com.salesforce.apollo.choam.support" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -61,15 +47,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.ethereal.memberships" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.state" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Session" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

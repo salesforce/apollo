@@ -102,7 +102,6 @@ public class CHOAMTest {
     private File                baseDir;
     private File                checkpointDirBase;
     private Map<Digest, CHOAM>  choams;
-    private Executor            exec = Executors.newVirtualThreadPerTaskExecutor();
     private List<SigningMember> members;
     private MetricRegistry      registry;
     private Map<Digest, Router> routers;
@@ -134,6 +133,7 @@ public class CHOAMTest {
 
     @BeforeEach
     public void before() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -175,12 +175,13 @@ public class CHOAMTest {
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+                               Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()), exec);
         }));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(12);
         var transactioneers = new ArrayList<Transactioneer>();
@@ -205,7 +206,7 @@ public class CHOAMTest {
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
                                                        countdown,
-                                                       Executors.newScheduledThreadPool(1,
+                                                       Executors.newScheduledThreadPool(5,
                                                                                         Thread.ofVirtual().factory())));
             }
         });
@@ -303,7 +304,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics, ScheduledExecutorService scheduler) {
+                              ChoamMetrics metrics, ScheduledExecutorService scheduler, Executor exec) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -334,8 +335,10 @@ public class CHOAMTest {
 
                                                            @Override
                                                            public void execute(int i, Digest hash, Transaction tx,
-                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                                                               up.getExecutor().execute(i, hash, tx, onComplete);
+                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete,
+                                                                               Executor executor) {
+                                                               up.getExecutor()
+                                                                 .execute(i, hash, tx, onComplete, executor);
                                                            }
 
                                                            @Override

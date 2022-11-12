@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -64,20 +66,28 @@ public class RbcTest {
     class Receiver implements MessageHandler {
         final Set<Digest>                     counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger                   current;
+        final Digest                          memberId;
         final AtomicReference<CountDownLatch> round   = new AtomicReference<>();
 
-        Receiver(int cardinality, AtomicInteger current) {
+        Receiver(Digest memberId, int cardinality, AtomicInteger current) {
             this.current = current;
+            this.memberId = memberId;
         }
 
         @Override
         public void message(Digest context, List<Msg> messages) {
             messages.forEach(m -> {
                 assert m.source() != null : "null member";
-                ByteBuffer buf = m.content().asReadOnlyByteBuffer();
+                ByteBuffer buf;
+                try {
+                    buf = m.content().unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalStateException(e);
+                }
                 assert buf.remaining() > 4 : "buffer: " + buf.remaining();
-                if (buf.getInt() == current.get() + 1) {
-                    if (counted.add(m.source())) {
+                final var index = buf.getInt();
+                if (index == current.get() + 1) {
+                    if (counted.add(m.source().get(0))) {
                         int totalCount = totalReceived.incrementAndGet();
                         if (totalCount % 1_000 == 0) {
                             System.out.print(".");
@@ -141,6 +151,7 @@ public class RbcTest {
 
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
+        final var authentication = ReliableBroadcaster.defaultMessageAdapter(context, DigestAlgorithm.DEFAULT);
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node, exec).router(
                                                                    ServerConnectionCache.newBuilder()
@@ -149,7 +160,7 @@ public class RbcTest {
                                                                    exec);
             communications.add(comms);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics);
+            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics, authentication);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
@@ -158,7 +169,7 @@ public class RbcTest {
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
         for (ReliableBroadcaster view : messengers) {
-            Receiver receiver = new Receiver(messengers.size(), current);
+            Receiver receiver = new Receiver(view.getMember().getId(), messengers.size(), current);
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
@@ -176,7 +187,7 @@ public class RbcTest {
                 buf.putInt(rnd);
                 buf.put(rand);
                 buf.flip();
-                view.publish(ByteString.copyFrom(buf), true);
+                view.publish(ByteMessage.newBuilder().setContents(ByteString.copyFrom(buf)).build(), true);
             });
             boolean success = round.await(60, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
