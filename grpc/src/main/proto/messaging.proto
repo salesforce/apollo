@@ -5,6 +5,7 @@ option java_package = "com.salesfoce.apollo.messaging.proto";
 option java_outer_classname = "MessagingProto";
 option objc_class_prefix = "Mp";
 import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
 import "util.proto";
 
 package messaging;
@@ -35,13 +36,13 @@ message ReconcileContext {
 
 message AgedMessage {
     int32 age = 1;
-    bytes content = 3;
+    google.protobuf.Any content = 3;
 }
 
 message DefaultMessage {
     utils.Digeste source = 1;
     int32 nonce = 2;
-    bytes content = 3;
+    google.protobuf.Any content = 3;
 }
 
 message SignedDefaultMessage {

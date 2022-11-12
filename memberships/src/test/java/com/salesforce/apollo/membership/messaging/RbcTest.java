@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -76,7 +78,12 @@ public class RbcTest {
         public void message(Digest context, List<Msg> messages) {
             messages.forEach(m -> {
                 assert m.source() != null : "null member";
-                ByteBuffer buf = m.content().asReadOnlyByteBuffer();
+                ByteBuffer buf;
+                try {
+                    buf = m.content().unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalStateException(e);
+                }
                 assert buf.remaining() > 4 : "buffer: " + buf.remaining();
                 final var index = buf.getInt();
                 if (index == current.get() + 1) {
@@ -180,7 +187,7 @@ public class RbcTest {
                 buf.putInt(rnd);
                 buf.put(rand);
                 buf.flip();
-                view.publish(ByteString.copyFrom(buf), true);
+                view.publish(ByteMessage.newBuilder().setContents(ByteString.copyFrom(buf)).build(), true);
             });
             boolean success = round.await(60, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

@@ -915,7 +915,7 @@ public class CHOAM {
     private void combine(Msg m) {
         CertifiedBlock block;
         try {
-            block = CertifiedBlock.parseFrom(m.content());
+            block = m.content().unpack(CertifiedBlock.class);
         } catch (InvalidProtocolBufferException e) {
             log.debug("unable to parse block content from {} on: {}", m.source(), params.member().getId());
             return;

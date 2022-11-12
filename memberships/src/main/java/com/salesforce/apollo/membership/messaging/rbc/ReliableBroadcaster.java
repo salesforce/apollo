@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -79,12 +80,11 @@ public class ReliableBroadcaster {
 
     public record HashedContent(Digest hash, ByteString content) {}
 
-    public record MessageAdapter(Predicate<ByteString> verifier, Function<AgedMessageOrBuilder, Digest> hasher,
-                                 Function<ByteString, List<Digest>> source,
-                                 BiFunction<SigningMember, ByteString, ByteString> wrapper,
-                                 Function<AgedMessageOrBuilder, ByteString> extractor) {}
+    public record MessageAdapter(Predicate<Any> verifier, Function<Any, Digest> hasher,
+                                 Function<Any, List<Digest>> source, BiFunction<SigningMember, Any, Any> wrapper,
+                                 Function<AgedMessageOrBuilder, Any> extractor) {}
 
-    public record Msg(List<Digest> source, ByteString content, Digest hash) {}
+    public record Msg(List<Digest> source, Any content, Digest hash) {}
 
     public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
                              int deliveredCacheSize) {
@@ -220,7 +220,7 @@ public class ReliableBroadcaster {
             log.trace("receiving: {} msgs on: {}", messages.size(), member);
             deliver(messages.stream()
                             .limit(params.maxMessages)
-                            .map(am -> new state(adapter.hasher.apply(am), AgedMessage.newBuilder(am)))
+                            .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
                             .filter(s -> !dup(s))
                             .filter(s -> adapter.verifier.test(s.msg.getContent()))
                             .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
@@ -249,9 +249,9 @@ public class ReliableBroadcaster {
             return round.get();
         }
 
-        public AgedMessage send(ByteString msg, SigningMember member) {
+        public AgedMessage send(Any msg, SigningMember member) {
             AgedMessage.Builder message = AgedMessage.newBuilder().setContent(adapter.wrapper.apply(member, msg));
-            var hash = adapter.hasher.apply(message);
+            var hash = adapter.hasher.apply(message.getContent());
             state s = new state(hash, message);
             state.put(hash, s);
             log.trace("Send message:{} on: {}", hash, member);
@@ -359,59 +359,54 @@ public class ReliableBroadcaster {
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
     public static MessageAdapter defaultMessageAuth(Context<Member> context, DigestAlgorithm algo) {
-        final Predicate<ByteString> verifier = bs -> {
+        final Predicate<Any> verifier = bs -> {
             SignedDefaultMessage sdm;
             try {
-                sdm = SignedDefaultMessage.parseFrom(bs);
+                sdm = bs.unpack(SignedDefaultMessage.class);
             } catch (InvalidProtocolBufferException e) {
-                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+                throw new IllegalStateException("Cannot unwrap", e);
             }
-            DefaultMessage dm = sdm.getContent();
+            var dm = sdm.getContent();
             var member = context.getMember(Digest.from(dm.getSource()));
             if (member == null) {
                 return false;
             }
             return member.verify(JohnHancock.from(sdm.getSignature()), dm.toByteString());
         };
-        final Function<AgedMessageOrBuilder, Digest> hasher = bs -> {
-            SignedDefaultMessage sdm;
+        final Function<Any, Digest> hasher = bs -> {
             try {
-                sdm = SignedDefaultMessage.parseFrom(bs.getContent());
+                return JohnHancock.from(bs.unpack(SignedDefaultMessage.class).getSignature()).toDigest(algo);
             } catch (InvalidProtocolBufferException e) {
-                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+                throw new IllegalStateException("Cannot unwrap", e);
             }
-            return JohnHancock.from(sdm.getSignature()).toDigest(algo);
         };
-        Function<ByteString, List<Digest>> source = bs -> {
-            SignedDefaultMessage sdm;
+        Function<Any, List<Digest>> source = bs -> {
             try {
-                sdm = SignedDefaultMessage.parseFrom(bs);
+                return Collections.singletonList(Digest.from(bs.unpack(SignedDefaultMessage.class)
+                                                               .getContent()
+                                                               .getSource()));
             } catch (InvalidProtocolBufferException e) {
-                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+                throw new IllegalStateException("Cannot unwrap", e);
             }
-            return Collections.singletonList(Digest.from(sdm.getContent().getSource()));
         };
         var sn = new AtomicInteger();
-        BiFunction<SigningMember, ByteString, ByteString> wrapper = (m, bs) -> {
+        BiFunction<SigningMember, Any, Any> wrapper = (m, bs) -> {
             final var dm = DefaultMessage.newBuilder()
                                          .setNonce(sn.incrementAndGet())
                                          .setSource(m.getId().toDigeste())
                                          .setContent(bs)
                                          .build();
-            return SignedDefaultMessage.newBuilder()
-                                       .setContent(dm)
-                                       .setSignature(m.sign(dm.toByteString()).toSig())
-                                       .build()
-                                       .toByteString();
+            return Any.pack(SignedDefaultMessage.newBuilder()
+                                                .setContent(dm)
+                                                .setSignature(m.sign(dm.toByteString()).toSig())
+                                                .build());
         };
-        Function<AgedMessageOrBuilder, ByteString> extractor = am -> {
-            SignedDefaultMessage sdm;
+        Function<AgedMessageOrBuilder, Any> extractor = am -> {
             try {
-                sdm = SignedDefaultMessage.parseFrom(am.getContent());
+                return am.getContent().unpack(SignedDefaultMessage.class).getContent().getContent();
             } catch (InvalidProtocolBufferException e) {
-                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+                throw new IllegalStateException("Cannot unwrap", e);
             }
-            return sdm.getContent().getContent();
         };
         return new MessageAdapter(verifier, hasher, source, wrapper, extractor);
     }
@@ -457,28 +452,21 @@ public class ReliableBroadcaster {
         return buffer.round();
     }
 
-    public void publish(ByteString message) {
-        publish(message, false);
-    }
-
-    public void publish(ByteString message, boolean notifyLocal) {
-        if (!started.get()) {
-            return;
-        }
-        log.debug("publishing message on: {}", member.getId());
-        AgedMessage m = buffer.send(message, member);
-        if (notifyLocal) {
-            deliver(Collections.singletonList(new Msg(Collections.singletonList(member.getId()),
-                                                      adapter.extractor.apply(m), adapter.hasher.apply(m))));
-        }
-    }
-
     public void publish(Message message) {
         publish(message, false);
     }
 
     public void publish(Message message, boolean notifyLocal) {
-        publish(message.toByteString(), notifyLocal);
+        if (!started.get()) {
+            return;
+        }
+        log.debug("publishing message on: {}", member.getId());
+        AgedMessage m = buffer.send(Any.pack(message), member);
+        if (notifyLocal) {
+            deliver(Collections.singletonList(new Msg(Collections.singletonList(member.getId()),
+                                                      adapter.extractor.apply(m),
+                                                      adapter.hasher.apply(m.getContent()))));
+        }
     }
 
     public UUID register(Consumer<Integer> roundListener) {
