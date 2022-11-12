@@ -39,34 +39,30 @@ import com.salesforce.apollo.state.SqlStateMachine.Event;
 public class UpdaterTest {
 
     @Test
-    public void smoke() throws Exception {
-        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
+    public void currentBlock() throws Exception {
+
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_curBlock", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        final var executor = updater.getExecutor();
+
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
-
         Statement statement = connection.createStatement();
-        statement.execute("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
+        ResultSet cb = statement.executeQuery("select * from apollo_internal.current");
 
-        Transaction.Builder builder = Transaction.newBuilder();
-        builder.setContent(Txn.newBuilder()
-                              .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                              .build()
-                              .toByteString());
-        Transaction transaction = builder.build();
+        assertTrue(cb.next(), "Should exist");
+        assertEquals(0, cb.getLong(2));
+        assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
+        assertFalse(cb.next(), "Should be only 1 record");
 
-        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
+        executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin());
+        cb = statement.executeQuery("select * from apollo_internal.current");
 
-        ResultSet books = statement.executeQuery("select * from books");
-        assertTrue(books.first());
-        for (int i = 0; i < 4; i++) {
-            assertTrue(books.next(), "Missing row: " + (i + 1));
-        }
+        assertTrue(cb.next(), "Should exist");
+        assertEquals(1, cb.getLong(2));
+        assertEquals(qb64(DigestAlgorithm.DEFAULT.getOrigin()), cb.getString(3));
+        assertFalse(cb.next(), "Should be only 1 record");
     }
 
     @Test
@@ -102,29 +98,33 @@ public class UpdaterTest {
     }
 
     @Test
-    public void currentBlock() throws Exception {
-
-        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_curBlock", new Properties(),
+    public void smoke() throws Exception {
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                                                       new File("target/chkpoints"));
-        final var executor = updater.getExecutor();
-
-        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
+
         Statement statement = connection.createStatement();
-        ResultSet cb = statement.executeQuery("select * from apollo_internal.current");
+        statement.execute("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))");
 
-        assertTrue(cb.next(), "Should exist");
-        assertEquals(0, cb.getLong(2));
-        assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
-        assertFalse(cb.next(), "Should be only 1 record");
+        Transaction.Builder builder = Transaction.newBuilder();
+        builder.setContent(Txn.newBuilder()
+                              .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                              "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                              .build()
+                              .toByteString());
+        Transaction transaction = builder.build();
 
-        executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin());
-        cb = statement.executeQuery("select * from apollo_internal.current");
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null, r -> r.run());
 
-        assertTrue(cb.next(), "Should exist");
-        assertEquals(1, cb.getLong(2));
-        assertEquals(qb64(DigestAlgorithm.DEFAULT.getOrigin()), cb.getString(3));
-        assertFalse(cb.next(), "Should be only 1 record");
+        ResultSet books = statement.executeQuery("select * from books");
+        assertTrue(books.first());
+        for (int i = 0; i < 4; i++) {
+            assertTrue(books.next(), "Missing row: " + (i + 1));
+        }
     }
 }

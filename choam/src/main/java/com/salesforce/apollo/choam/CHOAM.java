@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -256,7 +257,7 @@ public class CHOAM {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
+        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete, Executor executor);
 
         default void genesis(Digest hash, List<Transaction> initialization) {
         }
@@ -675,8 +676,8 @@ public class CHOAM {
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
         this.params = params;
-        executions = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Executions "
-        + params.member().getId()));
+        executions = Utils.newVirtualThreadPerTaskExecutor();
+
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
@@ -986,16 +987,14 @@ public class CHOAM {
             final var index = i;
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
-            executions.execute(() -> {
-                try {
-                    params.processor()
-                          .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
-                                   stxn == null ? null : stxn.onCompletion());
-                } catch (Throwable t) {
-                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash,
-                              h.height(), params.member().getId());
-                }
-            });
+            try {
+                params.processor()
+                      .execute(index, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                               stxn == null ? null : stxn.onCompletion(), executions);
+            } catch (Throwable t) {
+                log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
+                          params.member().getId());
+            }
         }
     }
 

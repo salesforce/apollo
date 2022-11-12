@@ -137,9 +137,9 @@ public class TestCHOAM {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
                     if (f != null) {
-                        f.complete(new Object());
+                        f.completeAsync(() -> new Object(), executor);
                     }
                 }
             };

@@ -16,6 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -187,9 +188,9 @@ public class MembershipTests {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
                     if (f != null) {
-                        f.complete(new Object());
+                        f.completeAsync(() -> new Object(), executor);
                     }
                 }
             };

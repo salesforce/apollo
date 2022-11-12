@@ -23,7 +23,6 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import deterministic.org.h2.jdbc.JdbcSQLSyntaxErrorException;
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +34,8 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
+import deterministic.org.h2.jdbc.JdbcSQLSyntaxErrorException;
+
 /**
  * @author hal.hildebrand
  *
@@ -44,6 +45,10 @@ public class MigrationTest {
     public static final Path   BOOK_RESOURCE_PATH = Path.of("src", "test", "resources", "book-schema");
     public static final String BOOK_SCHEMA_ROOT   = "bookSchema.xml";
 
+    public static Migration bookSchemaMigration() {
+        return Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
+    }
+
     public static List<Message> initializeBookSchema() {
         var list = new ArrayList<Message>();
         list.add(Txn.newBuilder()
@@ -51,10 +56,6 @@ public class MigrationTest {
                     .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
                     .build());
         return list;
-    }
-
-    public static Migration bookSchemaMigration() {
-        return Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
     }
 
     @Test
@@ -70,7 +71,7 @@ public class MigrationTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
 
@@ -81,7 +82,7 @@ public class MigrationTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -101,7 +102,7 @@ public class MigrationTest {
                               .toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null, r -> r.run());
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());
@@ -123,7 +124,7 @@ public class MigrationTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -152,7 +153,7 @@ public class MigrationTest {
                          Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
-                         success);
+                         success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -172,7 +173,7 @@ public class MigrationTest {
                               .toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(1, Digest.NONE, transaction, null);
+        updater.getExecutor().execute(1, Digest.NONE, transaction, null, r -> r.run());
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());
