@@ -151,7 +151,7 @@ public class RbcTest {
 
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
-        final var authentication = ReliableBroadcaster.defaultMessageAuth(context, DigestAlgorithm.DEFAULT);
+        final var authentication = ReliableBroadcaster.defaultMessageAdapter(context, DigestAlgorithm.DEFAULT);
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node, exec).router(
                                                                    ServerConnectionCache.newBuilder()

@@ -358,11 +358,11 @@ public class ReliableBroadcaster {
 
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
-    public static MessageAdapter defaultMessageAuth(Context<Member> context, DigestAlgorithm algo) {
-        final Predicate<Any> verifier = bs -> {
+    public static MessageAdapter defaultMessageAdapter(Context<Member> context, DigestAlgorithm algo) {
+        final Predicate<Any> verifier = any -> {
             SignedDefaultMessage sdm;
             try {
-                sdm = bs.unpack(SignedDefaultMessage.class);
+                sdm = any.unpack(SignedDefaultMessage.class);
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
@@ -373,16 +373,16 @@ public class ReliableBroadcaster {
             }
             return member.verify(JohnHancock.from(sdm.getSignature()), dm.toByteString());
         };
-        final Function<Any, Digest> hasher = bs -> {
+        final Function<Any, Digest> hasher = any -> {
             try {
-                return JohnHancock.from(bs.unpack(SignedDefaultMessage.class).getSignature()).toDigest(algo);
+                return JohnHancock.from(any.unpack(SignedDefaultMessage.class).getSignature()).toDigest(algo);
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
         };
-        Function<Any, List<Digest>> source = bs -> {
+        Function<Any, List<Digest>> source = any -> {
             try {
-                return Collections.singletonList(Digest.from(bs.unpack(SignedDefaultMessage.class)
+                return Collections.singletonList(Digest.from(any.unpack(SignedDefaultMessage.class)
                                                                .getContent()
                                                                .getSource()));
             } catch (InvalidProtocolBufferException e) {
@@ -390,11 +390,11 @@ public class ReliableBroadcaster {
             }
         };
         var sn = new AtomicInteger();
-        BiFunction<SigningMember, Any, Any> wrapper = (m, bs) -> {
+        BiFunction<SigningMember, Any, Any> wrapper = (m, any) -> {
             final var dm = DefaultMessage.newBuilder()
                                          .setNonce(sn.incrementAndGet())
                                          .setSource(m.getId().toDigeste())
-                                         .setContent(bs)
+                                         .setContent(any)
                                          .build();
             return Any.pack(SignedDefaultMessage.newBuilder()
                                                 .setContent(dm)

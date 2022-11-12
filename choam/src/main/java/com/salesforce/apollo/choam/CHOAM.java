@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -63,6 +65,7 @@ import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
@@ -95,6 +98,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
@@ -682,8 +686,11 @@ public class CHOAM {
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
-                                          ReliableBroadcaster.defaultMessageAuth(params.context(),
-                                                                                 params.digestAlgorithm()));
+                                          new MessageAdapter(any -> true,
+                                                             (Function<Any, Digest>) any -> signatureHash(any),
+                                                             (Function<Any, List<Digest>>) any -> Collections.emptyList(),
+                                                             (m, any) -> any,
+                                                             (Function<AgedMessageOrBuilder, Any>) am -> am.getContent()));
         linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
         combine.registerHandler((ctx, messages) -> {
             try {
@@ -1233,6 +1240,20 @@ public class CHOAM {
                                    .build();
             }
         };
+    }
+
+    private Digest signatureHash(Any any) {
+        CertifiedBlock cb;
+        try {
+            cb = any.unpack(CertifiedBlock.class);
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException(e);
+        }
+        return cb.getCertificationsList()
+                 .stream()
+                 .map(cert -> JohnHancock.from(cert.getSignature()))
+                 .map(sig -> sig.toDigest(params.digestAlgorithm()))
+                 .reduce(Digest.from(cb.getBlock().getHeader().getBodyHash()), (a, b) -> a.xor(b));
     }
 
     /**
