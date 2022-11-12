@@ -8,7 +8,6 @@ package com.salesforce.apollo.membership.messaging.rbc;
 
 import static com.salesforce.apollo.membership.messaging.rbc.comms.RbcClient.getCreate;
 
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Comparator;
@@ -27,7 +26,10 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +37,15 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.AgedMessage;
+import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
+import com.salesfoce.apollo.messaging.proto.DefaultMessage;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
+import com.salesfoce.apollo.messaging.proto.SignedDefaultMessage;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
@@ -65,12 +71,20 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  *
  */
 public class ReliableBroadcaster {
+
     @FunctionalInterface
     public interface MessageHandler {
         void message(Digest context, List<Msg> messages);
     }
 
-    public record Msg(Digest source, ByteString content, Digest hash) {}
+    public record HashedContent(Digest hash, ByteString content) {}
+
+    public record MessageAdapter(Predicate<ByteString> verifier, Function<AgedMessageOrBuilder, Digest> hasher,
+                                 Function<ByteString, List<Digest>> source,
+                                 BiFunction<SigningMember, ByteString, ByteString> wrapper,
+                                 Function<AgedMessageOrBuilder, ByteString> extractor) {}
+
+    public record Msg(List<Digest> source, ByteString content, Digest hash) {}
 
     public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
                              int deliveredCacheSize) {
@@ -179,7 +193,6 @@ public class ReliableBroadcaster {
         private final Semaphore          garbageCollecting = new Semaphore(1);
         private final int                highWaterMark;
         private final int                maxAge;
-        private final AtomicInteger      nonce             = new AtomicInteger(0);
         private final AtomicInteger      round             = new AtomicInteger();
         private final Map<Digest, state> state             = new ConcurrentHashMap<>();
         private final Semaphore          tickGate          = new Semaphore(1);
@@ -207,23 +220,12 @@ public class ReliableBroadcaster {
             log.trace("receiving: {} msgs on: {}", messages.size(), member);
             deliver(messages.stream()
                             .limit(params.maxMessages)
-                            .map(am -> new state(hashOf(am), AgedMessage.newBuilder(am), new Digest(am.getSource())))
-                            .filter(s -> !s.from.equals(member.getId()))
+                            .map(am -> new state(adapter.hasher.apply(am), AgedMessage.newBuilder(am)))
                             .filter(s -> !dup(s))
-                            .filter(s -> {
-                                var from = context.getMember(s.from);
-                                if (from == null) {
-                                    return false;
-                                }
-                                var buff = ByteBuffer.allocate(4);
-                                buff.putInt(s.msg.getNonce());
-                                buff.flip();
-                                boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), buff,
-                                                             s.msg.getContent().asReadOnlyByteBuffer());
-                                return verify;
-                            })
+                            .filter(s -> adapter.verifier.test(s.msg.getContent()))
                             .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
-                            .map(s -> new Msg(s.from, s.msg.getContent(), s.hash))
+                            .map(s -> new Msg(adapter.source.apply(s.msg.getContent()), adapter.extractor.apply(s.msg),
+                                              s.hash))
                             .filter(m -> delivered.add(m.hash, null))
                             .toList());
             gc();
@@ -234,7 +236,6 @@ public class ReliableBroadcaster {
             state.values()
                  .stream()
                  .filter(s -> !biff.contains(s.hash))
-                 .filter(s -> !s.from.equals(from))
                  .filter(s -> s.msg.getAge() < maxAge)
                  .forEach(s -> mailBox.add(s.msg));
             List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
@@ -249,18 +250,9 @@ public class ReliableBroadcaster {
         }
 
         public AgedMessage send(ByteString msg, SigningMember member) {
-            ByteBuffer buff = ByteBuffer.allocate(4);
-            final int n = nonce.getAndIncrement();
-            buff.putInt(n);
-            buff.flip();
-            final JohnHancock signature = member.sign(buff, msg.asReadOnlyByteBuffer());
-            AgedMessage.Builder message = AgedMessage.newBuilder()
-                                                     .setNonce(n)
-                                                     .setSource(member.getId().toDigeste())
-                                                     .setSignature(signature.toSig())
-                                                     .setContent(msg);
-            var hash = signature.toDigest(params.digestAlgorithm);
-            state s = new state(hash, message, member.getId());
+            AgedMessage.Builder message = AgedMessage.newBuilder().setContent(adapter.wrapper.apply(member, msg));
+            var hash = adapter.hasher.apply(message);
+            state s = new state(hash, message);
             state.put(hash, s);
             log.trace("Send message:{} on: {}", hash, member);
             return s.msg.build();
@@ -284,8 +276,7 @@ public class ReliableBroadcaster {
                     int age = next.msg.getAge();
                     if (age >= maxAge) {
                         trav.remove();
-                        log.trace("GC'ing: {} from: {} age: {} > {} on: {}", next.hash, next.from, age + 1, maxAge,
-                                  member);
+                        log.trace("GC'ing: {} age: {} > {} on: {}", next.hash, age + 1, maxAge, member.getId());
                     } else {
                         next.msg.setAge(age + 1);
                     }
@@ -297,7 +288,8 @@ public class ReliableBroadcaster {
 
         private boolean dup(state s) {
             if (s.msg.getAge() > maxAge) {
-                log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge, member);
+                log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge,
+                          member.getId());
                 return true;
             }
             var previous = state.get(s.hash);
@@ -308,7 +300,7 @@ public class ReliableBroadcaster {
                 } else if (previous.msg.getAge() != nextAge) {
                     previous.msg().setAge(nextAge);
                 }
-                log.trace("duplicate event: {} on: {}", s.hash, member);
+                log.trace("duplicate event: {} on: {}", s.hash, member.getId());
                 return true;
             }
             return delivered.contains(s.hash);
@@ -324,7 +316,7 @@ public class ReliableBroadcaster {
                     if (startSize < highWaterMark) {
                         return;
                     }
-                    log.trace("Compacting buffer: {} size: {} on: {}", context.getId(), startSize, member);
+                    log.trace("Compacting buffer: {} size: {} on: {}", context.getId(), startSize, member.getId());
                     purgeTheAged();
                     if (buffer.size() > params.bufferSize) {
                         log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", buffer.size(),
@@ -332,7 +324,8 @@ public class ReliableBroadcaster {
                     }
                     int freed = startSize - state.size();
                     if (freed > 0) {
-                        log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, context.getId(), member);
+                        log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, context.getId(),
+                                  member.getId());
                     }
                 } finally {
                     garbageCollecting.release();
@@ -341,13 +334,8 @@ public class ReliableBroadcaster {
 
         }
 
-        private Digest hashOf(AgedMessage am) {
-            JohnHancock signature = JohnHancock.of(am.getSignature());
-            return signature.toDigest(params.digestAlgorithm);
-        }
-
         private void purgeTheAged() {
-            log.debug("Purging the aged of: {} buffer size: {}   on: {}", context.getId(), size(), member);
+            log.debug("Purging the aged of: {} buffer size: {}   on: {}", context.getId(), size(), member.getId());
             Queue<state> candidates = new PriorityQueue<>(Collections.reverseOrder((a,
                                                                                     b) -> Integer.compare(a.msg.getAge(),
                                                                                                           b.msg.getAge())));
@@ -357,8 +345,7 @@ public class ReliableBroadcaster {
                 var m = processing.next();
                 if (m.msg.getAge() > maxAge) {
                     state.remove(m.hash);
-                    log.trace("GC'ing: {} from: {} age: {} > {} on: {}", m.hash, m.from, m.msg.getAge() + 1, maxAge,
-                              member);
+                    log.trace("GC'ing: {} age: {} > {} on: {}", m.hash, m.msg.getAge() + 1, maxAge, member.getId());
                 } else {
                     break;
                 }
@@ -367,10 +354,69 @@ public class ReliableBroadcaster {
 
     }
 
-    private record state(Digest hash, AgedMessage.Builder msg, Digest from) {}
+    private record state(Digest hash, AgedMessage.Builder msg) {}
 
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
+    public static MessageAdapter defaultMessageAuth(Context<Member> context, DigestAlgorithm algo) {
+        final Predicate<ByteString> verifier = bs -> {
+            SignedDefaultMessage sdm;
+            try {
+                sdm = SignedDefaultMessage.parseFrom(bs);
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+            }
+            DefaultMessage dm = sdm.getContent();
+            var member = context.getMember(Digest.from(dm.getSource()));
+            if (member == null) {
+                return false;
+            }
+            return member.verify(JohnHancock.from(sdm.getSignature()), dm.toByteString());
+        };
+        final Function<AgedMessageOrBuilder, Digest> hasher = bs -> {
+            SignedDefaultMessage sdm;
+            try {
+                sdm = SignedDefaultMessage.parseFrom(bs.getContent());
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+            }
+            return JohnHancock.from(sdm.getSignature()).toDigest(algo);
+        };
+        Function<ByteString, List<Digest>> source = bs -> {
+            SignedDefaultMessage sdm;
+            try {
+                sdm = SignedDefaultMessage.parseFrom(bs);
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+            }
+            return Collections.singletonList(Digest.from(sdm.getContent().getSource()));
+        };
+        var sn = new AtomicInteger();
+        BiFunction<SigningMember, ByteString, ByteString> wrapper = (m, bs) -> {
+            final var dm = DefaultMessage.newBuilder()
+                                         .setNonce(sn.incrementAndGet())
+                                         .setSource(m.getId().toDigeste())
+                                         .setContent(bs)
+                                         .build();
+            return SignedDefaultMessage.newBuilder()
+                                       .setContent(dm)
+                                       .setSignature(m.sign(dm.toByteString()).toSig())
+                                       .build()
+                                       .toByteString();
+        };
+        Function<AgedMessageOrBuilder, ByteString> extractor = am -> {
+            SignedDefaultMessage sdm;
+            try {
+                sdm = SignedDefaultMessage.parseFrom(am.getContent());
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalStateException("Cannot deserialize SignedDefaultMessage", e);
+            }
+            return sdm.getContent().getContent();
+        };
+        return new MessageAdapter(verifier, hasher, source, wrapper, extractor);
+    }
+
+    private final MessageAdapter                                   adapter;
     private final Buffer                                           buffer;
     private final Map<UUID, MessageHandler>                        channelHandlers = new ConcurrentHashMap<>();
     private final CommonCommunications<ReliableBroadcast, Service> comm;
@@ -384,7 +430,7 @@ public class ReliableBroadcaster {
     private final AtomicBoolean                                    started         = new AtomicBoolean();
 
     public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters, Executor exec,
-                               Router communications, RbcMetrics metrics) {
+                               Router communications, RbcMetrics metrics, MessageAdapter adapter) {
         this.params = parameters;
         this.context = context;
         this.member = member;
@@ -395,6 +441,7 @@ public class ReliableBroadcaster {
                                           r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
         gossiper = new RingCommunications<>(context, member, this.comm, exec);
+        this.adapter = adapter;
     }
 
     public void clearBuffer() {
@@ -421,8 +468,8 @@ public class ReliableBroadcaster {
         log.debug("publishing message on: {}", member.getId());
         AgedMessage m = buffer.send(message, member);
         if (notifyLocal) {
-            deliver(Collections.singletonList(new Msg(member.getId(), m.getContent(),
-                                                      params.digestAlgorithm.digest(m.getContent()))));
+            deliver(Collections.singletonList(new Msg(Collections.singletonList(member.getId()),
+                                                      adapter.extractor.apply(m), adapter.hasher.apply(m))));
         }
     }
 
@@ -523,7 +570,7 @@ public class ReliableBroadcaster {
                 Thread.currentThread().interrupt();
                 return;
             } catch (ExecutionException e) {
-                log.debug("error gossiping with {} on: {}", destination.member(), member.getId(), e.getCause());
+                log.debug("error gossiping with {} on: {}", destination.member().getId(), member.getId(), e.getCause());
                 return;
             }
             buffer.receive(gossip.getUpdatesList());

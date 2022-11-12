@@ -680,7 +680,9 @@ public class CHOAM {
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
-                                          params.metrics() == null ? null : params.metrics().getCombineMetrics());
+                                          params.metrics() == null ? null : params.metrics().getCombineMetrics(),
+                                          ReliableBroadcaster.defaultMessageAuth(params.context(),
+                                                                                 params.digestAlgorithm()));
         linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
         combine.registerHandler((ctx, messages) -> {
             try {

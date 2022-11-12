@@ -7,9 +7,9 @@ option objc_class_prefix = "Mp";
 import "google/protobuf/empty.proto";
 import "util.proto";
 
-package messaging; 
+package messaging;
 
-message MessageBff { 
+message MessageBff {
     int32 ring = 1;
     utils.Biff digests = 2;
 }
@@ -23,20 +23,28 @@ service RBC {
     rpc update (ReconcileContext) returns (google.protobuf.Empty) {}
 }
 
-message Reconcile { 
+message Reconcile {
     repeated  AgedMessage updates = 1;
     utils.Biff digests = 2;
 }
 
-message ReconcileContext { 
+message ReconcileContext {
     int32 ring = 1;
     repeated  AgedMessage updates = 2;
 }
 
 message AgedMessage {
     int32 age = 1;
+    bytes content = 3;
+}
+
+message DefaultMessage {
+    utils.Digeste source = 1;
     int32 nonce = 2;
     bytes content = 3;
-    utils.Digeste source = 4;
-    utils.Sig signature = 5;
+}
+
+message SignedDefaultMessage {
+    DefaultMessage content = 1;
+    utils.Sig signature = 2;
 }

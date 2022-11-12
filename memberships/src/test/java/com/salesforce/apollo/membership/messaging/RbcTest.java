@@ -64,10 +64,12 @@ public class RbcTest {
     class Receiver implements MessageHandler {
         final Set<Digest>                     counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger                   current;
+        final Digest                          memberId;
         final AtomicReference<CountDownLatch> round   = new AtomicReference<>();
 
-        Receiver(int cardinality, AtomicInteger current) {
+        Receiver(Digest memberId, int cardinality, AtomicInteger current) {
             this.current = current;
+            this.memberId = memberId;
         }
 
         @Override
@@ -76,8 +78,9 @@ public class RbcTest {
                 assert m.source() != null : "null member";
                 ByteBuffer buf = m.content().asReadOnlyByteBuffer();
                 assert buf.remaining() > 4 : "buffer: " + buf.remaining();
-                if (buf.getInt() == current.get() + 1) {
-                    if (counted.add(m.source())) {
+                final var index = buf.getInt();
+                if (index == current.get() + 1) {
+                    if (counted.add(m.source().get(0))) {
                         int totalCount = totalReceived.incrementAndGet();
                         if (totalCount % 1_000 == 0) {
                             System.out.print(".");
@@ -141,6 +144,7 @@ public class RbcTest {
 
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
+        final var authentication = ReliableBroadcaster.defaultMessageAuth(context, DigestAlgorithm.DEFAULT);
         messengers = members.stream().map(node -> {
             var comms = new LocalServer(prefix, node, exec).router(
                                                                    ServerConnectionCache.newBuilder()
@@ -149,7 +153,7 @@ public class RbcTest {
                                                                    exec);
             communications.add(comms);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics);
+            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics, authentication);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
@@ -158,7 +162,7 @@ public class RbcTest {
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
         for (ReliableBroadcaster view : messengers) {
-            Receiver receiver = new Receiver(messengers.size(), current);
+            Receiver receiver = new Receiver(view.getMember().getId(), messengers.size(), current);
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
