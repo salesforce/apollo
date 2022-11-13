@@ -72,7 +72,7 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.grpc.dht.DhtClient;
@@ -454,8 +454,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public KERL asKERL() {
-        final var delegatedKERL = new DelegatedKERL(this, digestAlgorithm());
-        return new CachingKERL(f -> f.apply(delegatedKERL));
+        return new CachingKERL(f -> f.apply(new KERLAdapter(this, digestAlgorithm())));
     }
 
     public DigestAlgorithm digestAlgorithm() {

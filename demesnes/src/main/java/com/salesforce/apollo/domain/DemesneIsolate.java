@@ -57,7 +57,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
-import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -228,7 +228,7 @@ public class DemesneIsolate {
                                              .build();
             try {
                 var stub = KERLServiceGrpc.newFutureStub(channel);
-                return f.apply(new DelegatedKERL(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
+                return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
             } finally {
                 channel.shutdown();
             }

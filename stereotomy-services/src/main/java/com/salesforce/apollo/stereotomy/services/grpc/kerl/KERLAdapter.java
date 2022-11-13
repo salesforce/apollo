@@ -31,12 +31,12 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
  * @author hal.hildebrand
  *
  */
-public class DelegatedKERL implements KERL {
+public class KERLAdapter implements KERL {
 
     private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;
 
-    public DelegatedKERL(ProtoKERLService kerl, DigestAlgorithm algorithm) {
+    public KERLAdapter(ProtoKERLService kerl, DigestAlgorithm algorithm) {
         this.kerl = kerl;
         this.algorithm = algorithm;
     }
