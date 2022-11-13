@@ -93,7 +93,7 @@ public class GorgoneionTest {
         // Registering client comms
         var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
                                                                         exec);
-        AdmissionsService admissions = mock(AdmissionsService.class);
+        var admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, null),
@@ -113,7 +113,11 @@ public class GorgoneionTest {
 
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
-        Invitation invitation = gorgoneionClient.apply(Duration.ofSeconds(2)).get(3, TimeUnit.SECONDS);
+        var invitation = gorgoneionClient.apply(Duration.ofSeconds(2)).get(3, TimeUnit.SECONDS);
+
+        gorgonRouter.close(Duration.ofSeconds(1));
+        clientRouter.close(Duration.ofSeconds(1));
+
         assertNotNull(invitation);
         assertNotEquals(Invitation.getDefaultInstance(), invitation);
         assertEquals(1, invitation.getValidations().getValidationsCount());
@@ -142,14 +146,11 @@ public class GorgoneionTest {
         var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
         members.forEach(m -> context.activate(m));
         final var parameters = Parameters.newBuilder().build();
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         @SuppressWarnings("unused")
         final var gorgons = members.stream().map(m -> {
-            final var router = new LocalServer(prefix, m, Executors.newFixedThreadPool(5, Thread.ofVirtual()
-                                                                                                .factory())).router(ServerConnectionCache.newBuilder()
-                                                                                                                                         .setTarget(2),
-                                                                                                                    Executors.newFixedThreadPool(2,
-                                                                                                                                                 Thread.ofVirtual()
-                                                                                                                                                       .factory()));
+            final var router = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                       exec);
             router.start();
             return router;
         })
@@ -158,22 +159,15 @@ public class GorgoneionTest {
                                                             Executors.newScheduledThreadPool(2,
                                                                                              Thread.ofVirtual()
                                                                                                    .factory()),
-                                                            null,
-                                                            Executors.newFixedThreadPool(2,
-                                                                                         Thread.ofVirtual().factory())))
+                                                            null, exec))
                                    .toList();
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client,
-                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
-                                                                                                         .router(ServerConnectionCache.newBuilder()
-                                                                                                                                      .setTarget(2),
-                                                                                                                 Executors.newFixedThreadPool(2,
-                                                                                                                                              Thread.ofVirtual()
-                                                                                                                                                    .factory()));
+        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                        exec);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
@@ -216,9 +210,8 @@ public class GorgoneionTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalServer(prefix, member,
-                                           exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                        Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+        var gorgonRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                        exec);
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
@@ -226,7 +219,7 @@ public class GorgoneionTest {
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, observer, gorgonRouter,
                                     Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
-                                    Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                                    exec);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
@@ -279,6 +272,8 @@ public class GorgoneionTest {
                                                           .build(),
                                                Duration.ofSeconds(1))
                                      .get(1, TimeUnit.SECONDS);
+        gorgonRouter.close(Duration.ofSeconds(1));
+        clientRouter.close(Duration.ofSeconds(1));
         assertNotNull(invitation);
         assertNotEquals(Invitation.getDefaultInstance(), invitation);
         assertEquals(1, invitation.getValidations().getValidationsCount());
