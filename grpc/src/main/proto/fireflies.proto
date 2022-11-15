@@ -122,7 +122,6 @@ service Entrance {
 message Registration { 
     utils.Digeste view = 1;
     SignedNote note = 2;
-    stereotomy.KERL_ kerl = 3;
 }
 
 message Redirect {
