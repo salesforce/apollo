@@ -15,6 +15,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc;
 import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementFutureStub;
+import com.salesfoce.apollo.gorgoneion.proto.MemberSignature;
 import com.salesfoce.apollo.gorgoneion.proto.Nonce;
 import com.salesfoce.apollo.gorgoneion.proto.Notarization;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
@@ -50,15 +51,15 @@ public class EndorsementClient implements Endorsement {
     }
 
     @Override
-    public ListenableFuture<Validation_> endorse(Nonce nonce, Duration timeout) {
+    public ListenableFuture<MemberSignature> endorse(Nonce nonce, Duration timeout) {
         if (metrics != null) {
             var serializedSize = nonce.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
             metrics.outboundEndorseNonce().update(serializedSize);
         }
 
-        ListenableFuture<Validation_> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                                                     .endorse(nonce);
+        ListenableFuture<MemberSignature> result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                                         .endorse(nonce);
         result.addListener(() -> {
             if (metrics != null) {
                 try {

@@ -20,9 +20,9 @@ import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 
@@ -46,8 +46,8 @@ public class GorgoneionClient {
         this.client = client;
     }
 
-    public CompletableFuture<Invitation> apply(Duration timeout) {
-        var invitation = new CompletableFuture<Invitation>();
+    public CompletableFuture<Validations> apply(Duration timeout) {
+        var invitation = new CompletableFuture<Validations>();
         member.kerl().whenComplete((application, t) -> {
             var fs = client.apply(application, timeout);
             fs.addListener(() -> complete(fs, invitation, timeout), r -> r.run());
@@ -74,7 +74,7 @@ public class GorgoneionClient {
 
     }
 
-    private void complete(ListenableFuture<SignedNonce> fs, CompletableFuture<Invitation> invitation,
+    private void complete(ListenableFuture<SignedNonce> fs, CompletableFuture<Validations> invitation,
                           Duration timeout) {
         try {
             credentials(fs.get()).thenCompose(credentials -> {
@@ -100,7 +100,7 @@ public class GorgoneionClient {
                                                                               .build()));
     }
 
-    private void invite(ListenableFuture<Invitation> invited, CompletableFuture<Invitation> invitation) {
+    private void invite(ListenableFuture<Validations> invited, CompletableFuture<Validations> invitation) {
         try {
             invitation.complete(invited.get());
         } catch (InterruptedException e) {

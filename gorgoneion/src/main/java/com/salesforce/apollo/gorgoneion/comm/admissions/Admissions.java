@@ -11,9 +11,9 @@ import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
@@ -41,7 +41,7 @@ public interface Admissions extends Link {
             }
 
             @Override
-            public ListenableFuture<Invitation> register(Credentials credentials, Duration timeout) {
+            public ListenableFuture<Validations> register(Credentials credentials, Duration timeout) {
                 return null;
             }
         };
@@ -49,5 +49,5 @@ public interface Admissions extends Link {
 
     ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout);
 
-    ListenableFuture<Invitation> register(Credentials credentials, Duration timeout);
+    ListenableFuture<Validations> register(Credentials credentials, Duration timeout);
 }

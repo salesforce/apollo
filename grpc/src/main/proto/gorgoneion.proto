@@ -16,23 +16,28 @@ package gorgoneion;
 
 service Admissions {
     rpc apply (stereotomy.KERL_) returns (SignedNonce) {}
-    rpc register (Credentials) returns (Invitation) {}
+    rpc register (Credentials) returns (stereotomy.Validations) {}
 }
 
 service Endorsement {
-    rpc endorse (Nonce)returns (stereotomy.Validation_) {}
+    rpc endorse (Nonce)returns (MemberSignature) {}
     rpc validate (Credentials)returns (stereotomy.Validation_) {}
     rpc enroll (Notarization) returns (google.protobuf.Empty) {}
 }
 
+message MemberSignature {
+    utils.Digeste id = 1;
+    utils.Sig signature = 2;
+}
+
 message SignedNonce {
     Nonce nonce = 1;
-    repeated stereotomy.Validation_ signatures = 2;
+    repeated MemberSignature signatures = 2;
 }
 
 message Nonce {
     stereotomy.Ident member = 1;
-    stereotomy.EventCoords issuer = 2;
+    utils.Digeste issuer = 2;
     utils.Digeste noise = 3;
     google.protobuf.Timestamp timestamp = 4;
 }
@@ -40,10 +45,6 @@ message Nonce {
 message Credentials { 
     SignedNonce nonce = 1;
     SignedAttestation attestation = 2;
-}
-
-message Invitation {
-    stereotomy.Validations validations = 1;
 }
 
 message Attestation {
