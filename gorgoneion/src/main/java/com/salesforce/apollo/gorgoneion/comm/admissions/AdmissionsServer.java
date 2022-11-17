@@ -8,9 +8,9 @@ package com.salesforce.apollo.gorgoneion.comm.admissions;
 
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsImplBase;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -52,7 +52,7 @@ public class AdmissionsServer extends AdmissionsImplBase {
     }
 
     @Override
-    public void register(Credentials request, StreamObserver<Invitation> responseObserver) {
+    public void register(Credentials request, StreamObserver<Validations> responseObserver) {
         var timer = metrics == null ? null : metrics.registerDuration().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();

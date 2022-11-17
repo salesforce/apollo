@@ -151,8 +151,8 @@ public class CHOAMTest {
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(15))
-                                                              .setMaxBatchByteSize(1024 * 1024)
-                                                              .setMaxBatchCount(3000)
+                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
+                                                              .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(2);
 

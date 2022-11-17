@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.LoggerFactory;
@@ -40,12 +41,11 @@ public class UniKERLDirectPooled {
 
     public class ClosableKERL implements Closeable, KERL {
         private final Connection connection;
+        private final KERL       kerl;
 
-        private final KERL kerl;
-
-        public ClosableKERL(Connection connection) {
+        public ClosableKERL(Connection connection, Function<KERL, KERL> wrapper) {
             this.connection = connection;
-            this.kerl = new UniKERLDirect(connection, digestAlgorithm);
+            this.kerl = wrapper.apply(new UniKERLDirect(connection, digestAlgorithm));
             try {
                 connection.setAutoCommit(false);
             } catch (SQLException e) {
@@ -134,6 +134,8 @@ public class UniKERLDirectPooled {
         }
     }
 
+    private static final Function<KERL, KERL> IDENTITY = kerl -> kerl;
+
     private final JdbcConnectionPool connectionPool;
     private final DigestAlgorithm    digestAlgorithm;
 
@@ -143,8 +145,12 @@ public class UniKERLDirectPooled {
     }
 
     public ClosableKERL create() throws SQLException {
+        return create(IDENTITY);
+    }
+
+    public ClosableKERL create(Function<KERL, KERL> wrapper) throws SQLException {
         Connection connection = connectionPool.getConnection();
-        return new ClosableKERL(connection);
+        return new ClosableKERL(connection, wrapper);
     }
 
     public DigestAlgorithm getDigestAlgorithm() {

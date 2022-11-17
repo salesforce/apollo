@@ -115,9 +115,10 @@ class Binding {
                                             approaches, exec);
         AtomicReference<Runnable> reseed = new AtomicReference<>();
         reseed.set(() -> {
+            final var registration = registration();
             seedlings.iterate((link, m) -> {
                 log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), node.getId());
-                return link.seed(registration());
+                return link.seed(registration);
             }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                 if (!seeding.isDone()) {
                     scheduler.schedule(exec(() -> reseed.get().run()), params.retryDelay().toNanos(),
@@ -342,7 +343,6 @@ class Binding {
     private Registration registration() {
         return Registration.newBuilder()
                            .setView(view.currentView().toDigeste())
-                           .setKerl(node.kerl())
                            .setNote(node.note.getWrapped())
                            .build();
     }

@@ -37,7 +37,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLService;
@@ -79,7 +79,7 @@ public class TestKerlService {
         var context = DigestAlgorithm.DEFAULT.getLast().prefix("foo");
         var client = setup(context);
 
-        var service = new DelegatedKERL(client, DigestAlgorithm.DEFAULT);
+        var service = new KERLAdapter(client, DigestAlgorithm.DEFAULT);
         Stereotomy controller = new StereotomyImpl(ks, service, secureRandom);
 
         var i = controller.newIdentifier().get();

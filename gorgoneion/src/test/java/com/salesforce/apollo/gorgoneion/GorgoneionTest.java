@@ -33,10 +33,10 @@ import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.Invitation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -63,7 +63,8 @@ public class GorgoneionTest {
         final var exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
         var context = Context.<Member>newBuilder().setCardinality(1).build();
@@ -81,7 +82,7 @@ public class GorgoneionTest {
 
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
-        final var parameters = Parameters.newBuilder().build();
+        final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(parameters, member, context, observer, gorgonRouter,
                                     Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
@@ -93,7 +94,7 @@ public class GorgoneionTest {
         // Registering client comms
         var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
                                                                         exec);
-        AdmissionsService admissions = mock(AdmissionsService.class);
+        var admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
                                                                                  r, null),
@@ -113,20 +114,27 @@ public class GorgoneionTest {
 
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
-        Invitation invitation = gorgoneionClient.apply(Duration.ofSeconds(2)).get(3, TimeUnit.SECONDS);
+        var invitation = gorgoneionClient.apply(Duration.ofSeconds(60)).get(120, TimeUnit.SECONDS);
+
+        gorgonRouter.close(Duration.ofSeconds(1));
+        clientRouter.close(Duration.ofSeconds(1));
+
         assertNotNull(invitation);
-        assertNotEquals(Invitation.getDefaultInstance(), invitation);
-        assertEquals(1, invitation.getValidations().getValidationsCount());
+        assertNotEquals(Validations.getDefaultInstance(), invitation);
+        assertEquals(1, invitation.getValidationsCount());
 
         // Verify client KERL published
-        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation.getValidations()));
+
+        // Because this is a minimal test, the notarization is not published
+//        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation));
     }
 
     @Test
     public void multiSmoke() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         final var members = IntStream.range(0, 10).mapToObj(i -> {
             try {
@@ -141,15 +149,12 @@ public class GorgoneionTest {
 
         var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
         members.forEach(m -> context.activate(m));
-        final var parameters = Parameters.newBuilder().build();
+        final var parameters = Parameters.newBuilder().setKerl(kerl).build();
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         @SuppressWarnings("unused")
         final var gorgons = members.stream().map(m -> {
-            final var router = new LocalServer(prefix, m, Executors.newFixedThreadPool(5, Thread.ofVirtual()
-                                                                                                .factory())).router(ServerConnectionCache.newBuilder()
-                                                                                                                                         .setTarget(2),
-                                                                                                                    Executors.newFixedThreadPool(2,
-                                                                                                                                                 Thread.ofVirtual()
-                                                                                                                                                       .factory()));
+            final var router = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                       exec);
             router.start();
             return router;
         })
@@ -158,22 +163,15 @@ public class GorgoneionTest {
                                                             Executors.newScheduledThreadPool(2,
                                                                                              Thread.ofVirtual()
                                                                                                    .factory()),
-                                                            null,
-                                                            Executors.newFixedThreadPool(2,
-                                                                                         Thread.ofVirtual().factory())))
+                                                            null, exec))
                                    .toList();
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client,
-                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()))
-                                                                                                         .router(ServerConnectionCache.newBuilder()
-                                                                                                                                      .setTarget(2),
-                                                                                                                 Executors.newFixedThreadPool(2,
-                                                                                                                                              Thread.ofVirtual()
-                                                                                                                                                    .factory()));
+        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                        exec);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
@@ -195,13 +193,13 @@ public class GorgoneionTest {
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
         final var apply = gorgoneionClient.apply(Duration.ofSeconds(2));
-        Invitation invitation = apply.get(3, TimeUnit.SECONDS);
+        var invitation = apply.get(3, TimeUnit.SECONDS);
         assertNotNull(invitation);
-        assertNotEquals(Invitation.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidations().getValidationsCount() >= context.majority());
+        assertNotEquals(Validations.getDefaultInstance(), invitation);
+        assertTrue(invitation.getValidationsCount() >= context.majority());
 
         // Verify client KERL published
-        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation.getValidations()));
+        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation));
     }
 
     @Test
@@ -209,24 +207,25 @@ public class GorgoneionTest {
         final var exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
         var context = Context.<Member>newBuilder().setCardinality(1).build();
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalServer(prefix, member,
-                                           exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                        Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+        var gorgonRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
+                                                                        exec);
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(Parameters.newBuilder().build(), member, context, observer, gorgonRouter,
+        var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
+                                    gorgonRouter,
                                     Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
-                                    Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                                    exec);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
@@ -249,8 +248,8 @@ public class GorgoneionTest {
 
         // Apply for registration of the client's KERL, receiving the signed nonce from
         // the server
-        final KERL_ kerl = client.kerl().get();
-        ListenableFuture<SignedNonce> fs = admin.apply(kerl, Duration.ofSeconds(1));
+        final KERL_ cKerl = client.kerl().get();
+        ListenableFuture<SignedNonce> fs = admin.apply(cKerl, Duration.ofSeconds(1));
         assertNotNull(fs);
         var signedNonce = fs.get();
         assertNotNull(signedNonce.getNonce());
@@ -269,21 +268,25 @@ public class GorgoneionTest {
                                            .setAttestation(attestationDocument)
                                            .build();
 
-        Invitation invitation = admin.register(Credentials.newBuilder()
-                                                          .setAttestation(SignedAttestation.newBuilder()
-                                                                                           .setAttestation(attestation)
-                                                                                           .setSignature(client.sign(attestation.toByteString())
-                                                                                                               .toSig())
-                                                                                           .build())
-                                                          .setNonce(signedNonce)
-                                                          .build(),
-                                               Duration.ofSeconds(1))
-                                     .get(1, TimeUnit.SECONDS);
+        var invitation = admin.register(Credentials.newBuilder()
+                                                   .setAttestation(SignedAttestation.newBuilder()
+                                                                                    .setAttestation(attestation)
+                                                                                    .setSignature(client.sign(attestation.toByteString())
+                                                                                                        .toSig())
+                                                                                    .build())
+                                                   .setNonce(signedNonce)
+                                                   .build(),
+                                        Duration.ofSeconds(1))
+                              .get(60, TimeUnit.SECONDS);
+        gorgonRouter.close(Duration.ofSeconds(1));
+        clientRouter.close(Duration.ofSeconds(1));
         assertNotNull(invitation);
-        assertNotEquals(Invitation.getDefaultInstance(), invitation);
-        assertEquals(1, invitation.getValidations().getValidationsCount());
+        assertNotEquals(Validations.getDefaultInstance(), invitation);
+        assertEquals(1, invitation.getValidationsCount());
 
         // Verify client KERL published
-        verify(observer, times(3)).publish(kerl, Collections.singletonList(invitation.getValidations()));
+
+        // Because this is a minimal test, the notarization is not published
+//        verify(observer, times(3)).publish(cKerl, Collections.singletonList(invitation));
     }
 }
