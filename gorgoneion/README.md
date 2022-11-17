@@ -25,10 +25,9 @@ Gorgoneion is the implementation of a protocol that transforms trusted attestati
 7. The joining member then sends the Credential to any member in the Gorgoneion cluster
 8. This facilitating member then passes the Credential to the validating members (the original byzantine cut) for validation of the included attestation
 9. Validating members of the byzantine cut call the attestation validation service (which may be local functionality, rather than a seperate service).
-10. When validated, the members return the KERI validation for the joining member's KERL
-11. The facilitation member then returns the gathered validations to the joining member
-12. The joining member creates the Notarization - the combination of the joining member's KERL and Validations - and sends this to a member of the cluster
-13. The facilitating member validates the Notarization and if valid then publishes the joining member's KERL and associated Validations to the destination Unified KERL
+10. When validated, the members return the KERI validation for the joining member's KERL 
+12. The falcilitating member uses the the gathered validations to create the Notarization - the combination of the joining member's KERL and Validations
+13. The facilitating member sends the Notarization to the byzantine cut membership subset which then validates there is a majority of validations and then publishes the joining member's KERL and associated Validations to the destination Unified KERL
 
 # Certificate Authority Functionality
 Note that the Gorgoneion protocol serves the same function as a centralized Certification Authority (CA).  At the end of the protocol, the joining member's KERL serves as the equivalent of a certificate from that member that is now "signed" by the CA.  The difference is that the KERL is far more flexible and powerful than a simple Certificate and can evolve, rotate and interact in all the forms that KERI facilitates.  This evolving KERL is accepted into the group as validated through the Byzantine subset of the Gorgoneion cluster's membership as well as validated via an integrated attestation service such as AWS, GCP, Azure or even private clouds or SGX/TPM mechanisms.
