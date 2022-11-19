@@ -84,37 +84,15 @@
             <column name="cardinality" type="INT">
                 <constraints nullable="false" />
             </column>
+            <column name="K" type="SMALLINT">
+                <constraints nullable="false" />
+            </column>
         </createTable>
 
         <addUniqueConstraint
             columnNames="digest"
             tableName="view" schemaName="thoth"
             constraintName="unique_digest"/>
-
-        <createTable tableName="member"
-            schemaName="thoth">
-            <column name="identifier" type="INT8">
-                <constraints nullable="false" />
-            </column>
-            <column name="ring" type="SMALLINT">
-                <constraints nullable="false" />
-            </column>
-            <column name="digest" type="VARBINARY">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-        
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="identifier"
-            baseTableName="member" baseTableSchemaName="thoth"
-            constraintName="member_identifier_fk"
-            referencedTableName="identifier" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-
-        <addUniqueConstraint
-            columnNames="identifier, ring"
-            tableName="member" schemaName="thoth"
-            constraintName="unique_identifier_ring"/>
 
         <createTable tableName="view_membership"
             schemaName="thoth">
