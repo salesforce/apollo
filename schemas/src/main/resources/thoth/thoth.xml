@@ -71,5 +71,89 @@
             referencedTableName="pending_coordinates" referencedColumnNames="id"
             referencedTableSchemaName="thoth" />
 
+        <createTable tableName="view"
+            schemaName="thoth">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="view_pkey" />
+            </column>
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="cardinality" type="INT">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            columnNames="digest"
+            tableName="view" schemaName="thoth"
+            constraintName="unique_digest"/>
+
+        <createTable tableName="member"
+            schemaName="thoth">
+            <column name="identifier" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="ring" type="SMALLINT">
+                <constraints nullable="false" />
+            </column>
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="member" baseTableSchemaName="thoth"
+            constraintName="member_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+
+        <addUniqueConstraint
+            columnNames="identifier, ring"
+            tableName="member" schemaName="thoth"
+            constraintName="unique_identifier_ring"/>
+
+        <createTable tableName="view_membership"
+            schemaName="thoth">
+            <column name="view" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="ring" type="SMALLINT">
+                <constraints nullable="false" />
+            </column>
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="identifier" type="INT8">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="view_membership" baseTableSchemaName="thoth"
+            constraintName="view_membership_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+        
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="view"
+            baseTableName="view_membership" baseTableSchemaName="thoth"
+            constraintName="view_membership_view_fk"
+            referencedTableName="view" referencedColumnNames="id"
+            referencedTableSchemaName="thoth" />
+
+        <addUniqueConstraint
+            columnNames="view, ring, digest"
+            tableName="view_membership" schemaName="thoth"  constraintName="unique_view_ring_digest"/>
+
+        <createIndex indexName="view_membership_identifier"
+            schemaName="thoth" tableName="view_membership">
+            <column name="identifier" />
+        </createIndex>
+
     </changeSet>
 </databaseChangeLog>
