@@ -21,11 +21,11 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 @SuppressWarnings("unused")
-public class ViewRecord {
+public class ViewAccounting {
     private final JdbcConnectionPool connectionPool;
     private final Context<Member>    context;
 
-    public ViewRecord(Context<Member> ctx, JdbcConnectionPool connectionPool) {
+    public ViewAccounting(Context<Member> ctx, JdbcConnectionPool connectionPool) {
         context = ctx;
         this.connectionPool = connectionPool;
     }
