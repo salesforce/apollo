@@ -12,8 +12,10 @@
             schemaName="thoth">
             <column generationType="ALWAYS" name="id"
                 type="IDENTITY">
-                <constraints nullable="false"
-                    primaryKey="true" primaryKeyName="pending_coordinates_pkey" />
+                <constraints 
+                    nullable="false"
+                    primaryKey="true"
+                    primaryKeyName="pending_coordinates_pkey" />
             </column>
             <column name="identifier" type="INT8">
                 <constraints nullable="false" />
@@ -53,7 +55,8 @@
         <createTable tableName="pending_event"
             schemaName="thoth">
             <column name="pending_coordinates" type="INT8">
-                <constraints nullable="false"
+                <constraints 
+                    nullable="false"
                     primaryKey="true" />
             </column>
             <column name="digest" type="VARBINARY">
@@ -94,9 +97,16 @@
             tableName="view" schemaName="thoth"
             constraintName="unique_digest"/>
 
-        <createTable tableName="view_membership"
+        <createTable tableName="member"
             schemaName="thoth">
-            <column name="view" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints
+                    nullable="false"
+                    primaryKey="true"
+                    primaryKeyName="member_pkey" />
+            </column>
+            <column name="identifier" type="INT8">
                 <constraints nullable="false" />
             </column>
             <column name="ring" type="SMALLINT">
@@ -105,32 +115,72 @@
             <column name="digest" type="VARBINARY">
                 <constraints nullable="false" />
             </column>
-            <column name="identifier" type="INT8">
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="member" baseTableSchemaName="thoth"
+            constraintName="member_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+
+        <addUniqueConstraint
+            columnNames="identifier, ring"
+            tableName="member" schemaName="thoth"
+            constraintName="unique_identifier_ring"/>
+
+        <addUniqueConstraint
+            columnNames="digest"
+            tableName="member" schemaName="thoth"
+            constraintName="unique_member_digest"/>
+
+        <createIndex indexName="member_ring_digest"
+            schemaName="thoth" tableName="member">
+            <column name="ring" />
+            <column name="digest" />
+        </createIndex>
+
+        <createTable tableName="membership"
+            schemaName="thoth">
+            <column name="view" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="ring" type="SMALLINT">
+                <constraints nullable="false" />
+            </column>
+            <column name="ordinal" type="INT4">
+                <constraints nullable="false" />
+            </column>
+            <column name="member" type="INT8">
                 <constraints nullable="false" />
             </column>
         </createTable>
-        
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="identifier"
-            baseTableName="view_membership" baseTableSchemaName="thoth"
-            constraintName="view_membership_identifier_fk"
-            referencedTableName="identifier" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-        
+
         <addForeignKeyConstraint
             onDelete="CASCADE" baseColumnNames="view"
-            baseTableName="view_membership" baseTableSchemaName="thoth"
-            constraintName="view_membership_view_fk"
+            baseTableName="membership" baseTableSchemaName="thoth"
+            constraintName="membership_view_fk"
             referencedTableName="view" referencedColumnNames="id"
             referencedTableSchemaName="thoth" />
 
-        <addUniqueConstraint
-            columnNames="view, ring, digest"
-            tableName="view_membership" schemaName="thoth"  constraintName="unique_view_ring_digest"/>
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="member"
+            baseTableName="membership" baseTableSchemaName="thoth"
+            constraintName="view_member_fk"
+            referencedTableName="member" referencedColumnNames="id"
+            referencedTableSchemaName="thoth" />
 
-        <createIndex indexName="view_membership_identifier"
-            schemaName="thoth" tableName="view_membership">
-            <column name="identifier" />
+        <addUniqueConstraint
+            columnNames="view, ring, ordinal"
+            tableName="membership"
+            schemaName="thoth"
+            constraintName="unique_view_ring_ordinal"/>
+
+        <createIndex indexName="membership_view_ring_member"
+            schemaName="thoth" tableName="membership">
+            <column name="view" />
+            <column name="ring" />
+            <column name="member" />
         </createIndex>
 
     </changeSet>
