@@ -148,9 +148,6 @@
             <column name="ring" type="SMALLINT">
                 <constraints nullable="false" />
             </column>
-            <column name="ordinal" type="INT4">
-                <constraints nullable="false" />
-            </column>
             <column name="member" type="INT8">
                 <constraints nullable="false" />
             </column>
@@ -171,17 +168,10 @@
             referencedTableSchemaName="thoth" />
 
         <addUniqueConstraint
-            columnNames="view, ring, ordinal"
+            columnNames="view, ring, member"
             tableName="membership"
             schemaName="thoth"
-            constraintName="unique_view_ring_ordinal"/>
-
-        <createIndex indexName="membership_view_ring_member"
-            schemaName="thoth" tableName="membership">
-            <column name="view" />
-            <column name="ring" />
-            <column name="member" />
-        </createIndex>
+            constraintName="unique_view_ring_member"/>
 
     </changeSet>
 </databaseChangeLog>

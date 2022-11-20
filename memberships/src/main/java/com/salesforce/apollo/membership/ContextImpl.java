@@ -313,6 +313,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return id.hashCode();
     }
 
+    @Override
     public Digest hashFor(Digest d, int ring) {
         return Context.hashFor(id, ring, d);
     }
