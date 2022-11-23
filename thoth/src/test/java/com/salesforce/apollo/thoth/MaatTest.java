@@ -7,27 +7,24 @@
 package com.salesforce.apollo.thoth;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.mock;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.security.SecureRandom;
-import java.util.Collections;
-import java.util.UUID;
-import java.util.concurrent.Executors;
+import java.util.HashMap;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
-import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClient;
-import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServer;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 /**
  * @author hal.hildebrand
@@ -37,39 +34,36 @@ public class MaatTest {
 
     @Test
     public void smokin() throws Exception {
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
-        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var kerl = new ProtoKERLAdapter(kerl_);
-        var prefix = UUID.randomUUID().toString();
-        final var builder = ServerConnectionCache.newBuilder().setTarget(2);
-        final var context = DigestAlgorithm.DEFAULT.getOrigin();
+        var context = Context.newBuilder().setCardinality(4).build();
+        for (int i = 0; i < 4; i++) {
+            context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier().get()));
+        }
+        var maat = new Maat(context, kerl_);
 
-        var serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        var maat = new Maat(serverMember, kerl, serverRouter, context);
-        assertNotNull(maat); // lol
+        var specification = IdentifierSpecification.newBuilder();
+        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var inception = AbstractDhtTest.inception(specification, initialKeyPair, ProtobufEventFactory.INSTANCE,
+                                                  nextKeyPair);
+        var digest = ((SelfAddressingIdentifier) inception.getIdentifier()).getDigest();
 
-        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        var serialized = inception.toKeyEvent_().toByteString();
+        var validations = new HashMap<EventCoordinates, JohnHancock>();
 
-        serverRouter.start();
-        clientRouter.start();
+        context.successors(digest).stream().map(m -> (ControlledIdentifierMember) m).forEach(m -> {
+            validations.put(m.getEvent().getCoordinates(), m.sign(serialized));
+        });
 
-        var protoService = mock(EventObserver.class);
-        var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new EventObserverServer(r, clientRouter.getClientIdentityProvider(),
-                                                                           null),
-                                              EventObserverClient.getCreate(null), null);
+        var inceptionState = maat.append(inception).get();
+        assertNull(inceptionState, "Should not have succeeded appending of test event");
 
-        var client = clientComms.connect(serverMember);
-        assertNotNull(client);
+        kerl_.appendValidations(inception.getCoordinates(), validations);
 
-        client.publishAttachments(Collections.emptyList()).get();
-        client.publish(KERL_.getDefaultInstance(), Collections.emptyList()).get();
-        client.publishEvents(Collections.emptyList(), Collections.emptyList()).get();
-
+        inceptionState = maat.append(inception).get();
+        assertNotNull(inceptionState, "Should have succeeded appending of test event");
     }
 }

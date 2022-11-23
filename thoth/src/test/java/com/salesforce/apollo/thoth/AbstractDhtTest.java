@@ -41,6 +41,7 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -58,13 +59,44 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 public class AbstractDhtTest {
     protected static final ProtobufEventFactory factory = new ProtobufEventFactory();
 
-    protected static final double                                                PBYZ    = 0.33;
-    protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
-    protected Executor                                                           exec    = Executors.newVirtualThreadPerTaskExecutor();
+    protected static final double PBYZ = 0.33;
+
+    public static InceptionEvent inception(Builder<?> specification, KeyPair initialKeyPair, EventFactory factory,
+                                           KeyPair nextKeyPair) {
+
+        specification.addKey(initialKeyPair.getPublic())
+                     .setSigningThreshold(unweighted(1))
+                     .setNextKeys(List.of(nextKeyPair.getPublic()))
+                     .setWitnesses(Collections.emptyList())
+                     .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
+        var identifier = Identifier.NONE;
+        InceptionEvent event = factory.inception(identifier, specification.build());
+        return event;
+    }
+
+    public static RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
+                                         KeyPair nextKeyPair, ProtobufEventFactory factory) {
+        var rotSpec = RotationSpecification.newBuilder();
+        rotSpec.setIdentifier(prev.getIdentifier())
+               .setCurrentCoords(prev.getCoordinates())
+               .setCurrentDigest(prevDigest)
+               .setKey(prevNext.getPublic())
+               .setSigningThreshold(unweighted(1))
+               .setNextKeys(List.of(nextKeyPair.getPublic()))
+               .setSigner(new SignerImpl(prevNext.getPrivate()));
+
+        RotationEvent rotation = factory.rotation(rotSpec.build(), false);
+        return rotation;
+    }
+
+    protected final Map<SigningMember, KerlDHT>                                  dhts = new HashMap<>();
+    protected Executor                                                           exec = Executors.newVirtualThreadPerTaskExecutor();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected int                                                                majority;
-    protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
-    protected Stereotomy                                                         stereotomy;
+
+    protected final Map<SigningMember, Router> routers = new HashMap<>();
+
+    protected Stereotomy stereotomy;
 
     public AbstractDhtTest() {
         super();
@@ -109,19 +141,6 @@ public class AbstractDhtTest {
         return Boolean.getBoolean("large_tests") ? 100 : 5;
     }
 
-    protected InceptionEvent inception(Builder<?> specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
-                                       KeyPair nextKeyPair) {
-
-        specification.addKey(initialKeyPair.getPublic())
-                     .setSigningThreshold(unweighted(1))
-                     .setNextKeys(List.of(nextKeyPair.getPublic()))
-                     .setWitnesses(Collections.emptyList())
-                     .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
-        var identifier = Identifier.NONE;
-        InceptionEvent event = factory.inception(identifier, specification.build());
-        return event;
-    }
-
     protected void instantiate(SigningMember member, Context<Member> context, String prefix,
                                ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
@@ -136,20 +155,5 @@ public class AbstractDhtTest {
                  new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
                              exec, Duration.ofSeconds(10),
                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
-    }
-
-    protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
-                                     KeyPair nextKeyPair, ProtobufEventFactory factory) {
-        var rotSpec = RotationSpecification.newBuilder();
-        rotSpec.setIdentifier(prev.getIdentifier())
-               .setCurrentCoords(prev.getCoordinates())
-               .setCurrentDigest(prevDigest)
-               .setKey(prevNext.getPublic())
-               .setSigningThreshold(unweighted(1))
-               .setNextKeys(List.of(nextKeyPair.getPublic()))
-               .setSigner(new SignerImpl(prevNext.getPrivate()));
-
-        RotationEvent rotation = factory.rotation(rotSpec.build(), false);
-        return rotation;
     }
 }
