@@ -272,9 +272,10 @@ public class KerlDHT implements ProtoKERLService {
     private final TemporalAmount                                              timeout;
     private final AtomicReference<ValidatorView>                              view           = new AtomicReference<>();
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
-                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
-                   ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
+    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, Function<KERL, KERL> wrap,
+                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
+                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
@@ -300,7 +301,7 @@ public class KerlDHT implements ProtoKERLService {
         initializeSchema();
         kerl = new CachingKERL(f -> {
             try (var k = kerlPool.create()) {
-                return f.apply(k);
+                return f.apply(wrap.apply(k));
             } catch (Throwable e) {
                 return completeExceptionally(e);
             }
@@ -308,6 +309,13 @@ public class KerlDHT implements ProtoKERLService {
         this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), asKERL(),
                            () -> view.get().threshold, () -> view.get().roots,
                            () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
+    }
+
+    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
+                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
+                   ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
+        this(frequency, context, member, k -> k, connectionPool, digestAlgorithm, communications, executor, timeout,
+             scheduler, falsePositiveRate, metrics);
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {

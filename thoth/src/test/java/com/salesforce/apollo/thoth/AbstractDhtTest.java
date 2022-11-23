@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -38,6 +39,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -89,14 +91,15 @@ public class AbstractDhtTest {
         return rotation;
     }
 
-    protected final Map<SigningMember, KerlDHT>                                  dhts = new HashMap<>();
-    protected Executor                                                           exec = Executors.newVirtualThreadPerTaskExecutor();
+    protected Context<Member>                                                    context;
+    protected final Map<SigningMember, KerlDHT>                                  dhts    = new HashMap<>();
+    protected Executor                                                           exec    = Executors.newVirtualThreadPerTaskExecutor();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    protected MemKERL                                                            kerl;
     protected int                                                                majority;
-
-    protected final Map<SigningMember, Router> routers = new HashMap<>();
-
-    protected Stereotomy stereotomy;
+    protected String                                                             prefix;
+    protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
+    protected Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {
         super();
@@ -112,9 +115,11 @@ public class AbstractDhtTest {
 
     @BeforeEach
     public void before() throws Exception {
+        prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, getCardinality()).mapToObj(i -> {
             try {
                 return stereotomy.newIdentifier().get();
@@ -124,11 +129,10 @@ public class AbstractDhtTest {
         })
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
-        String prefix = UUID.randomUUID().toString();
-        Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
+        context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         majority = context.majority();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        identities.keySet().forEach(member -> instantiate(member, context, prefix, serverMembers));
+        identities.keySet().forEach(member -> instantiate(member, context, serverMembers));
 
         System.out.println();
         System.out.println();
@@ -141,7 +145,7 @@ public class AbstractDhtTest {
         return Boolean.getBoolean("large_tests") ? 100 : 5;
     }
 
-    protected void instantiate(SigningMember member, Context<Member> context, String prefix,
+    protected void instantiate(SigningMember member, Context<Member> context,
                                ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
@@ -152,8 +156,12 @@ public class AbstractDhtTest {
                                                                   exec);
         routers.put(member, router);
         dhts.put(member,
-                 new KerlDHT(Duration.ofMillis(5), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                             exec, Duration.ofSeconds(10),
+                 new KerlDHT(Duration.ofMillis(5), context, member, wrap(), connectionPool, DigestAlgorithm.DEFAULT,
+                             router, exec, Duration.ofSeconds(10),
                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
+    }
+
+    protected Function<KERL, KERL> wrap() {
+        return k -> k;
     }
 }
