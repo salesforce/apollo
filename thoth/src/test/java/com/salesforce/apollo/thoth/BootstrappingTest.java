@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.mock;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -40,6 +42,7 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.thoth.KerlDHT.CompletionException;
 
 /**
  * @author hal.hildebrand
@@ -99,6 +102,13 @@ public class BootstrappingTest extends AbstractDhtTest {
 
         // Verify client KERL not published
         assertNull(kerl.getKeyEvent(client.getEvent().getCoordinates()).get());
+
+        // Verify we can't publish without correct validation
+        try {
+            dhts.values().stream().findFirst().get().append(client.getEvent().toKeyEvent_()).get();
+        } catch (ExecutionException e) {
+            assertEquals(CompletionException.class, e.getCause().getClass());
+        }
 
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
