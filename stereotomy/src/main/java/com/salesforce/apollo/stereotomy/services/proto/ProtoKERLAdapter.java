@@ -55,7 +55,10 @@ public class ProtoKERLAdapter implements ProtoKERLService {
             attachments.add(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
                                                                      ewa.attachments()));
         });
-        return kerl.append(events, attachments).thenApply(l -> l.stream().map(ks -> ks.toKeyState_()).toList());
+        return kerl.append(events, attachments)
+                   .thenApply(l -> l.stream()
+                                    .map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_())
+                                    .toList());
     }
 
     @Override
@@ -65,7 +68,10 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         for (KeyEvent event : keyEventList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList()) {
             events[i++] = event;
         }
-        return kerl.append(events).thenApply(l -> l.stream().map(ks -> ks.toKeyState_()).toList());
+        return kerl.append(events)
+                   .thenApply(l -> l.stream()
+                                    .map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_())
+                                    .toList());
     }
 
     @Override
@@ -101,7 +107,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     @Override
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         return kerl.getAttachment(EventCoordinates.from(coordinates))
-                   .thenApply(attch -> attch == null ? null : attch.toAttachemente());
+                   .thenApply(attch -> attch == null ? Attachment.getDefaultInstance() : attch.toAttachemente());
     }
 
     public DigestAlgorithm getDigestAlgorithm() {
@@ -110,36 +116,39 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
-        return kerl.kerl(Identifier.from(identifier)).thenApply(kerl -> kerl == null ? null : kerl(kerl));
+        return kerl.kerl(Identifier.from(identifier))
+                   .thenApply(kerl -> kerl == null ? KERL_.getDefaultInstance() : kerl(kerl));
     }
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
         return kerl.getKeyEvent(EventCoordinates.from(coordinates))
-                   .thenApply(event -> event == null ? null : event.toKeyEvent_());
+                   .thenApply(event -> event == null ? KeyEvent_.getDefaultInstance() : event.toKeyEvent_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
         return kerl.getKeyState(EventCoordinates.from(coordinates))
-                   .thenApply(ks -> ks == null ? null : ks.toKeyState_());
+                   .thenApply(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-        return kerl.getKeyState(Identifier.from(identifier)).thenApply(ks -> ks == null ? null : ks.toKeyState_());
+        return kerl.getKeyState(Identifier.from(identifier))
+                   .thenApply(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_());
     }
 
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
         return kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
-                   .thenApply(ksa -> ksa == null ? null : ksa.toEvente());
+                   .thenApply(ksa -> ksa == null ? KeyStateWithAttachments_.getDefaultInstance() : ksa.toEvente());
     }
 
     @Override
     public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
         return kerl.getKeyStateWithEndorsementsAndValidations(EventCoordinates.from(coordinates))
-                   .thenApply(ks -> ks.toKS());
+                   .thenApply(ks -> ks == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance()
+                                               : ks.toKS());
     }
 
     @Override

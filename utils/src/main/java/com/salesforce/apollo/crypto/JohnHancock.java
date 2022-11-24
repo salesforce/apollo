@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
@@ -28,6 +29,7 @@ import com.salesforce.apollo.utils.Hex;
  *
  */
 public class JohnHancock {
+    private static final Logger log = LoggerFactory.getLogger(JohnHancock.class);
 
     public static JohnHancock from(Sig signature) {
         return new JohnHancock(signature);
@@ -143,8 +145,8 @@ public class JohnHancock {
 
     public boolean verify(SigningThreshold threshold, PublicKey[] keys, InputStream input) {
         if (keys.length != bytes.length) {
-            throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
-                                                             keys.length));
+            log.warn("Have {} signatures and provided {} keys", bytes.length, keys.length);
+            return false;
         }
 
         var message = new BufferedInputStream(input);

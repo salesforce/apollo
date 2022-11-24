@@ -105,6 +105,9 @@ public class Maat extends DelegatedKERL {
             return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(e -> {
                 log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(),
                           validations.size(), mapped.size());
+                if (mapped.size() == 0) {
+                    return false;
+                }
                 var validating = new PublicKey[mapped.size()];
                 byte[][] signatures = new byte[mapped.size()][];
 

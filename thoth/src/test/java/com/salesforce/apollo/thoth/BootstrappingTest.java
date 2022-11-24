@@ -9,19 +9,22 @@ package com.salesforce.apollo.thoth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
@@ -50,28 +53,39 @@ import com.salesforce.apollo.thoth.KerlDHT.CompletionException;
  */
 public class BootstrappingTest extends AbstractDhtTest {
 
-    @Test
+    private AtomicBoolean gate;
+
+    @BeforeEach
+    public void beforeIt() {
+        gate = new AtomicBoolean(false);
+    }
+
+//    @Test
     public void smokin() throws Exception {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
+                                                                              Thread.ofVirtual().factory());
+        routers.values().forEach(r -> r.start());
+        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
 
-        // The kerl observer to publish admitted client KERLs to
-        var observer = new DirectPublisher(new ProtoKERLAdapter(kerl));
+        identities.entrySet().forEach(e -> {
+            try {
+                dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent().get());
+            } catch (InterruptedException | ExecutionException e1) {
+                fail(e1.toString());
+            }
+        });
 
-        final var parameters = Parameters.newBuilder().setKerl(kerl).build();
+        gate.set(true);
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
         @SuppressWarnings("unused")
-        final var gorgons = dhts.keySet().stream().map(m -> {
-            final var router = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                       exec);
-            router.start();
-            return router;
-        })
-                                .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getFrom(), context,
-                                                         observer, r,
-                                                         Executors.newScheduledThreadPool(2,
-                                                                                          Thread.ofVirtual().factory()),
-                                                         null, exec))
-                                .toList();
+        final var gorgons = routers.values().stream().map(r -> {
+            var k = dhts.get(r.getFrom()).asKERL();
+            return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
+                                  context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
+                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
+        }).toList();
 
+        final KERL testKerl = dhts.values().stream().findFirst().get().asKERL();
         var entropy = new SecureRandom();
         var clientKerl = new MemKERL(DigestAlgorithm.DEFAULT);
         var clientStereotomy = new StereotomyImpl(new MemKeyStore(), clientKerl, entropy);
@@ -101,30 +115,34 @@ public class BootstrappingTest extends AbstractDhtTest {
         };
 
         // Verify client KERL not published
-        assertNull(kerl.getKeyEvent(client.getEvent().getCoordinates()).get());
-
-        // Verify we can't publish without correct validation
         try {
-            dhts.values().stream().findFirst().get().append(client.getEvent().toKeyEvent_()).get();
+            testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
         } catch (ExecutionException e) {
             assertEquals(CompletionException.class, e.getCause().getClass());
         }
 
-        var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
+        // Verify we can't publish without correct validation
+        try {
+            testKerl.append(client.getEvent()).get();
+        } catch (ExecutionException e) {
+            assertEquals(CompletionException.class, e.getCause().getClass());
+        }
+
+        var gorgoneionClient = new GorgoneionClient(client, attester, Clock.systemUTC(), admin);
 
         final var apply = gorgoneionClient.apply(Duration.ofSeconds(60));
-        var invitation = apply.get(300, TimeUnit.SECONDS);
+        var invitation = apply.get(3, TimeUnit.SECONDS);
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
 
         // Verify client KERL published
-        var ks = kerl.getKeyEvent(client.getEvent().getCoordinates()).get();
+        var ks = testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
         assertNotNull(ks);
     }
 
     @Override
     protected Function<KERL, KERL> wrap() {
-        return k -> new Maat(context, k);
+        return k -> gate.get() ? new Maat(context, k) : k;
     }
 }
