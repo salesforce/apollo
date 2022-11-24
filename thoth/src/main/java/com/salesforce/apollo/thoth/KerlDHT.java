@@ -841,7 +841,7 @@ public class KerlDHT implements ProtoKERLService {
                               .orElse(null);
             if (max != null) {
                 tally.set(max.getCount());
-                if (max.getCount() >= context.toleranceLevel()) {
+                if (max.getCount() > context.toleranceLevel()) {
                     result.complete(max.getElement());
                     log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier,
                               member.getId());

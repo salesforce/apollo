@@ -69,7 +69,7 @@ public class BootstrappingTest extends AbstractDhtTest {
 
         identities.entrySet().forEach(e -> {
             try {
-                dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent().get());
+                dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent().get()).get();
             } catch (InterruptedException | ExecutionException e1) {
                 fail(e1.toString());
             }
