@@ -183,7 +183,10 @@ public class KerlDHT implements ProtoKERLService {
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
             log.info("get key event for coordinates on: {}", member.getId());
-            return complete(k -> k.getKeyEvent(coordinates));
+            final Function<ProtoKERLAdapter, CompletableFuture<KeyEvent_>> func = k -> {
+                return k.getKeyEvent(coordinates);
+            };
+            return complete(func);
         }
 
         @Override

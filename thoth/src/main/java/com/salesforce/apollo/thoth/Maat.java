@@ -70,7 +70,7 @@ public class Maat extends DelegatedKERL {
                 } catch (InterruptedException e1) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e1) {
-                    log.debug("error validating: {}", est.getCoordinates(), e1.getCause());
+                    log.error("error validating: {}", est.getCoordinates(), e1.getCause());
                     return false;
                 }
             }
@@ -95,6 +95,9 @@ public class Maat extends DelegatedKERL {
 
         return delegate.getValidations(event.getCoordinates()).thenCompose(validations -> {
             var futures = validations.entrySet().stream().map(e -> delegate.getKeyEvent(e.getKey()).thenApply(ev -> {
+                if (ev == null) {
+                    return null;
+                }
                 var evnt = (EstablishmentEvent) ev;
                 if ((evnt.getIdentifier() instanceof SelfAddressingIdentifier sai &&
                      successors.contains(sai.getDigest()))) {
@@ -106,6 +109,7 @@ public class Maat extends DelegatedKERL {
                 log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(),
                           validations.size(), mapped.size());
                 if (mapped.size() == 0) {
+                    log.warn("No validations of: {} ", event.getCoordinates());
                     return false;
                 }
                 var validating = new PublicKey[mapped.size()];
@@ -122,6 +126,7 @@ public class Maat extends DelegatedKERL {
                                                 signatures).verify(SigningThreshold.unweighted(context.majority()),
                                                                    validating,
                                                                    BbBackedInputStream.aggregate(serialized));
+                log.trace("Validated: {} for: {}  ", validated, event.getCoordinates());
                 return validated;
             });
         });

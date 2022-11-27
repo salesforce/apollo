@@ -127,8 +127,8 @@
         <addForeignKeyConstraint
             onDelete="CASCADE" baseColumnNames="for"
             baseTableName="receipt" baseTableSchemaName="stereotomy"
-            constraintName="receipt_for_fk" referencedTableName="event"
-            referencedColumnNames="coordinates"
+            constraintName="receipt_for_fk" referencedTableName="coordinates"
+            referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
         <createTable tableName="attachment"
@@ -145,8 +145,8 @@
             onDelete="CASCADE" baseColumnNames="for"
             baseTableName="attachment" baseTableSchemaName="stereotomy"
             constraintName="attachment_for_fk"
-            referencedTableName="event"
-            referencedColumnNames="coordinates"
+            referencedTableName="coordinates"
+            referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
         <addUniqueConstraint columnNames="for, seal"
@@ -170,8 +170,8 @@
         <addForeignKeyConstraint
             onDelete="CASCADE" baseColumnNames="for"
             baseTableName="validation" baseTableSchemaName="stereotomy"
-            constraintName="validation_for_fk" referencedTableName="event"
-            referencedColumnNames="coordinates"
+            constraintName="validation_for_fk" referencedTableName="coordinates"
+            referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
     </changeSet>
