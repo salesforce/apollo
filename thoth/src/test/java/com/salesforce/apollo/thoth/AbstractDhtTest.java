@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -161,7 +161,7 @@ public class AbstractDhtTest {
                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
     }
 
-    protected Function<KERL, KERL> wrap() {
-        return k -> k;
+    protected BiFunction<KerlDHT, KERL, KERL> wrap() {
+        return (t, k) -> k;
     }
 }

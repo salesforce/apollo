@@ -68,12 +68,9 @@ abstract public class UniKERL implements KERL {
         var coordinates = attachment.coordinates();
         final var identBytes = coordinates.getIdentifier().toIdent().toByteArray();
 
-        dsl.mergeInto(IDENTIFIER)
-           .using(dsl.selectOne())
-           .on(IDENTIFIER.PREFIX.eq(identBytes))
-           .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
-           .values(identBytes)
-           .execute();
+        var ident = dsl.newRecord(IDENTIFIER);
+        ident.setPrefix(identBytes);
+        ident.merge();
 
         Record1<Long> id;
         try {
@@ -231,12 +228,16 @@ abstract public class UniKERL implements KERL {
                                          Map<EventCoordinates, JohnHancock> validations) {
         final var identBytes = coordinates.getIdentifier().toIdent().toByteArray();
 
-        dsl.mergeInto(IDENTIFIER)
-           .using(dsl.selectOne())
-           .on(IDENTIFIER.PREFIX.eq(identBytes))
-           .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
-           .values(identBytes)
-           .execute();
+        try {
+            dsl.mergeInto(IDENTIFIER)
+               .using(dsl.selectOne())
+               .on(IDENTIFIER.PREFIX.eq(identBytes))
+               .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
+               .values(identBytes)
+               .execute();
+        } catch (DataAccessException e) {
+            log.trace("Duplicate inserting identifier: {}", coordinates.getIdentifier());
+        }
 
         Record1<Long> id;
         try {

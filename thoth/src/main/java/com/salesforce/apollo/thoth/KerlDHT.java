@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -256,6 +257,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private final Ani                                                         ani;
+    private final KERL                                                        cache;
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
     private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
@@ -275,16 +277,17 @@ public class KerlDHT implements ProtoKERLService {
     private final TemporalAmount                                              timeout;
     private final AtomicReference<ValidatorView>                              view           = new AtomicReference<>();
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, Function<KERL, KERL> wrap,
-                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
-                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
-                   double falsePositiveRate, StereotomyMetrics metrics) {
+    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member,
+                   BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
+                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
+                   ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
         this.fpr = falsePositiveRate;
         this.frequency = frequency;
         this.scheduler = scheduler;
+        this.cache = new CachingKERL(f -> f.apply(new KERLAdapter(this, digestAlgorithm())));
         dhtComms = communications.create(member, context.getId(), service, service.getClass().getCanonicalName(),
                                          r -> new DhtServer(r, metrics), DhtClient.getCreate(metrics),
                                          DhtClient.getLocalLoopback(service, member));
@@ -304,7 +307,7 @@ public class KerlDHT implements ProtoKERLService {
         initializeSchema();
         kerl = new CachingKERL(f -> {
             try (var k = kerlPool.create()) {
-                return f.apply(wrap.apply(k));
+                return f.apply(wrap.apply(this, k));
             } catch (Throwable e) {
                 return completeExceptionally(e);
             }
@@ -317,8 +320,8 @@ public class KerlDHT implements ProtoKERLService {
     public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                    ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
-        this(frequency, context, member, k -> k, connectionPool, digestAlgorithm, communications, executor, timeout,
-             scheduler, falsePositiveRate, metrics);
+        this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor,
+             timeout, scheduler, falsePositiveRate, metrics);
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
@@ -466,7 +469,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public KERL asKERL() {
-        return new CachingKERL(f -> f.apply(new KERLAdapter(this, digestAlgorithm())));
+        return cache;
     }
 
     public DigestAlgorithm digestAlgorithm() {

@@ -43,10 +43,12 @@ public class Maat extends DelegatedKERL {
     private static Logger log = LoggerFactory.getLogger(Maat.class);
 
     private final Context<Member> context;
+    private final KERL            validators;
 
-    public Maat(Context<Member> context, KERL delegate) {
+    public Maat(Context<Member> context, KERL delegate, KERL validators) {
         super(delegate);
         this.context = context;
+        this.validators = validators;
     }
 
     @Override
@@ -62,7 +64,7 @@ public class Maat extends DelegatedKERL {
 
     @Override
     public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
-        return super.append(events.stream().filter(e -> {
+        final List<KeyEvent> filtered = events.stream().filter(e -> {
             if (e instanceof EstablishmentEvent est &&
                 est.getCoordinates().getSequenceNumber().equals(ULong.valueOf(0))) {
                 try {
@@ -75,7 +77,8 @@ public class Maat extends DelegatedKERL {
                 }
             }
             return true;
-        }).toList(), attachments);
+        }).toList();
+        return filtered.isEmpty() && attachments.isEmpty() ? emptyFutureList() : super.append(filtered, attachments);
     }
 
     public CompletableFuture<Boolean> validate(EstablishmentEvent event) {
@@ -94,7 +97,7 @@ public class Maat extends DelegatedKERL {
         final ByteString serialized = event.toKeyEvent_().toByteString();
 
         return delegate.getValidations(event.getCoordinates()).thenCompose(validations -> {
-            var futures = validations.entrySet().stream().map(e -> delegate.getKeyEvent(e.getKey()).thenApply(ev -> {
+            var futures = validations.entrySet().stream().map(e -> validators.getKeyEvent(e.getKey()).thenApply(ev -> {
                 if (ev == null) {
                     return null;
                 }
@@ -126,10 +129,17 @@ public class Maat extends DelegatedKERL {
                                                 signatures).verify(SigningThreshold.unweighted(context.majority()),
                                                                    validating,
                                                                    BbBackedInputStream.aggregate(serialized));
-                log.trace("Validated: {} for: {}  ", validated, event.getCoordinates());
+                log.trace("Validated: {} mapped: {} required: {} for: {}  ", validated, mapped.size(),
+                          context.majority(), event.getCoordinates());
                 return validated;
             });
         });
+    }
+
+    private CompletableFuture<List<KeyState>> emptyFutureList() {
+        var fs = new CompletableFuture<List<KeyState>>();
+        fs.complete(Collections.emptyList());
+        return fs;
     }
 
 }

@@ -55,6 +55,10 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
+    <logger name="com.salesforce.apollo.gorgoneion" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
     <root level="INFO">
         <appender-ref ref="STDOUT" />
     </root>

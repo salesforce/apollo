@@ -42,7 +42,7 @@ public class MaatTest {
         for (int i = 0; i < 4; i++) {
             context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier().get()));
         }
-        var maat = new Maat(context, kerl_);
+        var maat = new Maat(context, kerl_, kerl_);
 
         var specification = IdentifierSpecification.newBuilder();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);

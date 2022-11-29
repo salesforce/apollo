@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -131,7 +132,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         var gorgoneionClient = new GorgoneionClient(client, attester, Clock.systemUTC(), admin);
 
         final var apply = gorgoneionClient.apply(Duration.ofSeconds(60));
-        var invitation = apply.get(3, TimeUnit.SECONDS);
+        var invitation = apply.get(3000, TimeUnit.SECONDS);
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
@@ -142,7 +143,7 @@ public class BootstrappingTest extends AbstractDhtTest {
     }
 
     @Override
-    protected Function<KERL, KERL> wrap() {
-        return k -> gate.get() ? new Maat(context, k) : k;
+    protected BiFunction<KerlDHT, KERL, KERL> wrap() {
+        return (t, k) -> gate.get() ? new Maat(context, k, t.asKERL()) : k;
     }
 }
