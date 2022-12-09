@@ -9,9 +9,13 @@ package com.salesforce.apollo.gorgoneion;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -66,7 +70,7 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
+ * 
  */
 public class Gorgoneion {
     private class Admit implements AdmissionsService {
@@ -355,6 +359,19 @@ public class Gorgoneion {
 
     private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
+    public static List<Member> validators(final Context<Member> context, Digest digest) {
+        Set<Member> post = new HashSet<>();
+        context.successors(digest, m -> {
+            if (post.size() == context.getRingCount()) {
+                return false;
+            }
+            return post.add(m);
+        });
+        var successors = new ArrayList<>(post);
+        successors.sort(Comparator.naturalOrder());
+        return successors;
+    }
+
     @SuppressWarnings("unused")
     private final CommonCommunications<Admissions, AdmissionsService>   admissionsComm;
     private final Context<Member>                                       context;
@@ -363,7 +380,8 @@ public class Gorgoneion {
     private final ControlledIdentifierMember                            member;
     private final ProtoEventObserver                                    observer;
     private final Parameters                                            parameters;
-    private final ScheduledExecutorService                              scheduler;
+
+    private final ScheduledExecutorService scheduler;
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
                       ProtoEventObserver observer, Router router, ScheduledExecutorService scheduler,
@@ -490,12 +508,12 @@ public class Gorgoneion {
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
 
-        var successors = context.successors(digestOf(ident, parameters.digestAlgorithm()));
+        var successors = validators(context, digestOf(ident, parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
         var endorsements = new HashSet<MemberSignature>();
         redirecting.iterate((link, m) -> {
-            log.debug("Validating nonce for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
+            log.debug("Generating nonce for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
                       member.getId());
             return link.endorse(nonce, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeEndorsement(futureSailor, m, endorsements), () -> {
@@ -511,6 +529,8 @@ public class Gorgoneion {
                                               .setNonce(nonce)
                                               .addAllSignatures(endorsements)
                                               .build());
+                log.debug("Generated nonce for: {} signatures: {} on: {}", identifier, endorsements.size(),
+                          member.getId());
             }
         }, scheduler, parameters.frequency());
         return generated;
@@ -538,7 +558,7 @@ public class Gorgoneion {
                                        .setValidations(validations)
                                        .build();
 
-        var successors = context.successors(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = validators(context, digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm, exec);
         var completed = new HashSet<Member>();
@@ -563,10 +583,12 @@ public class Gorgoneion {
             invited.completeExceptionally(new IllegalArgumentException("No identifier"));
             return invited;
         }
+        log.debug("Validating credentials for: {} nonce signatures: {} on: {}", identifier,
+                  request.getNonce().getSignaturesCount(), member.getId());
 
         var validated = new CompletableFuture<Validations>();
 
-        var successors = context.successors(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = validators(context, digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm,
                                                     exec);
@@ -584,6 +606,8 @@ public class Gorgoneion {
                                               - 1)).event().getCoordinates().toEventCoords())
                                               .addAllValidations(verifications)
                                               .build());
+                log.debug("Validated credentials for: {} verifications: {} on: {}", identifier, verifications.size(),
+                          member.getId());
             }
         }, scheduler, parameters.frequency());
         return validated.thenCompose(v -> notarize(request, v, invited));

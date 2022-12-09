@@ -61,7 +61,7 @@ public class MaatTest {
         var inceptionState = maat.append(inception).get();
         assertNull(inceptionState, "Should not have succeeded appending of test event");
 
-        kerl_.appendValidations(inception.getCoordinates(), validations);
+        kerl_.appendValidations(inception.getCoordinates(), validations).get();
 
         inceptionState = maat.append(inception).get();
         assertNotNull(inceptionState, "Should have succeeded appending of test event");

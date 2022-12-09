@@ -24,6 +24,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.gorgoneion.Gorgoneion;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
@@ -43,7 +44,8 @@ public class Maat extends DelegatedKERL {
     private static Logger log = LoggerFactory.getLogger(Maat.class);
 
     private final Context<Member> context;
-    private final KERL            validators;
+
+    private final KERL validators;
 
     public Maat(Context<Member> context, KERL delegate, KERL validators) {
         super(delegate);
@@ -90,7 +92,8 @@ public class Maat extends DelegatedKERL {
             fs.complete(false);
             return fs;
         }
-        var successors = context.successors(digest).stream().map(m -> m.getId()).collect(Collectors.toSet());
+        final Context<Member> ctx = context;
+        var successors = Gorgoneion.validators(ctx, digest).stream().map(m -> m.getId()).collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<validator>();
@@ -125,12 +128,11 @@ public class Maat extends DelegatedKERL {
                 }
 
                 var algo = SignatureAlgorithm.lookup(validating[0]);
-                var validated = new JohnHancock(algo,
-                                                signatures).verify(SigningThreshold.unweighted(context.majority()),
-                                                                   validating,
-                                                                   BbBackedInputStream.aggregate(serialized));
-                log.trace("Validated: {} mapped: {} required: {} for: {}  ", validated, mapped.size(),
-                          context.majority(), event.getCoordinates());
+                var validated = new JohnHancock(algo, signatures).verify(SigningThreshold.unweighted(ctx.majority()),
+                                                                         validating,
+                                                                         BbBackedInputStream.aggregate(serialized));
+                log.trace("Validated: {} mapped: {} required: {} for: {}  ", validated, mapped.size(), ctx.majority(),
+                          event.getCoordinates());
                 return validated;
             });
         });
