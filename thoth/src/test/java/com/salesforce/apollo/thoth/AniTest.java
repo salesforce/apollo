@@ -52,7 +52,7 @@ public class AniTest extends AbstractDhtTest {
     public void singleAni() throws Exception {
         var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[] { 7, 7, 7 });
 
         SigningThreshold threshold = SigningThreshold.unweighted(3);
 
@@ -131,7 +131,7 @@ public class AniTest extends AbstractDhtTest {
     public void smokin() throws Exception {
         var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[] { 7, 7, 7 });
 
         SigningThreshold threshold = SigningThreshold.unweighted(0);
         routers.values().forEach(lr -> lr.start());
@@ -168,7 +168,7 @@ public class AniTest extends AbstractDhtTest {
     public void threshold() throws Exception {
         var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[] { 7, 7, 7 });
 
         SigningThreshold threshold = SigningThreshold.unweighted(3);
         routers.values().forEach(lr -> lr.start());

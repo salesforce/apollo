@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
+import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -496,12 +497,12 @@ public class KerlDHT implements ProtoKERLService {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
                                     .iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, identifier,
                                                                    isTimedOut, destination, "get attachment",
                                                                    Attachment.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -521,12 +522,12 @@ public class KerlDHT implements ProtoKERLService {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
                                     .iterate(digest, null, (link, r) -> link.getKERL(identifier),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination, "get kerl",
                                                                    KERL_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -546,12 +547,12 @@ public class KerlDHT implements ProtoKERLService {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
                                     .iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination, "get key event",
                                                                    KeyEvent_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -571,13 +572,13 @@ public class KerlDHT implements ProtoKERLService {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).noDuplicates()
                                     .iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor, destination) -> read(result, gathered, tally,
                                                                                         futureSailor, digest,
                                                                                         isTimedOut, destination,
                                                                                         "get key state for coordinates",
                                                                                         KeyState_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -596,12 +597,12 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyState(identifier),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination, "get current key state",
                                                                    KeyState_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -620,13 +621,13 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination,
                                                                    "get key state with attachments",
                                                                    KeyStateWithAttachments_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -646,13 +647,13 @@ public class KerlDHT implements ProtoKERLService {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null,
                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                    isTimedOut, destination,
                                                                    "get key state with endorsements",
                                                                    KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
     }
 
@@ -671,13 +672,17 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<Validations> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
-                                             () -> completeExceptionally(result),
+                                             () -> failedMajority(result, max(gathered).getCount()),
                                              (tally, futureSailor,
                                               destination) -> read(result, gathered, tally, futureSailor, identifier,
                                                                    isTimedOut, destination, "get validations",
                                                                    Validations.getDefaultInstance()),
-                                             t -> completeExceptionally(result));
+                                             t -> failedMajority(result, max(gathered).getCount()));
         return result;
+    }
+
+    public <T> Entry<T> max(HashMultiset<T> gathered) {
+        return gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
     }
 
     public void start(ScheduledExecutorService scheduler, Duration duration) {
@@ -701,10 +706,6 @@ public class KerlDHT implements ProtoKERLService {
         return func.apply(new ProtoKERLAdapter(kerl));
     }
 
-    private boolean completeExceptionally(CompletableFuture<?> result) {
-        return result.completeExceptionally(new CompletionException("Unable to achieve majority read"));
-    }
-
     private <T> void completeIt(CompletableFuture<T> result, HashMultiset<T> gathered) {
         var max = gathered.entrySet()
                           .stream()
@@ -716,7 +717,13 @@ public class KerlDHT implements ProtoKERLService {
                 return;
             }
         }
-        result.completeExceptionally(new CompletionException("Unable to achieve majority write"));
+        result.completeExceptionally(new CompletionException("Unable to achieve majority, max: " + max.getCount()
+        + " required: " + context.majority() + " on: " + member.getId()));
+    }
+
+    private boolean failedMajority(CompletableFuture<?> result, int maxAgree) {
+        return result.completeExceptionally(new CompletionException("Unable to achieve majority read, max: " + maxAgree
+        + " required: " + context.majority() + " on: " + member.getId()));
     }
 
     private void initializeSchema() {
@@ -841,10 +848,7 @@ public class KerlDHT implements ProtoKERLService {
         if (content != null) {
             log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
             gathered.add(content);
-            var max = gathered.entrySet()
-                              .stream()
-                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
-                              .orElse(null);
+            var max = max(gathered);
             if (max != null) {
                 tally.set(max.getCount());
                 if (max.getCount() > context.toleranceLevel()) {

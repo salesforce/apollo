@@ -8,12 +8,12 @@ package com.salesforce.apollo.ring;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -38,9 +38,10 @@ public class SliceIterator<Comm extends Link> {
         boolean handle(Optional<ListenableFuture<T>> futureSailor, Comm communications, Member member);
     }
 
-    private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
+    private static final Logger                 log = LoggerFactory.getLogger(SliceIterator.class);
     private final CommonCommunications<Comm, ?> comm;
-    private AtomicInteger                       current = new AtomicInteger(0);
+    private Member                              current;
+    private Iterator<? extends Member>          currentIteration;
     private final Executor                      exec;
     private final String                        label;
     private final SigningMember                 member;
@@ -55,6 +56,8 @@ public class SliceIterator<Comm extends Link> {
         this.comm = comm;
         this.exec = exec;
         Entropy.secureShuffle(slice);
+        this.currentIteration = slice.iterator();
+        log.info("Slice: {}", slice.stream().map(m -> m.getId()).toList());
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,
@@ -72,23 +75,18 @@ public class SliceIterator<Comm extends Link> {
                                      ScheduledExecutorService scheduler, Duration frequency) {
         Runnable proceed = () -> internalIterate(round, handler, onComplete, scheduler, frequency);
 
-        boolean finalIteration = current.get() % slice.size() >= slice.size() - 1;
-
-        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete, scheduler, frequency);
+        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, scheduler, frequency);
         try (Comm link = next()) {
             if (link == null) {
-                log.trace("No link found on: {} member: {}  on: {}", label, slice.get(current.get()), member);
-                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current.get()));
-                allowed.accept(allow);
+                allowed.accept(handler.handle(Optional.empty(), link, slice.get(slice.size() - 1)));
                 return;
             }
-            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.get(), link.getMember(), member);
+            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(), member);
             ListenableFuture<T> futureSailor = round.apply(link, link.getMember());
             if (futureSailor == null) {
-                log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.get(),
+                log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.getId(),
                           link.getMember(), member);
-                final boolean allow = handler.handle(Optional.empty(), link, link.getMember());
-                allowed.accept(allow);
+                allowed.accept(handler.handle(Optional.empty(), link, link.getMember()));
                 return;
             }
             futureSailor.addListener(Utils.wrapped(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
@@ -100,38 +98,30 @@ public class SliceIterator<Comm extends Link> {
         }
     }
 
-    private Comm linkFor(int index) {
+    private Comm linkFor(Member m) {
         try {
-            return comm.connect(slice.get(index));
+            return comm.connect(m);
         } catch (Throwable e) {
-            log.error("error opening connection to {}: {}", slice.get(index).getId(),
+            log.error("error opening connection to {}: {}", m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;
     }
 
     private Comm next() {
-        Comm link = null;
-        int c = (current.get() + 1) % slice.size();
-        for (int i = 0; i < slice.size(); i++) {
-            if (c == 0) {
-                Entropy.secureShuffle(slice);
-            }
-            link = linkFor(c);
-            if (link != null) {
-                break;
-            }
-            current.set((c + 1) % slice.size());
+        if (!currentIteration.hasNext()) {
+            Entropy.secureShuffle(slice);
+            currentIteration = slice.iterator();
         }
-        current.set(c);
-        return link;
+        current = currentIteration.next();
+        return linkFor(current);
     }
 
-    private void proceed(final boolean allow, Runnable proceed, boolean finalIteration, Runnable onComplete,
-                         ScheduledExecutorService scheduler, Duration frequency) {
-        log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, finalIteration, allow,
-                  member);
-        if (finalIteration && allow) {
+    private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, ScheduledExecutorService scheduler,
+                         Duration frequency) {
+        log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, !currentIteration.hasNext(),
+                  allow, member);
+        if (!currentIteration.hasNext() && allow) {
             log.trace("Final iteration of: {} on: {}", label, member);
             if (onComplete != null) {
                 log.trace("Completing iteration for: {} on: {}", label, member);
