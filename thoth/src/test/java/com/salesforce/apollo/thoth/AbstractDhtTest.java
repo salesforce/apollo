@@ -151,7 +151,7 @@ public class AbstractDhtTest {
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
-        connectionPool.setMaxConnections(2);
+        connectionPool.setMaxConnections(10);
         var router = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
                                                                   exec);
         routers.put(member, router);

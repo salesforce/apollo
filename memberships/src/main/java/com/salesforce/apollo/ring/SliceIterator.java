@@ -57,7 +57,7 @@ public class SliceIterator<Comm extends Link> {
         this.exec = exec;
         Entropy.secureShuffle(slice);
         this.currentIteration = slice.iterator();
-        log.info("Slice: {}", slice.stream().map(m -> m.getId()).toList());
+        log.debug("Slice: {}", slice.stream().map(m -> m.getId()).toList());
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,

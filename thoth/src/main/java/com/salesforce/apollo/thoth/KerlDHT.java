@@ -717,8 +717,8 @@ public class KerlDHT implements ProtoKERLService {
                 return;
             }
         }
-        result.completeExceptionally(new CompletionException("Unable to achieve majority, max: " + max.getCount()
-        + " required: " + context.majority() + " on: " + member.getId()));
+        result.completeExceptionally(new CompletionException("Unable to achieve majority, max: "
+        + (max == null ? 0 : max.getCount()) + " required: " + context.majority() + " on: " + member.getId()));
     }
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree) {
