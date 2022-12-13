@@ -373,6 +373,7 @@ public class Gorgoneion {
         });
         var successors = new ArrayList<>(post);
         successors.sort(Comparator.naturalOrder());
+        log.info("Validators: {} for: {}", successors.stream().map(m -> m.getId()).toList(), digest);
         return successors;
     }
 
@@ -490,10 +491,8 @@ public class Gorgoneion {
     }
 
     private CompletableFuture<Empty> enroll(Notarization request) {
-        var fs = new CompletableFuture<Empty>();
-        observer.publish(request.getKerl(), Collections.singletonList(request.getValidations()));
-        fs.complete(Empty.getDefaultInstance());
-        return fs;
+        return observer.publish(request.getKerl(), Collections.singletonList(request.getValidations()))
+                       .thenApply(v -> Empty.getDefaultInstance());
     }
 
     private CompletableFuture<SignedNonce> generateNonce(KERL_ application) {
@@ -619,12 +618,16 @@ public class Gorgoneion {
     }
 
     private CompletableFuture<Validation_> validate(Credentials credentials) {
-        var event = credentials.getAttestation().getAttestation().getKerl().getEvents(0).getInception();
-        log.info("Validating credentials for: {} on: {}", Identifier.from(event.getIdentifier()), member.getId());
+        var event = (com.salesforce.apollo.stereotomy.event.InceptionEvent) ProtobufEventFactory.from(credentials.getAttestation()
+                                                                                                                 .getAttestation()
+                                                                                                                 .getKerl()
+                                                                                                                 .getEvents(0))
+                                                                                                .event();
+        log.info("Validating credentials for: {} on: {}", event.getIdentifier(), member.getId());
         return member.getIdentifier().getSigner().thenApply(signer -> {
             return Validation_.newBuilder()
                               .setValidator(member.getIdentifier().getCoordinates().toEventCoords())
-                              .setSignature(signer.sign(event.toByteString()).toSig())
+                              .setSignature(signer.sign(event.getBytes()).toSig())
                               .build();
         });
     }

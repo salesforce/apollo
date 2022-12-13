@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.thoth;
 
-import java.security.PublicKey;
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -19,11 +20,9 @@ import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.gorgoneion.Gorgoneion;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -34,7 +33,6 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -93,21 +91,31 @@ public class Maat extends DelegatedKERL {
             return fs;
         }
         final Context<Member> ctx = context;
-        var successors = Gorgoneion.validators(ctx, digest).stream().map(m -> m.getId()).collect(Collectors.toSet());
+        var successors = Gorgoneion.validators(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
+                                   .stream()
+                                   .map(m -> m.getId())
+                                   .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<validator>();
-        final ByteString serialized = event.toKeyEvent_().toByteString();
+        final var serialized = event.getBytes();
 
         return delegate.getValidations(event.getCoordinates()).thenCompose(validations -> {
             var futures = validations.entrySet().stream().map(e -> validators.getKeyEvent(e.getKey()).thenApply(ev -> {
                 if (ev == null) {
                     return null;
                 }
-                var evnt = (EstablishmentEvent) ev;
-                if ((evnt.getIdentifier() instanceof SelfAddressingIdentifier sai &&
-                     successors.contains(sai.getDigest()))) {
-                    mapped.add(new validator(evnt, e.getValue()));
+                var signer = (EstablishmentEvent) ev;
+                if ((signer.getIdentifier() instanceof SelfAddressingIdentifier sai)) {
+                    if (!successors.contains(sai.getDigest())) {
+                        log.warn("Signature: {} not successor of: {} ", signer.getCoordinates(),
+                                 event.getCoordinates());
+                    }
+                    mapped.add(new validator(signer, e.getValue()));
+                    log.warn("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
+                } else {
+                    log.warn("Signature not SAI: {} for: {}", signer.getCoordinates(), event.getCoordinates(),
+                             event.getCoordinates());
                 }
                 return event;
             })).toList();
@@ -118,21 +126,21 @@ public class Maat extends DelegatedKERL {
                     log.warn("No validations of: {} ", event.getCoordinates());
                     return false;
                 }
-                var validating = new PublicKey[mapped.size()];
-                byte[][] signatures = new byte[mapped.size()][];
 
-                int index = 0;
+                var verified = 0;
                 for (var r : mapped) {
-                    validating[index] = r.validating.getKeys().get(0);
-                    signatures[index++] = r.signature.getBytes()[0];
+                    var verifier = new DefaultVerifier(r.validating.getKeys().get(0));
+                    if (verifier.verify(r.signature, serialized)) {
+                        verified++;
+                    } else {
+                        log.trace("Cannot verify sig: {} of: {} by: {}", r.signature, event.getCoordinates(),
+                                  r.validating.getIdentifier());
+                    }
                 }
+                var validated = verified >= context.majority();
 
-                var algo = SignatureAlgorithm.lookup(validating[0]);
-                var validated = new JohnHancock(algo, signatures).verify(SigningThreshold.unweighted(ctx.majority()),
-                                                                         validating,
-                                                                         BbBackedInputStream.aggregate(serialized));
-                log.trace("Validated: {} mapped: {} required: {} for: {}  ", validated, mapped.size(), ctx.majority(),
-                          event.getCoordinates());
+                log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified,
+                          mapped.size(), ctx.majority(), event.getCoordinates());
                 return validated;
             });
         });

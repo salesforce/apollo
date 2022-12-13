@@ -10,6 +10,7 @@ package com.salesforce.apollo.thoth;
 import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -129,13 +130,13 @@ public class Ani {
                                .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 } catch (ExecutionException e) {
                     log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 } catch (TimeoutException e) {
                     log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 }
             }
 
@@ -242,13 +243,13 @@ public class Ani {
                                .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 } catch (ExecutionException e) {
                     log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 } catch (TimeoutException e) {
                     log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return new Filtered(false, null);
+                    return new Filtered(false, 0, null);
                 }
             }
 
@@ -412,11 +413,15 @@ public class Ani {
         if (state.getWitnesses().isEmpty()) {
             witnessed = true; // no witnesses for event
         } else {
-            var witnesses = new PublicKey[state.getWitnesses().size()];
+            SignatureAlgorithm algo = null;
+            var witnesses = new HashMap<Integer, PublicKey>();
             for (var i = 0; i < state.getWitnesses().size(); i++) {
-                witnesses[i] = state.getWitnesses().get(i).getPublicKey();
+                final PublicKey publicKey = state.getWitnesses().get(i).getPublicKey();
+                witnesses.put(i, publicKey);
+                if (algo == null) {
+                    algo = SignatureAlgorithm.lookup(publicKey);
+                }
             }
-            var algo = SignatureAlgorithm.lookup(witnesses[0]);
             byte[][] signatures = new byte[state.getWitnesses().size()][];
             if (!ksAttach.endorsements().isEmpty()) {
                 for (var entry : ksAttach.endorsements().entrySet()) {
@@ -447,16 +452,20 @@ public class Ani {
         return last.get().thenApply(o -> {
             log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
                       ksAttach.validations().size(), mapped.size(), member.getId());
-            var validations = new PublicKey[mapped.size()];
+            var validations = new HashMap<Integer, PublicKey>();
             byte[][] signatures = new byte[mapped.size()][];
 
             int index = 0;
+            SignatureAlgorithm algo = null;
             for (var r : mapped) {
-                validations[index] = r.state.getKeys().get(0);
+                final PublicKey publicKey = r.state.getKeys().get(0);
+                validations.put(index, publicKey);
                 signatures[index++] = r.signature.getBytes()[0];
+                if (algo == null) {
+                    algo = SignatureAlgorithm.lookup(publicKey);
+                }
             }
 
-            SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
             var validated = new JohnHancock(algo,
                                             signatures).verify(kerlThreshold.get(), validations,
                                                                BbBackedInputStream.aggregate(event.toKeyEvent_()
@@ -502,11 +511,15 @@ public class Ani {
         if (state.getWitnesses().isEmpty()) {
             witnessed = true; // no witnesses for event
         } else {
-            var witnesses = new PublicKey[state.getWitnesses().size()];
+            var witnesses = new HashMap<Integer, PublicKey>();
+            SignatureAlgorithm algo = null;
             for (var i = 0; i < state.getWitnesses().size(); i++) {
-                witnesses[i] = state.getWitnesses().get(i).getPublicKey();
+                final PublicKey publicKey = state.getWitnesses().get(i).getPublicKey();
+                witnesses.put(i, publicKey);
+                if (algo == null) {
+                    algo = SignatureAlgorithm.lookup(publicKey);
+                }
             }
-            var algo = SignatureAlgorithm.lookup(witnesses[0]);
             byte[][] signatures = new byte[state.getWitnesses().size()][];
             if (!ksAttach.endorsements().isEmpty()) {
                 for (var entry : ksAttach.endorsements().entrySet()) {
@@ -545,16 +558,20 @@ public class Ani {
         return last.get().thenApply(o -> {
             log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
                       ksAttach.validations().size(), mapped.size(), member.getId());
-            var validations = new PublicKey[mapped.size()];
+            var validations = new HashMap<Integer, PublicKey>();
             byte[][] signatures = new byte[mapped.size()][];
 
+            SignatureAlgorithm algo = null;
             int index = 0;
             for (var r : mapped) {
-                validations[index] = r.event.getKeys().get(0);
+                final PublicKey publicKey = r.event.getKeys().get(0);
+                validations.put(index, publicKey);
                 signatures[index++] = r.signature.getBytes()[0];
+                if (algo == null) {
+                    algo = SignatureAlgorithm.lookup(publicKey);
+                }
             }
 
-            SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
             var validated = new JohnHancock(algo,
                                             signatures).verify(rootThreshold.get(), validations,
                                                                BbBackedInputStream.aggregate(event.toKeyEvent_()

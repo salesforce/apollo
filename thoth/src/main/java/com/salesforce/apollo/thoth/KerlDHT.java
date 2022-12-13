@@ -70,9 +70,11 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
@@ -326,6 +328,10 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
+        if (event == null) {
+            return complete(null);
+        }
+        log.info("Append event: {} on: {}", EventCoordinates.from(event.getCoordinates()), member.getId());
         Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
             return complete(null);
@@ -533,6 +539,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
+        log.info("*** Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyEvent_.getDefaultInstance());
         }
@@ -558,6 +565,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
+        log.info("Get key state: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
@@ -584,6 +592,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
+        log.info("Get key state: {} on: {}", Identifier.from(identifier), member.getId());
         if (identifier == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
@@ -608,6 +617,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates) {
+        log.info("Get key state with attachements: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyStateWithAttachments_.getDefaultInstance());
         }
@@ -633,6 +643,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        log.info("Get key state with endorsements and validations: {} on: {}", EventCoordinates.from(coordinates),
+                 member.getId());
         if (coordinates == null) {
             return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
         }
@@ -659,6 +671,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+        log.info("Get validations: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(Validations.getDefaultInstance());
         }
@@ -696,7 +709,7 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-//        reconcile(scheduler, duration);
+//        reconcile(scheduler, duration); TODO
     }
 
     public void stop() {

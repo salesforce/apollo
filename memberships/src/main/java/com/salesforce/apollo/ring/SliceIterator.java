@@ -81,11 +81,12 @@ public class SliceIterator<Comm extends Link> {
                 allowed.accept(handler.handle(Optional.empty(), link, slice.get(slice.size() - 1)));
                 return;
             }
-            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(), member);
+            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(),
+                      member.getId());
             ListenableFuture<T> futureSailor = round.apply(link, link.getMember());
             if (futureSailor == null) {
                 log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.getId(),
-                          link.getMember(), member);
+                          link.getMember(), member.getId());
                 allowed.accept(handler.handle(Optional.empty(), link, link.getMember()));
                 return;
             }
@@ -120,18 +121,18 @@ public class SliceIterator<Comm extends Link> {
     private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, ScheduledExecutorService scheduler,
                          Duration frequency) {
         log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, !currentIteration.hasNext(),
-                  allow, member);
+                  allow, member.getId());
         if (!currentIteration.hasNext() && allow) {
-            log.trace("Final iteration of: {} on: {}", label, member);
+            log.trace("Final iteration of: {} on: {}", label, member.getId());
             if (onComplete != null) {
-                log.trace("Completing iteration for: {} on: {}", label, member);
+                log.trace("Completing iteration for: {} on: {}", label, member.getId());
                 onComplete.run();
             }
         } else if (allow) {
-            log.trace("Proceeding for: {} on: {}", label, member);
+            log.trace("Proceeding for: {} on: {}", label, member.getId());
             scheduler.schedule(Utils.wrapped(proceed, log), frequency.toNanos(), TimeUnit.NANOSECONDS);
         } else {
-            log.trace("Termination for: {} on: {}", label, member);
+            log.trace("Termination for: {} on: {}", label, member.getId());
         }
     }
 }

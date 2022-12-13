@@ -26,6 +26,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
@@ -61,7 +62,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         gate = new AtomicBoolean(false);
     }
 
-//    @Test
+    @Test
     public void smokin() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
                                                                               Thread.ofVirtual().factory());
@@ -138,6 +139,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
 
+//        Thread.sleep(1000);
         // Verify client KERL published
         var ks = testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
         assertNotNull(ks);

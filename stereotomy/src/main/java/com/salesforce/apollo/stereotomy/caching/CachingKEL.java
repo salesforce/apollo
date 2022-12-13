@@ -96,17 +96,27 @@ public class CachingKEL<K extends KEL> implements KEL {
 
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
-        return complete(kel -> kel.append(event));
+        try {
+            return complete(kel -> kel.append(event));
+        } finally {
+            keyCoords.synchronous().invalidate(event.getCoordinates());
+        }
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(KeyEvent... event) {
-        if (event == null || event.length == 0) {
+    public CompletableFuture<List<KeyState>> append(KeyEvent... events) {
+        if (events == null || events.length == 0) {
             var fs = new CompletableFuture<List<KeyState>>();
             fs.complete(Collections.emptyList());
             return fs;
         }
-        return complete(kel -> kel.append(event));
+        try {
+            return complete(kel -> kel.append(events));
+        } finally {
+            for (var event : events) {
+                keyCoords.synchronous().invalidate(event.getCoordinates());
+            }
+        }
     }
 
     @Override

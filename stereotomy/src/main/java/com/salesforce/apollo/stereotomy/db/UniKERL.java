@@ -163,7 +163,7 @@ abstract public class UniKERL implements KERL {
                                   .from(IDENTIFIER)
                                   .where(IDENTIFIER.PREFIX.eq(identBytes))
                                   .fetchOne();
-        final long id;
+        long id;
         try {
             id = context.insertInto(COORDINATES)
                         .set(COORDINATES.DIGEST, prevDigest == null ? DIGEST_NONE_BYTES : prevDigest.value1())
@@ -176,8 +176,17 @@ abstract public class UniKERL implements KERL {
                         .value1();
         } catch (DataAccessException e) {
             // Already exists
-            log.trace("Duplicate inserting event coordinates: {}", event);
-            return;
+            var coordinates = event.getCoordinates();
+            id = context.select(COORDINATES.ID)
+                        .from(COORDINATES)
+                        .join(IDENTIFIER)
+                        .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                        .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                        .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                        .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                        .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                        .fetchOne()
+                        .value1();
         }
 
         final var digest = event.hash(digestAlgorithm);
@@ -189,7 +198,6 @@ abstract public class UniKERL implements KERL {
                    .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
                    .execute();
         } catch (DataAccessException e) {
-            log.error("Error inserting event coordinates: {}", event, e);
             return;
         }
         log.trace("Inserted event: {}", event);

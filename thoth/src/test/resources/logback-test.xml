@@ -35,7 +35,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ring.SliceIterator" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ring.SliceIterator" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.ring.RingIterator" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.ring.RingCommunications" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -43,7 +51,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.stereotomy" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
