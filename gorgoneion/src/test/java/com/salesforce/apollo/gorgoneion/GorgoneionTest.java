@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -27,6 +28,7 @@ import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
@@ -146,6 +148,9 @@ public class GorgoneionTest {
 
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        when(observer.publish(Mockito.any(), Mockito.any())).thenReturn(fs);
 
         var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
         members.forEach(m -> context.activate(m));
@@ -185,15 +190,15 @@ public class GorgoneionTest {
 
         assertNotNull(admin);
         Function<SignedNonce, CompletableFuture<Any>> attester = sn -> {
-            var fs = new CompletableFuture<Any>();
-            fs.complete(Any.getDefaultInstance());
-            return fs;
+            var complete = new CompletableFuture<Any>();
+            complete.complete(Any.getDefaultInstance());
+            return complete;
         };
 
         var gorgoneionClient = new GorgoneionClient(client, attester, parameters.clock(), admin);
 
-        final var apply = gorgoneionClient.apply(Duration.ofSeconds(2));
-        var invitation = apply.get(3, TimeUnit.SECONDS);
+        final var apply = gorgoneionClient.apply(Duration.ofSeconds(2_000));
+        var invitation = apply.get(30000, TimeUnit.SECONDS);
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());

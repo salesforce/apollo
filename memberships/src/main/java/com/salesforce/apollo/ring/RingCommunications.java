@@ -177,7 +177,8 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         lock.lock();
         try {
             final var current = currentIndex;
-            if (current == traversalOrder.size() - 1) {
+            final var count = traversalOrder.size();
+            if (count == 0 || current == count - 1) {
                 traversalOrder.clear();
                 traversalOrder.addAll(calculateTraversal(digest));
                 assert traversalOrder.size() == context.getRingCount() : "Invalid traversal order size: "
@@ -185,7 +186,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                 Entropy.secureShuffle(traversalOrder);
                 log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
-            int next = (current + 1) % traversalOrder.size();
+            int next = count == 0 ? 0 : (current + 1) % count;
             currentIndex = next;
             return linkFor(digest);
         } finally {
