@@ -37,7 +37,6 @@ import com.salesforce.apollo.utils.Utils;
 public class RingIterator<T extends Member, Comm extends Link> extends RingCommunications<T, Comm> {
     private static final Logger log = LoggerFactory.getLogger(RingIterator.class);
 
-    private volatile boolean               complete        = false;
     private final Duration                 frequency;
     private volatile boolean               majorityFailed  = false;
     private volatile boolean               majoritySucceed = false;
@@ -89,6 +88,10 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
 
     }
 
+    public int iteration() {
+        return currentIndex + 1;
+    }
+
     @Override
     public RingIterator<T, Comm> noDuplicates() {
         super.noDuplicates();
@@ -107,54 +110,52 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
                                                  traversed);
-        boolean completed = complete;
-        complete = currentIndex == context.getRingCount() - 1;
-        var next = next(digest);
+        boolean completed = currentIndex == context.getRingCount() - 1;
 
         Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally, completed,
                                                      onComplete);
-
         if (completed) {
             allowed.accept(true);
             return;
         }
 
-        try (Comm link = next.link()) {
-            log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} complete: {} on: {}", currentIndex, tally.get(),
-                      digest, context.getId(), next.ring(), completed, member.getId());
-            if (link == null) {
-                log.trace("No successor found of: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
-                          context.getId(), currentIndex, traversed, context.ring(currentIndex).stream().toList(),
-                          member);
-                final boolean allow = handler.handle(tally, Optional.empty(), next);
-                allowed.accept(allow);
-                if (!completed && allow) {
-                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
-                              member.getId());
-                    schedule(proceed);
-                } else {
-                    log.trace("Complete on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
-                              member.getId());
-                }
-                return;
-            }
-            log.trace("Continuation: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", currentIndex, tally.get(),
-                      digest, context.getId(), next.ring(), link.getMember() == null ? null : link.getMember().getId(),
+        var next = next(digest);
+        log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} complete: {} on: {}", iteration(), tally.get(),
+                  digest, context.getId(), next.ring(), completed, member.getId());
+        if (next.link() == null) {
+            log.trace("No successor found of: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
+                      context.getId(), iteration(), traversed, context.ring(currentIndex).stream().toList(),
                       member.getId());
+            final boolean allow = handler.handle(tally, Optional.empty(), next);
+            allowed.accept(allow);
+            if (!completed && allow) {
+                log.trace("Finished on iteration: {} proceeding on: {} for: {} tally: {} on: {}", iteration(), digest,
+                          context.getId(), tally.get(), member.getId());
+                schedule(proceed);
+            } else {
+                log.trace("Completed on iteration: {} on: {} for: {} for: {} tally: {} on: {}", iteration(), digest,
+                          context.getId(), tally.get(), member.getId());
+            }
+            return;
+        }
+        try (Comm link = next.link()) {
+            log.trace("Continuation on iteration: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", iteration(),
+                      tally.get(), digest, context.getId(), next.ring(),
+                      link.getMember() == null ? null : link.getMember().getId(), member.getId());
             ListenableFuture<Q> futureSailor = round.apply(link, next.ring());
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} iteration: {} from: {} on: {}", digest,
-                          context.getId(), currentIndex, link.getMember() == null ? null : link.getMember().getId(),
+                          context.getId(), iteration(), link.getMember() == null ? null : link.getMember().getId(),
                           member.getId());
                 final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
-                    log.trace("Proceeding: {} on: {} for: {} tally: {} on: {}", currentIndex, digest, context.getId(),
-                              tally.get(), member.getId());
+                    log.trace("Proceeding on iteration: {} on: {} for: {} tally: {} on: {}", iteration(), digest,
+                              context.getId(), tally.get(), member.getId());
                     schedule(proceed);
                 } else {
-                    log.trace("Complete: {} on: {} for: {} tally: {} on: {}", currentIndex, digest, context.getId(),
-                              tally.get(), member.getId());
+                    log.trace("Completed on iteration: {} on: {} for: {} tally: {} on: {}", iteration(), digest,
+                              context.getId(), tally.get(), member.getId());
                 }
                 return;
             }
@@ -162,12 +163,12 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                 final var allow = handler.handle(tally, Optional.of(futureSailor), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
-                    log.trace("Proceeding: {} on: {} for: {} tally: {} on: {}", currentIndex, digest, context.getId(),
-                              tally.get(), member.getId());
+                    log.trace("Scheduling next iteration: {} on: {} for: {} tally: {} on: {}", iteration(), digest,
+                              context.getId(), tally.get(), member.getId());
                     schedule(proceed);
                 } else {
-                    log.trace("Complete: {} on: {} for: {} tally: {} on: {}", currentIndex, digest, context.getId(),
-                              tally.get(), member.getId());
+                    log.trace("Finished on iteration: {} on: {} for: {} tally: {} on: {}", iteration(), digest,
+                              context.getId(), tally.get(), member.getId());
                 }
             }, log), exec);
         } catch (IOException e) {
@@ -184,13 +185,13 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                       member.getId());
         }
         if (finalIteration && allow) {
-            log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                      member.getId());
+            log.trace("Completing iteration: {} of: {} for: {} tally: {} on: {}", iteration(), key, context.getId(),
+                      tally.get(), member.getId());
             if (failedMajority != null && !majorityFailed) {
                 if (tally.get() < context.majority()) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for: {} tally: {} required: {} on: {}", key,
-                              context.getId(), tally.get(), context.majority(), member);
+                              context.getId(), tally.get(), context.majority(), member.getId());
                     failedMajority.run();
                 }
             }

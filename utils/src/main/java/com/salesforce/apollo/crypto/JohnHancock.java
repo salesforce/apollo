@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Objects;
 
 import org.slf4j.LoggerFactory;
@@ -68,27 +69,25 @@ public class JohnHancock {
         return algorithm == other.algorithm && Arrays.equals(bytes, other.bytes);
     }
 
-    public Filtered filter(SigningThreshold threshold, PublicKey[] keys, InputStream message) {
-        if (keys.length != bytes.length) {
-            throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
-                                                             keys.length));
-        }
-
+    public Filtered filter(SigningThreshold threshold, Map<Integer, PublicKey> keys, InputStream message) {
         var verifiedSignatures = new ArrayList<Integer>();
         byte[][] filtered = new byte[bytes.length][];
         var keyIndex = 0;
         for (byte[] signature : bytes) {
-            var publicKey = keys[keyIndex];
-            var ops = SignatureAlgorithm.lookup(publicKey);
-            if (ops.verify(publicKey, signature, message)) {
-                verifiedSignatures.add(keyIndex);
-                filtered[keyIndex] = signature;
+            var publicKey = keys.get(keyIndex);
+            if (publicKey != null) {
+                var ops = SignatureAlgorithm.lookup(publicKey);
+                if (ops.verify(publicKey, signature, message)) {
+                    verifiedSignatures.add(keyIndex);
+                    filtered[keyIndex] = signature;
+                }
             }
             keyIndex++;
         }
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
-        return new Filtered(SigningThreshold.thresholdMet(threshold, arrIndexes), new JohnHancock(algorithm, filtered));
+        return new Filtered(SigningThreshold.thresholdMet(threshold, arrIndexes), arrIndexes.length,
+                            new JohnHancock(algorithm, filtered));
     }
 
     public SignatureAlgorithm getAlgorithm() {
@@ -106,6 +105,10 @@ public class JohnHancock {
         result = prime * result + Arrays.hashCode(bytes);
         result = prime * result + Objects.hash(algorithm);
         return result;
+    }
+
+    public int signatureCount() {
+        return bytes.length;
     }
 
     public Digest toDigest(DigestAlgorithm digestAlgorithm) {
@@ -132,35 +135,28 @@ public class JohnHancock {
 
     @Override
     public String toString() {
-        return "Sig[" + (bytes.length == 0 ? "<null>"
-                                           : (bytes.length == 1 ? Hex.hexSubString(bytes[0], 12)
-                                                                : Arrays.asList(bytes)
-                                                                        .stream()
-                                                                        .map(e -> "|" + Hex.hexSubString(e, 12))
-                                                                + ":" + algorithm.signatureCode()))
-        + "]";
+        return "Sig[" + Arrays.asList(bytes).stream().map(b -> Hex.hexSubString(b, 12)).toList() + ":"
+        + algorithm.signatureCode() + "]";
     }
 
-    public boolean verify(SigningThreshold threshold, PublicKey[] keys, InputStream input) {
-        if (keys.length != bytes.length) {
-            throw new IllegalArgumentException(String.format("Have %s signatures and provided %s keys", bytes.length,
-                                                             keys.length));
-        }
+    public boolean verify(SigningThreshold threshold, Map<Integer, PublicKey> keys, InputStream input) {
 
         var message = new BufferedInputStream(input);
         message.mark(Integer.MAX_VALUE);
         var verifiedSignatures = new ArrayList<Integer>();
         var keyIndex = 0;
         for (var signature : bytes) {
-            var publicKey = keys[keyIndex];
-            try {
-                message.reset();
-            } catch (IOException e) {
-                LoggerFactory.getLogger(JohnHancock.class).error("Cannot reset message input", e);
-                return false;
-            }
-            if (algorithm.verify(publicKey, signature, message)) {
-                verifiedSignatures.add(keyIndex);
+            var publicKey = keys.get(keyIndex);
+            if (publicKey != null) {
+                try {
+                    message.reset();
+                } catch (IOException e) {
+                    LoggerFactory.getLogger(JohnHancock.class).error("Cannot reset message input", e);
+                    return false;
+                }
+                if (algorithm.verify(publicKey, signature, message)) {
+                    verifiedSignatures.add(keyIndex);
+                }
             }
             keyIndex++;
         }

@@ -9,8 +9,9 @@ package com.salesforce.apollo.crypto;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
@@ -23,18 +24,38 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  */
 public interface Verifier {
     class DefaultVerifier implements Verifier {
-        private final PublicKey[] keys;
+        public static Map<Integer, PublicKey> mapped(List<PublicKey> list) {
+            var mapped = new HashMap<Integer, PublicKey>();
+            for (int i = 0; i < list.size(); i++) {
+                mapped.put(i, list.get(i));
+            }
+            return mapped;
+        }
+
+        public static Map<Integer, PublicKey> mapped(PublicKey[] array) {
+            var mapped = new HashMap<Integer, PublicKey>();
+            for (int i = 0; i < array.length; i++) {
+                mapped.put(i, array[i]);
+            }
+            return mapped;
+        }
+
+        private final Map<Integer, PublicKey> keys;
 
         public DefaultVerifier(List<PublicKey> keys) {
-            this((PublicKey[]) keys.toArray(new PublicKey[keys.size()]));
+            this(mapped(keys));
+        }
+
+        public DefaultVerifier(Map<Integer, PublicKey> keys) {
+            this.keys = keys;
         }
 
         public DefaultVerifier(PublicKey key) {
-            this(new PublicKey[] { key });
+            this(mapped(new PublicKey[] { key }));
         }
 
         public DefaultVerifier(PublicKey[] keys) {
-            this.keys = keys;
+            this(mapped(keys));
         }
 
         @Override
@@ -44,12 +65,12 @@ public interface Verifier {
 
         @Override
         public String toString() {
-            return "V[" + Arrays.asList(keys).stream().map(k -> ":" + k.getEncoded()).toList() + "]";
+            return "V[" + keys.values().stream().map(k -> ":" + k.getEncoded()).toList() + "]";
         }
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            return verify(SigningThreshold.unweighted(keys.length), signature, message);
+            return verify(SigningThreshold.unweighted(keys.size()), signature, message);
         }
 
         @Override
@@ -62,7 +83,7 @@ public interface Verifier {
 
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return new Filtered(true, signature);
+            return new Filtered(true, signature.signatureCount(), signature);
         }
 
         @Override
@@ -77,7 +98,7 @@ public interface Verifier {
 
     }
 
-    record Filtered(boolean verified, JohnHancock filtered) {}
+    record Filtered(boolean verified, int validating, JohnHancock filtered) {}
 
     default Filtered filtered(SigningThreshold threshold, JohnHancock signature, byte[]... message) {
         return filtered(threshold, signature, BbBackedInputStream.aggregate(message));

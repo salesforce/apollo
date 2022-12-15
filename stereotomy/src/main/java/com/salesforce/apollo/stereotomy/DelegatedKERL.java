@@ -24,7 +24,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public class DelegatedKERL implements KERL {
-    private final KERL delegate;
+    protected final KERL delegate;
 
     public DelegatedKERL(KERL delegate) {
         this.delegate = delegate;
@@ -36,8 +36,8 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(KeyEvent... event) {
-        return delegate.append(event);
+    public CompletableFuture<List<KeyState>> append(KeyEvent... events) {
+        return delegate.append(events);
     }
 
     @Override

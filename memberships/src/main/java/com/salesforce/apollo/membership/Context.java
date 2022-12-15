@@ -294,7 +294,9 @@ public interface Context<T extends Member> {
      */
     int getRingCount();
 
-    Digest hashFor(T m, int index);
+    Digest hashFor(Digest d, int ring);
+
+    Digest hashFor(T m, int ring);
 
     /**
      * Answer true if the member who's id is active

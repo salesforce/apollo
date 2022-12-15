@@ -35,11 +35,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.comm.RingCommunications" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ring.SliceIterator" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.comm.RingIterator" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ring.RingIterator" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.ring.RingCommunications" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -52,6 +56,14 @@
     </logger>
 
     <logger name="com.salesforce.apollo.thoth" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.thoth.Maat" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.gorgoneion" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

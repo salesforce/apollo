@@ -12,8 +12,10 @@
             schemaName="thoth">
             <column generationType="ALWAYS" name="id"
                 type="IDENTITY">
-                <constraints nullable="false"
-                    primaryKey="true" primaryKeyName="pending_coordinates_pkey" />
+                <constraints 
+                    nullable="false"
+                    primaryKey="true"
+                    primaryKeyName="pending_coordinates_pkey" />
             </column>
             <column name="identifier" type="INT8">
                 <constraints nullable="false" />
@@ -53,7 +55,8 @@
         <createTable tableName="pending_event"
             schemaName="thoth">
             <column name="pending_coordinates" type="INT8">
-                <constraints nullable="false"
+                <constraints 
+                    nullable="false"
                     primaryKey="true" />
             </column>
             <column name="digest" type="VARBINARY">

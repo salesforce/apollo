@@ -224,9 +224,8 @@ public class ViewManagement {
         // complete all pending joins
         pending.forEach(r -> {
             try {
-                final var shuffled = new ArrayList<>(joiningNotes);
-                Entropy.secureShuffle(shuffled);
-                r.accept(shuffled);
+                Entropy.secureShuffle(joiningNotes);
+                r.accept(joiningNotes);
             } catch (Throwable t) {
                 log.error("Exception in pending join on: {}", node.getId(), t);
             }
