@@ -51,7 +51,7 @@ public class MaatTest {
                                                   nextKeyPair);
         var digest = ((SelfAddressingIdentifier) inception.getIdentifier()).getDigest();
 
-        var serialized = inception.getBytes();
+        var serialized = inception.toKeyEvent_().toByteString();
         var validations = new HashMap<EventCoordinates, JohnHancock>();
 
         context.successors(digest).stream().map(m -> (ControlledIdentifierMember) m).forEach(m -> {

@@ -238,7 +238,8 @@ public class Gorgoneion {
                                                           .getKeyState(EventCoordinates.from(validation.getValidator()))
                                                           .get()
                                                           .getKeys()).verify(JohnHancock.from(validation.getSignature()),
-                                                                             establishment.getBytes())) {
+                                                                             establishment.toKeyEvent_()
+                                                                                          .toByteString())) {
                             count++;
                         } else {
                             log.warn("Invalid notarization, invalid validation for: {} from: {} on: {}", identifier,
@@ -627,7 +628,7 @@ public class Gorgoneion {
         return member.getIdentifier().getSigner().thenApply(signer -> {
             return Validation_.newBuilder()
                               .setValidator(member.getIdentifier().getCoordinates().toEventCoords())
-                              .setSignature(signer.sign(event.getBytes()).toSig())
+                              .setSignature(signer.sign(event.toKeyEvent_().toByteString()).toSig())
                               .build();
         });
     }

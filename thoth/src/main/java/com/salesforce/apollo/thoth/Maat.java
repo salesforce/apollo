@@ -98,7 +98,7 @@ public class Maat extends DelegatedKERL {
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<validator>();
-        final var serialized = event.getBytes();
+        final var serialized = event.toKeyEvent_().toByteString();
 
         return delegate.getValidations(event.getCoordinates()).thenCompose(validations -> {
             var futures = validations.entrySet().stream().map(e -> validators.getKeyEvent(e.getKey()).thenApply(ev -> {
