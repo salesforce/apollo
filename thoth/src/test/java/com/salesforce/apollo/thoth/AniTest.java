@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.h2.jdbc.JdbcConnection;
@@ -54,8 +53,6 @@ public class AniTest extends AbstractDhtTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 7, 7, 7 });
 
-        SigningThreshold threshold = SigningThreshold.unweighted(3);
-
         final var url = "jdbc:h2:mem:test_engine-smoke;DB_CLOSE_DELAY=-1";
         JdbcConnection connection = new JdbcConnection(url, new Properties(), "", "", false);
 
@@ -85,14 +82,13 @@ public class AniTest extends AbstractDhtTest {
             roots.add(id.getDigest());
         }
 
-        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl, () -> threshold, () -> roots,
+        var ani = new Ani(identities.keySet().stream().findFirst().get(), timeout, kerl,
                           () -> SigningThreshold.unweighted(3));
 
         // inception
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
         var validations = new HashMap<EventCoordinates, JohnHancock>();
 
@@ -103,7 +99,6 @@ public class AniTest extends AbstractDhtTest {
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
 
         ani.clearValidations();
@@ -113,7 +108,6 @@ public class AniTest extends AbstractDhtTest {
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(2, retrieved.size());
 
-        assertFalse(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
 
         ani.clearValidations();
@@ -123,7 +117,6 @@ public class AniTest extends AbstractDhtTest {
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(3, retrieved.size());
 
-        assertTrue(ani.validateRoot(inception).get(10, TimeUnit.SECONDS));
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 
@@ -140,14 +133,12 @@ public class AniTest extends AbstractDhtTest {
                                   Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
-        var roots = new DigestBloomFilter(entropy.nextLong(), 100, 0.00125);
 
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  () -> threshold, () -> roots,
                                                                                   () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
@@ -158,9 +149,6 @@ public class AniTest extends AbstractDhtTest {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
-        ani.validateRoot(inception).get();
-        final var success = ani.validateRoot(inception).get(10, TimeUnit.SECONDS);
-        assertTrue(success);
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 
@@ -191,7 +179,6 @@ public class AniTest extends AbstractDhtTest {
                                            .collect(Collectors.toMap(e -> e.getKey(),
                                                                      e -> new Ani(e.getKey(), timeout,
                                                                                   dhts.get(e.getKey()).asKERL(),
-                                                                                  () -> threshold, () -> roots,
                                                                                   () -> threshold)));
         var ani = anis.values().stream().findFirst().get();
 
@@ -199,7 +186,6 @@ public class AniTest extends AbstractDhtTest {
         var identifier = controller.newIdentifier().get();
         var inception = identifier.getLastEstablishingEvent().get();
 
-        assertFalse(ani.validateRoot(inception).get(5, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
         var validations = new HashMap<EventCoordinates, JohnHancock>();
 
@@ -210,7 +196,6 @@ public class AniTest extends AbstractDhtTest {
         var retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(1, retrieved.size());
 
-        assertFalse(ani.validateRoot(inception).get(5, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
@@ -220,15 +205,12 @@ public class AniTest extends AbstractDhtTest {
         retrieved = kerl.getValidations(inception.getCoordinates()).get();
         assertEquals(2, retrieved.size());
 
-        assertFalse(ani.validateRoot(inception).get(120, TimeUnit.SECONDS));
         assertFalse(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
 
         ani.clearValidations();
         validations.put(v3.getCoordinates(), v3.getSigner().get().sign(inception.toKeyEvent_().toByteString()));
         kerl.appendValidations(inception.getCoordinates(), validations).get();
 
-        var condition = ani.validateRoot(inception).get();
-        assertTrue(condition);
         assertTrue(ani.eventValidation(Duration.ofSeconds(5)).validate(inception));
     }
 }

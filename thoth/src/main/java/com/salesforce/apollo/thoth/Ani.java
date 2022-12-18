@@ -42,9 +42,7 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * Key Event Validation
@@ -78,21 +76,9 @@ public class Ani {
     private final Supplier<SigningThreshold>                   kerlThreshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean> kerlValidated;
     private final SigningMember                                member;
-    private final Supplier<DigestBloomFilter>                  roots;
-    private final Supplier<SigningThreshold>                   rootThreshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean> rootValidated;
 
     public Ani(SigningMember member, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> rootValidatedBuilder, Supplier<SigningThreshold> rootThreshold,
-               Supplier<DigestBloomFilter> roots, Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder,
-               Supplier<SigningThreshold> kerlThreshold) {
-        rootValidated = rootValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
-            @Override
-            public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
-                                                                  Executor executor) throws Exception {
-                return performRootValidation(key, validationTimeout);
-            }
-        });
+               Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder, Supplier<SigningThreshold> kerlThreshold) {
         kerlValidated = kerlValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
@@ -102,133 +88,15 @@ public class Ani {
         });
         this.member = member;
         this.kerl = kerl;
-        this.rootThreshold = rootThreshold;
         this.kerlThreshold = kerlThreshold;
-        this.roots = roots;
     }
 
-    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, Supplier<SigningThreshold> rootThreshold,
-               Supplier<DigestBloomFilter> roots, Supplier<SigningThreshold> kerlThreshold) {
-        this(member, validationTimeout, kerl, defaultRootValidatedBuilder(), rootThreshold, roots,
-             defaultKerlValidatedBuilder(), kerlThreshold);
+    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, Supplier<SigningThreshold> kerlThreshold) {
+        this(member, validationTimeout, kerl, defaultKerlValidatedBuilder(), kerlThreshold);
     }
 
     public void clearValidations() {
-        rootValidated.synchronous().invalidateAll();
         kerlValidated.synchronous().invalidateAll();
-    }
-
-    public EventValidation eventRootValidation(Duration timeout) {
-        return new EventValidation() {
-            @Override
-            public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                     InputStream message) {
-                try {
-                    return kerl.getKeyState(coordinates)
-                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
-                               .thenApply(v -> v.filtered(threshold, signature, message))
-                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return new Filtered(false, 0, null);
-                } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return new Filtered(false, 0, null);
-                } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return new Filtered(false, 0, null);
-                }
-            }
-
-            @Override
-            public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-                try {
-                    return Optional.of(kerl.getKeyState(coordinates).get(timeout.toNanos(), TimeUnit.NANOSECONDS));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return Optional.empty();
-                } catch (ExecutionException e) {
-                    log.error("Unable to retrieve keystate: {} on: {}", coordinates, member, e.getCause());
-                    return Optional.empty();
-                } catch (TimeoutException e) {
-                    log.error("Timeout retrieving keystate: {} on: {} ", coordinates, member);
-                    return Optional.empty();
-                }
-            }
-
-            @Override
-            public boolean validate(EstablishmentEvent event) {
-                try {
-                    return Ani.this.validateRoot(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member, e.getCause());
-                    return false;
-                } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean validate(EventCoordinates coordinates) {
-                try {
-                    return kerl.getKeyEvent(coordinates)
-                               .thenCompose(ke -> Ani.this.validateRoot(ke))
-                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return false;
-                } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-                try {
-                    return kerl.getKeyState(coordinates)
-                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
-                               .thenApply(v -> v.verify(signature, message))
-                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return false;
-                } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                  InputStream message) {
-                try {
-                    return kerl.getKeyState(coordinates)
-                               .thenApply(ks -> new Verifier.DefaultVerifier(ks.getKeys()))
-                               .thenApply(v -> v.verify(threshold, signature, message))
-                               .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
-                    return false;
-                } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
-                    return false;
-                }
-            }
-        };
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -346,10 +214,6 @@ public class Ani {
 
     public CompletableFuture<Boolean> validateKerl(KeyEvent event) {
         return kerlValidated.get(event.getCoordinates());
-    }
-
-    public CompletableFuture<Boolean> validateRoot(KeyEvent event) {
-        return rootValidated.get(event.getCoordinates());
     }
 
     public Verifiers verifiers(Duration timeout) {
@@ -488,98 +352,5 @@ public class Ani {
                            throw new IllegalStateException(e.getCause());
                        }
                    });
-    }
-
-    private CompletableFuture<Boolean> performRootValidation(EventCoordinates coord, Duration timeout) {
-        return kerl.getKeyEvent(coord)
-                   .thenCombine(kerl.getKeyStateWithEndorsementsAndValidations(coord), (event, ksa) -> {
-                       try {
-                           return rootValidate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                       } catch (InterruptedException | TimeoutException e) {
-                           throw new IllegalStateException(e);
-                       } catch (ExecutionException e) {
-                           throw new IllegalStateException(e.getCause());
-                       }
-                   });
-    }
-
-    private CompletableFuture<Boolean> rootValidate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
-                                                    KeyEvent event) {
-        // TODO Multisig
-        var state = ksAttach.state();
-        boolean witnessed = false;
-        if (state.getWitnesses().isEmpty()) {
-            witnessed = true; // no witnesses for event
-        } else {
-            var witnesses = new HashMap<Integer, PublicKey>();
-            SignatureAlgorithm algo = null;
-            for (var i = 0; i < state.getWitnesses().size(); i++) {
-                final PublicKey publicKey = state.getWitnesses().get(i).getPublicKey();
-                witnesses.put(i, publicKey);
-                if (algo == null) {
-                    algo = SignatureAlgorithm.lookup(publicKey);
-                }
-            }
-            byte[][] signatures = new byte[state.getWitnesses().size()][];
-            if (!ksAttach.endorsements().isEmpty()) {
-                for (var entry : ksAttach.endorsements().entrySet()) {
-                    signatures[entry.getKey()] = entry.getValue().getBytes()[0];
-                }
-            }
-            witnessed = new JohnHancock(algo, signatures).verify(state.getSigningThreshold(), witnesses,
-                                                                 BbBackedInputStream.aggregate(event.toKeyEvent_()
-                                                                                                    .toByteString()));
-        }
-
-        if (!witnessed) {
-            return complete(witnessed);
-        }
-
-        record resolved(EstablishmentEvent event, JohnHancock signature) {}
-        var mapped = new CopyOnWriteArrayList<resolved>();
-        final var rootSet = roots.get();
-        var last = ksAttach.validations()
-                           .entrySet()
-                           .stream()
-                           .filter(e -> rootSet.contains(((SelfAddressingIdentifier) e.getKey()
-                                                                                      .getIdentifier()).getDigest()))
-                           .map(e -> kerl.getKeyEvent(e.getKey()).thenApply(evnt -> {
-                               var est = (EstablishmentEvent) evnt;
-                               mapped.add(new resolved(est, e.getValue()));
-                               return event;
-                           }))
-                           .reduce((a, b) -> a.thenCompose(ks -> b));
-
-        if (last.isEmpty()) {
-            log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
-            return complete(SigningThreshold.thresholdMet(rootThreshold.get(), new int[] {}));
-        }
-
-        return last.get().thenApply(o -> {
-            log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
-                      ksAttach.validations().size(), mapped.size(), member.getId());
-            var validations = new HashMap<Integer, PublicKey>();
-            byte[][] signatures = new byte[mapped.size()][];
-
-            SignatureAlgorithm algo = null;
-            int index = 0;
-            for (var r : mapped) {
-                final PublicKey publicKey = r.event.getKeys().get(0);
-                validations.put(index, publicKey);
-                signatures[index++] = r.signature.getBytes()[0];
-                if (algo == null) {
-                    algo = SignatureAlgorithm.lookup(publicKey);
-                }
-            }
-
-            var validated = new JohnHancock(algo,
-                                            signatures).verify(rootThreshold.get(), validations,
-                                                               BbBackedInputStream.aggregate(event.toKeyEvent_()
-                                                                                                  .toByteString()));
-            return validated;
-        }).exceptionally(t -> {
-            log.error("Error in validating {} on: {}", ksAttach.state().getCoordinates(), member.getId(), t);
-            return false;
-        });
     }
 }

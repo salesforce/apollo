@@ -128,9 +128,8 @@ import io.grpc.stub.StreamObserver;
  * "https://www.cs.huji.ac.il/~dolev/pubs/opodis07-DHR-fulltext.pdf">Stable-Fireflies</a>.
  * <p>
  * This implementation is also very closely linked with the KERI Stereotomy
- * implementation of Apollo. The Join protocol of this implementation includes a
- * remote attestation protocol for secure bootstrapping of the entire
- * membership.
+ * implementation of Apollo as the View explicitly uses teh Controlled
+ * Identifier form of membership.
  *
  * @author hal.hildebrand
  * @since 220

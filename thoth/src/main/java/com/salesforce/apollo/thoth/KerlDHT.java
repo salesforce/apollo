@@ -26,7 +26,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -56,7 +55,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesfoce.apollo.thoth.proto.ViewState;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
@@ -242,9 +240,6 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    private record ValidatorView(Digest crown, DigestBloomFilter roots, SigningThreshold threshold, Digest previous,
-                                 ViewState state) {}
-
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
     public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
@@ -278,7 +273,6 @@ public class KerlDHT implements ProtoKERLService {
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final TemporalAmount                                              timeout;
-    private final AtomicReference<ValidatorView>                              view           = new AtomicReference<>();
 
     public KerlDHT(Duration frequency, Context<Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
@@ -316,7 +310,6 @@ public class KerlDHT implements ProtoKERLService {
             }
         });
         this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), asKERL(),
-                           () -> view.get().threshold, () -> view.get().roots,
                            () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
     }
 
