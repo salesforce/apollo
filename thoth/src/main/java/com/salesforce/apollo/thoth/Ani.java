@@ -13,18 +13,13 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
-import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -35,12 +30,12 @@ import com.salesforce.apollo.crypto.Verifier.Filtered;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.KEL.KeyStateWithAttachments;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
@@ -72,31 +67,12 @@ public class Ani {
                                                                          cause));
     }
 
-    private final KERL                                         kerl;
-    private final Supplier<SigningThreshold>                   kerlThreshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean> kerlValidated;
-    private final SigningMember                                member;
+    private final KERL          kerl;
+    private final SigningMember member;
 
-    public Ani(SigningMember member, Duration validationTimeout, KERL kerl,
-               Caffeine<EventCoordinates, Boolean> kerlValidatedBuilder, Supplier<SigningThreshold> kerlThreshold) {
-        kerlValidated = kerlValidatedBuilder.buildAsync(new AsyncCacheLoader<>() {
-            @Override
-            public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
-                                                                  Executor executor) throws Exception {
-                return performKerlValidation(key, validationTimeout);
-            }
-        });
+    public Ani(SigningMember member, Duration validationTimeout, KERL kerl) {
         this.member = member;
         this.kerl = kerl;
-        this.kerlThreshold = kerlThreshold;
-    }
-
-    public Ani(SigningMember member, Duration validationTimeout, KERL kerl, Supplier<SigningThreshold> kerlThreshold) {
-        this(member, validationTimeout, kerl, defaultKerlValidatedBuilder(), kerlThreshold);
-    }
-
-    public void clearValidations() {
-        kerlValidated.synchronous().invalidateAll();
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -140,7 +116,7 @@ public class Ani {
             @Override
             public boolean validate(EstablishmentEvent event) {
                 try {
-                    return Ani.this.validateKerl(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                    return Ani.this.validateKerl(event, timeout).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return false;
@@ -157,7 +133,7 @@ public class Ani {
             public boolean validate(EventCoordinates coordinates) {
                 try {
                     return kerl.getKeyEvent(coordinates)
-                               .thenCompose(ke -> Ani.this.validateKerl(ke))
+                               .thenCompose(ke -> Ani.this.validateKerl(ke, timeout))
                                .get(timeout.toNanos(), TimeUnit.NANOSECONDS);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -212,10 +188,6 @@ public class Ani {
         };
     }
 
-    public CompletableFuture<Boolean> validateKerl(KeyEvent event) {
-        return kerlValidated.get(event.getCoordinates());
-    }
-
     public Verifiers verifiers(Duration timeout) {
         return new Verifiers() {
 
@@ -259,20 +231,15 @@ public class Ani {
         };
     }
 
-    KERL getKerl() {
-        return kerl;
-    }
-
     private CompletableFuture<Boolean> complete(boolean result) {
         var fs = new CompletableFuture<Boolean>();
         fs.complete(result);
         return fs;
     }
 
-    private CompletableFuture<Boolean> kerlValidate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach,
-                                                    KeyEvent event) {
+    private CompletableFuture<Boolean> kerlValidate(Duration timeout, KeyStateWithAttachments ksa, KeyEvent event) {
         // TODO Multisig
-        var state = ksAttach.state();
+        var state = ksa.state();
         boolean witnessed = false;
         if (state.getWitnesses().isEmpty()) {
             witnessed = true; // no witnesses for event
@@ -287,8 +254,9 @@ public class Ani {
                 }
             }
             byte[][] signatures = new byte[state.getWitnesses().size()][];
-            if (!ksAttach.endorsements().isEmpty()) {
-                for (var entry : ksAttach.endorsements().entrySet()) {
+            final var endorsements = ksa.attachments().endorsements();
+            if (!endorsements.isEmpty()) {
+                for (var entry : endorsements.entrySet()) {
                     signatures[entry.getKey()] = entry.getValue().getBytes()[0];
                 }
             }
@@ -296,61 +264,22 @@ public class Ani {
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                     .toByteString()));
         }
-
-        if (!witnessed) {
-            return complete(witnessed);
-        }
-
-        record resolved(KeyState state, JohnHancock signature) {}
-        var mapped = new CopyOnWriteArrayList<resolved>();
-        var last = ksAttach.validations().entrySet().stream().map(e -> kerl.getKeyState(e.getKey()).thenApply(ks -> {
-            mapped.add(new resolved(ks, e.getValue()));
-            return ks;
-        })).reduce((a, b) -> a.thenCompose(ks -> b));
-
-        if (last.isEmpty()) {
-            log.trace("No mapped validations for {} on: {}", ksAttach.state().getCoordinates(), member.getId());
-            return complete(SigningThreshold.thresholdMet(kerlThreshold.get(), new int[] {}));
-        }
-
-        return last.get().thenApply(o -> {
-            log.trace("Evaluating validation {} validations: {} mapped: {} on: {}", ksAttach.state().getCoordinates(),
-                      ksAttach.validations().size(), mapped.size(), member.getId());
-            var validations = new HashMap<Integer, PublicKey>();
-            byte[][] signatures = new byte[mapped.size()][];
-
-            int index = 0;
-            SignatureAlgorithm algo = null;
-            for (var r : mapped) {
-                final PublicKey publicKey = r.state.getKeys().get(0);
-                validations.put(index, publicKey);
-                signatures[index++] = r.signature.getBytes()[0];
-                if (algo == null) {
-                    algo = SignatureAlgorithm.lookup(publicKey);
-                }
-            }
-
-            var validated = new JohnHancock(algo,
-                                            signatures).verify(kerlThreshold.get(), validations,
-                                                               BbBackedInputStream.aggregate(event.toKeyEvent_()
-                                                                                                  .toByteString()));
-            return validated;
-        }).exceptionally(t -> {
-            log.error("Error in validating {} on: {}", ksAttach.state().getCoordinates(), member.getId(), t);
-            return false;
-        });
+        return complete(witnessed);
     }
 
     private CompletableFuture<Boolean> performKerlValidation(EventCoordinates coord, Duration timeout) {
-        return kerl.getKeyEvent(coord)
-                   .thenCombine(kerl.getKeyStateWithEndorsementsAndValidations(coord), (event, ksa) -> {
-                       try {
-                           return kerlValidate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
-                       } catch (InterruptedException | TimeoutException e) {
-                           throw new IllegalStateException(e);
-                       } catch (ExecutionException e) {
-                           throw new IllegalStateException(e.getCause());
-                       }
-                   });
+        return kerl.getKeyEvent(coord).thenCombine(kerl.getKeyStateWithAttachments(coord), (event, ksa) -> {
+            try {
+                return kerlValidate(timeout, ksa, event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException | TimeoutException e) {
+                throw new IllegalStateException(e);
+            } catch (ExecutionException e) {
+                throw new IllegalStateException(e.getCause());
+            }
+        });
+    }
+
+    private CompletableFuture<Boolean> validateKerl(KeyEvent event, Duration timeout) {
+        return performKerlValidation(event.getCoordinates(), timeout);
     }
 }

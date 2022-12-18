@@ -51,10 +51,8 @@ import com.salesforce.apollo.utils.Hex;
 public class KerlTest extends AbstractDhtTest {
     private SecureRandom secureRandom;
 
-    @Override
     @BeforeEach
-    public void before() throws Exception {
-        super.before();
+    public void beforeIt() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
         secureRandom.setSeed(new byte[] { 0 });
     }
