@@ -583,17 +583,12 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>3.8.1</version>
+                                    <version>[3.8.1,)</version>
                                 </requireMavenVersion>
                                 <dependencyConvergence />
                                 <requireJavaVersion>
-                                    <version>19</version>
+                                    <version>[19,)</version>
                                 </requireJavaVersion>
-                                <requireJavaVendor>
-                                    <includes>
-                                        <include>GraalVM Community</include>
-                                    </includes>
-                                </requireJavaVendor>
                             </rules>
                         </configuration>
                     </execution>

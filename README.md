@@ -27,13 +27,13 @@ Apollo isn't designed for coins, rather as essentially a distributed multitenant
 * Google Zanzibar functionality providing Relation Based Access Control hosted on SQL state machines.
 
 ## Requirements
-Apollo requires the [GraalVM](https://www.graalvm.org) JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+Apollo requires JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ### Install Maven
 See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
 
-### Install GraalVM
-Apollo now requires the GraalVM for Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
+### Install GraalVM (Optional)
+Apollo optionally requires the GraalVM for leveraging Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
 
 ## Building Apollo
 **Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
@@ -56,7 +56,7 @@ Anyhow, this is all done so that you can actually import the *[demesnes](demesne
 
     mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
 
-This will add the *[demesnes](demesnes/README.md)* and *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *demesnes* module can build correctly.
+This will add the *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *isolates* module can build correctly.
 
 ### Platform Specific Domain Socket Support
 
@@ -67,7 +67,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 
 * [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
-* [Demesnes](demesnes/README.md) - Apollo domain enclaves as GraalVM Isolate
+* [Demesnes](demesnes/README.md) - Apollo sub domain enclaves
 * [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
 * [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
 * [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
@@ -76,7 +76,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
-* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo domain enclaves.
+* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo sub domain enclaves.
 * [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
 * [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
@@ -136,7 +136,7 @@ from the command line before attempting to load the remaining Apollo modules int
 ### Enable Preview On The JRE
 
 This is important as well, as Apollo makes use of the Project Loom Virtual Threads preview.  This is taken care of in the Maven build, however in your IDE, you'll need to add
-*--enable-preview* as a default flag passed to the JRE.  In Eclipse, when you import the GraalVM, there is a setting to define default flags:
+*--enable-preview* as a default flag passed to the JRE.  In Eclipse, when you import the JVM, there is a setting to define default flags:
 <p><img src="media/enable-preview.png" alt="drawing" width="600"/></p>
 
 ### Eclipse M2E issues with ${os.detected.classifier}

@@ -62,6 +62,34 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-maven</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.8.1,)</version>
+                                </requireMavenVersion>
+                                <dependencyConvergence />
+                                <requireJavaVersion>
+                                    <version>[19,)</version>
+                                </requireJavaVersion>
+                                <requireJavaVendor>
+                                    <includes>
+                                        <include>GraalVM Community</include>
+                                    </includes>
+                                </requireJavaVendor>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
