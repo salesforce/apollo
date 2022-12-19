@@ -20,8 +20,6 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
@@ -50,24 +48,6 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
 public class Ani {
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
-
-    public static Caffeine<EventCoordinates, Boolean> defaultKerlValidatedBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((EventCoordinates coords, Boolean validated,
-                                         RemovalCause cause) -> log.info("KERL validation {} was removed ({})", coords,
-                                                                         cause));
-    }
-
-    public static Caffeine<EventCoordinates, Boolean> defaultRootValidatedBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((EventCoordinates coords, Boolean validated,
-                                         RemovalCause cause) -> log.info("Root validation {} was removed ({})", coords,
-                                                                         cause));
-    }
 
     private final KERL   kerl;
     private final Member member;

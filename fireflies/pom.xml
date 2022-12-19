@@ -12,7 +12,7 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>thoth</artifactId>
+            <artifactId>memberships</artifactId>
         </dependency>
 
         <!-- Test only dependencies below this line -->

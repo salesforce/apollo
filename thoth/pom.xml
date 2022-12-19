@@ -16,10 +16,6 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>gorgoneion</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
             <artifactId>stereotomy-services</artifactId>
         </dependency>
         <dependency>
@@ -52,6 +48,11 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>gorgoneion</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

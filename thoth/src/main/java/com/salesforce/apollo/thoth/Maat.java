@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
-import com.salesforce.apollo.gorgoneion.Gorgoneion;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
@@ -91,7 +90,7 @@ public class Maat extends DelegatedKERL {
             return fs;
         }
         final Context<Member> ctx = context;
-        var successors = Gorgoneion.validators(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
+        var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
                                    .stream()
                                    .map(m -> m.getId())
                                    .collect(Collectors.toSet());
