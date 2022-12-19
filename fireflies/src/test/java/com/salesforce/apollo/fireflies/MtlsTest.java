@@ -233,7 +233,7 @@ public class MtlsTest {
         return new ServerContextSupplier() {
             @Override
             public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                        Provider provider, String tlsVersion) {
+                                        Provider provider) {
                 return MtlsServer.forServer(clientAuth, alias, certWithKey.getX509Certificate(),
                                             certWithKey.getPrivateKey(), validator);
             }

@@ -27,12 +27,14 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.Filtered;
-import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KEL.KeyStateWithAttachments;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.StereotomyValidator;
 import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -40,7 +42,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
- * Key Event Validation
+ * Stereotomy key event validation, certificate validator and verifiers
  *
  * @author hal.hildebrand
  *
@@ -67,12 +69,16 @@ public class Ani {
                                                                          cause));
     }
 
-    private final KERL          kerl;
-    private final SigningMember member;
+    private final KERL   kerl;
+    private final Member member;
 
-    public Ani(SigningMember member, Duration validationTimeout, KERL kerl) {
+    public Ani(Member member, KERL kerl) {
         this.member = member;
         this.kerl = kerl;
+    }
+
+    public CertificateValidator certificateValidator(Duration timeout) {
+        return new StereotomyValidator(verifiers(timeout));
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -89,10 +95,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return new Filtered(false, 0, null);
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return new Filtered(false, 0, null);
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    log.error("Timeout validating: {} on: {} ", coordinates, member.getId());
                     return new Filtered(false, 0, null);
                 }
             }
@@ -105,10 +111,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return Optional.empty();
                 } catch (ExecutionException e) {
-                    log.error("Unable to retrieve keystate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to retrieve keystate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return Optional.empty();
                 } catch (TimeoutException e) {
-                    log.error("Timeout retrieving keystate: {} on: {} ", coordinates, member);
+                    log.error("Timeout retrieving keystate: {} on: {} ", coordinates, member.getId());
                     return Optional.empty();
                 }
             }
@@ -121,10 +127,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member.getId(), e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
+                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member.getId());
                     return false;
                 }
             }
@@ -139,10 +145,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    log.error("Timeout validating: {} on: {} ", coordinates, member.getId());
                     return false;
                 }
             }
@@ -158,10 +164,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    log.error("Timeout validating: {} on: {} ", coordinates, member.getId());
                     return false;
                 }
             }
@@ -178,10 +184,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    log.error("Timeout validating: {} on: {} ", coordinates, member.getId());
                     return false;
                 }
             }
@@ -202,10 +208,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return Optional.empty();
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", coordinates, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", coordinates, member.getId(), e.getCause());
                     return Optional.empty();
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", coordinates, member);
+                    log.error("Timeout validating: {} on: {} ", coordinates, member.getId());
                     return Optional.empty();
                 }
             }
@@ -221,10 +227,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return Optional.empty();
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: {} on: {}", identifier, member, e.getCause());
+                    log.error("Unable to validate: {} on: {}", identifier, member.getId(), e.getCause());
                     return Optional.empty();
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: {} on: {} ", identifier, member);
+                    log.error("Timeout validating: {} on: {} ", identifier, member.getId());
                     return Optional.empty();
                 }
             }

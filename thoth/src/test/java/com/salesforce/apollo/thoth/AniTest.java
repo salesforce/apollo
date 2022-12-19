@@ -28,7 +28,6 @@ public class AniTest extends AbstractDhtTest {
 
     @Test
     public void smokin() throws Exception {
-        var timeout = Duration.ofSeconds(1000);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 7, 7, 7 });
 
@@ -42,7 +41,7 @@ public class AniTest extends AbstractDhtTest {
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(e.getKey(), timeout,
+                                                                     e -> new Ani(e.getKey(),
                                                                                   dhts.get(e.getKey()).asKERL())));
         var ani = anis.values().stream().findFirst().get();
 

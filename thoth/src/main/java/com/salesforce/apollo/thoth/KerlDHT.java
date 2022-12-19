@@ -13,7 +13,6 @@ import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -308,7 +307,7 @@ public class KerlDHT implements ProtoKERLService {
                 return completeExceptionally(e);
             }
         });
-        this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), asKERL());
+        this.ani = new Ani(member, asKERL());
     }
 
     public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,

@@ -174,7 +174,7 @@ public class MtlsServer implements RouterSupplier {
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),
                                                                                             epProvider.getValiator(),
-                                                                                            PROVIDER_JSSE, TL_SV1_3))
+                                                                                            PROVIDER_JSSE))
                                                              .fallbackHandlerRegistry(new MutableHandlerRegistry())
                                                              .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                              .intercept(new TlsInterceptor(sslSessionContext))
