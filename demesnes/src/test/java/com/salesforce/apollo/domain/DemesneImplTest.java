@@ -48,7 +48,7 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
  * @author hal.hildebrand
  *
  */
-public class DemesneIsolateTest {
+public class DemesneImplTest {
 
     private static final Class<? extends ServerDomainSocketChannel> channelType    = getServerDomainSocketChannelClass();
     private EventLoopGroup                                          eventLoopGroup = getEventLoopGroup();
@@ -92,7 +92,7 @@ public class DemesneIsolateTest {
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        var demesne = new DemesneIsolate(null, parameters, null, ksPassword);
+        var demesne = new DemesneImpl(parameters, ksPassword);
         demesne.start();
     }
 

@@ -11,7 +11,6 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -24,19 +23,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.IntStream;
 
-import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.word.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.Parameters;
@@ -76,22 +68,11 @@ import io.netty.channel.unix.DomainSocketAddress;
  * @author hal.hildebrand
  *
  */
-public class DemesneIsolate {
+public class DemesneImpl {
 
-    private static final Class<? extends Channel>        channelType    = getChannelType();
-    private static final AtomicReference<DemesneIsolate> demesne        = new AtomicReference<>();
-    private static final EventLoopGroup                  eventLoopGroup = getEventLoopGroup();
-    private static final Logger                          log            = LoggerFactory.getLogger(DemesneIsolate.class);
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
-    public static native IsolateThread createIsolate();
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_active")
-    private static boolean active(Pointer jniEnv, Pointer clazz,
-                                  @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
-        final var d = demesne.get();
-        return d == null ? false : d.active();
-    }
+    private static final Class<? extends Channel> channelType    = getChannelType();
+    private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
+    private static final Logger                   log            = LoggerFactory.getLogger(DemesneImpl.class);
 
     private static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -110,99 +91,13 @@ public class DemesneIsolate {
         };
     }
 
-    private static Digest digest(byte[] digest) {
-        try {
-            return Digest.from(Digeste.parseFrom(digest));
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Invalid digest: {}", digest);
-            throw new IllegalArgumentException("Invalid digest: " + digest, e);
-        }
-    }
-
-    private static String launch(Pointer jniEnv, ByteBuffer paramBytes, Pointer clazz,
-                                 char[] pwd) throws GeneralSecurityException, IOException {
-        try {
-            return launch(jniEnv, DemesneParameters.parseFrom(paramBytes), clazz, pwd);
-        } finally {
-            Arrays.fill(pwd, ' ');
-        }
-    }
-
-    private static String launch(Pointer jniEnv, DemesneParameters parameters, Pointer clazz,
-                                 char[] pwd) throws GeneralSecurityException, IOException {
-        if (demesne.get() != null) {
-            return null;
-        }
-        final var pretending = new DemesneIsolate(jniEnv, parameters, clazz, pwd);
-        if (!demesne.compareAndSet(null, pretending)) {
-            return null;
-        }
-        return pretending.getInbound();
-    }
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_launch")
-    private static void launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                               byte[] parameters, char[] ksPassword) throws GeneralSecurityException, IOException {
-        log.info("Launch isolate: {} parameters: {} pswd: {}", isolateId, parameters.length, ksPassword.length);
-        try {
-            launch(jniEnv, ByteBuffer.wrap(parameters), clazz, ksPassword);
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Cannot launch demesne", e);
-        } finally {
-            Arrays.fill(ksPassword, ' ');
-        }
-    }
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_start")
-    private static void start(Pointer jniEnv, Pointer clazz,
-                              @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
-        final var d = demesne.get();
-        if (d != null) {
-            d.start();
-        }
-    }
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_stop")
-    private static void stop(Pointer jniEnv, Pointer clazz,
-                             @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
-        final var d = demesne.get();
-        if (d != null) {
-            d.stop();
-        }
-    }
-
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_viewChange")
-    private static void viewChange(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                   byte[] viewId, byte[][] joins,
-                                   byte[][] leaves) throws GeneralSecurityException, IOException {
-
-        final var current = demesne.get();
-        if (current == null) {
-            return;
-        }
-        current.viewChange(digest(viewId),
-                           IntStream.range(0, joins.length)
-                                    .mapToObj(i -> digest(joins[i]))
-                                    .filter(d -> d != null)
-                                    .toList(),
-                           IntStream.range(0, leaves.length)
-                                    .mapToObj(i -> digest(leaves[i]))
-                                    .filter(d -> d != null)
-                                    .toList());
-    }
-
-    private final Pointer       clazz;
     private final SubDomain     domain;
     private final String        inbound;
-    private final Pointer       jniEnv;
     private final KERL          kerl;
     private final AtomicBoolean started = new AtomicBoolean();
     private final Stereotomy    stereotomy;
 
-    DemesneIsolate(Pointer jniEnv, DemesneParameters parameters, Pointer clazz,
-                   char[] pwd) throws GeneralSecurityException, IOException {
-        this.jniEnv = jniEnv;
-        this.clazz = clazz;
+    public DemesneImpl(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
@@ -286,6 +181,10 @@ public class DemesneIsolate {
         return domain == null ? false : domain.active();
     }
 
+    public String getInbound() {
+        return inbound;
+    }
+
     public void start() {
         if (!started.compareAndSet(false, true)) {
             return;
@@ -300,15 +199,7 @@ public class DemesneIsolate {
         domain.stop();
     }
 
-    private String getInbound() {
-        return inbound;
-    }
-
-    private void registerContext(Digest ctxId) {
-        // TODO Auto-generated method stub
-    }
-
-    private void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
+    public void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
         joining.stream().filter(id -> domain.getContext().isMember(id)).forEach(id -> {
             EstablishmentEvent keyEvent;
             try {
@@ -325,5 +216,9 @@ public class DemesneIsolate {
             }
         });
         leaving.forEach(id -> domain.getContext().remove(id));
+    }
+
+    private void registerContext(Digest ctxId) {
+        // TODO Auto-generated method stub
     }
 }

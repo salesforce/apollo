@@ -44,6 +44,7 @@ import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -237,7 +238,7 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(exec)
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0), ffParams, txnConfig);
+                                           new InetSocketAddress(0), ffParams, txnConfig, EventValidation.NONE);
             domains.add(domain);
             localRouter.start();
         });

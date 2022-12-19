@@ -58,14 +58,14 @@ public class ProcessDomain extends Domain {
     public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                          InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
-                         TransactionConfiguration txnConfig) {
+                         TransactionConfiguration txnConfig, EventValidation eventValidation) {
         super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
-        this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(),
-                                   ff.build(), DigestAlgorithm.DEFAULT, null, params.exec());
+        this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
+                                   DigestAlgorithm.DEFAULT, null, params.exec());
         listener = foundation.register(listener());
     }
 

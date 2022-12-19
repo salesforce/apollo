@@ -92,7 +92,7 @@ public class DemesneIsolateTest {
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        var demesne = new Demesne(parameters, ksPassword);
+        var demesne = new DemesneImpl(parameters, ksPassword);
         demesne.start();
         Utils.waitForCondition(1000, () -> demesne.active());
     }
