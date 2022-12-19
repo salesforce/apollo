@@ -6,6 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>isolate-ftesting</artifactId>
+    <name>Isolate Testing</name>
+    <description>Functional testing for Apollo Demesnes Isolates</description>
 
     <dependencies>
         <dependency>

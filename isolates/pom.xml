@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>isolates</artifactId>
-    <name>Isolates: Apollo Domain Shards</name>
-    <description>Dynamic library for Apollo Domain Shards</description>
+    <name>Isolates</name>
+    <description>Dynamic library for Apollo Domain Isolates</description>
 
     <properties>
         <imageName>libdemesne</imageName>

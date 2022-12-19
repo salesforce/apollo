@@ -6,7 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>grpc</artifactId>
-    <name>Apollo GRPC/Proto</name>
+    <name>GRPC</name>
     <description>Module that defines and generates all proto/grpc for Apollo</description>
 
     <dependencies>

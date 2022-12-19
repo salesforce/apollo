@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>thoth</artifactId>
-    <name>Thoth - KERI at scale</name>
-    <description>Stereotomy for async, decentralized, byzantine fault tolerant PKI.</description>
+    <name>Thoth</name>
+    <description>Stereotomy for async, decentralized, byzantine fault tolerant PKI</description>
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>

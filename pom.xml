@@ -4,7 +4,7 @@
     <artifactId>apollo.app</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Apollo: Umbrella App</name>
+    <name>Apollo Umbrella App</name>
     <modules>
         <module>fireflies</module>
         <module>protocols</module>

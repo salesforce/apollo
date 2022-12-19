@@ -6,7 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>stereotomy</artifactId>
-    <name>Stereotomy: Identity and Key Management</name>
+    <name>Stereotomy</name>
+    <description>KERI Identity and Key Management</description>
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>

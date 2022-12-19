@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>choam</artifactId>
-    <name>CHOAM: Replicated State Machines</name>
-    <description>Consortium For Apollo</description>
+    <name>CHOAM</name>
+    <description>Replicated State Machines and Consortium For Apollo</description>
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>

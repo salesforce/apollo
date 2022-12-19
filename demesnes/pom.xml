@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>demesnes</artifactId>
-    <name>Demesnes: Apollo Enclave Model</name>
-    <description>Apollo isolate model for the GraalVM</description>
+    <name>Demesnes</name>
+    <description>Apollo Enclave Isolation Model</description>
 
     <properties>
         <mainClass>com.salesforce.apollo.domain.Demesne</mainClass>

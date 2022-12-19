@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>sql-state</artifactId>
-    <name>SQL State: Replicated SQL State Machine</name>
-    <description>Materialized SQL view state from CHOAM</description>
+    <name>SQL State</name>
+    <description>Materialized SQL view state from CHOAM Replicated SQL State Machine</description>
 
     <dependencies>
         <dependency>

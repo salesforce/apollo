@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>fireflies</artifactId>
-    <name>Fireflies: BFT Membership</name>
-    <description>Byzantine fault tolerant gossip communications discovery and overay</description>
+    <name>Fireflies</name>
+    <description>Byzantine fault tolerant, virtually synchronous membership service and secure communications overay</description>
 
     <dependencies>
         <dependency>

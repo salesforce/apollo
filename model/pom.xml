@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>model</artifactId>
-    <name>Model: System Model</name>
-    <description>Sytem model for applications, deployments, tenants, etc.</description>
+    <name>Model</name>
+    <description>Sytem Domain model for applications, deployments, tenants, etc.</description>
 
     <dependencies>
         <dependency>

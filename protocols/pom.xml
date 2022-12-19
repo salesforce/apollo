@@ -6,7 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>protocols</artifactId>
-    <name>Protocols: MTLS GRPC and Limiting</name>
+    <name>Protocols</name>
+    <description>Apollo base GRPC communications and rate limiting</description>
 
     <dependencies>
         <dependency>
