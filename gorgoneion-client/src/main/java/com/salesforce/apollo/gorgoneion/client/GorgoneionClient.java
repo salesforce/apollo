@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.gorgoneion;
+package com.salesforce.apollo.gorgoneion.client;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -23,7 +23,7 @@ import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
+import com.salesforce.apollo.gorgoneion.client.client.comm.Admissions;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 
 /**

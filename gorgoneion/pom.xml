@@ -16,15 +16,11 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>delphinius</artifactId>
+            <artifactId>memberships</artifactId>
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>grpc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>memberships</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->

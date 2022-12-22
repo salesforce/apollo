@@ -27,6 +27,7 @@
         <module>grpc</module>
         <module>gorgoneion</module>
         <module>demesnes</module>
+        <module>gorgoneion-client</module>
     </modules>
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
@@ -231,6 +232,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>gorgoneion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>gorgoneion-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -52,7 +52,12 @@
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>gorgoneion</artifactId>
+            <artifactId>gorgoneion-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+        	<groupId>com.salesforce.apollo</groupId>
+        	<artifactId>gorgoneion</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

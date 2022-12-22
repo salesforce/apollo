@@ -55,11 +55,33 @@ public class Router {
     }
 
     public class CommonCommunications<Client extends Link, Service> implements ClientConnector<Client> {
+        public static <Client> Client vanilla(Member from) {
+            @SuppressWarnings("unchecked")
+            Client client = (Client) new Link() {
+
+                @Override
+                public void close() throws IOException {
+                }
+
+                @Override
+                public Member getMember() {
+                    return from;
+                }
+            };
+            return client;
+        }
+
         private final Digest                             context;
         private final CreateClientCommunications<Client> createFunction;
         private final Member                             from;
         private final Client                             localLoopback;
-        private final RoutableService<Service>           routing;
+
+        private final RoutableService<Service> routing;
+
+        public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing) {
+            this(context, from, routing, m -> vanilla(from), vanilla(from));
+
+        }
 
         public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
                                                        CreateClientCommunications<Client> createFunction,
@@ -180,6 +202,22 @@ public class Router {
                                                                                                               CreateClientCommunications<Client> createFunction,
                                                                                                               Client localLoopback) {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
+    }
+
+    public <Service> CommonCommunications<Link, Service> create(Member member, Digest context, Service service,
+                                                                String routingLabel,
+                                                                Function<RoutableService<Service>, BindableService> factory) {
+        @SuppressWarnings("unchecked")
+        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
+            var route = new RoutableService<Service>(executor);
+            BindableService bindableService = factory.apply(route);
+            registry.addService(bindableService);
+            return route;
+        });
+        routing.bind(context, service);
+        contextRegistration.accept(context);
+        log.info("Communications created for: " + member.getId());
+        return new CommonCommunications<Link, Service>(context, member, routing);
     }
 
     public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,

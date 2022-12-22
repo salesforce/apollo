@@ -92,8 +92,6 @@ public class ViewManagement {
         }
     }
 
-    static final double MEMBERSHIP_FPR = 0.0000125;
-
     private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
 
     private final AtomicInteger                            attempt      = new AtomicInteger();

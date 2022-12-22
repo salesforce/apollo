@@ -76,6 +76,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Deterministic H2](h2-deterministic) - Deterministic H2 SQL Database
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
+* [Gorgoneion Client](gorgoneion-client/README.md) - Identity bootstrap client
 * [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo sub domain enclaves.
 * [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.

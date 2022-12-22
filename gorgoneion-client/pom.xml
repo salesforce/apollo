@@ -1,13 +1,12 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.salesforce.apollo</groupId>
         <artifactId>apollo.app</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>fireflies</artifactId>
-    <name>Fireflies</name>
-    <description>Byzantine fault tolerant, virtually synchronous membership service and secure communications ovelay</description>
+    <name>Gorgoneion Client</name>
+    <artifactId>gorgoneion-client</artifactId>
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
@@ -15,17 +14,19 @@
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>gorgoneion</artifactId>
+            <artifactId>grpc</artifactId>
         </dependency>
-        <!-- Test only dependencies below this line -->
+        
+        <!-- Test only deps below this line -->
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -34,8 +35,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency> 
+        <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>thoth</artifactId>
+            <artifactId>gorgoneion</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

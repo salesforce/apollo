@@ -259,7 +259,7 @@ abstract public class Domain {
 
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        log.info("Genesis joins: {} on: {}", members.keySet(), params.member());
+        log.info("Genesis joins: {} on: {}", members.keySet().stream().map(m -> m.getId()).toList(), params.member());
         var sorted = new ArrayList<Member>(members.keySet());
         sorted.sort(Comparator.naturalOrder());
         List<Transaction> transactions = new ArrayList<>();
