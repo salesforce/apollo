@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.domain;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
@@ -13,8 +13,12 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -26,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
@@ -36,11 +41,20 @@ import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.Stereotomy;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
@@ -57,12 +71,13 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import io.netty.channel.unix.ServerDomainSocketChannel;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class EnclaveTest {
+public class DemesneTest {
     public static class Server extends TestItImplBase {
         private final RoutableService<TestIt> router;
 
@@ -129,7 +144,8 @@ public class EnclaveTest {
         Any ping(Any request);
     }
 
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
+    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -181,7 +197,7 @@ public class EnclaveTest {
     }
 
     @Test
-    public void smokin() throws Exception {
+    public void portal() throws Exception {
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
         var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
@@ -241,10 +257,55 @@ public class EnclaveTest {
         router2.close(Duration.ofSeconds(1));
     }
 
+    @Test
+    public void smokin() throws Exception {
+        var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
+        Files.createDirectories(commDirectory);
+        final var ksPassword = new char[] { 'f', 'o', 'o' };
+        final var ks = KeyStore.getInstance("JKS");
+        ks.load(null, ksPassword);
+        final var keystore = new JksKeyStore(ks, () -> ksPassword);
+        final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        Stereotomy controller = new StereotomyImpl(keystore, kerl, SecureRandom.getInstanceStrong());
+        var identifier = controller.newIdentifier().get();
+        var baos = new ByteArrayOutputStream();
+        ks.store(baos, ksPassword);
+        ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
+        Member serverMember = new ControlledIdentifierMember(identifier);
+        var kerlEndpoint = UUID.randomUUID().toString();
+        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(kerlEndpoint).toFile());
+        var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
+                                              .protocolNegotiator(new DomainSocketNegotiator())
+                                              .channelType(serverChannelType)
+                                              .workerEventLoopGroup(eventLoopGroup)
+                                              .bossEventLoopGroup(eventLoopGroup)
+                                              .intercept(new DomainSocketServerInterceptor());
+
+        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
+        var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
+        router.start();
+        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
+        @SuppressWarnings("unused")
+        var comms = router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
+                                  r -> new KERLServer(r, null), null, null);
+
+        var parameters = DemesneParameters.newBuilder()
+                                          .setKerlContext(context.toDigeste())
+                                          .setKerlService(kerlEndpoint)
+                                          .setMember(identifier.getIdentifier().toIdent())
+                                          .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
+                                          .setCommDirectory(commDirectory.toString())
+                                          .build();
+        var demesne = new Demesne(parameters, ksPassword);
+        demesne.start();
+
+        demesne.getInbound();
+    }
+
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(eventLoopGroup)
-                                  .channelType(channelType)
+                                  .channelType(clientChannelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)
                                   .usePlaintext()
                                   .build();

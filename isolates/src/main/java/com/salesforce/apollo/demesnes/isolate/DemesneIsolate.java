@@ -28,7 +28,7 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.domain.DemesneImpl;
+import com.salesforce.apollo.domain.Demesne;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -48,7 +48,7 @@ import io.netty.channel.EventLoopGroup;
 public class DemesneIsolate {
 
     private static final Class<? extends Channel>     channelType    = getChannelType();
-    private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
+    private static final AtomicReference<Demesne> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
 
@@ -102,7 +102,7 @@ public class DemesneIsolate {
         if (demesne.get() != null) {
             return null;
         }
-        final var pretending = new DemesneImpl(parameters, pwd);
+        final var pretending = new Demesne(parameters, pwd);
         if (!demesne.compareAndSet(null, pretending)) {
             return null;
         }
