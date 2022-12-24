@@ -16,7 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>demesnes</artifactId>
+            <artifactId>model</artifactId>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>

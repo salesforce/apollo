@@ -52,7 +52,7 @@ You can, of course, use the "--also-make-dependents" argument for maven "-amd" i
 
 Currently, the integration between Eclipse and Graalvm is a bit....  interesting.  Consequently, generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile.  When you run this profile, you'll also need to set the property *eclipse.graalvm.jdk.workaround=true*.  Yes, I know, what a PITA.  Apologies, but to quote Martin Blank, "it's not me".
 
-Anyhow, this is all done so that you can actually import the *[demesnes](demesnes/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
+Anyhow, this is all done so that, if you so choose, you can actually import the *[isolates](isolates/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
 
     mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
 
@@ -67,7 +67,6 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 
 * [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
-* [Demesnes](demesnes/README.md) - Apollo sub domain enclaves
 * [Demo](demo/README.md) - Hypothetical DropWizard REST API for Delphinus running on the Apollo stack
 * [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
 * [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
@@ -80,7 +79,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo sub domain enclaves.
 * [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_.  Ring communication and gossip patterns.
-* [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains.
+* [Model](model/README.md) - Replicated domains.  Process and multitentant sharding domains and enclaves.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
 * [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
 * [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs.  JDBC interface.

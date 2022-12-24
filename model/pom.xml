@@ -26,6 +26,10 @@
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>stereotomy-services</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.scijava</groupId>
+            <artifactId>native-lib-loader</artifactId>
+        </dependency>
 
         <!-- Test only deps below this line -->
         <dependency>

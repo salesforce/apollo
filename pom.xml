@@ -26,7 +26,6 @@
         <module>liquibase-deterministic</module>
         <module>grpc</module>
         <module>gorgoneion</module>
-        <module>demesnes</module>
         <module>gorgoneion-client</module>
     </modules>
     <properties>

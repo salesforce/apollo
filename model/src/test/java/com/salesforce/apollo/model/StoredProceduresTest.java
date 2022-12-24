@@ -62,7 +62,7 @@ public class StoredProceduresTest {
 
         DatatypeConverter.class.toGenericString();
         for (var digest : ids) {
-            assertTrue(Domain.isActiveMember(context, digest), "Not an active member: " + digest);
+            assertTrue(Domain.isMember(context, digest), "Not an active member: " + digest);
         }
     }
 }
