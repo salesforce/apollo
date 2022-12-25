@@ -307,7 +307,7 @@ public class KerlDHT implements ProtoKERLService {
                 return completeExceptionally(e);
             }
         });
-        this.ani = new Ani(member, asKERL());
+        this.ani = new Ani(member.getId(), asKERL());
     }
 
     public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,

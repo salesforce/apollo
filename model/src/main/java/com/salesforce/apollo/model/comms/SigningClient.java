@@ -11,33 +11,20 @@ import com.salesfoce.apollo.model.proto.Request;
 import com.salesfoce.apollo.model.proto.SigningServiceGrpc;
 import com.salesfoce.apollo.model.proto.SigningServiceGrpc.SigningServiceBlockingStub;
 import com.salesfoce.apollo.utils.proto.Sig;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.membership.Member;
+
+import io.grpc.ManagedChannel;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class SigningClient implements SigningService {
-
-    private final ManagedServerChannel       channel;
     private final SigningServiceBlockingStub client;
     private final SigningMetrics             metrics;
 
-    public SigningClient(ManagedServerChannel channel, SigningMetrics metrics) {
+    public SigningClient(ManagedChannel managedChannel, SigningMetrics metrics) {
         this.metrics = metrics;
-        this.channel = channel;
-        client = SigningServiceGrpc.newBlockingStub(channel).withCompression("gzip");
-    }
-
-    @Override
-    public void close() {
-        channel.release();
-    }
-
-    @Override
-    public Member getMember() {
-        return channel.getMember();
+        client = SigningServiceGrpc.newBlockingStub(managedChannel).withCompression("gzip");
     }
 
     @Override

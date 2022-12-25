@@ -8,12 +8,11 @@ package com.salesforce.apollo.model.comms;
 
 import com.salesfoce.apollo.model.proto.Request;
 import com.salesfoce.apollo.utils.proto.Sig;
-import com.salesforce.apollo.archipelago.Link;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface SigningService extends Link {
+public interface SigningService {
     Sig sign(Request request);
 }

@@ -39,6 +39,7 @@ import com.salesforce.apollo.fireflies.View.ViewChangeListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.stereotomy.EventValidation;
 
 import io.grpc.ManagedChannel;
@@ -138,49 +139,11 @@ public class ProcessDomain extends Domain {
         super.start();
     }
 
-    public void startServices() {
-        try {
-            portal.start();
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to start portal, local address: " + bridge.path() + " on: "
-            + params.member().getId());
-        }
-        try {
-            kerlService.start();
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to start KERL service, local address: " + kerlEndpoint.path()
-            + " on: " + params.member().getId());
-        }
-
-        try {
-            signingService.start();
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to start signing service, local address: " + signingEndpoint.path()
-            + " on: " + params.member().getId());
-        }
-    }
-
     @Override
     public void stop() {
         super.stop();
         foundation.deregister(listener);
         stopServices();
-    }
-
-    public void stopServices() {
-        portal.close(Duration.ofSeconds(30));
-        kerlService.shutdown();
-        try {
-            kerlService.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        signingService.shutdown();
-        try {
-            signingService.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {
@@ -208,5 +171,43 @@ public class ProcessDomain extends Domain {
             log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
                      join.size(), leaving.size(), params.member().getId());
         };
+    }
+
+    private void startServices() {
+        try {
+            portal.start();
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to start portal, local address: " + bridge.path() + " on: "
+            + params.member().getId());
+        }
+        try {
+            kerlService.start();
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to start KERL service, local address: " + kerlEndpoint.path()
+            + " on: " + params.member().getId());
+        }
+
+        try {
+            signingService.start();
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to start signing service, local address: " + signingEndpoint.path()
+            + " on: " + params.member().getId());
+        }
+    }
+
+    private void stopServices() {
+        portal.close(Duration.ofSeconds(30));
+        kerlService.shutdown();
+        try {
+            kerlService.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        signingService.shutdown();
+        try {
+            signingService.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

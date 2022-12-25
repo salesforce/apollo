@@ -28,8 +28,8 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.model.Demesne;
-import com.salesforce.apollo.model.DemesneImpl;
+import com.salesforce.apollo.model.demesnes.Demesne;
+import com.salesforce.apollo.model.demesnes.DemesneImpl;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;

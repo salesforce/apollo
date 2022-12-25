@@ -41,7 +41,7 @@ public class AniTest extends AbstractDhtTest {
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(e.getKey(),
+                                                                     e -> new Ani(e.getKey().getId(),
                                                                                   dhts.get(e.getKey()).asKERL())));
         var ani = anis.values().stream().findFirst().get();
 
