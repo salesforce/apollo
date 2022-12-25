@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.model.proto";
+option java_outer_classname = "MessagingProto";
+option objc_class_prefix = "Mp";
+import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
+import "util.proto";
+import "stereotomy.proto";
+
+package model;
+
+message Request {
+    stereotomy.EventCoords coordinates = 1;
+    repeated bytes content = 2;
+}
+
+service SigningService {
+    rpc sign (Request) returns(utils.Sig) {}
+}

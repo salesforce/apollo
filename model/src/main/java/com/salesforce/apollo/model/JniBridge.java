@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.domain;
+package com.salesforce.apollo.model;
 
 import java.io.IOException;
 import java.util.List;
@@ -15,12 +15,12 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
- * Interface to SubDomain Demesne running in the GraalVM Isolate
+ * Interface to SubDomain Demesne running in the GraalVM Isolate as JNI library
  *
  * @author hal.hildebrand
  *
  */
-public class JniBridge {
+public class JniBridge implements Demesne {
     private static final String DEMESNE_SHARED_LIB_NAME = "demesne";
 
     static {
@@ -50,18 +50,22 @@ public class JniBridge {
         launch(isolateId, parameters.toByteArray(), password);
     }
 
+    @Override
     public boolean active() {
         return active(isolateId);
     }
 
+    @Override
     public void start() {
         start(isolateId);
     }
 
+    @Override
     public void stop() {
         start(isolateId);
     }
 
+    @Override
     public void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
         viewChange(isolateId, viewId.toDigeste().toByteArray(),
                    (byte[][]) joining.stream().map(d -> d.toDigeste().toByteArray()).toArray(),

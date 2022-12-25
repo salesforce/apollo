@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.domain;
+package com.salesforce.apollo.model;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
@@ -39,7 +39,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
-import com.salesforce.apollo.model.SubDomain;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -63,16 +62,16 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
 /**
- * GraalVM Isolate for the Apollo SubDomain stack
+ * Isolate for the Apollo SubDomain stack
  *
  * @author hal.hildebrand
  *
  */
-public class Demesne {
+public class DemesneImpl implements Demesne {
 
     private static final Class<? extends Channel> channelType    = getChannelType();
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
-    private static final Logger                   log            = LoggerFactory.getLogger(Demesne.class);
+    private static final Logger                   log            = LoggerFactory.getLogger(DemesneImpl.class);
 
     private static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -97,7 +96,7 @@ public class Demesne {
     private final AtomicBoolean started = new AtomicBoolean();
     private final Stereotomy    stereotomy;
 
-    public Demesne(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
+    public DemesneImpl(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
@@ -177,6 +176,7 @@ public class Demesne {
                                                                                                       .factory())));
     }
 
+    @Override
     public boolean active() {
         return domain == null ? false : domain.active();
     }
@@ -185,6 +185,7 @@ public class Demesne {
         return inbound;
     }
 
+    @Override
     public void start() {
         if (!started.compareAndSet(false, true)) {
             return;
@@ -192,6 +193,7 @@ public class Demesne {
         domain.start();
     }
 
+    @Override
     public void stop() {
         if (!started.compareAndSet(true, false)) {
             return;
@@ -199,6 +201,7 @@ public class Demesne {
         domain.stop();
     }
 
+    @Override
     public void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
         joining.stream().filter(id -> domain.getContext().isMember(id)).forEach(id -> {
             EstablishmentEvent keyEvent;

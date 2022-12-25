@@ -25,7 +25,7 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EndorsementServer extends EndorsementImplBase {
-    private ClientIdentity                            identity;
+    private final ClientIdentity                      identity;
     private final GorgoneionMetrics                   metrics;
     private final RoutableService<EndorsementService> router;
 

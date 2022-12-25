@@ -197,6 +197,10 @@ public class DomainTest {
 
     @BeforeEach
     public void before() throws Exception {
+
+        final var commsDirectory = Path.of("target/comms");
+        commsDirectory.toFile().mkdirs();
+
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -238,7 +242,8 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(exec)
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0), ffParams, txnConfig, EventValidation.NONE);
+                                           new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
+                                           EventValidation.NONE);
             domains.add(domain);
             localRouter.start();
         });
