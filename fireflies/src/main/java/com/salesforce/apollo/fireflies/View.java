@@ -680,10 +680,10 @@ public class View {
          *
          * @param context - the context for which the view change has occurred
          * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining members ids
+         * @param joins   - the list of joining members event coordinates
          * @param leaves  - the list of leaving members ids
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<Digest> joins, List<Digest> leaves);
+        void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
     }
 
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
@@ -865,28 +865,38 @@ public class View {
     }
 
     boolean addToView(NoteWrapper note) {
-        var newMember = false;
-        Participant m = context.getMember(note.getId());
-        if (m == null) {
-            newMember = true;
-            if (!validation.verify(note.getCoordinates(), note.getSignature(),
-                                   note.getWrapped().getNote().toByteString())) {
-                log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
+        return stable(() -> {
+            var newMember = false;
+            Participant m = context.getMember(note.getId());
+            if (m == null) {
+                newMember = true;
+                if (!validation.verify(note.getCoordinates(), note.getSignature(),
+                                       note.getWrapped().getNote().toByteString())) {
+                    log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
+                    if (metrics != null) {
+                        metrics.filteredNotes().mark();
+                    }
+                    return false;
                 }
-                return false;
-            }
-            m = new Participant(note);
-            context.add(m);
-        } else {
-            NoteWrapper current = m.getNote();
-            if (!newMember && current != null) {
-                long nextEpoch = note.getEpoch();
-                long currentEpoch = current.getEpoch();
-                if (nextEpoch <= currentEpoch) {
+                m = new Participant(note);
+                context.add(m);
+            } else {
+                NoteWrapper current = m.getNote();
+                if (!newMember && current != null) {
+                    long nextEpoch = note.getEpoch();
+                    long currentEpoch = current.getEpoch();
+                    if (nextEpoch <= currentEpoch) {
 //                    log.trace("Note: {} epoch out of date: {} current: {} on: {}", note.getId(), nextEpoch,
 //                              currentEpoch, node.getId());
+                        if (metrics != null) {
+                            metrics.filteredNotes().mark();
+                        }
+                        return false;
+                    }
+                }
+
+                if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+                    log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
                     if (metrics != null) {
                         metrics.filteredNotes().mark();
                     }
@@ -894,21 +904,11 @@ public class View {
                 }
             }
 
-            if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
-                log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
-                return false;
+            if (metrics != null) {
+                metrics.notes().mark();
             }
-        }
 
-        if (metrics != null) {
-            metrics.notes().mark();
-        }
-
-        var member = m;
-        stable(() -> {
+            var member = m;
             var accused = member.isAccused();
             stopRebuttalTimer(member);
             member.setNote(note);
@@ -923,8 +923,8 @@ public class View {
                 assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
                 + context.cardinality();
             }
+            return true;
         });
-        return true;
     }
 
     void bootstrap(NoteWrapper nw, ScheduledExecutorService sched, Duration dur) {
@@ -1017,7 +1017,7 @@ public class View {
         return viewManagement.join(scheduler, duration, timer);
     }
 
-    void notifyListeners(List<Digest> joining, List<Digest> leaving) {
+    void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = currentView();
         viewChangeListeners.forEach((id, listener) -> {
             try {

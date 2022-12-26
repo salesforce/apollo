@@ -13,6 +13,7 @@ import org.scijava.nativelib.NativeLoader;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * Interface to SubDomain Demesne running in the GraalVM Isolate as JNI library
@@ -66,9 +67,9 @@ public class JniBridge implements Demesne {
     }
 
     @Override
-    public void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
+    public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
         viewChange(isolateId, viewId.toDigeste().toByteArray(),
-                   (byte[][]) joining.stream().map(d -> d.toDigeste().toByteArray()).toArray(),
+                   (byte[][]) joining.stream().map(coords -> coords.toEventCoords().toByteArray()).toArray(),
                    (byte[][]) leaving.stream().map(d -> d.toDigeste().toByteArray()).toArray());
     }
 }

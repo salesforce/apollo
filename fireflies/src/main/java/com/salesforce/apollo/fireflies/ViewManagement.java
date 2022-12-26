@@ -237,7 +237,7 @@ public class ViewManagement {
                  context.allMembers().count(), pending.size(), ballot.leaving.size(), ballot.joining.size(),
                  node.getId());
 
-        view.notifyListeners(ballot.joining, ballot.leaving);
+        view.notifyListeners(joiningNotes.stream().map(nw -> nw.getCoordinates()).toList(), ballot.leaving);
     }
 
     boolean isJoined() {
@@ -265,7 +265,7 @@ public class ViewManagement {
             throw new IllegalStateException("Invalid crown");
         }
         setDiadem(calculated);
-        view.notifyListeners(context.allMembers().map(p -> p.getId()).toList(), Collections.emptyList());
+        view.notifyListeners(context.allMembers().map(p -> p.note.getCoordinates()).toList(), Collections.emptyList());
         onJoined.complete(null);
 
         view.scheduleViewChange();

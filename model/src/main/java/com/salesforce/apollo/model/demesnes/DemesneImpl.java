@@ -52,6 +52,7 @@ import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
 import com.salesforce.apollo.model.comms.SigningClient;
 import com.salesforce.apollo.model.comms.SigningService;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -136,7 +137,7 @@ public class DemesneImpl implements Demesne {
 
         @Override
         public JohnHancock sign(ByteString... message) {
-            final var builder = Request.newBuilder();
+            final var builder = Request.newBuilder().setCoordinates(event.getCoordinates().toEventCoords());
             for (var m : message) {
                 builder.addContent(m);
             }
@@ -147,6 +148,7 @@ public class DemesneImpl implements Demesne {
         public JohnHancock sign(InputStream message) {
             try {
                 return JohnHancock.from(signer.sign(Request.newBuilder()
+                                                           .setCoordinates(event.getCoordinates().toEventCoords())
                                                            .addContent(ByteString.readFrom(message))
                                                            .build()));
             } catch (IOException e) {
@@ -251,20 +253,16 @@ public class DemesneImpl implements Demesne {
     }
 
     @Override
-    public void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving) {
-        joining.stream().filter(id -> domain.getContext().isMember(id)).forEach(id -> {
+    public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
+        joining.forEach(coords -> {
             EstablishmentEvent keyEvent;
             try {
-                keyEvent = kerl.getKeyState(new SelfAddressingIdentifier(id))
-                               .thenApply(ks -> ks.getLastEstablishmentEvent())
-                               .thenCompose(coords -> kerl.getKeyEvent(coords))
-                               .thenApply(ke -> (EstablishmentEvent) ke)
-                               .get();
+                keyEvent = kerl.getKeyState(coords).thenApply(ke -> (EstablishmentEvent) ke).get();
                 domain.activate(new IdentifierMember(keyEvent));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (ExecutionException e) {
-                log.error("Error retrieving last establishment event for: {}", id, e.getCause());
+                log.error("Error retrieving last establishment event for: {}", coords, e.getCause());
             }
         });
         leaving.forEach(id -> domain.getContext().remove(id));

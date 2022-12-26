@@ -25,11 +25,13 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -78,6 +80,15 @@ public class DemesneIsolate {
                 };
             }
         };
+    }
+
+    private static EventCoordinates coords(byte[] coords) {
+        try {
+            return EventCoordinates.from(EventCoords.parseFrom(coords));
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Invalid digest: {}", coords);
+            throw new IllegalArgumentException("Invalid digest: " + coords, e);
+        }
     }
 
     private static Digest digest(byte[] digest) {
@@ -152,7 +163,7 @@ public class DemesneIsolate {
         }
         current.viewChange(digest(viewId),
                            IntStream.range(0, joins.length)
-                                    .mapToObj(i -> digest(joins[i]))
+                                    .mapToObj(i -> coords(joins[i]))
                                     .filter(d -> d != null)
                                     .toList(),
                            IntStream.range(0, leaves.length)

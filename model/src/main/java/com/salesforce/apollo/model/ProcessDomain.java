@@ -41,6 +41,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
@@ -158,7 +159,9 @@ public class ProcessDomain extends Domain {
     private ViewChangeListener listener() {
         return (context, id, join, leaving) -> {
             for (var d : join) {
-                params.context().activate(context.getMember(d));
+                if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
+                    params.context().activate(context.getMember(sai.getDigest()));
+                }
             }
             for (var d : leaving) {
                 params.context().remove(d);

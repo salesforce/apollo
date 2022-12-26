@@ -9,6 +9,7 @@ package com.salesforce.apollo.model.demesnes;
 import java.util.List;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * Domain Isolate interface
@@ -24,6 +25,6 @@ public interface Demesne {
 
     void stop();
 
-    void viewChange(Digest viewId, List<Digest> joining, List<Digest> leaving);
+    void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving);
 
 }
