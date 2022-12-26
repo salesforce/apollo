@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,13 +36,14 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.fireflies.View.ViewChangeListener;
+import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.thoth.KerlDHT;
 
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
@@ -72,13 +74,14 @@ public class ProcessDomain extends Domain {
     private final static EventLoopGroup eventLoopGroup = getEventLoopGroup();
     private final static Logger         log            = LoggerFactory.getLogger(ProcessDomain.class);
 
-    final Portal<Member>               portal;
     private final DomainSocketAddress  bridge;
+    private final KerlDHT              dht;
     private final View                 foundation;
     private final Map<Digest, Demesne> hostedDomains = new ConcurrentHashMap<>();
-    private DomainSocketAddress        kerlEndpoint;
+    private final DomainSocketAddress  kerlEndpoint;
     private final Server               kerlService;
     private final UUID                 listener;
+    private final Portal<Member>       portal;
     private final DomainSocketAddress  portalEndpoint;
     private final DomainSocketAddress  signingEndpoint;
     private final Server               signingService;
@@ -119,6 +122,12 @@ public class ProcessDomain extends Domain {
                                         .workerEventLoopGroup(getEventLoopGroup())
                                         .bossEventLoopGroup(getEventLoopGroup())
                                         .build();
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        connectionPool.setMaxConnections(10);
+        dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
+                          params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
+                          params.runtime().scheduler(), 0.00125, null);
     }
 
     public View getFoundation() {
@@ -156,7 +165,7 @@ public class ProcessDomain extends Domain {
                                   .build();
     }
 
-    private ViewChangeListener listener() {
+    private ViewLifecycleListener listener() {
         return (context, id, join, leaving) -> {
             for (var d : join) {
                 if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
@@ -177,6 +186,7 @@ public class ProcessDomain extends Domain {
     }
 
     private void startServices() {
+        dht.start(params.scheduler(), Duration.ofMillis(10)); // TODO parameterize gossip frequency
         try {
             portal.start();
         } catch (IOException e) {
@@ -212,5 +222,6 @@ public class ProcessDomain extends Domain {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        dht.stop();
     }
 }

@@ -447,6 +447,7 @@ abstract public class UniKERL implements KERL {
             log.info("Get key event: {} result: {}", coordinates, result);
             fs.complete(result);
         } catch (Throwable t) {
+            log.error("Get key event: {} error", coordinates, t);
             fs.completeExceptionally(t);
         }
         return fs;

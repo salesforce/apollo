@@ -272,11 +272,13 @@ public class KerlDHT implements ProtoKERLService {
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final TemporalAmount                                              timeout;
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member,
+    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                    ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
-        this.context = context;
+        @SuppressWarnings("unchecked")
+        final var casting = (Context<Member>) context;
+        this.context = casting;
         this.member = member;
         this.timeout = timeout;
         this.fpr = falsePositiveRate;
@@ -296,7 +298,7 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
-        this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
+        this.reconcile = new RingCommunications<>(this.context, member, reconcileComms, executor);
         this.kerlSpace = new KerlSpace(connectionPool);
 
         initializeSchema();
@@ -310,9 +312,10 @@ public class KerlDHT implements ProtoKERLService {
         this.ani = new Ani(member.getId(), asKERL());
     }
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
-                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
-                   ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
+    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
+                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
+                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
         this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor,
              timeout, scheduler, falsePositiveRate, metrics);
     }

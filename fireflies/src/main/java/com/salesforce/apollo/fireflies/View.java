@@ -673,8 +673,7 @@ public class View {
         }
     }
 
-    @FunctionalInterface
-    public interface ViewChangeListener {
+    public interface ViewLifecycleListener {
         /**
          * Notification of a view change event
          *
@@ -684,6 +683,7 @@ public class View {
          * @param leaves  - the list of leaving members ids
          */
         void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
+
     }
 
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
@@ -735,7 +735,7 @@ public class View {
     private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
     private final EventValidation                             validation;
     private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
-    private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
+    private final Map<UUID, ViewLifecycleListener>            viewChangeListeners = new HashMap<>();
     private final ViewManagement                              viewManagement;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -790,7 +790,7 @@ public class View {
      * @param listener - the ViewChangeListener to receive events
      * @return the UUID identifying this listener
      */
-    public UUID register(ViewChangeListener listener) {
+    public UUID register(ViewLifecycleListener listener) {
         final var id = UUID.randomUUID();
         viewChangeListeners.put(id, listener);
         return id;
