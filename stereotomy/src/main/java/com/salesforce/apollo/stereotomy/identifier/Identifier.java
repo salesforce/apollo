@@ -14,6 +14,7 @@ import java.security.PublicKey;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -96,6 +97,10 @@ public interface Identifier {
 
     @Override
     boolean equals(Object obj);
+
+    default Digest getDigest(DigestAlgorithm algo) {
+        return algo.digest(toIdent().toByteString());
+    }
 
     @Override
     int hashCode();

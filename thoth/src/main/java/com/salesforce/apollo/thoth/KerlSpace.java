@@ -16,6 +16,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * Represents the replicated KERL logic
@@ -40,6 +41,17 @@ public class KerlSpace {
     public List<Digest> populate(CombinedIntervals keyIntervals) {
         // TODO Auto-generated method stub
         return Collections.emptyList();
+    }
+
+    /**
+     * Rebalance the KERLs in the new view
+     *
+     * @param joining - new members in the context
+     * @param leaving - members who have left the context
+     */
+    public void rebalance(List<EventCoordinates> joining, List<Digest> leaving) {
+        // TODO Auto-generated method stub
+
     }
 
     /**

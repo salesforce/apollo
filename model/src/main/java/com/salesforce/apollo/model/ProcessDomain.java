@@ -15,6 +15,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -41,6 +42,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.thoth.KerlDHT;
@@ -166,22 +168,33 @@ public class ProcessDomain extends Domain {
     }
 
     private ViewLifecycleListener listener() {
-        return (context, id, join, leaving) -> {
-            for (var d : join) {
-                if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
-                    params.context().activate(context.getMember(sai.getDigest()));
+        return new ViewLifecycleListener() {
+
+            @Override
+            public void update(EventCoordinates update) {
+                // TODO Auto-generated method stub
+
+            }
+
+            @Override
+            public void viewChange(Context<Participant> context, Digest id, List<EventCoordinates> join,
+                                   List<Digest> leaving) {
+                for (var d : join) {
+                    if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
+                        params.context().activate(context.getMember(sai.getDigest()));
+                    }
                 }
-            }
-            for (var d : leaving) {
-                params.context().remove(d);
-            }
+                for (var d : leaving) {
+                    params.context().remove(d);
+                }
 
-            hostedDomains.forEach((viewId, demesne) -> {
-                demesne.viewChange(viewId, join, leaving);
-            });
+                hostedDomains.forEach((viewId, demesne) -> {
+                    demesne.viewChange(viewId, join, leaving);
+                });
 
-            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
-                     join.size(), leaving.size(), params.member().getId());
+                log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
+                         join.size(), leaving.size(), params.member().getId());
+            }
         };
     }
 

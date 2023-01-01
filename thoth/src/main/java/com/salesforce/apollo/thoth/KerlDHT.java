@@ -25,6 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -85,6 +86,7 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.LoggingOutputStream;
 import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
@@ -685,6 +687,14 @@ public class KerlDHT implements ProtoKERLService {
                                                                    Validations.getDefaultInstance()),
                                              t -> failedMajority(result, maxCount(gathered)));
         return result;
+    }
+
+    public BiConsumer<List<EventCoordinates>, List<Digest>> listener() {
+        return (joining, leaving) -> {
+            executor.execute(Utils.wrapped(() -> {
+                kerlSpace.rebalance(joining, leaving);
+            }, log));
+        };
     }
 
     public <T> Entry<T> max(HashMultiset<T> gathered) {

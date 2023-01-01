@@ -675,12 +675,19 @@ public class View {
 
     public interface ViewLifecycleListener {
         /**
+         * Notification of update to members' event coordinates
+         *
+         * @param update - the event coordinates to update
+         */
+        void update(EventCoordinates updated);
+
+        /**
          * Notification of a view change event
          *
          * @param context - the context for which the view change has occurred
          * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining members event coordinates
-         * @param leaves  - the list of leaving members ids
+         * @param joins   - the list of joining member's event coordinates
+         * @param leaves  - the list of leaving member's ids
          */
         void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
 
@@ -723,19 +730,19 @@ public class View {
     private final Executor                                    exec;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private final AtomicBoolean                               introduced          = new AtomicBoolean();
+    private final AtomicBoolean                               introduced         = new AtomicBoolean();
+    private final Map<UUID, ViewLifecycleListener>            lifecycleListeners = new HashMap<>();
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
-    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final Map<Digest, SignedViewChange>               observations       = new ConcurrentSkipListMap<>();
     private final Parameters                                  params;
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals   = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
-    private final Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
-    private final AtomicBoolean                               started             = new AtomicBoolean();
-    private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
+    private final Set<Digest>                                 shunned            = new ConcurrentSkipListSet<>();
+    private final AtomicBoolean                               started            = new AtomicBoolean();
+    private final Map<String, RoundScheduler.Timer>           timers             = new HashMap<>();
     private final EventValidation                             validation;
-    private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
-    private final Map<UUID, ViewLifecycleListener>            viewChangeListeners = new HashMap<>();
+    private final ReadWriteLock                               viewChange         = new ReentrantReadWriteLock(true);
     private final ViewManagement                              viewManagement;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -773,7 +780,7 @@ public class View {
      * @param listenerId
      */
     public void deregister(UUID listenerId) {
-        viewChangeListeners.remove(listenerId);
+        lifecycleListeners.remove(listenerId);
     }
 
     /**
@@ -792,7 +799,7 @@ public class View {
      */
     public UUID register(ViewLifecycleListener listener) {
         final var id = UUID.randomUUID();
-        viewChangeListeners.put(id, listener);
+        lifecycleListeners.put(id, listener);
         return id;
     }
 
@@ -865,38 +872,30 @@ public class View {
     }
 
     boolean addToView(NoteWrapper note) {
-        return stable(() -> {
-            var newMember = false;
-            Participant m = context.getMember(note.getId());
-            if (m == null) {
-                newMember = true;
-                if (!validation.verify(note.getCoordinates(), note.getSignature(),
-                                       note.getWrapped().getNote().toByteString())) {
-                    log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
-                    if (metrics != null) {
-                        metrics.filteredNotes().mark();
-                    }
-                    return false;
+        var newMember = false;
+        NoteWrapper current = null;
+
+        Participant m = context.getMember(note.getId());
+        if (m == null) {
+            newMember = true;
+            if (!validation.verify(note.getCoordinates(), note.getSignature(),
+                                   note.getWrapped().getNote().toByteString())) {
+                log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
                 }
-                m = new Participant(note);
-                context.add(m);
-            } else {
-                NoteWrapper current = m.getNote();
-                if (!newMember && current != null) {
-                    long nextEpoch = note.getEpoch();
-                    long currentEpoch = current.getEpoch();
-                    if (nextEpoch <= currentEpoch) {
+                return false;
+            }
+            m = new Participant(note);
+            context.add(m);
+        } else {
+            current = m.getNote();
+            if (!newMember && current != null) {
+                long nextEpoch = note.getEpoch();
+                long currentEpoch = current.getEpoch();
+                if (nextEpoch <= currentEpoch) {
 //                    log.trace("Note: {} epoch out of date: {} current: {} on: {}", note.getId(), nextEpoch,
 //                              currentEpoch, node.getId());
-                        if (metrics != null) {
-                            metrics.filteredNotes().mark();
-                        }
-                        return false;
-                    }
-                }
-
-                if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
-                    log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
                     if (metrics != null) {
                         metrics.filteredNotes().mark();
                     }
@@ -904,11 +903,21 @@ public class View {
                 }
             }
 
-            if (metrics != null) {
-                metrics.notes().mark();
+            if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+                log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
+                return false;
             }
+        }
 
-            var member = m;
+        if (metrics != null) {
+            metrics.notes().mark();
+        }
+
+        var member = m;
+        stable(() -> {
             var accused = member.isAccused();
             stopRebuttalTimer(member);
             member.setNote(note);
@@ -923,8 +932,26 @@ public class View {
                 assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
                 + context.cardinality();
             }
-            return true;
         });
+        if (!newMember) {
+            if (current != null) {
+                if (current.getCoordinates()
+                           .getSequenceNumber()
+                           .compareTo(member.note.getCoordinates().getSequenceNumber()) > 0) {
+                    exec.execute(() -> {
+                        final var coordinates = member.note.getCoordinates();
+                        try {
+                            lifecycleListeners.values().forEach(l -> {
+                                l.update(coordinates);
+                            });
+                        } catch (Throwable t) {
+                            log.error("Error during coordinate update: {}", coordinates, t);
+                        }
+                    });
+                }
+            }
+        }
+        return true;
     }
 
     void bootstrap(NoteWrapper nw, ScheduledExecutorService sched, Duration dur) {
@@ -1019,7 +1046,7 @@ public class View {
 
     void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = currentView();
-        viewChangeListeners.forEach((id, listener) -> {
+        lifecycleListeners.forEach((id, listener) -> {
             try {
                 log.trace("Notifying view change: {} listener: {} cardinality: {} joins: {} leaves: {} on: {} ",
                           currentView(), id, context.totalCount(), joining.size(), leaving.size(), node.getId());

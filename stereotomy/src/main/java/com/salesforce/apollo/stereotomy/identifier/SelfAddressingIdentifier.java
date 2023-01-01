@@ -10,6 +10,7 @@ import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
@@ -41,6 +42,11 @@ public class SelfAddressingIdentifier implements Identifier, Comparable<SelfAddr
     }
 
     public Digest getDigest() {
+        return digest;
+    }
+
+    @Override
+    public Digest getDigest(DigestAlgorithm algo) {
         return digest;
     }
 

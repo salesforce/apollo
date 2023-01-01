@@ -43,10 +43,14 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -135,16 +139,28 @@ public class FireFliesTest {
         final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
                                                              new InetSocketAddress(0)));
         domains.forEach(d -> {
-            d.getFoundation().register((context, viewId, joins, leaves) -> {
-                if (context.totalCount() == CARDINALITY) {
-                    System.out.println(String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
-                                                     d.getMember().getId()));
-                    countdown.countDown();
-                } else {
-                    System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
-                                                     context.totalCount(), d.getMember().getId()));
+            var listener = new View.ViewLifecycleListener() {
+
+                @Override
+                public void update(EventCoordinates update) {
+                    // TODO Auto-generated method stub
+
                 }
-            });
+
+                @Override
+                public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
+                                       List<Digest> leaves) {
+                    if (context.totalCount() == CARDINALITY) {
+                        System.out.println(String.format("Full view: %s members: %s on: %s", viewId,
+                                                         context.totalCount(), d.getMember().getId()));
+                        countdown.countDown();
+                    } else {
+                        System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
+                                                         context.totalCount(), d.getMember().getId()));
+                    }
+                }
+            };
+            d.getFoundation().register(listener);
         });
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
