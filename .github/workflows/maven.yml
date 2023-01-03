@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v4.5
+        with:
+          maven-version: 3.8.2
       - uses: actions/checkout@v3
       - name: Cache local Maven repository
         uses: actions/cache@v3.0.11
