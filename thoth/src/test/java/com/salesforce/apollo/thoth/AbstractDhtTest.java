@@ -156,8 +156,8 @@ public class AbstractDhtTest {
                                                                   exec);
         routers.put(member, router);
         dhts.put(member,
-                 new KerlDHT(Duration.ofMillis(5), context, member, wrap(), connectionPool, DigestAlgorithm.DEFAULT,
-                             router, exec, Duration.ofSeconds(10),
+                 new KerlDHT(Duration.ofMillis(5), KerlDHT.DEFAULT_MAX_RINGS, context, member, wrap(), connectionPool,
+                             DigestAlgorithm.DEFAULT, router, exec, Duration.ofSeconds(10),
                              Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
     }
 

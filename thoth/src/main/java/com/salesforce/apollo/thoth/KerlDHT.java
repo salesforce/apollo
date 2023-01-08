@@ -27,7 +27,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -89,7 +88,6 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.LoggingOutputStream;
 import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
@@ -258,7 +256,8 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
+    public final static int     DEFAULT_MAX_RINGS = 128;
+    private final static Logger log               = LoggerFactory.getLogger(KerlDHT.class);
 
     public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         var fs = new CompletableFuture<T>();
@@ -283,6 +282,7 @@ public class KerlDHT implements ProtoKERLService {
     private final CachingKERL                                                 kerl;
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
+    private final int                                                         maxRings;
     private final SigningMember                                               member;
     private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
@@ -293,9 +293,18 @@ public class KerlDHT implements ProtoKERLService {
     private final TemporalAmount                                              timeout;
 
     public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
+                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
+                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
+        this(frequency, DEFAULT_MAX_RINGS, context, member, (t, k) -> k, connectionPool, digestAlgorithm,
+             communications, executor, timeout, scheduler, falsePositiveRate, metrics);
+    }
+
+    public KerlDHT(Duration frequency, int maxRings, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                    ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
+        this.maxRings = maxRings;
         @SuppressWarnings("unchecked")
         final var casting = (Context<Member>) context;
         this.context = casting;
@@ -330,14 +339,6 @@ public class KerlDHT implements ProtoKERLService {
             }
         });
         this.ani = new Ani(member.getId(), asKERL());
-    }
-
-    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
-                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
-                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
-                   double falsePositiveRate, StereotomyMetrics metrics) {
-        this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor,
-             timeout, scheduler, falsePositiveRate, metrics);
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
@@ -707,14 +708,6 @@ public class KerlDHT implements ProtoKERLService {
         return result;
     }
 
-    public BiConsumer<List<EventCoordinates>, List<Digest>> listener() {
-        return (joining, leaving) -> {
-            executor.execute(Utils.wrapped(() -> {
-                kerlSpace.rebalance(joining, leaving);
-            }, log));
-        };
-    }
-
     public <T> Entry<T> max(HashMultiset<T> gathered) {
         return gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
     }
@@ -948,23 +941,25 @@ public class KerlDHT implements ProtoKERLService {
     private void updateRings(Ident identifier) {
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
-            dsl.transaction(create -> {
-                var id = dsl.select(IDENTIFIER.ID)
-                            .from(IDENTIFIER)
-                            .where(IDENTIFIER.PREFIX.eq(identifier.toByteArray()))
-                            .fetchOne();
+            dsl.transaction(ctx -> {
+                var create = DSL.using(ctx);
+                // Braindead, but correct
+                var id = create.select(IDENTIFIER.ID)
+                               .from(IDENTIFIER)
+                               .where(IDENTIFIER.PREFIX.eq(identifier.toByteArray()))
+                               .fetchOne();
                 if (id == null) {
                     log.error("Identifier: {} not found on: {}", Identifier.from(identifier), member.getId());
                     throw new IllegalStateException("Identifier: %s not found on: %s".formatted(Identifier.from(identifier),
                                                                                                 member.getId()));
                 }
 
-                var batch = dsl.batch(dsl.insertInto(RING_DIGESTS, RING_DIGESTS.IDENTIFIER, RING_DIGESTS.RING,
-                                                     RING_DIGESTS.DIGEST)
-                                         .values((Long) null, null, null)
-                                         .onDuplicateKeyIgnore());
+                var batch = create.batch(create.insertInto(RING_DIGESTS, RING_DIGESTS.IDENTIFIER, RING_DIGESTS.RING,
+                                                           RING_DIGESTS.DIGEST)
+                                               .values((Long) null, null, null)
+                                               .onDuplicateKeyIgnore());
                 var hashed = kerl.getDigestAlgorithm().digest(identifier.toByteString());
-                for (var r = 0; r < context.getRingCount(); r++) {
+                for (var r = 0; r < maxRings; r++) {
                     batch.bind(id.value1(), r, context.hashFor(hashed, r).getBytes());
                 }
                 batch.execute();
