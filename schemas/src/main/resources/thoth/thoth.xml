@@ -8,6 +8,30 @@
     <changeSet author="hhildebrand" id="thoth-1">
         <sql>create schema if not exists thoth</sql>
 
+        <createTable tableName="ring_digests"
+            schemaName="thoth">
+            <column name="identifier" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="ring" type="INT">
+                <constraints nullable="false" />
+            </column>
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            columnNames="identifier, ring, digest"
+            tableName="ring_digests" schemaName="thoth" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="ring_digests" baseTableSchemaName="thoth"
+            constraintName="ring_digests"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+
         <createTable tableName="pending_coordinates"
             schemaName="thoth">
             <column generationType="ALWAYS" name="id"
