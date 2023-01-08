@@ -91,9 +91,9 @@ public class Maat extends DelegatedKERL {
         }
         final Context<Member> ctx = context;
         var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
-                                   .stream()
-                                   .map(m -> m.getId())
-                                   .collect(Collectors.toSet());
+                                .stream()
+                                .map(m -> m.getId())
+                                .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<validator>();
@@ -111,7 +111,7 @@ public class Maat extends DelegatedKERL {
                                  event.getCoordinates());
                     }
                     mapped.add(new validator(signer, e.getValue()));
-                    log.warn("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
+                    log.trace("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
                 } else {
                     log.warn("Signature not SAI: {} for: {}", signer.getCoordinates(), event.getCoordinates(),
                              event.getCoordinates());

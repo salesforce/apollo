@@ -8,6 +8,8 @@
 package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.thoth.schema.Tables.RING_DIGESTS;
 
 import java.io.PrintStream;
 import java.sql.SQLException;
@@ -31,6 +33,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,19 +146,34 @@ public class KerlDHT implements ProtoKERLService {
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             log.info("appending kerl on: {}", member.getId());
-            return complete(k -> k.append(kerl_));
+            return complete(k -> k.append(kerl_).thenApply(lks -> {
+                if (lks.size() > 0) {
+                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                }
+                return lks;
+            }));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             log.info("appending events on: {}", member.getId());
-            return complete(k -> k.append(events));
+            return complete(k -> k.append(events).thenApply(lks -> {
+                if (lks.size() > 0) {
+                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                }
+                return lks;
+            }));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             log.info("appending events and attachments on: {}", member.getId());
-            return complete(k -> k.append(events, attachments));
+            return complete(k -> k.append(events, attachments).thenApply(lks -> {
+                if (lks.size() > 0) {
+                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                }
+                return lks;
+            }));
         }
 
         @Override
@@ -172,19 +190,19 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-            log.info("get attachments for coordinates on: {}", member.getId());
+            log.trace("get attachments for coordinates on: {}", member.getId());
             return complete(k -> k.getAttachment(coordinates));
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
-            log.info("get kerl for identifier on: {}", member.getId());
+            log.trace("get kerl for identifier on: {}", member.getId());
             return complete(k -> k.getKERL(identifier));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-            log.info("get key event for coordinates on: {}", member.getId());
+            log.trace("get key event for coordinates on: {}", member.getId());
             final Function<ProtoKERLAdapter, CompletableFuture<KeyEvent_>> func = k -> {
                 return k.getKeyEvent(coordinates);
             };
@@ -193,25 +211,25 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-            log.info("get key state for coordinates on: {}", member.getId());
+            log.trace("get key state for coordinates on: {}", member.getId());
             return complete(k -> k.getKeyState(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-            log.info("get key state for identifier on: {}", member.getId());
+            log.trace("get key state for identifier on: {}", member.getId());
             return complete(k -> k.getKeyState(identifier));
         }
 
         @Override
         public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
-            log.info("get key state with attachments for coordinates on: {}", member.getId());
+            log.trace("get key state with attachments for coordinates on: {}", member.getId());
             return complete(k -> k.getKeyStateWithAttachments(coords));
         }
 
         @Override
         public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
-            log.info("get key state with endorsements and attachments for coordinates on: {}", member.getId());
+            log.trace("get key state with endorsements and attachments for coordinates on: {}", member.getId());
             return complete(k -> {
                 final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
                 k.getKeyStateWithAttachments(coordinates)
@@ -235,7 +253,7 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
-            log.info("get validations for coordinates on: {}", member.getId());
+            log.trace("get validations for coordinates on: {}", member.getId());
             return complete(k -> k.getValidations(coordinates));
         }
     }
@@ -534,7 +552,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-        log.info("*** Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        log.trace("Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyEvent_.getDefaultInstance());
         }
@@ -925,6 +943,37 @@ public class KerlDHT implements ProtoKERLService {
         reconcile.execute((link, ring) -> reconcile(link, ring),
                           (futureSailor, destination) -> reconcile(futureSailor, destination, scheduler, duration));
 
+    }
+
+    private void updateRings(Ident identifier) {
+        try (var connection = connectionPool.getConnection()) {
+            var dsl = DSL.using(connection);
+            dsl.transaction(create -> {
+                var id = dsl.select(IDENTIFIER.ID)
+                            .from(IDENTIFIER)
+                            .where(IDENTIFIER.PREFIX.eq(identifier.toByteArray()))
+                            .fetchOne();
+                if (id == null) {
+                    log.error("Identifier: {} not found on: {}", Identifier.from(identifier), member.getId());
+                    throw new IllegalStateException("Identifier: %s not found on: %s".formatted(Identifier.from(identifier),
+                                                                                                member.getId()));
+                }
+
+                var batch = dsl.batch(dsl.insertInto(RING_DIGESTS, RING_DIGESTS.IDENTIFIER, RING_DIGESTS.RING,
+                                                     RING_DIGESTS.DIGEST)
+                                         .values((Long) null, null, null)
+                                         .onDuplicateKeyIgnore());
+                var hashed = kerl.getDigestAlgorithm().digest(identifier.toByteString());
+                for (var r = 0; r < context.getRingCount(); r++) {
+                    batch.bind(id.value1(), r, context.hashFor(hashed, r).getBytes());
+                }
+                batch.execute();
+            });
+        } catch (SQLException e) {
+            log.error("Cannot update ring hashes for: {} on: {}", Identifier.from(identifier), member.getId());
+            throw new IllegalStateException("Cannot update ring hashes for: %s on: %s".formatted(Identifier.from(identifier),
+                                                                                                 member.getId()));
+        }
     }
 
     private boolean valid(Digest from, int ring) {

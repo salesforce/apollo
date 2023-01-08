@@ -552,7 +552,7 @@ abstract public class UniKERL implements KERL {
                              .filter(s -> s != null)
                              .collect(Collectors.toMap(v -> EventCoordinates.from(v.coordinates),
                                                        v -> JohnHancock.from(v.signature)));
-        log.warn("Resolve validations: {} result: {}", coordinates, validations);
+        log.trace("Resolve validations: {} result: {}", coordinates, validations);
         complete.complete(validations);
         return complete;
     }
