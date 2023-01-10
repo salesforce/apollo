@@ -154,7 +154,13 @@ message KeyStateWithEndorsementsAndValidations_ {
     stereotomy.KeyState_ state = 1;
     map<int32, utils.Sig> endorsements = 2;
     repeated stereotomy.Validation_ validations = 3;
-} 
+}
+
+message KeyEventWithEndorsementsAndValidations_ {
+    stereotomy.KeyEvent_ event = 1;
+    map<int32, utils.Sig> endorsements = 2;
+    repeated stereotomy.Validation_ validations = 3;
+}
 
 message Validations {
     stereotomy.EventCoords coordinates = 1;

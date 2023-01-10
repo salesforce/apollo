@@ -12,7 +12,7 @@ import java.util.List;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
@@ -59,9 +59,9 @@ public class KerlSpace {
     /**
      * Update the key events in this space
      * 
-     * @param events
+     * @param list
      */
-    public void update(List<KeyEvent_> events) {
+    public void update(List<KeyEventWithEndorsementsAndValidations_> list) {
         // TODO Auto-generated method stub
 
     }

@@ -9,7 +9,7 @@ package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.thoth.schema.Tables.RING_DIGESTS;
+import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH;
 
 import java.io.PrintStream;
 import java.sql.SQLException;
@@ -146,7 +146,7 @@ public class KerlDHT implements ProtoKERLService {
             log.info("appending kerl on: {}", member.getId());
             return complete(k -> k.append(kerl_).thenApply(lks -> {
                 if (lks.size() > 0) {
-                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
                 }
                 return lks;
             }));
@@ -157,7 +157,7 @@ public class KerlDHT implements ProtoKERLService {
             log.info("appending events on: {}", member.getId());
             return complete(k -> k.append(events).thenApply(lks -> {
                 if (lks.size() > 0) {
-                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
                 }
                 return lks;
             }));
@@ -168,7 +168,7 @@ public class KerlDHT implements ProtoKERLService {
             log.info("appending events and attachments on: {}", member.getId());
             return complete(k -> k.append(events, attachments).thenApply(lks -> {
                 if (lks.size() > 0) {
-                    updateRings(lks.get(0).getCoordinates().getIdentifier());
+                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
                 }
                 return lks;
             }));
@@ -256,8 +256,7 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    public final static int     DEFAULT_MAX_RINGS = 128;
-    private final static Logger log               = LoggerFactory.getLogger(KerlDHT.class);
+    private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
     public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         var fs = new CompletableFuture<T>();
@@ -282,7 +281,6 @@ public class KerlDHT implements ProtoKERLService {
     private final CachingKERL                                                 kerl;
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
-    private final int                                                         maxRings;
     private final SigningMember                                               member;
     private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
@@ -293,18 +291,9 @@ public class KerlDHT implements ProtoKERLService {
     private final TemporalAmount                                              timeout;
 
     public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
-                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
-                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
-                   double falsePositiveRate, StereotomyMetrics metrics) {
-        this(frequency, DEFAULT_MAX_RINGS, context, member, (t, k) -> k, connectionPool, digestAlgorithm,
-             communications, executor, timeout, scheduler, falsePositiveRate, metrics);
-    }
-
-    public KerlDHT(Duration frequency, int maxRings, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                    ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
-        this.maxRings = maxRings;
         @SuppressWarnings("unchecked")
         final var casting = (Context<Member>) context;
         this.context = casting;
@@ -339,6 +328,14 @@ public class KerlDHT implements ProtoKERLService {
             }
         });
         this.ani = new Ani(member.getId(), asKERL());
+    }
+
+    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
+                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
+                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
+        this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor,
+             timeout, scheduler, falsePositiveRate, metrics);
     }
 
     public CompletableFuture<KeyState_> append(AttachmentEvent event) {
@@ -938,7 +935,7 @@ public class KerlDHT implements ProtoKERLService {
 
     }
 
-    private void updateRings(Ident identifier) {
+    private void updateLocationHash(Ident identifier) {
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             dsl.transaction(ctx -> {
@@ -954,20 +951,17 @@ public class KerlDHT implements ProtoKERLService {
                                                                                                 member.getId()));
                 }
 
-                var batch = create.batch(create.insertInto(RING_DIGESTS, RING_DIGESTS.IDENTIFIER, RING_DIGESTS.RING,
-                                                           RING_DIGESTS.DIGEST)
-                                               .values((Long) null, null, null)
-                                               .onDuplicateKeyIgnore());
                 var hashed = kerl.getDigestAlgorithm().digest(identifier.toByteString());
-                for (var r = 0; r < maxRings; r++) {
-                    batch.bind(id.value1(), r, context.hashFor(hashed, r).getBytes());
-                }
-                batch.execute();
+                create.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
+                                  IDENTIFIER_LOCATION_HASH.DIGEST)
+                      .values(id.value1(), hashed.getBytes())
+                      .onDuplicateKeyIgnore()
+                      .execute();
             });
         } catch (SQLException e) {
-            log.error("Cannot update ring hashes for: {} on: {}", Identifier.from(identifier), member.getId());
-            throw new IllegalStateException("Cannot update ring hashes for: %s on: %s".formatted(Identifier.from(identifier),
-                                                                                                 member.getId()));
+            log.error("Cannot update location hash for: {} on: {}", Identifier.from(identifier), member.getId());
+            throw new IllegalStateException("Cannot update location hash S for: %s on: %s".formatted(Identifier.from(identifier),
+                                                                                                     member.getId()));
         }
     }
 

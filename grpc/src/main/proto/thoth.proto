@@ -41,14 +41,14 @@ service Reconciliation {
 }
 
 message Update {
-    repeated stereotomy.KeyEvent_ events = 1;
+    repeated stereotomy.KeyEventWithEndorsementsAndValidations_ events = 1;
     repeated Interval intervals = 2;
     utils.Biff have = 3;
 }
 
 message Updating {
     int32 ring = 1;
-    repeated stereotomy.KeyEvent_ events = 2; 
+    repeated stereotomy.KeyEventWithEndorsementsAndValidations_ events = 2; 
 }
 
 message Intervals { 
