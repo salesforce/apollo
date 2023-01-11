@@ -156,10 +156,10 @@ message KeyStateWithEndorsementsAndValidations_ {
     repeated stereotomy.Validation_ validations = 3;
 }
 
-message KeyEventWithEndorsementsAndValidations_ {
+message KeyEventWithAttachmentAndValidations_ {
     stereotomy.KeyEvent_ event = 1;
-    map<int32, utils.Sig> endorsements = 2;
-    repeated stereotomy.Validation_ validations = 3;
+    Attachment attachment = 2;
+    Validations validations = 3;
 }
 
 message Validations {

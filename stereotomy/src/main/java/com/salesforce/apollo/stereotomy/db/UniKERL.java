@@ -42,8 +42,8 @@ import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
@@ -60,7 +60,7 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  * @author hal.hildebrand
  *
  */
-abstract public class UniKERL implements KERL {
+abstract public class UniKERL implements DigestKERL {
     private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
     private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
 
@@ -319,6 +319,13 @@ abstract public class UniKERL implements KERL {
                    .values(0L, ecNone.getIdentifier().toIdent().toByteArray())
                    .execute();
 
+            context.mergeInto(EVENT)
+                   .using(context.selectOne())
+                   .on(EVENT.COORDINATES.eq(0L))
+                   .whenNotMatchedThenInsert(EVENT.COORDINATES, EVENT.DIGEST, EVENT.CONTENT)
+                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), compress(new byte[0]))
+                   .execute();
+
             context.mergeInto(COORDINATES)
                    .using(context.selectOne())
                    .on(COORDINATES.ID.eq(0L))
@@ -407,6 +414,7 @@ abstract public class UniKERL implements KERL {
         return digestAlgorithm;
     }
 
+    @Override
     public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
         var fs = new CompletableFuture<KeyEvent>();
         try {

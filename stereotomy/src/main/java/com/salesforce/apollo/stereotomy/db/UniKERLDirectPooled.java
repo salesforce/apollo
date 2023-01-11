@@ -14,16 +14,16 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.LoggerFactory;
 
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
@@ -39,13 +39,13 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public class UniKERLDirectPooled {
 
-    public class ClosableKERL implements Closeable, KERL {
+    public class ClosableKERL implements Closeable, DigestKERL {
         private final Connection connection;
-        private final KERL       kerl;
+        private final DigestKERL kerl;
 
-        public ClosableKERL(Connection connection, Function<KERL, KERL> wrapper) {
+        public ClosableKERL(Connection connection) {
             this.connection = connection;
-            this.kerl = wrapper.apply(new UniKERLDirect(connection, digestAlgorithm));
+            this.kerl = new UniKERLDirect(connection, digestAlgorithm);
             try {
                 connection.setAutoCommit(false);
             } catch (SQLException e) {
@@ -99,6 +99,11 @@ public class UniKERLDirectPooled {
         }
 
         @Override
+        public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
+            return kerl.getKeyEvent(digest);
+        }
+
+        @Override
         public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
             return kerl.getKeyEvent(coordinates);
         }
@@ -134,8 +139,6 @@ public class UniKERLDirectPooled {
         }
     }
 
-    private static final Function<KERL, KERL> IDENTITY = kerl -> kerl;
-
     private final JdbcConnectionPool connectionPool;
     private final DigestAlgorithm    digestAlgorithm;
 
@@ -145,12 +148,7 @@ public class UniKERLDirectPooled {
     }
 
     public ClosableKERL create() throws SQLException {
-        return create(IDENTITY);
-    }
-
-    public ClosableKERL create(Function<KERL, KERL> wrapper) throws SQLException {
-        Connection connection = connectionPool.getConnection();
-        return new ClosableKERL(connection, wrapper);
+        return new ClosableKERL(connectionPool.getConnection());
     }
 
     public DigestAlgorithm getDigestAlgorithm() {

@@ -74,12 +74,9 @@
             <column name="current_state" type="VARBINARY" />
         </createTable>
 
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="coordinates"
-            baseTableName="event" baseTableSchemaName="stereotomy"
-            constraintName="event_coordinates_fk"
-            referencedTableName="coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
+        <addUniqueConstraint
+            columnNames="digest"
+            tableName="event" schemaName="stereotomy" />
 
         <createTable tableName="current_key_state"
             schemaName="stereotomy">

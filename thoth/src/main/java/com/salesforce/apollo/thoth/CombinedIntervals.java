@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.salesfoce.apollo.thoth.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
@@ -55,8 +56,8 @@ public class CombinedIntervals implements Predicate<Digest> {
         }
     }
 
-    public List<KeyInterval> getIntervals() {
-        return intervals;
+    public Stream<KeyInterval> intervals() {
+        return intervals.stream();
     }
 
     @Override

@@ -8,11 +8,10 @@
     <artifactId>thoth</artifactId>
     <name>Thoth</name>
     <description>Stereotomy for async, decentralized, byzantine fault tolerant PKI</description>
-
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
     </properties>
-
+    
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
@@ -26,10 +25,8 @@
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
         </dependency>
-
-
+        
         <!-- Test only deps below this line -->
-
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -56,12 +53,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-        	<groupId>com.salesforce.apollo</groupId>
-        	<artifactId>gorgoneion</artifactId>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>gorgoneion</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
     <build>
         <plugins>
             <plugin>

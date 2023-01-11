@@ -11,6 +11,7 @@ import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFacto
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH;
 
+import java.io.IOException;
 import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -57,7 +58,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -88,7 +88,6 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.LoggingOutputStream;
 import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -125,8 +124,15 @@ public class KerlDHT implements ProtoKERLService {
             if (!valid(from, ring)) {
                 return Update.getDefaultInstance();
             }
-
-            return KerlDHT.this.kerlSpace.reconcile(intervals);
+            try (var k = kerlPool.create()) {
+                final var builder = KerlDHT.this.kerlSpace.reconcile(intervals, k);
+                CombinedIntervals keyIntervals = keyIntervals();
+                builder.addAllIntervals(keyIntervals.toIntervals())
+                       .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr));
+                return builder.build();
+            } catch (IOException | SQLException e) {
+                throw new IllegalStateException("Cannot acquire KERL", e);
+            }
         }
 
         @Override
@@ -135,7 +141,7 @@ public class KerlDHT implements ProtoKERLService {
             if (!valid(from, ring)) {
                 return;
             }
-            KerlDHT.this.kerlSpace.update(update.getEventsList());
+            KerlDHT.this.kerlSpace.update(update.getEventsList(), kerl.getDigestAlgorithm());
         }
     }
 
@@ -720,7 +726,7 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-//        reconcile(scheduler, duration); TODO
+        reconcile(scheduler, duration);
     }
 
     public void stop() {
@@ -842,12 +848,6 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    private Biff populate(CombinedIntervals keyIntervals) {
-        List<Digest> digests = kerlSpace.populate(keyIntervals);
-        var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), digests.size(), fpr);
-        return biff.toBff();
-    }
-
     private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<ListenableFuture<T>> futureSailor, Digest identifier,
                              Supplier<Boolean> isTimedOut, Destination<Member, DhtService> destination, String action,
@@ -898,17 +898,19 @@ public class KerlDHT implements ProtoKERLService {
     private void reconcile(Optional<ListenableFuture<Update>> futureSailor,
                            Destination<Member, ReconciliationService> destination, ScheduledExecutorService scheduler,
                            Duration duration) {
-        if (!started.get() || futureSailor.isEmpty()) {
+        if (!started.get()) {
             return;
         }
-        try {
-            Update update = futureSailor.get().get();
-            log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
-                      destination.member().getId(), member.getId());
-            kerlSpace.update(update.getEventsList());
-        } catch (InterruptedException | ExecutionException e) {
-            log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
-                      member.getId(), e.getCause());
+        if (!futureSailor.isEmpty()) {
+            try {
+                Update update = futureSailor.get().get();
+                log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
+                          destination.member().getId(), member.getId());
+                kerlSpace.update(update.getEventsList(), kerl.getDigestAlgorithm());
+            } catch (InterruptedException | ExecutionException e) {
+                log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
+                          member.getId(), e.getCause());
+            }
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -922,7 +924,7 @@ public class KerlDHT implements ProtoKERLService {
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
-                                       .setHave(populate(keyIntervals))
+                                       .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr))
                                        .build());
     }
 
