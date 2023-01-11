@@ -7,23 +7,34 @@
 
 package com.salesforce.apollo.thoth;
 
+import static com.salesforce.apollo.stereotomy.schema.tables.Attachment.ATTACHMENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Validation.VALIDATION;
 import static com.salesforce.apollo.thoth.schema.tables.IdentifierLocationHash.IDENTIFIER_LOCATION_HASH;
+import static com.salesforce.apollo.thoth.schema.tables.PendingCoordinates.PENDING_COORDINATES;
+import static com.salesforce.apollo.thoth.schema.tables.PendingEvent.PENDING_EVENT;
 
 import java.sql.SQLException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
+import org.jooq.Record1;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachmentAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
@@ -35,7 +46,10 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -47,6 +61,180 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  */
 public class KerlSpace {
     private static final Logger log = LoggerFactory.getLogger(KerlSpace.class);
+
+    public static void upsert(DSLContext dsl, EventCoords coordinates, Attachment attachment) {
+        final var identBytes = coordinates.getIdentifier().toByteArray();
+
+        var ident = dsl.newRecord(IDENTIFIER);
+        ident.setPrefix(identBytes);
+        ident.merge();
+
+        Record1<Long> id;
+        try {
+            id = dsl.insertInto(PENDING_COORDINATES)
+                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.IDENTIFIER,
+                         dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
+                    .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
+                    .set(PENDING_COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber())
+                    .returningResult(PENDING_COORDINATES.ID)
+                    .fetchOne();
+        } catch (DataAccessException e) {
+            // Already exists
+            id = dsl.select(PENDING_COORDINATES.ID)
+                    .from(PENDING_COORDINATES)
+                    .join(IDENTIFIER)
+                    .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                    .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                    .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
+                    .fetchOne();
+        }
+        var count = new AtomicInteger();
+        for (var s : attachment.getSealsList()) {
+            final var bytes = s.toByteArray();
+            count.accumulateAndGet(dsl.mergeInto(ATTACHMENT)
+                                      .usingDual()
+                                      .on(ATTACHMENT.FOR.eq(id.value1()))
+                                      .and(ATTACHMENT.SEAL.eq(bytes))
+                                      .whenNotMatchedThenInsert()
+                                      .set(ATTACHMENT.FOR, id.value1())
+                                      .set(ATTACHMENT.SEAL, bytes)
+                                      .execute(),
+                                   (a, b) -> a + b);
+        }
+        log.info("appended: {} seals out of: {} coords: {}", count.get(), attachment.getSealsCount(), coordinates);
+
+        count.set(0);
+        for (var entry : attachment.getEndorsementsMap().entrySet()) {
+            count.accumulateAndGet(dsl.mergeInto(RECEIPT)
+                                      .usingDual()
+                                      .on(RECEIPT.FOR.eq(id.value1()).and(RECEIPT.WITNESS.eq(entry.getKey())))
+                                      .whenNotMatchedThenInsert()
+                                      .set(RECEIPT.FOR, id.value1())
+                                      .set(RECEIPT.WITNESS, entry.getKey())
+                                      .set(RECEIPT.SIGNATURE, entry.getValue().toByteArray())
+                                      .execute(),
+                                   (a, b) -> a + b);
+        }
+        log.info("appended: {} endorsements out of: {} coords: {}", count.get(), attachment.getEndorsementsCount(),
+                 coordinates);
+    }
+
+    public static void upsert(DSLContext context, KeyEvent event, DigestAlgorithm digestAlgorithm) {
+        final EventCoordinates prevCoords = event.getPrevious();
+
+        final var identBytes = event.getIdentifier().toIdent().toByteArray();
+
+        context.mergeInto(IDENTIFIER)
+               .using(context.selectOne())
+               .on(IDENTIFIER.PREFIX.eq(identBytes))
+               .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
+               .values(identBytes)
+               .execute();
+
+        var identifierId = context.select(IDENTIFIER.ID)
+                                  .from(IDENTIFIER)
+                                  .where(IDENTIFIER.PREFIX.eq(identBytes))
+                                  .fetchOne();
+        long id;
+        try {
+            id = context.insertInto(PENDING_COORDINATES)
+                        .set(PENDING_COORDINATES.DIGEST, prevCoords.getDigest().toDigeste().toByteArray())
+                        .set(PENDING_COORDINATES.IDENTIFIER,
+                             context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
+                        .set(PENDING_COORDINATES.ILK, event.getIlk())
+                        .set(PENDING_COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
+                        .returningResult(PENDING_COORDINATES.ID)
+                        .fetchOne()
+                        .value1();
+        } catch (DataAccessException e) {
+            // Already exists
+            var coordinates = event.getCoordinates();
+            id = context.select(PENDING_COORDINATES.ID)
+                        .from(PENDING_COORDINATES)
+                        .join(IDENTIFIER)
+                        .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                        .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                        .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                        .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                        .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
+                        .fetchOne()
+                        .value1();
+        }
+
+        final var digest = event.hash(digestAlgorithm);
+        try {
+            context.insertInto(PENDING_EVENT)
+                   .set(PENDING_EVENT.COORDINATES, id)
+                   .set(PENDING_EVENT.DIGEST, digest.toDigeste().toByteArray())
+                   .set(PENDING_EVENT.CONTENT, UniKERL.compress(event.getBytes()))
+                   .execute();
+        } catch (DataAccessException e) {
+            return;
+        }
+        log.trace("Inserted event: {}", event);
+        context.mergeInto(CURRENT_KEY_STATE)
+               .using(context.selectOne())
+               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
+               .whenMatchedThenUpdate()
+               .set(CURRENT_KEY_STATE.CURRENT, id)
+               .whenNotMatchedThenInsert()
+               .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
+               .set(CURRENT_KEY_STATE.CURRENT, id)
+               .execute();
+    }
+
+    public static void upsertValidations(DSLContext dsl, Validations validations) {
+        final var coordinates = validations.getCoordinates();
+        final var identBytes = coordinates.getIdentifier().toByteArray();
+
+        try {
+            dsl.mergeInto(IDENTIFIER)
+               .using(dsl.selectOne())
+               .on(IDENTIFIER.PREFIX.eq(identBytes))
+               .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
+               .values(identBytes)
+               .execute();
+        } catch (DataAccessException e) {
+            log.trace("Duplicate inserting identifier: {}", Identifier.from(coordinates.getIdentifier()));
+        }
+
+        Record1<Long> id;
+        try {
+            id = dsl.insertInto(COORDINATES)
+                    .set(COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(COORDINATES.IDENTIFIER,
+                         dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
+                    .set(COORDINATES.ILK, coordinates.getIlk())
+                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber())
+                    .returningResult(COORDINATES.ID)
+                    .fetchOne();
+        } catch (DataAccessException e) {
+            // Already exists
+            id = dsl.select(COORDINATES.ID)
+                    .from(COORDINATES)
+                    .join(IDENTIFIER)
+                    .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                    .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                    .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                    .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                    .fetchOne();
+        }
+        var result = new AtomicInteger();
+        var l = id.value1();
+        validations.getValidationsList().forEach(v -> {
+            var vRec = dsl.newRecord(VALIDATION);
+            vRec.setFor(l);
+            vRec.setValidator(v.getValidator().toByteArray());
+            vRec.setSignature(v.getSignature().toByteArray());
+            result.accumulateAndGet(vRec.merge(), (a, b) -> a + b);
+        });
+        log.info("Inserted validations: {} out of : {} for event: {}", result.get(), validations.getValidationsCount(),
+                 EventCoordinates.from(coordinates));
+    }
 
     private final JdbcConnectionPool connectionPool;
 
@@ -119,17 +307,13 @@ public class KerlSpace {
             var dsl = DSL.using(connection);
             dsl.transaction(ctx -> {
                 var context = DSL.using(ctx);
-                var insertEvent = context.batch(context.insertInto(EVENT)
-                                                       .columns(EVENT.COORDINATES, EVENT.DIGEST, EVENT.CONTENT)
-                                                       .values((Long) null, null, null));
-                for (var event : events) {
-                    event.getValidations();
-                    event.getAttachment();
-                    Long coordinates = null;
-                    Digest digest = digestAlgorithm.digest(event.toByteString());
-                    insertEvent.bind(coordinates, digest.toDigeste().toByteArray(), event.toByteArray());
+                for (var evente_ : events) {
+                    final var event = ProtobufEventFactory.from(evente_.getEvent());
+                    upsert(context, event, digestAlgorithm);
+                    upsertValidations(context, evente_.getValidations());
+                    evente_.getAttachment();
+                    evente_.getEvent();
                 }
-                insertEvent.execute();
             });
             dsl.fetchCount(dsl.selectFrom(IDENTIFIER));
         } catch (SQLException e) {

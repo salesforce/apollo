@@ -61,8 +61,9 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  *
  */
 abstract public class UniKERL implements DigestKERL {
-    private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
-    private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
+    public static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
+
+    private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
         var coordinates = attachment.coordinates();

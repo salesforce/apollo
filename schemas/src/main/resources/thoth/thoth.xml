@@ -71,7 +71,7 @@
 		</createIndex>
 
 		<createTable tableName="pending_event" schemaName="thoth">
-			<column name="pending_coordinates" type="INT8">
+			<column name="coordinates" type="INT8">
 				<constraints nullable="false" primaryKey="true" />
 			</column>
 			<column name="digest" type="VARBINARY">
@@ -83,9 +83,9 @@
 		</createTable>
 
 		<addForeignKeyConstraint onDelete="CASCADE"
-			baseColumnNames="pending_coordinates" baseTableName="pending_event"
+			baseColumnNames="coordinates" baseTableName="pending_event"
 			baseTableSchemaName="thoth"
-			constraintName="pending_event_pending_coordinates_fk"
+			constraintName="pending_event_coordinates_fk"
 			referencedTableName="pending_coordinates" referencedColumnNames="id"
 			referencedTableSchemaName="thoth" />
 
