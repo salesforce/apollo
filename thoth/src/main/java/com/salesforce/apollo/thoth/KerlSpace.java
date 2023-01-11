@@ -112,6 +112,9 @@ public class KerlSpace {
      * @param events
      */
     public void update(List<KeyEventWithAttachmentAndValidations_> events, DigestAlgorithm digestAlgorithm) {
+        if (events.isEmpty()) {
+            return;
+        }
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             dsl.transaction(ctx -> {
