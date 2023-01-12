@@ -9,7 +9,6 @@ package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.stereotomy.schema.tables.Attachment.ATTACHMENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
-import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
@@ -29,6 +28,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +76,8 @@ public class KerlSpace {
                     .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
-                    .set(PENDING_COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber())
+                    .set(PENDING_COORDINATES.SEQUENCE_NUMBER,
+                         ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -87,7 +88,8 @@ public class KerlSpace {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
                     .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
-                    .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                    .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(ULong.valueOf(coordinates.getSequenceNumber())
+                                                                     .toBigInteger()))
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -133,11 +135,6 @@ public class KerlSpace {
                .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
                .values(identBytes)
                .execute();
-
-        var identifierId = context.select(IDENTIFIER.ID)
-                                  .from(IDENTIFIER)
-                                  .where(IDENTIFIER.PREFIX.eq(identBytes))
-                                  .fetchOne();
         long id;
         try {
             id = context.insertInto(PENDING_COORDINATES)
@@ -145,7 +142,7 @@ public class KerlSpace {
                         .set(PENDING_COORDINATES.IDENTIFIER,
                              context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                         .set(PENDING_COORDINATES.ILK, event.getIlk())
-                        .set(PENDING_COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
+                        .set(PENDING_COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().toBigInteger())
                         .returningResult(PENDING_COORDINATES.ID)
                         .fetchOne()
                         .value1();
@@ -158,7 +155,7 @@ public class KerlSpace {
                         .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                         .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                         .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                        .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                        .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                         .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
                         .fetchOne()
                         .value1();
@@ -174,16 +171,6 @@ public class KerlSpace {
         } catch (DataAccessException e) {
             return;
         }
-        log.trace("Inserted event: {}", event);
-        context.mergeInto(CURRENT_KEY_STATE)
-               .using(context.selectOne())
-               .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
-               .whenMatchedThenUpdate()
-               .set(CURRENT_KEY_STATE.CURRENT, id)
-               .whenNotMatchedThenInsert()
-               .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
-               .set(CURRENT_KEY_STATE.CURRENT, id)
-               .execute();
     }
 
     public static void upsertValidations(DSLContext dsl, Validations validations) {
@@ -208,7 +195,7 @@ public class KerlSpace {
                     .set(COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber())
+                    .set(COORDINATES.SEQUENCE_NUMBER, ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -219,7 +206,7 @@ public class KerlSpace {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
                     .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -314,8 +301,9 @@ public class KerlSpace {
                     evente_.getAttachment();
                     evente_.getEvent();
                 }
+                commitPending(context);
             });
-            dsl.fetchCount(dsl.selectFrom(IDENTIFIER));
+
         } catch (SQLException e) {
             log.error("Unable to update events, cannot acquire JDBC connection", e);
             throw new IllegalStateException("Unable to update events, cannot acquire JDBC connection", e);
@@ -332,6 +320,10 @@ public class KerlSpace {
             throw new IllegalStateException("Unable to provide estimated cardinality, cannot acquire JDBC connection",
                                             e);
         }
+    }
+
+    private void commitPending(DSLContext context) {
+
     }
 
     private KeyEventWithAttachmentAndValidations_ event(Digest d, DSLContext dsl, DigestKERL kerl) {
@@ -380,24 +372,43 @@ public class KerlSpace {
     }
 
     private Stream<Digest> eventDigestsIn(KeyInterval interval, DSLContext dsl) {
-        return dsl.select(EVENT.DIGEST)
-                  .from(EVENT)
-                  .join(COORDINATES)
-                  .on(EVENT.COORDINATES.eq(COORDINATES.ID))
-                  .join(IDENTIFIER)
-                  .on(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                  .join(IDENTIFIER_LOCATION_HASH)
-                  .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
-                  .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
-                  .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getBegin().getBytes()))
-                  .stream()
-                  .map(r -> {
-                      try {
-                          return Digest.from(Digeste.parseFrom(r.value1()));
-                      } catch (InvalidProtocolBufferException e) {
-                          return null;
-                      }
-                  })
-                  .filter(d -> d != null);
+        return Stream.concat(dsl.select(EVENT.DIGEST)
+                                .from(EVENT)
+                                .join(COORDINATES)
+                                .on(EVENT.COORDINATES.eq(COORDINATES.ID))
+                                .join(IDENTIFIER)
+                                .on(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                .join(IDENTIFIER_LOCATION_HASH)
+                                .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
+                                .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
+                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getBegin().getBytes()))
+                                .stream()
+                                .map(r -> {
+                                    try {
+                                        return Digest.from(Digeste.parseFrom(r.value1()));
+                                    } catch (InvalidProtocolBufferException e) {
+                                        return null;
+                                    }
+                                })
+                                .filter(d -> d != null),
+                             dsl.select(PENDING_EVENT.DIGEST)
+                                .from(PENDING_EVENT)
+                                .join(PENDING_COORDINATES)
+                                .on(PENDING_EVENT.COORDINATES.eq(PENDING_COORDINATES.ID))
+                                .join(IDENTIFIER)
+                                .on(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                .join(IDENTIFIER_LOCATION_HASH)
+                                .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
+                                .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
+                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getBegin().getBytes()))
+                                .stream()
+                                .map(r -> {
+                                    try {
+                                        return Digest.from(Digeste.parseFrom(r.value1()));
+                                    } catch (InvalidProtocolBufferException e) {
+                                        return null;
+                                    }
+                                })
+                                .filter(d -> d != null));
     }
 }

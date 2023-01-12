@@ -80,7 +80,7 @@ abstract public class UniKERL implements DigestKERL {
                     .set(COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().longValue())
+                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().toBigInteger())
                     .returningResult(COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -91,7 +91,7 @@ abstract public class UniKERL implements DigestKERL {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                     .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -138,7 +138,7 @@ abstract public class UniKERL implements DigestKERL {
                                 .from(COORDINATES)
                                 .where(COORDINATES.DIGEST.eq(prevCoords.getDigest().toDigeste().toByteArray()))
                                 .and(COORDINATES.IDENTIFIER.eq(preIdentifier))
-                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber().longValue()))
+                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber().toBigInteger()))
                                 .and(COORDINATES.ILK.eq(prevCoords.getIlk()))
                                 .fetchOne();
         if (prev == null) {
@@ -171,7 +171,7 @@ abstract public class UniKERL implements DigestKERL {
                         .set(COORDINATES.IDENTIFIER,
                              context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                         .set(COORDINATES.ILK, event.getIlk())
-                        .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
+                        .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().toBigInteger())
                         .returningResult(COORDINATES.ID)
                         .fetchOne()
                         .value1();
@@ -184,7 +184,7 @@ abstract public class UniKERL implements DigestKERL {
                         .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                         .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                         .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                        .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                        .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                         .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                         .fetchOne()
                         .value1();
@@ -255,7 +255,7 @@ abstract public class UniKERL implements DigestKERL {
                     .set(COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().longValue())
+                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().toBigInteger())
                     .returningResult(COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -266,7 +266,7 @@ abstract public class UniKERL implements DigestKERL {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                     .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -332,8 +332,8 @@ abstract public class UniKERL implements DigestKERL {
                    .on(COORDINATES.ID.eq(0L))
                    .whenNotMatchedThenInsert(COORDINATES.ID, COORDINATES.DIGEST, COORDINATES.IDENTIFIER,
                                              COORDINATES.SEQUENCE_NUMBER, COORDINATES.ILK)
-                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L, ecNone.getSequenceNumber().longValue(),
-                           ecNone.getIlk())
+                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L,
+                           ecNone.getSequenceNumber().toBigInteger(), ecNone.getIlk())
                    .execute();
         });
     }
@@ -362,9 +362,9 @@ abstract public class UniKERL implements DigestKERL {
                               .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                               .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                               .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                               .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                               .fetchOne();
             if (resolved == null) {
                 fs.complete(null);
@@ -447,9 +447,9 @@ abstract public class UniKERL implements DigestKERL {
                             .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                             .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                             .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .fetchOptional()
                             .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
                             .orElse(null);
@@ -474,9 +474,9 @@ abstract public class UniKERL implements DigestKERL {
                             .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                             .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                             .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .fetchOptional()
                             .map(r -> {
                                 try {
@@ -533,9 +533,9 @@ abstract public class UniKERL implements DigestKERL {
                           .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                           .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                           .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                           .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                           .fetchOne();
         if (resolved == null) {
             log.warn("Cannot resolve validations: {}", coordinates);

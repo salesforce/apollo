@@ -41,7 +41,7 @@
 			<column name="digest" type="VARBINARY">
 				<constraints nullable="false" />
 			</column>
-			<column name="sequence_number" type="BIGINT">
+			<column name="sequence_number" type="NUMERIC(20)">
 				<constraints nullable="false" />
 			</column>
 			<column name="ilk" type="VARCHAR(3)">
