@@ -141,7 +141,7 @@ public class KerlDHT implements ProtoKERLService {
             if (!valid(from, ring)) {
                 return;
             }
-            KerlDHT.this.kerlSpace.update(update.getEventsList(), kerl.getDigestAlgorithm());
+            KerlDHT.this.kerlSpace.update(update.getEventsList(), kerl);
         }
     }
 
@@ -906,7 +906,7 @@ public class KerlDHT implements ProtoKERLService {
                 Update update = futureSailor.get().get();
                 log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
                           destination.member().getId(), member.getId());
-                kerlSpace.update(update.getEventsList(), kerl.getDigestAlgorithm());
+                kerlSpace.update(update.getEventsList(), kerl);
             } catch (InterruptedException | ExecutionException e) {
                 log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
                           member.getId(), e.getCause());

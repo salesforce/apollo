@@ -7,25 +7,25 @@
 
 package com.salesforce.apollo.thoth;
 
-import static com.salesforce.apollo.stereotomy.schema.tables.Attachment.ATTACHMENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
 import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
-import static com.salesforce.apollo.stereotomy.schema.tables.Validation.VALIDATION;
 import static com.salesforce.apollo.thoth.schema.tables.IdentifierLocationHash.IDENTIFIER_LOCATION_HASH;
+import static com.salesforce.apollo.thoth.schema.tables.PendingAttachment.PENDING_ATTACHMENT;
 import static com.salesforce.apollo.thoth.schema.tables.PendingCoordinates.PENDING_COORDINATES;
 import static com.salesforce.apollo.thoth.schema.tables.PendingEvent.PENDING_EVENT;
+import static com.salesforce.apollo.thoth.schema.tables.PendingValidations.PENDING_VALIDATIONS;
 
 import java.sql.SQLException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
+import org.jooq.Record4;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
@@ -34,8 +34,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachmentAndValidations_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.thoth.proto.Intervals;
@@ -44,12 +46,16 @@ import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -93,35 +99,10 @@ public class KerlSpace {
                     .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
-        var count = new AtomicInteger();
-        for (var s : attachment.getSealsList()) {
-            final var bytes = s.toByteArray();
-            count.accumulateAndGet(dsl.mergeInto(ATTACHMENT)
-                                      .usingDual()
-                                      .on(ATTACHMENT.FOR.eq(id.value1()))
-                                      .and(ATTACHMENT.SEAL.eq(bytes))
-                                      .whenNotMatchedThenInsert()
-                                      .set(ATTACHMENT.FOR, id.value1())
-                                      .set(ATTACHMENT.SEAL, bytes)
-                                      .execute(),
-                                   (a, b) -> a + b);
-        }
-        log.info("appended: {} seals out of: {} coords: {}", count.get(), attachment.getSealsCount(), coordinates);
-
-        count.set(0);
-        for (var entry : attachment.getEndorsementsMap().entrySet()) {
-            count.accumulateAndGet(dsl.mergeInto(RECEIPT)
-                                      .usingDual()
-                                      .on(RECEIPT.FOR.eq(id.value1()).and(RECEIPT.WITNESS.eq(entry.getKey())))
-                                      .whenNotMatchedThenInsert()
-                                      .set(RECEIPT.FOR, id.value1())
-                                      .set(RECEIPT.WITNESS, entry.getKey())
-                                      .set(RECEIPT.SIGNATURE, entry.getValue().toByteArray())
-                                      .execute(),
-                                   (a, b) -> a + b);
-        }
-        log.info("appended: {} endorsements out of: {} coords: {}", count.get(), attachment.getEndorsementsCount(),
-                 coordinates);
+        var vRec = dsl.newRecord(PENDING_ATTACHMENT);
+        vRec.setCoordinates(id.value1());
+        vRec.setAttachment(attachment.toByteArray());
+        vRec.insert();
     }
 
     public static void upsert(DSLContext context, KeyEvent event, DigestAlgorithm digestAlgorithm) {
@@ -166,14 +147,14 @@ public class KerlSpace {
             context.insertInto(PENDING_EVENT)
                    .set(PENDING_EVENT.COORDINATES, id)
                    .set(PENDING_EVENT.DIGEST, digest.toDigeste().toByteArray())
-                   .set(PENDING_EVENT.CONTENT, UniKERL.compress(event.getBytes()))
+                   .set(PENDING_EVENT.EVENT, event.getBytes())
                    .execute();
         } catch (DataAccessException e) {
             return;
         }
     }
 
-    public static void upsertValidations(DSLContext dsl, Validations validations) {
+    public static void upsert(DSLContext dsl, Validations validations) {
         final var coordinates = validations.getCoordinates();
         final var identBytes = coordinates.getIdentifier().toByteArray();
 
@@ -210,17 +191,10 @@ public class KerlSpace {
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
-        var result = new AtomicInteger();
-        var l = id.value1();
-        validations.getValidationsList().forEach(v -> {
-            var vRec = dsl.newRecord(VALIDATION);
-            vRec.setFor(l);
-            vRec.setValidator(v.getValidator().toByteArray());
-            vRec.setSignature(v.getSignature().toByteArray());
-            result.accumulateAndGet(vRec.merge(), (a, b) -> a + b);
-        });
-        log.info("Inserted validations: {} out of : {} for event: {}", result.get(), validations.getValidationsCount(),
-                 EventCoordinates.from(coordinates));
+        var vRec = dsl.newRecord(PENDING_VALIDATIONS);
+        vRec.setCoordinates(id.value1());
+        vRec.setValidations(validations.toByteArray());
+        vRec.insert();
     }
 
     private final JdbcConnectionPool connectionPool;
@@ -285,11 +259,16 @@ public class KerlSpace {
      * Update the key events in this space
      * 
      * @param events
+     * @param kerl
      */
-    public void update(List<KeyEventWithAttachmentAndValidations_> events, DigestAlgorithm digestAlgorithm) {
+    public void update(List<KeyEventWithAttachmentAndValidations_> events, KERL kerl) {
         if (events.isEmpty()) {
             return;
         }
+
+        final var processor = new KeyEventProcessor(kerl);
+        final var digestAlgorithm = kerl.getDigestAlgorithm();
+
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             dsl.transaction(ctx -> {
@@ -297,11 +276,10 @@ public class KerlSpace {
                 for (var evente_ : events) {
                     final var event = ProtobufEventFactory.from(evente_.getEvent());
                     upsert(context, event, digestAlgorithm);
-                    upsertValidations(context, evente_.getValidations());
-                    evente_.getAttachment();
-                    evente_.getEvent();
+                    upsert(context, evente_.getValidations());
+                    upsert(context, event.getCoordinates().toEventCoords(), evente_.getAttachment());
                 }
-                commitPending(context);
+                commitPending(context, processor, digestAlgorithm);
             });
 
         } catch (SQLException e) {
@@ -322,8 +300,22 @@ public class KerlSpace {
         }
     }
 
-    private void commitPending(DSLContext context) {
-
+    private void commitPending(DSLContext context, KeyEventProcessor processor, DigestAlgorithm digestAlgorithm) {
+        context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_ATTACHMENT.ATTACHMENT,
+                       PENDING_VALIDATIONS.VALIDATIONS)
+               .from(PENDING_EVENT)
+               .join(PENDING_COORDINATES)
+               .on(PENDING_COORDINATES.ID.eq(PENDING_EVENT.COORDINATES))
+               .join(EVENT)
+               .on(EVENT.DIGEST.eq(PENDING_COORDINATES.DIGEST))
+               .join(PENDING_ATTACHMENT)
+               .on(PENDING_COORDINATES.ID.eq(PENDING_ATTACHMENT.COORDINATES))
+               .join(PENDING_VALIDATIONS)
+               .on(PENDING_COORDINATES.ID.eq(PENDING_VALIDATIONS.COORDINATES))
+               .fetchStream()
+               .forEach(r -> {
+                   ingest(context, r, processor, digestAlgorithm);
+               });
     }
 
     private KeyEventWithAttachmentAndValidations_ event(Digest d, DSLContext dsl, DigestKERL kerl) {
@@ -410,5 +402,36 @@ public class KerlSpace {
                                     }
                                 })
                                 .filter(d -> d != null));
+    }
+
+    private void ingest(DSLContext context, Record4<Long, byte[], byte[], byte[]> r, KeyEventProcessor processor,
+                        DigestAlgorithm digestAlgorithm) {
+        KeyEvent_ ev;
+        try {
+            ev = KeyEvent_.parseFrom(r.value2());
+            KeyEvent event = ProtobufEventFactory.from(ev);
+            Attachment attach = r.value3() == null ? null : Attachment.parseFrom(r.value3());
+            Validations validations = r.value4() == null ? null : Validations.parseFrom(r.value4());
+
+            if (attach != null) {
+                UniKERL.append(context,
+                               new AttachmentEventImpl(AttachmentEvent.newBuilder()
+                                                                      .setAttachment(attach)
+                                                                      .setCoordinates(event.getCoordinates()
+                                                                                           .toEventCoords())
+                                                                      .build()));
+            }
+            if (validations != null) {
+                UniKERL.appendValidations(context, event.getCoordinates(),
+                                          validations.getValidationsList()
+                                                     .stream()
+                                                     .collect(Collectors.toMap(v -> EventCoordinates.from(v.getValidator()),
+                                                                               v -> JohnHancock.from(v.getSignature()))));
+            }
+            UniKERL.append(context, event, processor.process(event), digestAlgorithm);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Cannot deserialize", e);
+        }
+        context.deleteFrom(PENDING_COORDINATES).where(PENDING_COORDINATES.ID.eq(r.value1())).execute();
     }
 }
