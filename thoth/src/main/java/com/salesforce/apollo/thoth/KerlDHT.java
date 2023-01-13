@@ -33,6 +33,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,10 +70,14 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.stereotomy.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
+import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled.ClosableKERL;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
@@ -150,34 +155,19 @@ public class KerlDHT implements ProtoKERLService {
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             log.info("appending kerl on: {}", member.getId());
-            return complete(k -> k.append(kerl_).thenApply(lks -> {
-                if (lks.size() > 0) {
-                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
-                }
-                return lks;
-            }));
+            return complete(k -> k.append(kerl_));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             log.info("appending events on: {}", member.getId());
-            return complete(k -> k.append(events).thenApply(lks -> {
-                if (lks.size() > 0) {
-                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
-                }
-                return lks;
-            }));
+            return complete(k -> k.append(events));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             log.info("appending events and attachments on: {}", member.getId());
-            return complete(k -> k.append(events, attachments).thenApply(lks -> {
-                if (lks.size() > 0) {
-                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
-                }
-                return lks;
-            }));
+            return complete(k -> k.append(events, attachments));
         }
 
         @Override
@@ -270,6 +260,25 @@ public class KerlDHT implements ProtoKERLService {
         return fs;
     }
 
+    public static void updateLocationHash(Identifier identifier, DigestAlgorithm digestAlgorithm, DSLContext dsl) {
+        dsl.transaction(config -> {
+            var context = DSL.using(config);
+            var identBytes = identifier.toIdent().toByteArray();
+            // Braindead, but correct
+            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)).fetchOne();
+            if (id == null) {
+                throw new IllegalStateException("Identifier: %s not found".formatted(identifier));
+            }
+
+            var hashed = digestAlgorithm.digest(identBytes);
+            context.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
+                               IDENTIFIER_LOCATION_HASH.DIGEST)
+                   .values(id.value1(), hashed.getBytes())
+                   .onDuplicateKeyIgnore()
+                   .execute();
+        });
+    }
+
     static <T> CompletableFuture<T> completeIt(T result) {
         var fs = new CompletableFuture<T>();
         fs.complete(result);
@@ -294,7 +303,8 @@ public class KerlDHT implements ProtoKERLService {
     private final ScheduledExecutorService                                    scheduler;
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final TemporalAmount                                              timeout;
+
+    private final TemporalAmount timeout;
 
     public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
@@ -328,7 +338,7 @@ public class KerlDHT implements ProtoKERLService {
         initializeSchema();
         kerl = new CachingKERL(f -> {
             try (var k = kerlPool.create()) {
-                return f.apply(wrap.apply(this, k));
+                return f.apply(wrap.apply(this, wrap(k)));
             } catch (Throwable e) {
                 return completeExceptionally(e);
             }
@@ -937,32 +947,13 @@ public class KerlDHT implements ProtoKERLService {
 
     }
 
-    private void updateLocationHash(Ident identifier) {
+    private void updateLocationHash(Identifier identifier) {
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
-            dsl.transaction(ctx -> {
-                var create = DSL.using(ctx);
-                // Braindead, but correct
-                var id = create.select(IDENTIFIER.ID)
-                               .from(IDENTIFIER)
-                               .where(IDENTIFIER.PREFIX.eq(identifier.toByteArray()))
-                               .fetchOne();
-                if (id == null) {
-                    log.error("Identifier: {} not found on: {}", Identifier.from(identifier), member.getId());
-                    throw new IllegalStateException("Identifier: %s not found on: %s".formatted(Identifier.from(identifier),
-                                                                                                member.getId()));
-                }
-
-                var hashed = kerl.getDigestAlgorithm().digest(identifier.toByteString());
-                create.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
-                                  IDENTIFIER_LOCATION_HASH.DIGEST)
-                      .values(id.value1(), hashed.getBytes())
-                      .onDuplicateKeyIgnore()
-                      .execute();
-            });
+            updateLocationHash(identifier, kerl.getDigestAlgorithm(), dsl);
         } catch (SQLException e) {
-            log.error("Cannot update location hash for: {} on: {}", Identifier.from(identifier), member.getId());
-            throw new IllegalStateException("Cannot update location hash S for: %s on: %s".formatted(Identifier.from(identifier),
+            log.error("Cannot update location hash for: {} on: {}", identifier, member.getId());
+            throw new IllegalStateException("Cannot update location hash S for: %s on: %s".formatted(identifier,
                                                                                                      member.getId()));
         }
     }
@@ -984,5 +975,41 @@ public class KerlDHT implements ProtoKERLService {
             return false;
         }
         return true;
+    }
+
+    private DelegatedKERL wrap(ClosableKERL k) {
+        return new DelegatedKERL(k) {
+
+            @Override
+            public CompletableFuture<KeyState> append(KeyEvent event) {
+                return super.append(event).thenApply(ks -> {
+                    if (ks != null) {
+                        updateLocationHash(ks.getCoordinates().getIdentifier());
+                    }
+                    return ks;
+                });
+            }
+
+            @Override
+            public CompletableFuture<List<KeyState>> append(KeyEvent... events) {
+                return super.append(events).thenApply(lks -> {
+                    if (lks.size() > 0) {
+                        updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                    }
+                    return lks;
+                });
+            }
+
+            @Override
+            public CompletableFuture<List<KeyState>> append(List<KeyEvent> events,
+                                                            List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments) {
+                return super.append(events, attachments).thenApply(lks -> {
+                    if (lks.size() > 0) {
+                        updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                    }
+                    return lks;
+                });
+            }
+        };
     }
 }

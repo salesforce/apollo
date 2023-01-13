@@ -8,6 +8,7 @@
 package com.salesforce.apollo.thoth;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +25,10 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class CombinedIntervals implements Predicate<Digest> {
     private final List<KeyInterval> intervals = new ArrayList<>();
+
+    public CombinedIntervals(KeyInterval... allIntervals) {
+        this(Arrays.asList(allIntervals));
+    }
 
     public CombinedIntervals(List<KeyInterval> allIntervals) {
         if (allIntervals.isEmpty()) {

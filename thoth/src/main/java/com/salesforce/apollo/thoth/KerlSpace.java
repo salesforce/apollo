@@ -218,7 +218,9 @@ public class KerlSpace {
         DigestBloomFilter bff = new DigestBloomFilter(seed, cardinality(), fpr);
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
-            eventDigestsIn(intervals, dsl).forEach(d -> bff.add(d));
+            eventDigestsIn(intervals, dsl).forEach(d -> {
+                bff.add(d);
+            });
         } catch (SQLException e) {
             log.error("Unable populate bloom filter, cannot acquire JDBC connection", e);
         }
@@ -243,10 +245,13 @@ public class KerlSpace {
                      .stream()
                      .map(i -> new KeyInterval(i))
                      .flatMap(i -> eventDigestsIn(i, dsl))
+                     .peek(d -> System.out.println(d))
                      .filter(d -> !biff.contains(d))
                      .map(d -> event(d, dsl, kerl))
                      .filter(ke -> ke != null)
-                     .forEach(ke -> update.addEvents(ke));
+                     .forEach(ke -> {
+                         update.addEvents(ke);
+                     });
         } catch (SQLException e) {
             log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);
             throw new IllegalStateException("Unable to provide estimated cardinality, cannot acquire JDBC connection",
@@ -373,7 +378,7 @@ public class KerlSpace {
                                 .join(IDENTIFIER_LOCATION_HASH)
                                 .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
                                 .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
-                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getBegin().getBytes()))
+                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getEnd().getBytes()))
                                 .stream()
                                 .map(r -> {
                                     try {
@@ -392,7 +397,7 @@ public class KerlSpace {
                                 .join(IDENTIFIER_LOCATION_HASH)
                                 .on(IDENTIFIER.ID.eq(IDENTIFIER_LOCATION_HASH.IDENTIFIER))
                                 .where(IDENTIFIER_LOCATION_HASH.DIGEST.ge(interval.getBegin().getBytes()))
-                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getBegin().getBytes()))
+                                .and(IDENTIFIER_LOCATION_HASH.DIGEST.le(interval.getEnd().getBytes()))
                                 .stream()
                                 .map(r -> {
                                     try {
