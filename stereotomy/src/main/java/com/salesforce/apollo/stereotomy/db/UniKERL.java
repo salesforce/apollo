@@ -128,6 +128,7 @@ abstract public class UniKERL implements DigestKERL {
     }
 
     public static void append(DSLContext context, KeyEvent event, KeyState newState, DigestAlgorithm digestAlgorithm) {
+        assert newState != null;
         final EventCoordinates prevCoords = event.getPrevious();
         final var preIdentifier = context.select(IDENTIFIER.ID)
                                          .from(IDENTIFIER)
@@ -199,7 +200,7 @@ abstract public class UniKERL implements DigestKERL {
                    .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
                    .execute();
         } catch (DataAccessException e) {
-            return;
+            // ignore
         }
         log.trace("Inserted event: {}", event);
         context.mergeInto(CURRENT_KEY_STATE)
@@ -211,6 +212,7 @@ abstract public class UniKERL implements DigestKERL {
                .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
                .set(CURRENT_KEY_STATE.CURRENT, id)
                .execute();
+        log.trace("Inserted key state: {}", event);
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
@@ -476,7 +478,6 @@ abstract public class UniKERL implements DigestKERL {
                             .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
                             .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .fetchOptional()
                             .map(r -> {
                                 try {
@@ -487,7 +488,7 @@ abstract public class UniKERL implements DigestKERL {
                                 }
                             })
                             .orElse(null);
-            log.info("Get key state: {} result: {}", coordinates, result != null);
+            log.info("Get key state coordinates: {} result: {}", coordinates, result != null);
             fs.complete(result);
         } catch (Throwable t) {
             fs.completeExceptionally(t);

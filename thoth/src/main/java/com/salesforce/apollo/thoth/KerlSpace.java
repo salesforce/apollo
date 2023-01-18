@@ -17,6 +17,7 @@ import static com.salesforce.apollo.thoth.schema.tables.PendingEvent.PENDING_EVE
 import static com.salesforce.apollo.thoth.schema.tables.PendingValidations.PENDING_VALIDATIONS;
 
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -25,7 +26,6 @@ import java.util.stream.Stream;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
-import org.jooq.Record4;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
@@ -37,7 +37,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachmentAndValidations_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.thoth.proto.Intervals;
@@ -50,12 +49,10 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -271,7 +268,6 @@ public class KerlSpace {
             return;
         }
 
-        final var processor = new KeyEventProcessor(kerl);
         final var digestAlgorithm = kerl.getDigestAlgorithm();
 
         try (var connection = connectionPool.getConnection()) {
@@ -280,13 +276,16 @@ public class KerlSpace {
                 var context = DSL.using(ctx);
                 for (var evente_ : events) {
                     final var event = ProtobufEventFactory.from(evente_.getEvent());
+                    if (!evente_.getValidations().equals(Validations.getDefaultInstance())) {
+                        upsert(context, evente_.getValidations());
+                    }
+                    if (evente_.hasAttachment()) {
+                        upsert(context, event.getCoordinates().toEventCoords(), evente_.getAttachment());
+                    }
                     upsert(context, event, digestAlgorithm);
-                    upsert(context, evente_.getValidations());
-                    upsert(context, event.getCoordinates().toEventCoords(), evente_.getAttachment());
                 }
-                commitPending(context, processor, digestAlgorithm);
             });
-
+            commitPending(dsl, kerl);
         } catch (SQLException e) {
             log.error("Unable to update events, cannot acquire JDBC connection", e);
             throw new IllegalStateException("Unable to update events, cannot acquire JDBC connection", e);
@@ -305,21 +304,53 @@ public class KerlSpace {
         }
     }
 
-    private void commitPending(DSLContext context, KeyEventProcessor processor, DigestAlgorithm digestAlgorithm) {
-        context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_ATTACHMENT.ATTACHMENT,
-                       PENDING_VALIDATIONS.VALIDATIONS)
+    private void commitPending(DSLContext context, KERL kerl) {
+        context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_COORDINATES.ILK)
                .from(PENDING_EVENT)
                .join(PENDING_COORDINATES)
                .on(PENDING_COORDINATES.ID.eq(PENDING_EVENT.COORDINATES))
                .join(EVENT)
                .on(EVENT.DIGEST.eq(PENDING_COORDINATES.DIGEST))
-               .join(PENDING_ATTACHMENT)
-               .on(PENDING_COORDINATES.ID.eq(PENDING_ATTACHMENT.COORDINATES))
-               .join(PENDING_VALIDATIONS)
-               .on(PENDING_COORDINATES.ID.eq(PENDING_VALIDATIONS.COORDINATES))
+               .orderBy(PENDING_COORDINATES.SEQUENCE_NUMBER)
                .fetchStream()
                .forEach(r -> {
-                   ingest(context, r, processor, digestAlgorithm);
+                   KeyEvent event = ProtobufEventFactory.toKeyEvent(r.value2(), r.value3());
+                   EventCoordinates coordinates = event.getCoordinates();
+                   if (coordinates != null) {
+                       context.select(PENDING_ATTACHMENT.ATTACHMENT)
+                              .from(PENDING_ATTACHMENT)
+                              .where(PENDING_ATTACHMENT.COORDINATES.eq(r.value1()))
+                              .stream()
+                              .forEach(bytes -> {
+                                  try {
+                                      Attachment attach = Attachment.parseFrom(bytes.value1());
+                                      kerl.append(Collections.singletonList(new AttachmentEventImpl(AttachmentEvent.newBuilder()
+                                                                                                                   .setCoordinates(coordinates.toEventCoords())
+                                                                                                                   .setAttachment(attach)
+                                                                                                                   .build())));
+                                  } catch (InvalidProtocolBufferException e) {
+                                      log.error("Cannot deserialize attachment", e);
+                                  }
+                              });
+                       context.select(PENDING_VALIDATIONS.VALIDATIONS)
+                              .from(PENDING_VALIDATIONS)
+                              .where(PENDING_VALIDATIONS.COORDINATES.eq(r.value1()))
+                              .stream()
+                              .forEach(bytes -> {
+                                  try {
+                                      Validations attach = Validations.parseFrom(bytes.value1());
+                                      kerl.appendValidations(coordinates,
+                                                             attach.getValidationsList()
+                                                                   .stream()
+                                                                   .collect(Collectors.toMap(v -> EventCoordinates.from(v.getValidator()),
+                                                                                             v -> JohnHancock.from(v.getSignature()))));
+                                  } catch (InvalidProtocolBufferException e) {
+                                      log.error("Cannot deserialize validation", e);
+                                  }
+                              });
+                       kerl.append(event);
+                   }
+                   context.deleteFrom(PENDING_COORDINATES).where(PENDING_COORDINATES.ID.eq(r.value1())).execute();
                });
     }
 
@@ -407,36 +438,5 @@ public class KerlSpace {
                                     }
                                 })
                                 .filter(d -> d != null));
-    }
-
-    private void ingest(DSLContext context, Record4<Long, byte[], byte[], byte[]> r, KeyEventProcessor processor,
-                        DigestAlgorithm digestAlgorithm) {
-        KeyEvent_ ev;
-        try {
-            ev = KeyEvent_.parseFrom(r.value2());
-            KeyEvent event = ProtobufEventFactory.from(ev);
-            Attachment attach = r.value3() == null ? null : Attachment.parseFrom(r.value3());
-            Validations validations = r.value4() == null ? null : Validations.parseFrom(r.value4());
-
-            if (attach != null) {
-                UniKERL.append(context,
-                               new AttachmentEventImpl(AttachmentEvent.newBuilder()
-                                                                      .setAttachment(attach)
-                                                                      .setCoordinates(event.getCoordinates()
-                                                                                           .toEventCoords())
-                                                                      .build()));
-            }
-            if (validations != null) {
-                UniKERL.appendValidations(context, event.getCoordinates(),
-                                          validations.getValidationsList()
-                                                     .stream()
-                                                     .collect(Collectors.toMap(v -> EventCoordinates.from(v.getValidator()),
-                                                                               v -> JohnHancock.from(v.getSignature()))));
-            }
-            UniKERL.append(context, event, processor.process(event), digestAlgorithm);
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Cannot deserialize", e);
-        }
-        context.deleteFrom(PENDING_COORDINATES).where(PENDING_COORDINATES.ID.eq(r.value1())).execute();
     }
 }

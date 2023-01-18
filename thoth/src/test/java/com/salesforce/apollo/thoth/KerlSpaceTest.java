@@ -9,6 +9,7 @@ package com.salesforce.apollo.thoth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
@@ -106,6 +107,9 @@ public class KerlSpaceTest {
         assertTrue(bffB.contains(digestB));
         assertFalse(bffB.contains(digestA));
 
+        assertNull(kerlA.getKeyState(identifierB.getIdentifier()).get());
+        assertNull(kerlB.getKeyState(identifierA.getIdentifier()).get());
+
         var updateA = spaceA.reconcile(Intervals.newBuilder()
                                                 .addIntervals(Interval.newBuilder()
                                                                       .setStart(digestAlgorithm.getOrigin().toDigeste())
@@ -128,5 +132,10 @@ public class KerlSpaceTest {
         assertNotNull(updateB);
         assertEquals(2, updateB.getEventsCount());
 
+        spaceA.update(updateB.getEventsList(), kerlA);
+        spaceB.update(updateA.getEventsList(), kerlB);
+
+        assertNotNull(kerlA.getKeyState(identifierB.getIdentifier()).get());
+        assertNotNull(kerlB.getKeyState(identifierA.getIdentifier()).get());
     }
 }
