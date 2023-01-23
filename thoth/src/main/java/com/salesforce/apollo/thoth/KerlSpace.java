@@ -153,6 +153,9 @@ public class KerlSpace {
 
     public static void upsert(DSLContext dsl, Validations validations) {
         final var coordinates = validations.getCoordinates();
+        final var logCoords = EventCoordinates.from(coordinates);
+        final var logIdentifier = Identifier.from(coordinates.getIdentifier());
+        log.trace("Upserting validations for: {}", logCoords);
         final var identBytes = coordinates.getIdentifier().toByteArray();
 
         try {
@@ -163,30 +166,38 @@ public class KerlSpace {
                .values(identBytes)
                .execute();
         } catch (DataAccessException e) {
-            log.trace("Duplicate inserting identifier: {}", Identifier.from(coordinates.getIdentifier()));
+            log.trace("Duplicate inserting identifier: {}", logIdentifier);
         }
 
         Record1<Long> id;
         try {
-            id = dsl.insertInto(COORDINATES)
-                    .set(COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
-                    .set(COORDINATES.IDENTIFIER,
+            id = dsl.insertInto(PENDING_COORDINATES)
+                    .set(PENDING_COORDINATES.DIGEST, coordinates.getDigest().toByteArray())
+                    .set(PENDING_COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
-                    .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
-                    .returningResult(COORDINATES.ID)
+                    .set(PENDING_COORDINATES.ILK, coordinates.getIlk())
+                    .set(PENDING_COORDINATES.SEQUENCE_NUMBER,
+                         ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
+                    .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
+            log.trace("Id: {} for: {}", id, logCoords);
         } catch (DataAccessException e) {
+            log.trace("access exception for: {}", logCoords, e);
             // Already exists
-            id = dsl.select(COORDINATES.ID)
-                    .from(COORDINATES)
+            id = dsl.select(PENDING_COORDINATES.ID)
+                    .from(PENDING_COORDINATES)
                     .join(IDENTIFIER)
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
-                    .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                    .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger()))
-                    .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                    .where(PENDING_COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                    .and(PENDING_COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                    .and(PENDING_COORDINATES.SEQUENCE_NUMBER.eq(ULong.valueOf(coordinates.getSequenceNumber())
+                                                                     .toBigInteger()))
+                    .and(PENDING_COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
+        }
+        if (id == null) {
+            log.trace("Null coordinates ID for: {}", coordinates);
+            return;
         }
         var vRec = dsl.newRecord(PENDING_VALIDATIONS);
         vRec.setCoordinates(id.value1());
@@ -242,7 +253,6 @@ public class KerlSpace {
                      .stream()
                      .map(i -> new KeyInterval(i))
                      .flatMap(i -> eventDigestsIn(i, dsl))
-                     .peek(d -> System.out.println(d))
                      .filter(d -> !biff.contains(d))
                      .map(d -> event(d, dsl, kerl))
                      .filter(ke -> ke != null)
@@ -374,6 +384,7 @@ public class KerlSpace {
             kerl.getAttachment(coordinates).thenApply(a -> builder.setAttachment(a.toAttachemente())).get();
             kerl.getValidations(coordinates)
                 .thenApply(vs -> Validations.newBuilder()
+                                            .setCoordinates(coordinates.toEventCoords())
                                             .addAllValidations(vs.entrySet()
                                                                  .stream()
                                                                  .map(e -> Validation_.newBuilder()

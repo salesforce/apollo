@@ -81,7 +81,7 @@ public class KerlSpaceTest {
         try (var connection = connectionPoolA.getConnection()) {
             KerlDHT.updateLocationHash(identifierA.getIdentifier(), digestAlgorithm, DSL.using(connection));
         }
-        identifierA.rotate();
+        identifierA.rotate().get();
         var digestA = identifierA.getLastEstablishingEvent().get().getCoordinates().getDigest();
         var biffA = spaceA.populate(0x1638, new CombinedIntervals(new KeyInterval(digestAlgorithm.getOrigin(),
                                                                                   digestAlgorithm.getLast())),
@@ -90,7 +90,7 @@ public class KerlSpaceTest {
         var bffA = BloomFilter.from(biffA);
 
         var identifierB = stereotomyB.newIdentifier().get();
-        identifierB.rotate();
+        identifierB.rotate().get();
         var digestB = identifierB.getLastEstablishingEvent().get().getCoordinates().getDigest();
         try (var connection = connectionPoolB.getConnection()) {
             KerlDHT.updateLocationHash(identifierB.getIdentifier(), digestAlgorithm, DSL.using(connection));
