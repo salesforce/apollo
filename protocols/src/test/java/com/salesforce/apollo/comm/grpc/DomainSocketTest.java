@@ -90,7 +90,7 @@ public class DomainSocketTest {
         try {
             var stub = TestItGrpc.newBlockingStub(channel);
 
-            var result = stub.ping(Any.newBuilder().build());
+            var result = stub.ping(Any.getDefaultInstance());
             assertNotNull(result);
             var creds = result.unpack(PeerCreds.class);
             assertNotNull(creds);

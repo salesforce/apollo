@@ -40,7 +40,7 @@ public class CombinedIntervalsTest {
         intervals.add(new KeyInterval(Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 128 }),
                                       Digest.normalized(DigestAlgorithm.DEFAULT, new byte[] { 0, (byte) 175 })));
         CombinedIntervals combined = new CombinedIntervals(intervals);
-        List<KeyInterval> compressed = combined.getIntervals();
+        var compressed = combined.intervals().toList();
         System.out.println(compressed);
         assertEquals(4, compressed.size());
     }

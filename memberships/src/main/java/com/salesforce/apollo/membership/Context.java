@@ -6,8 +6,11 @@
  */
 package com.salesforce.apollo.membership;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -176,6 +179,18 @@ public interface Context<T extends Member> {
 
     static int toleranceLevel(int rings, int bias) {
         return ((rings - 1) / bias);
+    }
+
+    static List<Member> uniqueSuccessors(final Context<Member> context, Digest digest) {
+        Set<Member> post = new HashSet<>();
+        context.successors(digest, m -> {
+            if (post.size() == context.getRingCount()) {
+                return false;
+            }
+            return post.add(m);
+        });
+        var successors = new ArrayList<>(post);
+        return successors;
     }
 
     /**

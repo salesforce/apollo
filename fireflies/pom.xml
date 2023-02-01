@@ -6,15 +6,17 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>fireflies</artifactId>
-    <name>Fireflies: BFT Membership</name>
-    <description>Byzantine fault tolerant gossip communications discovery and overay</description>
-
+    <name>Fireflies</name>
+    <description>Byzantine fault tolerant, virtually synchronous membership service and secure communications ovelay</description>
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>thoth</artifactId>
+            <artifactId>memberships</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>gorgoneion</artifactId>
+        </dependency>
         <!-- Test only dependencies below this line -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -29,6 +31,11 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>thoth</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

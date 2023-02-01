@@ -4,8 +4,7 @@
     <artifactId>apollo.app</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Apollo: Umbrella App</name>
-
+    <name>Apollo Umbrella App</name>
     <modules>
         <module>fireflies</module>
         <module>protocols</module>
@@ -27,8 +26,8 @@
         <module>liquibase-deterministic</module>
         <module>grpc</module>
         <module>gorgoneion</module>
+        <module>gorgoneion-client</module>
     </modules>
-
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
         <jackson.version>2.13.4</jackson.version>
@@ -44,15 +43,11 @@
         <native.maven.plugin.version>0.9.16</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
-
         <maven.compiler.source>19</maven.compiler.source>
         <maven.compiler.target>19</maven.compiler.target>
         <graal.vm.version>22.3.0</graal.vm.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
     </properties>
-
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -218,7 +213,6 @@
                 <artifactId>domain-kqueue</artifactId>
                 <version>${project.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>h2-deterministic</artifactId>
@@ -237,6 +231,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>gorgoneion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>gorgoneion-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -266,7 +265,6 @@
                 <artifactId>native-lib-loader</artifactId>
                 <version>2.4.0</version>
             </dependency>
-
             <dependency>
                 <groupId>org.jboss.logging</groupId>
                 <artifactId>jboss-logging</artifactId>
@@ -301,7 +299,6 @@
                 <artifactId>logback-access</artifactId>
                 <version>${logback.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk15to18</artifactId>
@@ -322,7 +319,6 @@
                 <artifactId>perfmark-api</artifactId>
                 <version>0.25.0</version>
             </dependency>
-
             <dependency>
                 <!-- necessary for Java 9+ -->
                 <groupId>org.apache.tomcat</groupId>
@@ -419,7 +415,6 @@
                 <artifactId>graal-sdk</artifactId>
                 <version>${graal.vm.version}</version>
             </dependency>
-
             <!-- Test dependencies only below this line! -->
             <dependency>
                 <groupId>org.apiguardian</groupId>
@@ -461,15 +456,12 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-
     <scm>
         <connection>scm:git:https://github.com/salesforce/apollo.git</connection>
         <developerConnection>scm:git:https://github.com/salesforce/apollo.git</developerConnection>
         <url>https://https://github.com/salesforce/apollo</url>
         <tag>HEAD</tag>
     </scm>
-
     <repositories>
         <repository>
             <id>Maven Central</id>
@@ -484,7 +476,6 @@
             </releases>
         </repository>
     </repositories>
-
     <pluginRepositories>
         <pluginRepository>
             <id>Maven Central</id>
@@ -499,7 +490,6 @@
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
-
     <profiles>
         <profile>
             <id>pre</id>
@@ -516,7 +506,6 @@
                 <activeByDefault>false</activeByDefault>
             </activation>
             <modules>
-                <module>demesnes</module>
                 <module>isolates</module>
                 <module>isolate-ftesting</module>
             </modules>
@@ -544,7 +533,6 @@
             </modules>
         </profile>
     </profiles>
-
     <build>
         <extensions>
             <extension>
@@ -600,17 +588,12 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>3.8.1</version>
+                                    <version>[3.8.1,)</version>
                                 </requireMavenVersion>
                                 <dependencyConvergence />
                                 <requireJavaVersion>
-                                    <version>19</version>
+                                    <version>[19,)</version>
                                 </requireJavaVersion>
-                                <requireJavaVendor>
-                                    <includes>
-                                        <include>GraalVM Community</include>
-                                    </includes>
-                                </requireJavaVendor>
                             </rules>
                         </configuration>
                     </execution>
@@ -653,7 +636,6 @@
                     <artifactId>maven-site-plugin</artifactId>
                     <version>3.9.1</version>
                 </plugin>
-
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-project-info-reports-plugin</artifactId>
@@ -781,4 +763,4 @@
             </plugins>
         </pluginManagement>
     </build>
-</project> 
+</project>

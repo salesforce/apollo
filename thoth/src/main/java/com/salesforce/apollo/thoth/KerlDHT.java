@@ -8,12 +8,14 @@
 package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH;
 
+import java.io.IOException;
 import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAmount;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,12 +28,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,13 +59,10 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesfoce.apollo.thoth.proto.ViewState;
-import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -70,10 +70,14 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.stereotomy.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
+import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled.ClosableKERL;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
@@ -89,7 +93,6 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.LoggingOutputStream;
 import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -126,8 +129,15 @@ public class KerlDHT implements ProtoKERLService {
             if (!valid(from, ring)) {
                 return Update.getDefaultInstance();
             }
-
-            return KerlDHT.this.kerlSpace.reconcile(intervals);
+            try (var k = kerlPool.create()) {
+                final var builder = KerlDHT.this.kerlSpace.reconcile(intervals, k);
+                CombinedIntervals keyIntervals = keyIntervals();
+                builder.addAllIntervals(keyIntervals.toIntervals())
+                       .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr));
+                return builder.build();
+            } catch (IOException | SQLException e) {
+                throw new IllegalStateException("Cannot acquire KERL", e);
+            }
         }
 
         @Override
@@ -136,7 +146,7 @@ public class KerlDHT implements ProtoKERLService {
             if (!valid(from, ring)) {
                 return;
             }
-            KerlDHT.this.kerlSpace.update(update.getEventsList());
+            KerlDHT.this.kerlSpace.update(update.getEventsList(), kerl);
         }
     }
 
@@ -174,19 +184,19 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-            log.info("get attachments for coordinates on: {}", member.getId());
+            log.trace("get attachments for coordinates on: {}", member.getId());
             return complete(k -> k.getAttachment(coordinates));
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
-            log.info("get kerl for identifier on: {}", member.getId());
+            log.trace("get kerl for identifier on: {}", member.getId());
             return complete(k -> k.getKERL(identifier));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-            log.info("get key event for coordinates on: {}", member.getId());
+            log.trace("get key event for coordinates on: {}", member.getId());
             final Function<ProtoKERLAdapter, CompletableFuture<KeyEvent_>> func = k -> {
                 return k.getKeyEvent(coordinates);
             };
@@ -195,25 +205,25 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-            log.info("get key state for coordinates on: {}", member.getId());
+            log.trace("get key state for coordinates on: {}", member.getId());
             return complete(k -> k.getKeyState(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-            log.info("get key state for identifier on: {}", member.getId());
+            log.trace("get key state for identifier on: {}", member.getId());
             return complete(k -> k.getKeyState(identifier));
         }
 
         @Override
         public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
-            log.info("get key state with attachments for coordinates on: {}", member.getId());
+            log.trace("get key state with attachments for coordinates on: {}", member.getId());
             return complete(k -> k.getKeyStateWithAttachments(coords));
         }
 
         @Override
         public CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
-            log.info("get key state with endorsements and attachments for coordinates on: {}", member.getId());
+            log.trace("get key state with endorsements and attachments for coordinates on: {}", member.getId());
             return complete(k -> {
                 final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
                 k.getKeyStateWithAttachments(coordinates)
@@ -237,13 +247,10 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
-            log.info("get validations for coordinates on: {}", member.getId());
+            log.trace("get validations for coordinates on: {}", member.getId());
             return complete(k -> k.getValidations(coordinates));
         }
     }
-
-    private record ValidatorView(Digest crown, DigestBloomFilter roots, SigningThreshold threshold, Digest previous,
-                                 ViewState state) {}
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
@@ -251,6 +258,25 @@ public class KerlDHT implements ProtoKERLService {
         var fs = new CompletableFuture<T>();
         fs.completeExceptionally(t);
         return fs;
+    }
+
+    public static void updateLocationHash(Identifier identifier, DigestAlgorithm digestAlgorithm, DSLContext dsl) {
+        dsl.transaction(config -> {
+            var context = DSL.using(config);
+            var identBytes = identifier.toIdent().toByteArray();
+            // Braindead, but correct
+            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)).fetchOne();
+            if (id == null) {
+                throw new IllegalStateException("Identifier: %s not found".formatted(identifier));
+            }
+
+            var hashed = digestAlgorithm.digest(identBytes);
+            context.insertInto(IDENTIFIER_LOCATION_HASH, IDENTIFIER_LOCATION_HASH.IDENTIFIER,
+                               IDENTIFIER_LOCATION_HASH.DIGEST)
+                   .values(id.value1(), hashed.getBytes())
+                   .onDuplicateKeyIgnore()
+                   .execute();
+        });
     }
 
     static <T> CompletableFuture<T> completeIt(T result) {
@@ -277,14 +303,16 @@ public class KerlDHT implements ProtoKERLService {
     private final ScheduledExecutorService                                    scheduler;
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final TemporalAmount                                              timeout;
-    private final AtomicReference<ValidatorView>                              view           = new AtomicReference<>();
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member,
+    private final TemporalAmount timeout;
+
+    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                    ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
-        this.context = context;
+        @SuppressWarnings("unchecked")
+        final var casting = (Context<Member>) context;
+        this.context = casting;
         this.member = member;
         this.timeout = timeout;
         this.fpr = falsePositiveRate;
@@ -304,25 +332,24 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
-        this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
+        this.reconcile = new RingCommunications<>(this.context, member, reconcileComms, executor);
         this.kerlSpace = new KerlSpace(connectionPool);
 
         initializeSchema();
         kerl = new CachingKERL(f -> {
             try (var k = kerlPool.create()) {
-                return f.apply(wrap.apply(this, k));
+                return f.apply(wrap.apply(this, wrap(k)));
             } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         });
-        this.ani = new Ani(member, Duration.ofNanos(timeout.get(ChronoUnit.NANOS)), asKERL(),
-                           () -> view.get().threshold, () -> view.get().roots,
-                           () -> SigningThreshold.unweighted(context.toleranceLevel() + 1));
+        this.ani = new Ani(member.getId(), asKERL());
     }
 
-    public KerlDHT(Duration frequency, Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
-                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
-                   ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
+    public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member,
+                   JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
+                   Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
         this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor,
              timeout, scheduler, falsePositiveRate, metrics);
     }
@@ -539,7 +566,7 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-        log.info("*** Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        log.trace("Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyEvent_.getDefaultInstance());
         }
@@ -709,7 +736,7 @@ public class KerlDHT implements ProtoKERLService {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-//        reconcile(scheduler, duration); TODO
+        reconcile(scheduler, duration);
     }
 
     public void stop() {
@@ -831,12 +858,6 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    private Biff populate(CombinedIntervals keyIntervals) {
-        List<Digest> digests = kerlSpace.populate(keyIntervals);
-        var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), digests.size(), fpr);
-        return biff.toBff();
-    }
-
     private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<ListenableFuture<T>> futureSailor, Digest identifier,
                              Supplier<Boolean> isTimedOut, Destination<Member, DhtService> destination, String action,
@@ -887,17 +908,19 @@ public class KerlDHT implements ProtoKERLService {
     private void reconcile(Optional<ListenableFuture<Update>> futureSailor,
                            Destination<Member, ReconciliationService> destination, ScheduledExecutorService scheduler,
                            Duration duration) {
-        if (!started.get() || futureSailor.isEmpty()) {
+        if (!started.get()) {
             return;
         }
-        try {
-            Update update = futureSailor.get().get();
-            log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
-                      destination.member().getId(), member.getId());
-            kerlSpace.update(update.getEventsList());
-        } catch (InterruptedException | ExecutionException e) {
-            log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
-                      member.getId(), e.getCause());
+        if (!futureSailor.isEmpty()) {
+            try {
+                Update update = futureSailor.get().get();
+                log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
+                          destination.member().getId(), member.getId());
+                kerlSpace.update(update.getEventsList(), kerl);
+            } catch (InterruptedException | ExecutionException e) {
+                log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
+                          member.getId(), e.getCause());
+            }
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -911,7 +934,7 @@ public class KerlDHT implements ProtoKERLService {
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
-                                       .setHave(populate(keyIntervals))
+                                       .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr))
                                        .build());
     }
 
@@ -922,6 +945,17 @@ public class KerlDHT implements ProtoKERLService {
         reconcile.execute((link, ring) -> reconcile(link, ring),
                           (futureSailor, destination) -> reconcile(futureSailor, destination, scheduler, duration));
 
+    }
+
+    private void updateLocationHash(Identifier identifier) {
+        try (var connection = connectionPool.getConnection()) {
+            var dsl = DSL.using(connection);
+            updateLocationHash(identifier, kerl.getDigestAlgorithm(), dsl);
+        } catch (SQLException e) {
+            log.error("Cannot update location hash for: {} on: {}", identifier, member.getId());
+            throw new IllegalStateException("Cannot update location hash S for: %s on: %s".formatted(identifier,
+                                                                                                     member.getId()));
+        }
     }
 
     private boolean valid(Digest from, int ring) {
@@ -941,5 +975,41 @@ public class KerlDHT implements ProtoKERLService {
             return false;
         }
         return true;
+    }
+
+    private DelegatedKERL wrap(ClosableKERL k) {
+        return new DelegatedKERL(k) {
+
+            @Override
+            public CompletableFuture<KeyState> append(KeyEvent event) {
+                return super.append(event).thenApply(ks -> {
+                    if (ks != null) {
+                        updateLocationHash(ks.getCoordinates().getIdentifier());
+                    }
+                    return ks;
+                });
+            }
+
+            @Override
+            public CompletableFuture<List<KeyState>> append(KeyEvent... events) {
+                return super.append(events).thenApply(lks -> {
+                    if (lks.size() > 0) {
+                        updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                    }
+                    return lks;
+                });
+            }
+
+            @Override
+            public CompletableFuture<List<KeyState>> append(List<KeyEvent> events,
+                                                            List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments) {
+                return super.append(events, attachments).thenApply(lks -> {
+                    if (lks.size() > 0) {
+                        updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                    }
+                    return lks;
+                });
+            }
+        };
     }
 }

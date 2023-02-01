@@ -255,9 +255,9 @@ public class StereotomyTests {
         kel = new MemKERL(DigestAlgorithm.DEFAULT);
     }
 
-    private void provision(ControlledIdentifier<?> i, Stereotomy controller) throws Exception {
+    private void provision(ControlledIdentifier<?> identifier, Stereotomy controller) throws Exception {
         var now = Instant.now();
-        var cwpk = i.provision(now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
+        var cwpk = identifier.provision(now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
         assertNotNull(cwpk);
         var cert = cwpk.getX509Certificate();
         assertNotNull(cert);
@@ -269,23 +269,24 @@ public class StereotomyTests {
         var decoded = Stereotomy.decode(cert);
         assertFalse(decoded.isEmpty());
 
-        assertEquals(i.getIdentifier(), decoded.get().coordinates().getIdentifier());
+        assertEquals(identifier.getIdentifier(), decoded.get().coordinates().getIdentifier());
         final var qb64Id = qb64(basicId);
 
-        assertTrue(i.getVerifier().get().verify(decoded.get().signature(), qb64Id));
+        assertTrue(identifier.getVerifier().get().verify(decoded.get().signature(), qb64Id));
 
         var verifiers = new Verifiers() {
             @Override
             public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
-                return (i.getIdentifier().equals(coordinates.getIdentifier())) ? i.getVerifier() : Optional.empty();
+                return (identifier.getIdentifier().equals(coordinates.getIdentifier())) ? identifier.getVerifier()
+                                                                                        : Optional.empty();
             }
 
             @Override
-            public Optional<Verifier> verifierFor(Identifier identifier) {
-                return (i.getIdentifier().equals(identifier)) ? i.getVerifier() : Optional.empty();
+            public Optional<Verifier> verifierFor(Identifier id) {
+                return (identifier.getIdentifier().equals(id)) ? identifier.getVerifier() : Optional.empty();
             }
         };
-        new StereotomyValidator(verifiers).validate(cert);
+        new StereotomyValidator(verifiers).validate(cert); // exception means failure
 
         var privateKey = cwpk.getPrivateKey();
         assertNotNull(privateKey);

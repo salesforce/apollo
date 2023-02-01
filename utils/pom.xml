@@ -6,7 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>utils</artifactId>
-    <name>Utils: General utilities</name>
+    <name>Utils</name>
+    <description>General utilities, Bloomfilters and cryptographic abstractions</description>
 
     <dependencies>
         <dependency>

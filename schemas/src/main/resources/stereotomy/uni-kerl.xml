@@ -21,6 +21,22 @@
         <sql>call stereotomy.initialize()</sql>
 
         <sql>drop alias stereotomy.initialize</sql>
+        
+        <!-- These two constraints are cyclical, so are defered until after the anchor NULL event and event coordinates are created -->
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="coordinates"
+            baseTableName="event" baseTableSchemaName="stereotomy"
+            constraintName="event_coordinates_fk"
+            referencedTableName="coordinates" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="digest"
+            baseTableName="coordinates" baseTableSchemaName="stereotomy"
+            constraintName="coordinates_digest_fk"
+            referencedTableName="event" referencedColumnNames="digest"
+            referencedTableSchemaName="stereotomy" />
 
 	</changeSet>
 </databaseChangeLog>

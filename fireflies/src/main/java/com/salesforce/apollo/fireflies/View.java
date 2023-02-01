@@ -128,9 +128,8 @@ import io.grpc.stub.StreamObserver;
  * "https://www.cs.huji.ac.il/~dolev/pubs/opodis07-DHR-fulltext.pdf">Stable-Fireflies</a>.
  * <p>
  * This implementation is also very closely linked with the KERI Stereotomy
- * implementation of Apollo. The Join protocol of this implementation includes a
- * remote attestation protocol for secure bootstrapping of the entire
- * membership.
+ * implementation of Apollo as the View explicitly uses teh Controlled
+ * Identifier form of membership.
  *
  * @author hal.hildebrand
  * @since 220
@@ -674,17 +673,24 @@ public class View {
         }
     }
 
-    @FunctionalInterface
-    public interface ViewChangeListener {
+    public interface ViewLifecycleListener {
+        /**
+         * Notification of update to members' event coordinates
+         *
+         * @param update - the event coordinates to update
+         */
+        void update(EventCoordinates updated);
+
         /**
          * Notification of a view change event
          *
          * @param context - the context for which the view change has occurred
          * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining members ids
-         * @param leaves  - the list of leaving members ids
+         * @param joins   - the list of joining member's event coordinates
+         * @param leaves  - the list of leaving member's ids
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<Digest> joins, List<Digest> leaves);
+        void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
+
     }
 
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
@@ -724,19 +730,19 @@ public class View {
     private final Executor                                    exec;
     private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private final AtomicBoolean                               introduced          = new AtomicBoolean();
+    private final AtomicBoolean                               introduced         = new AtomicBoolean();
+    private final Map<UUID, ViewLifecycleListener>            lifecycleListeners = new HashMap<>();
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
-    private final Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final Map<Digest, SignedViewChange>               observations       = new ConcurrentSkipListMap<>();
     private final Parameters                                  params;
-    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
+    private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals   = new ConcurrentSkipListMap<>();
     private final RoundScheduler                              roundTimers;
-    private final Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
-    private final AtomicBoolean                               started             = new AtomicBoolean();
-    private final Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
+    private final Set<Digest>                                 shunned            = new ConcurrentSkipListSet<>();
+    private final AtomicBoolean                               started            = new AtomicBoolean();
+    private final Map<String, RoundScheduler.Timer>           timers             = new HashMap<>();
     private final EventValidation                             validation;
-    private final ReadWriteLock                               viewChange          = new ReentrantReadWriteLock(true);
-    private final Map<UUID, ViewChangeListener>               viewChangeListeners = new HashMap<>();
+    private final ReadWriteLock                               viewChange         = new ReentrantReadWriteLock(true);
     private final ViewManagement                              viewManagement;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -774,7 +780,7 @@ public class View {
      * @param listenerId
      */
     public void deregister(UUID listenerId) {
-        viewChangeListeners.remove(listenerId);
+        lifecycleListeners.remove(listenerId);
     }
 
     /**
@@ -791,9 +797,9 @@ public class View {
      * @param listener - the ViewChangeListener to receive events
      * @return the UUID identifying this listener
      */
-    public UUID register(ViewChangeListener listener) {
+    public UUID register(ViewLifecycleListener listener) {
         final var id = UUID.randomUUID();
-        viewChangeListeners.put(id, listener);
+        lifecycleListeners.put(id, listener);
         return id;
     }
 
@@ -867,6 +873,8 @@ public class View {
 
     boolean addToView(NoteWrapper note) {
         var newMember = false;
+        NoteWrapper current = null;
+
         Participant m = context.getMember(note.getId());
         if (m == null) {
             newMember = true;
@@ -881,7 +889,7 @@ public class View {
             m = new Participant(note);
             context.add(m);
         } else {
-            NoteWrapper current = m.getNote();
+            current = m.getNote();
             if (!newMember && current != null) {
                 long nextEpoch = note.getEpoch();
                 long currentEpoch = current.getEpoch();
@@ -925,6 +933,24 @@ public class View {
                 + context.cardinality();
             }
         });
+        if (!newMember) {
+            if (current != null) {
+                if (current.getCoordinates()
+                           .getSequenceNumber()
+                           .compareTo(member.note.getCoordinates().getSequenceNumber()) > 0) {
+                    exec.execute(() -> {
+                        final var coordinates = member.note.getCoordinates();
+                        try {
+                            lifecycleListeners.values().forEach(l -> {
+                                l.update(coordinates);
+                            });
+                        } catch (Throwable t) {
+                            log.error("Error during coordinate update: {}", coordinates, t);
+                        }
+                    });
+                }
+            }
+        }
         return true;
     }
 
@@ -1018,9 +1044,9 @@ public class View {
         return viewManagement.join(scheduler, duration, timer);
     }
 
-    void notifyListeners(List<Digest> joining, List<Digest> leaving) {
+    void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = currentView();
-        viewChangeListeners.forEach((id, listener) -> {
+        lifecycleListeners.forEach((id, listener) -> {
             try {
                 log.trace("Notifying view change: {} listener: {} cardinality: {} joins: {} leaves: {} on: {} ",
                           currentView(), id, context.totalCount(), joining.size(), leaving.size(), node.getId());

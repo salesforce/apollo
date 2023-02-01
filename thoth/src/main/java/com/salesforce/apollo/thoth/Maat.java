@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
-import com.salesforce.apollo.gorgoneion.Gorgoneion;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
@@ -91,10 +90,10 @@ public class Maat extends DelegatedKERL {
             return fs;
         }
         final Context<Member> ctx = context;
-        var successors = Gorgoneion.validators(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
-                                   .stream()
-                                   .map(m -> m.getId())
-                                   .collect(Collectors.toSet());
+        var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
+                                .stream()
+                                .map(m -> m.getId())
+                                .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {}
         var mapped = new CopyOnWriteArrayList<validator>();
@@ -112,7 +111,7 @@ public class Maat extends DelegatedKERL {
                                  event.getCoordinates());
                     }
                     mapped.add(new validator(signer, e.getValue()));
-                    log.warn("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
+                    log.trace("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
                 } else {
                     log.warn("Signature not SAI: {} for: {}", signer.getCoordinates(), event.getCoordinates(),
                              event.getCoordinates());

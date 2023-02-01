@@ -225,13 +225,13 @@ public class EnclaveTest {
 
         var clientA = commsA.connect(serverMember2);
 
-        var resultA = clientA.ping(Any.newBuilder().build());
+        var resultA = clientA.ping(Any.getDefaultInstance());
         assertNotNull(resultA);
         var msg = resultA.unpack(ByteMessage.class);
         assertEquals("Hello Server A", msg.getContents().toStringUtf8());
 
         var clientB = commsB.connect(serverMember1);
-        var resultB = clientB.ping(Any.newBuilder().build());
+        var resultB = clientB.ping(Any.getDefaultInstance());
         assertNotNull(resultB);
         msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server B", msg.getContents().toStringUtf8());

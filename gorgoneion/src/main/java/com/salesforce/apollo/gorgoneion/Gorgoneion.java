@@ -9,11 +9,8 @@ package com.salesforce.apollo.gorgoneion;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -46,8 +43,6 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
-import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
-import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsClient;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.Endorsement;
@@ -362,24 +357,10 @@ public class Gorgoneion {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
-
-    public static List<Member> validators(final Context<Member> context, Digest digest) {
-        Set<Member> post = new HashSet<>();
-        context.successors(digest, m -> {
-            if (post.size() == context.getRingCount()) {
-                return false;
-            }
-            return post.add(m);
-        });
-        var successors = new ArrayList<>(post);
-        successors.sort(Comparator.naturalOrder());
-        log.info("Validators: {} for: {}", successors.stream().map(m -> m.getId()).toList(), digest);
-        return successors;
-    }
+    public static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
     @SuppressWarnings("unused")
-    private final CommonCommunications<Admissions, AdmissionsService>   admissionsComm;
+    private final CommonCommunications<?, AdmissionsService>            admissionsComm;
     private final Context<Member>                                       context;
     private final CommonCommunications<Endorsement, EndorsementService> endorsementComm;
     private final Executor                                              exec;
@@ -407,9 +388,7 @@ public class Gorgoneion {
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
                                                  r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
-                                                                           r, metrics),
-                                                 AdmissionsClient.getCreate(metrics),
-                                                 Admissions.getLocalLoopback(member));
+                                                                           r, metrics));
 
         final var service = new Endorse();
         endorsementComm = endorsementRouter.create(member, context.getId(), service, ":endorsement",
@@ -513,8 +492,11 @@ public class Gorgoneion {
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
 
-        var successors = validators(context, digestOf(ident, parameters.digestAlgorithm()));
-        final var majority = context.activeCount() == 1 ? 0 : context.majority();
+        var successors = context.totalCount() == 1 ? Collections.singletonList(member)
+                                                   : Context.uniqueSuccessors(context,
+                                                                              digestOf(ident,
+                                                                                       parameters.digestAlgorithm()));
+        final var majority = context.totalCount() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         redirecting.iterate((link, m) -> {
@@ -563,7 +545,8 @@ public class Gorgoneion {
                                        .setValidations(validations)
                                        .build();
 
-        var successors = validators(context, digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = Context.uniqueSuccessors(context,
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm, exec);
         var completed = new HashSet<Member>();
@@ -593,7 +576,8 @@ public class Gorgoneion {
 
         var validated = new CompletableFuture<Validations>();
 
-        var successors = validators(context, digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = Context.uniqueSuccessors(context,
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm,
                                                     exec);

@@ -7,8 +7,9 @@
 		<artifactId>apollo.app</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
-	<artifactId>memberships</artifactId> 
-    <name>Memberships: BFT Group Communication Overlay</name>
+	<artifactId>memberships</artifactId>
+    <name>Memberships</name>
+    <description>Fundamental Membership and BFT Group Communication Ring Overlay</description>
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>

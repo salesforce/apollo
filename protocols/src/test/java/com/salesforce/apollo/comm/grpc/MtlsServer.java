@@ -154,7 +154,7 @@ public class MtlsServer implements ClientIdentity {
                                                        .executor(executor)
                                                        .withOption(ChannelOption.SO_REUSEADDR, true)
                                                        .sslContext(supplier.forServer(clientAuth, alias, validator,
-                                                                                      PROVIDER_JSSE, TL_SV1_3))
+                                                                                      PROVIDER_JSSE))
                                                        .fallbackHandlerRegistry(registry)
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)

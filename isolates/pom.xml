@@ -6,8 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>isolates</artifactId>
-    <name>Isolates: Apollo Domain Shards</name>
-    <description>Dynamic library for Apollo Domain Shards</description>
+    <name>Isolates</name>
+    <description>Dynamic library for Apollo Domain Isolates</description>
 
     <properties>
         <imageName>libdemesne</imageName>
@@ -16,7 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>demesnes</artifactId>
+            <artifactId>model</artifactId>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
@@ -62,10 +62,54 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-maven</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.8.1,)</version>
+                                </requireMavenVersion>
+                                <dependencyConvergence />
+                                <requireJavaVersion>
+                                    <version>[19,)</version>
+                                </requireJavaVersion>
+                                <requireJavaVendor>
+                                    <includes>
+                                        <include>GraalVM Community</include>
+                                    </includes>
+                                </requireJavaVendor>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
-    <profiles>
+    <profiles> 
+        <profile>
+            <id>eclipse-work-around</id>
+            <activation>
+                <property>
+                    <name>eclipse.graalvm.jdk.workaround</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.graalvm.sdk</groupId>
+                    <artifactId>graal-sdk</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile> 
         <profile>
             <id>os-x</id>
             <activation>

@@ -160,7 +160,7 @@ public class DemultiplexerTest {
         var channel = InProcessChannelBuilder.forName(name).intercept(clientInterceptor(ctxA)).build();
         opened.add(channel);
         var clientA = TestItGrpc.newBlockingStub(channel);
-        var resultA = clientA.ping(Any.newBuilder().build());
+        var resultA = clientA.ping(Any.getDefaultInstance());
         assertNotNull(resultA);
         var creds = resultA.unpack(PeerCreds.class);
         assertNotNull(creds);
@@ -168,7 +168,7 @@ public class DemultiplexerTest {
         channel = InProcessChannelBuilder.forName(name).intercept(clientInterceptor(ctxB)).build();
         opened.add(channel);
         var clientB = TestItGrpc.newBlockingStub(channel);
-        var resultB = clientB.ping(Any.newBuilder().build());
+        var resultB = clientB.ping(Any.getDefaultInstance());
         assertNotNull(resultB);
         var msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server", msg.getContents().toStringUtf8());

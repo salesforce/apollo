@@ -42,8 +42,8 @@ import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
@@ -60,9 +60,10 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  * @author hal.hildebrand
  *
  */
-abstract public class UniKERL implements KERL {
-    private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
-    private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
+abstract public class UniKERL implements DigestKERL {
+    public static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
+
+    private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
         var coordinates = attachment.coordinates();
@@ -79,7 +80,7 @@ abstract public class UniKERL implements KERL {
                     .set(COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().longValue())
+                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().toBigInteger())
                     .returningResult(COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -90,7 +91,7 @@ abstract public class UniKERL implements KERL {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                     .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -127,6 +128,7 @@ abstract public class UniKERL implements KERL {
     }
 
     public static void append(DSLContext context, KeyEvent event, KeyState newState, DigestAlgorithm digestAlgorithm) {
+        assert newState != null;
         final EventCoordinates prevCoords = event.getPrevious();
         final var preIdentifier = context.select(IDENTIFIER.ID)
                                          .from(IDENTIFIER)
@@ -137,7 +139,7 @@ abstract public class UniKERL implements KERL {
                                 .from(COORDINATES)
                                 .where(COORDINATES.DIGEST.eq(prevCoords.getDigest().toDigeste().toByteArray()))
                                 .and(COORDINATES.IDENTIFIER.eq(preIdentifier))
-                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber().longValue()))
+                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber().toBigInteger()))
                                 .and(COORDINATES.ILK.eq(prevCoords.getIlk()))
                                 .fetchOne();
         if (prev == null) {
@@ -170,7 +172,7 @@ abstract public class UniKERL implements KERL {
                         .set(COORDINATES.IDENTIFIER,
                              context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                         .set(COORDINATES.ILK, event.getIlk())
-                        .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
+                        .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().toBigInteger())
                         .returningResult(COORDINATES.ID)
                         .fetchOne()
                         .value1();
@@ -183,7 +185,7 @@ abstract public class UniKERL implements KERL {
                         .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                         .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                         .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                        .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                        .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                         .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                         .fetchOne()
                         .value1();
@@ -198,7 +200,7 @@ abstract public class UniKERL implements KERL {
                    .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
                    .execute();
         } catch (DataAccessException e) {
-            return;
+            // ignore
         }
         log.trace("Inserted event: {}", event);
         context.mergeInto(CURRENT_KEY_STATE)
@@ -210,6 +212,7 @@ abstract public class UniKERL implements KERL {
                .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
                .set(CURRENT_KEY_STATE.CURRENT, id)
                .execute();
+        log.trace("Inserted key state: {}", event);
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {
@@ -254,7 +257,7 @@ abstract public class UniKERL implements KERL {
                     .set(COORDINATES.IDENTIFIER,
                          dsl.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
                     .set(COORDINATES.ILK, coordinates.getIlk())
-                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().longValue())
+                    .set(COORDINATES.SEQUENCE_NUMBER, coordinates.getSequenceNumber().toBigInteger())
                     .returningResult(COORDINATES.ID)
                     .fetchOne();
         } catch (DataAccessException e) {
@@ -265,7 +268,7 @@ abstract public class UniKERL implements KERL {
                     .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                     .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                     .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                    .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                     .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                     .fetchOne();
         }
@@ -319,13 +322,20 @@ abstract public class UniKERL implements KERL {
                    .values(0L, ecNone.getIdentifier().toIdent().toByteArray())
                    .execute();
 
+            context.mergeInto(EVENT)
+                   .using(context.selectOne())
+                   .on(EVENT.COORDINATES.eq(0L))
+                   .whenNotMatchedThenInsert(EVENT.COORDINATES, EVENT.DIGEST, EVENT.CONTENT)
+                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), compress(new byte[0]))
+                   .execute();
+
             context.mergeInto(COORDINATES)
                    .using(context.selectOne())
                    .on(COORDINATES.ID.eq(0L))
                    .whenNotMatchedThenInsert(COORDINATES.ID, COORDINATES.DIGEST, COORDINATES.IDENTIFIER,
                                              COORDINATES.SEQUENCE_NUMBER, COORDINATES.ILK)
-                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L, ecNone.getSequenceNumber().longValue(),
-                           ecNone.getIlk())
+                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L,
+                           ecNone.getSequenceNumber().toBigInteger(), ecNone.getIlk())
                    .execute();
         });
     }
@@ -354,9 +364,9 @@ abstract public class UniKERL implements KERL {
                               .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                               .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                               .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                               .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                              .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                               .fetchOne();
             if (resolved == null) {
                 fs.complete(null);
@@ -407,6 +417,7 @@ abstract public class UniKERL implements KERL {
         return digestAlgorithm;
     }
 
+    @Override
     public CompletableFuture<KeyEvent> getKeyEvent(Digest digest) {
         var fs = new CompletableFuture<KeyEvent>();
         try {
@@ -438,15 +449,16 @@ abstract public class UniKERL implements KERL {
                             .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                             .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                             .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .fetchOptional()
                             .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
                             .orElse(null);
             log.info("Get key event: {} result: {}", coordinates, result);
             fs.complete(result);
         } catch (Throwable t) {
+            log.error("Get key event: {} error", coordinates, t);
             fs.completeExceptionally(t);
         }
         return fs;
@@ -464,9 +476,8 @@ abstract public class UniKERL implements KERL {
                             .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                             .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                             .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                             .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                            .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                             .fetchOptional()
                             .map(r -> {
                                 try {
@@ -477,7 +488,7 @@ abstract public class UniKERL implements KERL {
                                 }
                             })
                             .orElse(null);
-            log.info("Get key state: {} result: {}", coordinates, result != null);
+            log.info("Get key state coordinates: {} result: {}", coordinates, result != null);
             fs.complete(result);
         } catch (Throwable t) {
             fs.completeExceptionally(t);
@@ -523,9 +534,9 @@ abstract public class UniKERL implements KERL {
                           .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                           .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                           .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                           .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().toBigInteger()))
                           .fetchOne();
         if (resolved == null) {
             log.warn("Cannot resolve validations: {}", coordinates);
@@ -551,7 +562,7 @@ abstract public class UniKERL implements KERL {
                              .filter(s -> s != null)
                              .collect(Collectors.toMap(v -> EventCoordinates.from(v.coordinates),
                                                        v -> JohnHancock.from(v.signature)));
-        log.warn("Resolve validations: {} result: {}", coordinates, validations);
+        log.trace("Resolve validations: {} result: {}", coordinates, validations);
         complete.complete(validations);
         return complete;
     }

@@ -151,12 +151,12 @@ public class LocalServerTest {
 
         var clientA = commsA.connect(memberB);
 
-        var resultA = clientA.ping(Any.newBuilder().build());
+        var resultA = clientA.ping(Any.getDefaultInstance());
         assertNotNull(resultA);
         assertEquals("Hello Server B", resultA.unpack(ByteMessage.class).getContents().toStringUtf8());
 
         var clientB = commsA_B.connect(memberA);
-        var resultB = clientB.ping(Any.newBuilder().build());
+        var resultB = clientB.ping(Any.getDefaultInstance());
         assertNotNull(resultB);
         assertEquals("Hello Server A", resultB.unpack(ByteMessage.class).getContents().toStringUtf8());
 

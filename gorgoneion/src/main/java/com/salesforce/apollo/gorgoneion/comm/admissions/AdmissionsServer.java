@@ -24,7 +24,7 @@ import io.grpc.stub.StreamObserver;
  */
 public class AdmissionsServer extends AdmissionsImplBase {
 
-    private ClientIdentity                           identity;
+    private final ClientIdentity                     identity;
     private final GorgoneionMetrics                  metrics;
     private final RoutableService<AdmissionsService> router;
 

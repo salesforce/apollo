@@ -32,7 +32,7 @@ public class KerlDhtTest extends AbstractDhtTest {
         routers.values().forEach(r -> r.start());
         dhts.values()
             .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
-                                      Duration.ofSeconds(1)));
+                                      Duration.ofMillis(10)));
 
         // inception
         var specification = IdentifierSpecification.newBuilder();

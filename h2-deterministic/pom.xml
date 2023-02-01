@@ -6,7 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>h2-deterministic</artifactId>
-    <name>H2 Deterministic SQL</name>
+    <name>Deterministic H2</name>
     <description>H2 modified to be a deterministic SQL DB</description>
 
     <dependencies>

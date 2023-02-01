@@ -21,8 +21,7 @@ import io.netty.handler.ssl.SslContext;
  */
 public interface ServerContextSupplier {
 
-    SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
-                         String tlsVersion);
+    SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider);
 
     Digest getMemberId(X509Certificate key);
 

@@ -35,10 +35,10 @@ import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.gorgoneion.Gorgoneion;
-import com.salesforce.apollo.gorgoneion.GorgoneionClient;
 import com.salesforce.apollo.gorgoneion.Parameters;
-import com.salesforce.apollo.gorgoneion.comm.admissions.Admissions;
-import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsClient;
+import com.salesforce.apollo.gorgoneion.client.GorgoneionClient;
+import com.salesforce.apollo.gorgoneion.client.client.comm.Admissions;
+import com.salesforce.apollo.gorgoneion.client.client.comm.AdmissionsClient;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -67,7 +67,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
                                                                               Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
+        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofMillis(10)));
 
         identities.entrySet().forEach(e -> {
             try {

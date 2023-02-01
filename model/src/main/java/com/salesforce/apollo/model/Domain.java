@@ -77,14 +77,6 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
  */
 abstract public class Domain {
 
-    public enum MemberState {
-        ACTIVE, JOINING, LEAVING, OFFLINE;
-
-        public String toColumn() {
-            return name().toLowerCase();
-        }
-    }
-
     public record TransactionConfiguration(Executor executor, ScheduledExecutorService scheduler) {}
 
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
@@ -95,11 +87,7 @@ abstract public class Domain {
             context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
             var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
             if (id != null) {
-                context.insertInto(MEMBER)
-                       .set(MEMBER.IDENTIFIER, id.value1())
-                       .set(MEMBER.STATE, state)
-                       .onConflictDoNothing()
-                       .execute();
+                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
             }
         }
     }
@@ -122,14 +110,13 @@ abstract public class Domain {
                   .build();
     }
 
-    public static boolean isActiveMember(DSLContext context, SelfAddressingIdentifier id) {
+    public static boolean isMember(DSLContext context, SelfAddressingIdentifier id) {
         final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
         return context.fetchExists(context.select(MEMBER.IDENTIFIER)
                                           .from(MEMBER)
                                           .join(idTable)
                                           .on(idTable.ID.eq(MEMBER.IDENTIFIER))
-                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes()))
-                                          .and(MEMBER.STATE.eq("active")));
+                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes())));
     }
 
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
@@ -201,7 +188,7 @@ abstract public class Domain {
                          .anyMatch(d -> m.getId().equals(d));
         }
         final var context = DSL.using(stateConnection, SQLDialect.H2);
-        final var activeMember = isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
+        final var activeMember = isMember(context, new SelfAddressingIdentifier(m.getId()));
 
         return activeMember;
     }
@@ -259,7 +246,7 @@ abstract public class Domain {
 
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        log.info("Genesis joins: {} on: {}", members.keySet(), params.member());
+        log.info("Genesis joins: {} on: {}", members.keySet().stream().map(m -> m.getId()).toList(), params.member());
         var sorted = new ArrayList<Member>(members.keySet());
         sorted.sort(Comparator.naturalOrder());
         List<Transaction> transactions = new ArrayList<>();
