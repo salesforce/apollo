@@ -67,7 +67,8 @@ public class BootstrappingTest extends AbstractDhtTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
                                                                               Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofMillis(10)));
+        dhts.values()
+            .forEach(dht -> dht.start(scheduler, LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
         identities.entrySet().forEach(e -> {
             try {

@@ -280,7 +280,7 @@ public class ViewManagement {
     void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
         final var joinView = Digest.from(join.getView());
         if (!joined()) {
-            log.trace("Not joined, ignored join of view: {} from: {} on: {}", joinView, from, node.getId());
+            log.info("Not joined, ignored join of view: {} from: {} on: {}", joinView, from, node.getId());
             responseObserver.onNext(Gateway.getDefaultInstance());
             responseObserver.onCompleted();
             return;
@@ -292,8 +292,10 @@ public class ViewManagement {
                 responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
                 return;
             }
+            log.debug("Join requested from: {} view: {} context: {} cardinality: {} on: {}", from, thisView,
+                      context.getId(), context.cardinality(), node.getId());
             if (contains(from)) {
-                log.trace("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
+                log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
                           context.getId(), context.cardinality(), node.getId());
                 joined(Collections.emptyList(), from, responseObserver, timer);
                 return;

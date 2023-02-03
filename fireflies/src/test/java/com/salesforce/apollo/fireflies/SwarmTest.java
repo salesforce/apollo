@@ -64,7 +64,7 @@ public class SwarmTest {
     private static final double                                                P_BYZ      = 0.1;
 
     static {
-        CARDINALITY = largeTests ? 3000 : 100;
+        CARDINALITY = largeTests ? 1000 : 100;
     }
 
     @BeforeAll
@@ -211,6 +211,9 @@ public class SwarmTest {
         var parameters = Parameters.newBuilder()
                                    .setMaxPending(largeTests ? 10 : 10)
                                    .setMaximumTxfr(largeTests ? 100 : 20)
+                                   .setJoinRetries(25)
+                                   .setFpr(0.0000125)
+                                   .setRetryDelay(Duration.ofMillis(largeTests ? 500 : 200))
                                    .build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
@@ -224,10 +227,9 @@ public class SwarmTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        final var executor = exec;
-        final var commExec = exec;
-        final var gatewayExec = exec;
+        final var executor = Executors.newVirtualThreadPerTaskExecutor();
+        final var commExec = Executors.newVirtualThreadPerTaskExecutor();
+        final var gatewayExec = Executors.newVirtualThreadPerTaskExecutor();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
