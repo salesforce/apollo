@@ -59,9 +59,9 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  *
  */
 public class AbstractDhtTest {
-    protected static final ProtobufEventFactory factory = new ProtobufEventFactory();
-
-    protected static final double PBYZ = 0.33;
+    protected static final ProtobufEventFactory factory     = new ProtobufEventFactory();
+    protected static final boolean              LARGE_TESTS = Boolean.getBoolean("large_tests");
+    protected static final double               PBYZ        = 0.25;
 
     public static InceptionEvent inception(Builder<?> specification, KeyPair initialKeyPair, EventFactory factory,
                                            KeyPair nextKeyPair) {
@@ -96,7 +96,6 @@ public class AbstractDhtTest {
     protected Executor                                                           exec    = Executors.newVirtualThreadPerTaskExecutor();
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected MemKERL                                                            kerl;
-    protected int                                                                majority;
     protected String                                                             prefix;
     protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
     protected Stereotomy                                                         stereotomy;
@@ -130,19 +129,18 @@ public class AbstractDhtTest {
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
         context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
-        majority = context.majority();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.keySet().forEach(member -> instantiate(member, context, serverMembers));
 
         System.out.println();
         System.out.println();
-        System.out.println(String.format("Cardinality: %s, Prob Byz: %s, Majority: %s", getCardinality(), PBYZ,
-                                         majority));
+        System.out.println(String.format("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s", getCardinality(),
+                                         PBYZ, context.getRingCount(), context.majority()));
         System.out.println();
     }
 
     protected int getCardinality() {
-        return Boolean.getBoolean("large_tests") ? 100 : 5;
+        return LARGE_TESTS ? 100 : 5;
     }
 
     protected void instantiate(SigningMember member, Context<Member> context,

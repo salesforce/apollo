@@ -66,6 +66,9 @@ abstract public class UniKERL implements DigestKERL {
     private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
+        if (attachment.attachments().seals().size() == 0 && attachment.attachments().endorsements().size() == 0) {
+            return;
+        }
         var coordinates = attachment.coordinates();
         final var identBytes = coordinates.getIdentifier().toIdent().toByteArray();
 
@@ -237,6 +240,9 @@ abstract public class UniKERL implements DigestKERL {
 
     public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
                                          Map<EventCoordinates, JohnHancock> validations) {
+        if (validations.size() == 0) {
+            return;
+        }
         final var identBytes = coordinates.getIdentifier().toIdent().toByteArray();
 
         try {

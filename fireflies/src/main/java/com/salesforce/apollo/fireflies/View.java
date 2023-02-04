@@ -1503,7 +1503,7 @@ public class View {
      */
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
-                                                                                   context.cardinality()),
+                                                                                   context.cardinality() * 2),
                                                                     p);
         context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
         return bff;
