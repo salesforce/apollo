@@ -103,7 +103,6 @@ public class EdDSAOperations {
     public byte[] encode(PublicKey publicKey) {
         var point = ((EdECPublicKey) publicKey).getPoint();
         var encodedPoint = point.getY().toByteArray();
-
         reverse(encodedPoint);
         encodedPoint = Arrays.copyOf(encodedPoint, publicKeyLength());
         var msb = (byte) (point.isXOdd() ? 0x80 : 0);
