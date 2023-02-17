@@ -99,7 +99,7 @@ message Digests {
 }
 
 message Gossip {
-    bool redirect = 1;
+    SignedNote redirect = 1;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
     ViewChangeGossip observations = 5;
