@@ -29,7 +29,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
-import com.salesforce.apollo.model.demesnes.DemesneImpl;
+import com.salesforce.apollo.model.demesnes.JniBridge;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
@@ -94,7 +94,7 @@ public class DemesneIsolateTest {
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        Demesne demesne = new DemesneImpl(parameters, ksPassword);
+        Demesne demesne = new JniBridge(parameters, ksPassword);
         demesne.start();
         Utils.waitForCondition(1000, () -> demesne.active());
     }

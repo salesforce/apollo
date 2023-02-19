@@ -12,19 +12,21 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.IntStream;
 
+import org.bouncycastle.util.Arrays;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
@@ -55,10 +57,10 @@ public class DemesneIsolate {
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
     public static native IsolateThread createIsolate();
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_active")
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_active")
     private static boolean active(Pointer jniEnv, Pointer clazz,
                                   @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
@@ -100,41 +102,44 @@ public class DemesneIsolate {
         }
     }
 
-    private static String launch(Pointer jniEnv, ByteBuffer paramBytes, Pointer clazz,
-                                 char[] pwd) throws GeneralSecurityException, IOException {
-        try {
-            return launch(jniEnv, DemesneParameters.parseFrom(paramBytes), clazz, pwd);
-        } finally {
-            Arrays.fill(pwd, ' ');
-        }
+    private static String launch(Pointer jniEnv, ByteBuffer paramBuf, char[] password,
+                                 Pointer clazz) throws GeneralSecurityException, IOException {
+        final var parameters = DemesneParameters.parseFrom(paramBuf.array());
+        return launch(jniEnv, parameters, password, clazz);
     }
 
-    private static String launch(Pointer jniEnv, DemesneParameters parameters, Pointer clazz,
-                                 char[] pwd) throws GeneralSecurityException, IOException {
+    private static String launch(Pointer jniEnv, DemesneParameters parameters, char[] password,
+                                 Pointer clazz) throws GeneralSecurityException, IOException {
         if (demesne.get() != null) {
             return null;
         }
-        final var pretending = new DemesneImpl(parameters, pwd);
+        final var pretending = new DemesneImpl(parameters, password);
         if (!demesne.compareAndSet(null, pretending)) {
             return null;
         }
         return pretending.getInbound();
     }
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_launch")
-    private static void launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                               byte[] parameters, char[] ksPassword) throws GeneralSecurityException, IOException {
-        log.info("Launch isolate: {} parameters: {} pswd: {}", isolateId, parameters.length, ksPassword.length);
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")
+    private static boolean launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                                  Pointer parameters, int paramSize, Pointer pwd,
+                                  int pwdSize) throws GeneralSecurityException, IOException {
+        log.info("Launch Demesne Isolate: {} parameters len: {} pwd len: {}", isolateId, paramSize, pwdSize);
+        var buff = CTypeConversion.asByteBuffer(parameters, paramSize);
+        var pwdBuff = StandardCharsets.UTF_8.decode(CTypeConversion.asByteBuffer(pwd, pwdSize));
+        final var password = pwdBuff.array();
         try {
-            launch(jniEnv, ByteBuffer.wrap(parameters), clazz, ksPassword);
+            launch(jniEnv, buff, password, clazz);
+            return true;
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot launch demesne", e);
+            return false;
         } finally {
-            Arrays.fill(ksPassword, ' ');
+            Arrays.fill(password, ' ');
         }
     }
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_start")
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_start")
     private static void start(Pointer jniEnv, Pointer clazz,
                               @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
@@ -143,7 +148,7 @@ public class DemesneIsolate {
         }
     }
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_stop")
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_stop")
     private static void stop(Pointer jniEnv, Pointer clazz,
                              @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
@@ -152,23 +157,25 @@ public class DemesneIsolate {
         }
     }
 
-    @CEntryPoint(name = "Java_com_salesforce_apollo_domain_Demesne_viewChange")
-    private static void viewChange(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                   byte[] viewId, byte[][] joins,
-                                   byte[][] leaves) throws GeneralSecurityException, IOException {
-
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_viewChange")
+    private static boolean viewChange(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                                      Pointer vc, int size) {
+        var buff = CTypeConversion.asByteBuffer(vc, size);
         final Demesne current = demesne.get();
         if (current == null) {
-            return;
+            log.warn("No Demesne created");
+            return false;
         }
-        current.viewChange(digest(viewId),
-                           IntStream.range(0, joins.length)
-                                    .mapToObj(i -> coords(joins[i]))
-                                    .filter(d -> d != null)
-                                    .toList(),
-                           IntStream.range(0, leaves.length)
-                                    .mapToObj(i -> digest(leaves[i]))
-                                    .filter(d -> d != null)
-                                    .toList());
+        ViewChange viewChange;
+        try {
+            viewChange = ViewChange.parseFrom(buff);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Unable to parse DemesnesViewChange", e);
+            return false;
+        }
+        current.viewChange(Digest.from(viewChange.getView()),
+                           viewChange.getJoiningList().stream().map(j -> EventCoordinates.from(j)).toList(),
+                           viewChange.getLeavingList().stream().map(d -> Digest.from(d)).toList());
+        return true;
     }
 }
