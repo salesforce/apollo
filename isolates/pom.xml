@@ -149,7 +149,8 @@
                          --initialize-at-run-time=io.netty.channel.unix.Errors
                          --initialize-at-run-time=io.netty.channel.unix.IovArray
                          --initialize-at-run-time=io.netty.channel.unix.Limits
-                         --initialize-at-run-time=com.salesforce.apollo.domain.Demesne 
+                         --initialize-at-run-time=com.salesforce.apollo.domain.Demesne
+                         --initialize-at-run-time=io.grpc.netty.NettyChannelBuilder
 
                          --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper 
                          --trace-class-initialization=jakarta.xml.bind.ContextFinder

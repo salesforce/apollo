@@ -270,14 +270,21 @@ public class DemesneImpl implements Demesne {
 
     private CachingKERL kerlFrom(DemesneParameters parameters, final Path commDirectory, Digest kerlContext) {
         return new CachingKERL(f -> {
-            var channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService())
-                                                                                              .toFile()))
-                                             .intercept(clientInterceptor(kerlContext))
-                                             .eventLoopGroup(eventLoopGroup)
-                                             .channelType(channelType)
-                                             .keepAliveTime(1, TimeUnit.SECONDS)
-                                             .usePlaintext()
-                                             .build();
+            final var kerlService = parameters.getKerlService();
+            final var file = commDirectory.resolve(kerlService).toFile();
+            final var serverAddress = new DomainSocketAddress(file);
+            log.error("Kerl service: {}, comm directory: {}, context: {}, file: {}, address: {}", kerlService,
+                      commDirectory, kerlContext, file, serverAddress);
+
+            final var builder = NettyChannelBuilder.forAddress(serverAddress);
+
+            builder.intercept(clientInterceptor(kerlContext));
+            builder.eventLoopGroup(eventLoopGroup);
+            builder.channelType(channelType);
+            builder.keepAliveTime(1, TimeUnit.SECONDS);
+            builder.usePlaintext();
+
+            var channel = builder.build();
             try {
                 var stub = KERLServiceGrpc.newFutureStub(channel);
                 return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));

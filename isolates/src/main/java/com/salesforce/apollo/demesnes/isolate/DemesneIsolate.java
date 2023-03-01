@@ -16,11 +16,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.bouncycastle.util.Arrays;
 import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.word.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,13 +54,15 @@ public class DemesneIsolate {
     private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
-    private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
+    private static final ObjectHandles                GLOBAL         = ObjectHandles.getGlobal();
+
+    private static final Logger log = LoggerFactory.getLogger(DemesneIsolate.class);
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
     public static native IsolateThread createIsolate();
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_active")
-    private static boolean active(Pointer jniEnv, Pointer clazz,
+    private static boolean active(JNIEnvironment jniEnv, JClass clazz,
                                   @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
         return d == null ? false : d.active();
@@ -102,14 +103,14 @@ public class DemesneIsolate {
         }
     }
 
-    private static String launch(Pointer jniEnv, ByteBuffer paramBuf, char[] password,
-                                 Pointer clazz) throws GeneralSecurityException, IOException {
-        final var parameters = DemesneParameters.parseFrom(paramBuf.array());
+    private static String launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
+                                 JClass clazz) throws GeneralSecurityException, IOException {
+        final var parameters = DemesneParameters.parseFrom(data);
         return launch(jniEnv, parameters, password, clazz);
     }
 
-    private static String launch(Pointer jniEnv, DemesneParameters parameters, char[] password,
-                                 Pointer clazz) throws GeneralSecurityException, IOException {
+    private static String launch(JNIEnvironment jniEnv, DemesneParameters parameters, char[] password,
+                                 JClass clazz) throws GeneralSecurityException, IOException {
         if (demesne.get() != null) {
             return null;
         }
@@ -121,26 +122,30 @@ public class DemesneIsolate {
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")
-    private static boolean launch(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                  Pointer parameters, int paramSize, Pointer pwd,
-                                  int pwdSize) throws GeneralSecurityException, IOException {
-        log.info("Launch Demesne Isolate: {} parameters len: {} pwd len: {}", isolateId, paramSize, pwdSize);
-        var buff = CTypeConversion.asByteBuffer(parameters, paramSize);
-        var pwdBuff = StandardCharsets.UTF_8.decode(CTypeConversion.asByteBuffer(pwd, pwdSize));
-        final var password = pwdBuff.array();
+    private static boolean launch(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                                  JByteArray parameters, int parametersLen, JByteArray pwd,
+                                  int pwdLen) throws GeneralSecurityException, IOException {
+        var parametersBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
+                                                                .getGetByteArrayElements()
+                                                                .call(jniEnv, parameters, false),
+                                                          parametersLen);
+        var passwordBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
+                                                              .getGetByteArrayElements()
+                                                              .call(jniEnv, pwd, false),
+                                                        pwdLen);
+        var password = StandardCharsets.UTF_8.decode(passwordBuff);
+        log.info("Launch Demesne Isolate: {}", isolateId);
         try {
-            launch(jniEnv, buff, password, clazz);
+            launch(jniEnv, parametersBuff, password.array(), clazz);
             return true;
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot launch demesne", e);
             return false;
-        } finally {
-            Arrays.fill(password, ' ');
         }
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_start")
-    private static void start(Pointer jniEnv, Pointer clazz,
+    private static void start(JNIEnvironment jniEnv, JClass clazz,
                               @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
         if (d != null) {
@@ -149,7 +154,7 @@ public class DemesneIsolate {
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_stop")
-    private static void stop(Pointer jniEnv, Pointer clazz,
+    private static void stop(JNIEnvironment jniEnv, JClass clazz,
                              @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
         if (d != null) {
@@ -158,9 +163,10 @@ public class DemesneIsolate {
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_viewChange")
-    private static boolean viewChange(Pointer jniEnv, Pointer clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                      Pointer vc, int size) {
-        var buff = CTypeConversion.asByteBuffer(vc, size);
+    private static boolean viewChange(JNIEnvironment jniEnv, JClass clazz,
+                                      @CEntryPoint.IsolateThreadContext long isolateId, JByteArray vc, int size) {
+        var buff = CTypeConversion.asByteBuffer(jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, vc, false),
+                                                size);
         final Demesne current = demesne.get();
         if (current == null) {
             log.warn("No Demesne created");

@@ -1198,5 +1198,65 @@
 {
   "name":"sun.security.x509.SubjectKeyIdentifierExtension",
   "methods":[{"name":"<init>","parameterTypes":["java.lang.Boolean","java.lang.Object"] }]
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.PSW",
+    "allDeclaredConstructors": true
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.PSWMS",
+    "allDeclaredConstructors": true
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.PSWMW",
+    "allDeclaredConstructors": true
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.SSLA",
+    "allDeclaredConstructors": true
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.SSLMSW",
+    "allDeclaredConstructors": true
+},
+{
+    "name": "com.github.benmanes.caffeine.cache.SSMSW",
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.grpc.netty.NettyChannelBuilder",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true
+},
+{
+    "name" : "com.github.benmanes.caffeine.cache.AsyncCacheLoader",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true
+},
+{
+    "name" : "com.salesforce.apollo.stereotomy.caching.CachingKEL$2",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true
+},
+{
+    "name" : "com.salesforce.apollo.stereotomy.caching.CachingKEL$1",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true
 }
 ]

@@ -117,7 +117,7 @@
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-services</artifactId>
                 <version>${grpc.version}</version>
-            </dependency>
+            </dependency>       
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>fireflies</artifactId>

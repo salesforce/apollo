@@ -17,7 +17,6 @@ import org.scijava.nativelib.NativeLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesforce.apollo.crypto.Digest;
@@ -45,8 +44,7 @@ public class JniBridge implements Demesne {
 
     private static native long createIsolate();
 
-    private static native boolean launch(long isolateId, byte[] parameters, int paramsSize, byte[] password,
-                                         int pwdLength);
+    private static native boolean launch(long isolateId, byte[] parameters, int paramLen, byte[] password, int passLen);
 
     private static native void start(long isolateId);
 
@@ -68,14 +66,6 @@ public class JniBridge implements Demesne {
             try {
                 isolateId = createIsolate();
                 final var serialized = parameters.toByteString().toByteArray();
-                DemesneParameters p;
-                try {
-                    p = DemesneParameters.parseFrom(serialized);
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalStateException("Cannot deserialize parameters", e);
-                }
-                log.error("Launching Demesne JNI Bridge, param len: {} pwd len: {} serialized: {}", serialized.length,
-                          password.length, p);
                 launch(isolateId, serialized, serialized.length, bytes, bytes.length);
             } finally {
                 Arrays.fill(bytes, (byte) 0);

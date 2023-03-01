@@ -1318,7 +1318,7 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
-            log.warn("Note: {} mask invalid: {} majority: on: {}", note.getId(), note.getMask(), context.majority(),
+            log.warn("Note: {} mask invalid: {} majority: {} on: {}", note.getId(), note.getMask(), context.majority(),
                      node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
