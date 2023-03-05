@@ -36,11 +36,11 @@
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.72</bc.version>
         <logback.version>1.4.4</logback.version>
-        <grpc.version>1.50.0</grpc.version>
-        <protobuf.version>3.21.7</protobuf.version>
+        <grpc.version>1.53.0</grpc.version>
+        <protobuf.version>3.22.0</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <netty.version>4.1.79.Final</netty.version>
-        <native.maven.plugin.version>0.9.16</native.maven.plugin.version>
+        <native.maven.plugin.version>0.9.20</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
         <maven.compiler.source>19</maven.compiler.source>
@@ -117,7 +117,7 @@
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-services</artifactId>
                 <version>${grpc.version}</version>
-            </dependency>       
+            </dependency>
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>fireflies</artifactId>
@@ -453,6 +453,22 @@
                 <groupId>com.github.oshi</groupId>
                 <artifactId>oshi-core</artifactId>
                 <version>6.2.2</version>
+            </dependency>
+            <dependency>
+                <groupId>io.yupiik.logging</groupId>
+                <artifactId>yupiik-logging-jul</artifactId>
+                <version>1.0.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-jdk14</artifactId>
+                <version>2.0.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.graalvm.nativeimage</groupId>
+                <artifactId>svm</artifactId>
+                <version>${graal.vm.version}</version>
+                <scope>provided</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>

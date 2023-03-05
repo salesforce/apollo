@@ -50,13 +50,15 @@ import io.netty.channel.EventLoopGroup;
  *
  */
 public class DemesneIsolate {
+    static {
+        System.setProperty(".level", "FINEST");
+    }
 
     private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final ObjectHandles                GLOBAL         = ObjectHandles.getGlobal();
-
-    private static final Logger log = LoggerFactory.getLogger(DemesneIsolate.class);
+    private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
     public static native IsolateThread createIsolate();
@@ -123,8 +125,7 @@ public class DemesneIsolate {
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")
     private static boolean launch(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                  JByteArray parameters, int parametersLen, JByteArray pwd,
-                                  int pwdLen) throws GeneralSecurityException, IOException {
+                                  JByteArray parameters, int parametersLen, JByteArray pwd, int pwdLen) {
         var parametersBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
                                                                 .getGetByteArrayElements()
                                                                 .call(jniEnv, parameters, false),
@@ -135,10 +136,17 @@ public class DemesneIsolate {
                                                         pwdLen);
         var password = StandardCharsets.UTF_8.decode(passwordBuff);
         log.info("Launch Demesne Isolate: {}", isolateId);
+        log.trace("Launching Demesne Isolate: {}", isolateId);
         try {
             launch(jniEnv, parametersBuff, password.array(), clazz);
             return true;
         } catch (InvalidProtocolBufferException e) {
+            log.error("Cannot launch demesne", e);
+            return false;
+        } catch (GeneralSecurityException e) {
+            log.error("Cannot launch demesne", e);
+            return false;
+        } catch (IOException e) {
             log.error("Cannot launch demesne", e);
             return false;
         }
