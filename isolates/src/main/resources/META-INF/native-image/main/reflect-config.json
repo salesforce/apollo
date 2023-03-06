@@ -1174,13 +1174,84 @@
     "allDeclaredConstructors": true
 },
 {
+    "name" : "io.netty.channel.kqueue.AbstractKQueueChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.kqueue.AbstractKQueueStreamChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.kqueue.KQueueDomainSocketChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.DefaultChannelPipeline$TailContext",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.DefaultChannelPipeline$HeadContext",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.kqueue.KQueueDomainSocketChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
     "name" : "io.grpc.netty.NettyChannelBuilder",
     "queryAllDeclaredConstructors" : true,
     "queryAllPublicConstructors" : true,
     "queryAllDeclaredMethods" : true,
     "queryAllPublicMethods" : true,
     "allDeclaredClasses" : true,
-    "allPublicClasses" : true
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
+    "name" : "io.netty.channel.socket.nio.NioSocketChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
 },
 {
     "name" : "com.github.benmanes.caffeine.cache.AsyncCacheLoader",

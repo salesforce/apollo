@@ -70,6 +70,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.netty.NettyChannelBuilder;
@@ -276,15 +277,24 @@ public class DemesneImpl implements Demesne {
                   commDirectory, kerlContext, file, serverAddress);
         NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
-            var channel = NettyChannelBuilder.forAddress(serverAddress)
+            ManagedChannel channel = null;
+            try {
+                channel = NettyChannelBuilder.forAddress(serverAddress)
                                              .intercept(clientInterceptor(kerlContext))
                                              .eventLoopGroup(eventLoopGroup)
                                              .channelType(channelType)
                                              .keepAliveTime(1, TimeUnit.SECONDS)
                                              .usePlaintext()
                                              .build();
-            var stub = KERLServiceGrpc.newFutureStub(channel);
-            return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
+                var stub = KERLServiceGrpc.newFutureStub(channel);
+                return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
+            } catch (Throwable t) {
+                return f.apply(null);
+            } finally {
+                if (channel != null) {
+                    channel.shutdown();
+                }
+            }
         });
     }
 

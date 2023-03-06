@@ -50,15 +50,14 @@ import io.netty.channel.EventLoopGroup;
  *
  */
 public class DemesneIsolate {
-    static {
-        System.setProperty(".level", "FINEST");
-    }
-
     private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final ObjectHandles                GLOBAL         = ObjectHandles.getGlobal();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
+    static {
+        System.setProperty(".level", "CONFIG");
+    }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
     public static native IsolateThread createIsolate();

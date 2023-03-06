@@ -21,6 +21,14 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
  *
  */
 public class DomainSockets {
+    static {
+        try {
+            final var sock = new KQueueServerDomainSocketChannel();
+            sock.close();
+        } catch (Throwable t) {
+//            t.printStackTrace();
+        }
+    }
 
     public static Class<? extends Channel> getChannelType() {
         return KQueueDomainSocketChannel.class;
