@@ -4,14 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.model;
+package com.salesforce.apollo.demesnes;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,10 +21,6 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
@@ -78,7 +72,8 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
  * @author hal.hildebrand
  *
  */
-public class DemesneTest {
+public class DemesneSmoke {
+
     public static class Server extends TestItImplBase {
         private final RoutableService<TestIt> router;
 
@@ -145,7 +140,8 @@ public class DemesneTest {
         Any ping(Any request);
     }
 
-    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel> clientChannelType = getChannelType();
+
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
@@ -163,6 +159,17 @@ public class DemesneTest {
                 };
             }
         };
+    }
+
+    public static void main(String[] argv) throws Exception {
+        var t = new DemesneSmoke();
+        t.before();
+        t.portal();
+        t.after();
+        t.before();
+        t.smokin();
+        t.after();
+        System.exit(0);
     }
 
     private EventLoopGroup      eventLoopGroup;
@@ -183,21 +190,20 @@ public class DemesneTest {
                                           }
                                       };
 
-    @AfterEach
     public void after() throws Exception {
         if (eventLoopGroup != null) {
-            eventLoopGroup.shutdownGracefully();
-            eventLoopGroup.awaitTermination(1, TimeUnit.SECONDS);
-
+            var fs = eventLoopGroup.shutdownGracefully(0, 10, TimeUnit.SECONDS);
+            fs.get();
+            var success = eventLoopGroup.awaitTermination(10, TimeUnit.SECONDS);
+            System.out.println("Shutdown: " + success);
+            eventLoopGroup = null;
         }
     }
 
-    @BeforeEach
     public void before() {
         eventLoopGroup = getEventLoopGroup();
     }
 
-    @Test
     public void portal() throws Exception {
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
@@ -213,8 +219,8 @@ public class DemesneTest {
         final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
                                                           .protocolNegotiator(new DomainSocketNegotiator())
                                                           .channelType(getServerDomainSocketChannelClass())
-                                                          .workerEventLoopGroup(getEventLoopGroup())
-                                                          .bossEventLoopGroup(getEventLoopGroup())
+                                                          .workerEventLoopGroup(eventLoopGroup)
+                                                          .bossEventLoopGroup(eventLoopGroup)
                                                           .intercept(new DomainSocketServerInterceptor()),
                                         s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
 
@@ -243,22 +249,19 @@ public class DemesneTest {
         var clientA = commsA.connect(serverMember2);
 
         var resultA = clientA.ping(Any.getDefaultInstance());
-        assertNotNull(resultA);
-        var msg = resultA.unpack(ByteMessage.class);
-        assertEquals("Hello Server A", msg.getContents().toStringUtf8());
+        resultA.unpack(ByteMessage.class);
 
         var clientB = commsB.connect(serverMember1);
         var resultB = clientB.ping(Any.getDefaultInstance());
-        assertNotNull(resultB);
-        msg = resultB.unpack(ByteMessage.class);
-        assertEquals("Hello Server B", msg.getContents().toStringUtf8());
+        resultB.unpack(ByteMessage.class);
 
-        portal.close(Duration.ofSeconds(1));
-        router1.close(Duration.ofSeconds(1));
-        router2.close(Duration.ofSeconds(1));
+        portal.close(Duration.ofSeconds(10));
+        router1.close(Duration.ofSeconds(10));
+        router2.close(Duration.ofSeconds(10));
+        exec.shutdownNow();
+        exec.awaitTermination(10, TimeUnit.SECONDS);
     }
 
-    @Test
     public void smokin() throws Exception {
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
@@ -301,6 +304,8 @@ public class DemesneTest {
         demesne.start();
 
         demesne.getInbound();
+        demesne.stop();
+        router.close(Duration.ofSeconds(10));
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {

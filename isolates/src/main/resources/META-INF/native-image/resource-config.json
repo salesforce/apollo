@@ -2,9 +2,6 @@
   "resources":{
   "includes":[
     {
-      "pattern":"\\QMETA-INF/services/ch.qos.logback.classic.spi.Configurator\\E"
-    }, 
-    {
       "pattern":"\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
     }, 
     {
@@ -90,9 +87,6 @@
     }, 
     {
       "pattern":"\\Qliquibase.build.properties\\E"
-    }, 
-    {
-      "pattern":"\\Qlogback-test.xml\\E"
     }, 
     {
       "pattern":"\\Qmodel/model.xml\\E"

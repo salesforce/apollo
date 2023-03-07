@@ -796,6 +796,7 @@ public class CHOAM {
         if (c != null) {
             c.complete();
         }
+        combine.stop();
     }
 
     private void accept(HashedCertifiedBlock next) {

@@ -7,11 +7,18 @@
 package com.salesforce.apollo.model.demesnes;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 import org.scijava.nativelib.NativeLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 
@@ -23,6 +30,7 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
  */
 public class JniBridge implements Demesne {
     private static final String DEMESNE_SHARED_LIB_NAME = "demesne";
+    private static final Logger log                     = LoggerFactory.getLogger(JniBridge.class);
 
     static {
         try {
@@ -36,19 +44,35 @@ public class JniBridge implements Demesne {
 
     private static native long createIsolate();
 
-    private static native void launch(long isolateId, byte[] parameters, char[] ksPassword);
+    private static native boolean launch(long isolateId, byte[] parameters, int paramLen, byte[] password, int passLen);
 
     private static native void start(long isolateId);
 
     private static native void stop(long isolateId);
 
-    private static native void viewChange(long isolateId, byte[] viewId, byte[][] joining, byte[][] leaving);
+    private static byte[] toBytes(char[] chars) {
+        CharBuffer charBuffer = CharBuffer.wrap(chars);
+        ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(charBuffer);
+        return byteBuffer.array();
+    }
+
+    private static native boolean viewChange(long isolateId, byte[] parameters, int paramLength);
 
     private final long isolateId;
 
     public JniBridge(DemesneParameters parameters, char[] password) {
-        isolateId = createIsolate();
-        launch(isolateId, parameters.toByteArray(), password);
+        try {
+            final byte[] bytes = toBytes(password);
+            try {
+                isolateId = createIsolate();
+                final var serialized = parameters.toByteString().toByteArray();
+                launch(isolateId, serialized, serialized.length, bytes, bytes.length);
+            } finally {
+                Arrays.fill(bytes, (byte) 0);
+            }
+        } finally {
+            Arrays.fill(password, ' ');
+        }
     }
 
     @Override
@@ -68,8 +92,7 @@ public class JniBridge implements Demesne {
 
     @Override
     public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
-        viewChange(isolateId, viewId.toDigeste().toByteArray(),
-                   (byte[][]) joining.stream().map(coords -> coords.toEventCoords().toByteArray()).toArray(),
-                   (byte[][]) leaving.stream().map(d -> d.toDigeste().toByteArray()).toArray());
+        var bytes = ViewChange.newBuilder().build().toByteArray();
+        viewChange(isolateId, bytes, bytes.length);
     }
 }

@@ -10,6 +10,8 @@ package com.salesforce.apollo.stereotomy.caching;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
@@ -82,6 +84,18 @@ public class CachingKEL<K extends KEL> implements KEL {
                                                                    Executor executor) throws Exception {
                 return complete(kel -> kel.getKeyState(key));
             }
+
+            @Override
+            public CompletableFuture<? extends Map<? extends EventCoordinates, ? extends KeyState>> asyncLoadAll(Set<? extends EventCoordinates> keys,
+                                                                                                                 Executor executor) throws Exception {
+                return AsyncCacheLoader.super.asyncLoadAll(keys, executor);
+            }
+
+            @Override
+            public CompletableFuture<? extends KeyState> asyncReload(EventCoordinates key, KeyState oldValue,
+                                                                     Executor executor) throws Exception {
+                return AsyncCacheLoader.super.asyncReload(key, oldValue, executor);
+            }
         });
         this.kelSupplier = kelSupplier;
         this.keyCoords = eventBuilder.buildAsync(new AsyncCacheLoader<>() {
@@ -90,6 +104,18 @@ public class CachingKEL<K extends KEL> implements KEL {
             public CompletableFuture<? extends KeyEvent> asyncLoad(EventCoordinates key,
                                                                    Executor executor) throws Exception {
                 return complete(kel -> kel.getKeyEvent(key));
+            }
+
+            @Override
+            public CompletableFuture<? extends Map<? extends EventCoordinates, ? extends KeyEvent>> asyncLoadAll(Set<? extends EventCoordinates> keys,
+                                                                                                                 Executor executor) throws Exception {
+                return AsyncCacheLoader.super.asyncLoadAll(keys, executor);
+            }
+
+            @Override
+            public CompletableFuture<? extends KeyEvent> asyncReload(EventCoordinates key, KeyEvent oldValue,
+                                                                     Executor executor) throws Exception {
+                return AsyncCacheLoader.super.asyncReload(key, oldValue, executor);
             }
         });
     }
