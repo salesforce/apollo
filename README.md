@@ -33,7 +33,7 @@ Apollo requires JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
 
 ### Install GraalVM (Optional)
-Apollo optionally requires the GraalVM 22.3.1+ for leveraging Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Quick Start Guide](https://www.graalvm.org/java/quickstart/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
+Apollo optionally requires the GraalVM 22.3.1+ for leveraging Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Getting Started Guide](https://www.graalvm.org/latest/docs/getting-started/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
 
 ## Building Apollo
 **Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
