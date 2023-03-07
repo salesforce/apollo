@@ -15,6 +15,16 @@
   "name":"javax.sql.rowset.RowSetProvider"
 },
 {
+    "name" : "io.netty.channel.kqueue.KQueueServerDomainSocketChannel",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true
+},
+{
     "name" : "io.netty.channel.kqueue.KQueueDomainSocketChannel",
     "queryAllDeclaredConstructors" : true,
     "queryAllPublicConstructors" : true,
