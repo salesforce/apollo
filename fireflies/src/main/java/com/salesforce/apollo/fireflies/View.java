@@ -574,7 +574,7 @@ public class View {
         @Override
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
-                log.trace("Currently still being introduced, send unknown to: {}  on: {}", from, node.getId());
+                log.trace("Not introduced!, ring: {} from: {} on: {}", request.getRing(), from, node.getId());
                 return Gossip.getDefaultInstance();
             }
             return stable(() -> {
@@ -604,7 +604,6 @@ public class View {
                     g = redirectTo(member, ring, successor, digests);
                 } else {
                     g = Gossip.newBuilder()
-                              .setRedirect(false)
                               .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
                               .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()),
                                                                  params.fpr()))
@@ -1319,7 +1318,7 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
-            log.warn("Note: {} mask invalid: {} majority: on: {}", note.getId(), note.getMask(), context.majority(),
+            log.warn("Note: {} mask invalid: {} majority: {} on: {}", note.getId(), note.getMask(), context.majority(),
                      node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
@@ -1586,8 +1585,8 @@ public class View {
         } catch (Throwable e) {
             final var p = (Participant) link.getMember();
             if (!viewManagement.joined()) {
-                log.debug("Exception bootstrap gossiping with {} view: {} on: {}", p.getId(), currentView(),
-                          node.getId(), e);
+                log.debug("Exception: {} bootstrap gossiping with:S {} view: {} on: {}", e.getMessage(), p.getId(),
+                          currentView(), node.getId());
                 return null;
             }
             if (e instanceof StatusRuntimeException sre) {
@@ -1636,7 +1635,7 @@ public class View {
 
             try {
                 Gossip gossip = futureSailor.get().get();
-                if (gossip.getRedirect()) {
+                if (gossip.hasRedirect()) {
                     stable(() -> redirect(member, gossip, destination.ring()));
                 } else if (viewManagement.joined()) {
                     try {
@@ -1661,8 +1660,8 @@ public class View {
                 }
             } catch (ExecutionException e) {
                 if (!viewManagement.joined()) {
-                    log.debug("Exception bootstrap gossiping with {} view: {} on: {}", member.getId(), currentView(),
-                              node.getId(), e.getCause());
+                    log.debug("Exception: {} bootstrap gossiping with: {} view: {} on: {}", e.getCause().getMessage(),
+                              member.getId(), currentView(), node.getId());
                     return;
                 }
                 if (e.getCause() instanceof StatusRuntimeException sre) {
@@ -1738,7 +1737,8 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
-               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               .limit(params.maximumTxfr())
+//               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         return builder;
     }
@@ -1776,7 +1776,8 @@ public class View {
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
-               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               .limit(params.maximumTxfr()) // Always in sorted order with this method
+//               .collect(new ReservoirSampler<>(params.maximumTxfr() * 2, Entropy.bitsStream()))
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
@@ -1810,7 +1811,8 @@ public class View {
                     .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
-                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+                    .limit(params.maximumTxfr())
+//                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                     .forEach(n -> builder.addUpdates(n));
         return builder;
     }
@@ -1896,40 +1898,17 @@ public class View {
      * @param ring
      */
     private boolean redirect(Participant member, Gossip gossip, int ring) {
-        if (gossip.getNotes().getUpdatesCount() != 1) {
+        if (!gossip.hasRedirect()) {
             log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
                      node.getId());
             return false;
         }
-        if (gossip.getNotes().getUpdatesCount() == 1) {
-            var note = new NoteWrapper(gossip.getNotes().getUpdatesList().get(0), digestAlgo);
-            addToCurrentView(note);
-            final Participant redirect = context.getActiveMember(note.getId());
-            if (redirect == null) {
-                log.trace("Ignored redirect from: {} to: {} ring: {} not currently a member on: {}", member.getId(),
-                          note.getId(), ring, node.getId());
-                return false;
-            }
-            if (gossip.getAccusations().getUpdatesCount() > 0) {
-                gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
-                // Reset our epoch to whatever the group has recorded for this node
-                long max = Math.max(node.getEpoch(),
-                                    gossip.getAccusations()
-                                          .getUpdatesList()
-                                          .stream()
-                                          .map(signed -> new AccusationWrapper(signed, digestAlgo))
-                                          .mapToLong(a -> a.getEpoch())
-                                          .max()
-                                          .orElse(-1));
-                node.nextNote(max + 1, currentView());
-                node.clearAccusations();
-            }
-            log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring, node.getId());
-            return true;
-        } else {
-            log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
-            return false;
-        }
+        final var redirect = new NoteWrapper(gossip.getRedirect(), digestAlgo);
+        add(redirect);
+        processUpdates(gossip);
+        log.debug("Redirected from: {} to: {} on ring: {} on: {}", member.getId(), redirect.getId(), ring,
+                  node.getId());
+        return true;
     }
 
     /**
@@ -1958,7 +1937,7 @@ public class View {
             return Gossip.getDefaultInstance();
         }
         return Gossip.newBuilder()
-                     .setRedirect(false)
+                     .setRedirect(successor.getNote().getWrapped())
                      .setNotes(processNotes(BloomFilter.from(digests.getNoteBff())))
                      .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff())))
                      .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))

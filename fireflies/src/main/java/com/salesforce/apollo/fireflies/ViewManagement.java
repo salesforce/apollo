@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -45,6 +45,7 @@ import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -94,21 +95,21 @@ public class ViewManagement {
 
     private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
 
-    private final AtomicInteger                            attempt      = new AtomicInteger();
-    private boolean                                        bootstrap;
-    private final Digest                                   bootstrapView;
-    private final Context<Participant>                     context;
-    private AtomicReference<Digest>                        currentView  = new AtomicReference<>();
-    private AtomicReference<HexBloom>                      diadem       = new AtomicReference<>();
-    private final DigestAlgorithm                          digestAlgo;
-    private final ConcurrentMap<Digest, NoteWrapper>       joins        = new ConcurrentSkipListMap<>();
-    private final FireflyMetrics                           metrics;
-    private final Node                                     node;
-    private CompletableFuture<Void>                        onJoined;
-    private final Parameters                               params;
-    private final Map<Digest, Consumer<List<NoteWrapper>>> pendingJoins = new ConcurrentSkipListMap<>();
-    private final View                                     view;
-    private final AtomicReference<ViewChange>              vote         = new AtomicReference<>();
+    private final AtomicInteger                                 attempt      = new AtomicInteger();
+    private boolean                                             bootstrap;
+    private final Digest                                        bootstrapView;
+    private final Context<Participant>                          context;
+    private AtomicReference<Digest>                             currentView  = new AtomicReference<>();
+    private AtomicReference<HexBloom>                           diadem       = new AtomicReference<>();
+    private final DigestAlgorithm                               digestAlgo;
+    private final ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
+    private final FireflyMetrics                                metrics;
+    private final Node                                          node;
+    private CompletableFuture<Void>                             onJoined;
+    private final Parameters                                    params;
+    private final Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
+    private final View                                          view;
+    private final AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
 
     ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
@@ -197,14 +198,12 @@ public class ViewManagement {
         ballot.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> view.remove(p));
 
         context.rebalance(context.totalCount() + ballot.joining.size());
-
-        // Gather joining notes and members joining on this node
-        var joiningNotes = new ArrayList<NoteWrapper>();
+        var joining = new ArrayList<EventCoordinates>();
         var pending = ballot.joining()
                             .stream()
                             .map(d -> joins.remove(d))
                             .filter(sn -> sn != null)
-                            .peek(sn -> joiningNotes.add(sn))
+                            .peek(nw -> joining.add(nw.getCoordinates()))
                             .peek(nw -> view.addToView(nw))
                             .peek(nw -> {
                                 if (metrics != null) {
@@ -219,11 +218,16 @@ public class ViewManagement {
                                      view.bootstrapView(), params.crowns()));
         view.reset();
 
+        var seedSet = new ArrayList<SignedNote>();
         // complete all pending joins
+        context.ring(Entropy.nextBitsStreamInt(context.getRingCount()))
+               .stream()
+               .limit(params.maximumTxfr())
+               .map(p -> p.getNote().getWrapped())
+               .forEach(sn -> seedSet.add(sn));
         pending.forEach(r -> {
             try {
-                Entropy.secureShuffle(joiningNotes);
-                r.accept(joiningNotes);
+                r.accept(seedSet);
             } catch (Throwable t) {
                 log.error("Exception in pending join on: {}", node.getId(), t);
             }
@@ -237,7 +241,7 @@ public class ViewManagement {
                  context.allMembers().count(), pending.size(), ballot.leaving.size(), ballot.joining.size(),
                  node.getId());
 
-        view.notifyListeners(joiningNotes.stream().map(nw -> nw.getCoordinates()).toList(), ballot.leaving);
+        view.notifyListeners(joining, ballot.leaving);
     }
 
     boolean isJoined() {
@@ -280,7 +284,7 @@ public class ViewManagement {
     void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
         final var joinView = Digest.from(join.getView());
         if (!joined()) {
-            log.info("Not joined, ignored join of view: {} from: {} on: {}", joinView, from, node.getId());
+            log.trace("Not joined, ignored join of view: {} from: {} on: {}", joinView, from, node.getId());
             responseObserver.onNext(Gateway.getDefaultInstance());
             responseObserver.onCompleted();
             return;
@@ -297,7 +301,7 @@ public class ViewManagement {
             if (contains(from)) {
                 log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
                           context.getId(), context.cardinality(), node.getId());
-                joined(Collections.emptyList(), from, responseObserver, timer);
+                joined(Collections.emptySet(), from, responseObserver, timer);
                 return;
             }
             if (!thisView.equals(joinView)) {
@@ -314,11 +318,10 @@ public class ViewManagement {
                 responseObserver.onError(new StatusRuntimeException(Status.RESOURCE_EXHAUSTED.withDescription("No room at the inn")));
                 return;
             }
-            pendingJoins.put(from, joining -> {
+            pendingJoins.put(from, seeds -> {
                 log.info("Gateway established for: {} view: {}  context: {} cardinality: {} on: {}", from,
                          currentView(), context.getId(), context.cardinality(), node.getId());
-                joined(joining.stream().map(nw -> nw.getWrapped()).limit(params.maximumTxfr()).toList(), from,
-                       responseObserver, timer);
+                joined(seeds, from, responseObserver, timer);
             });
             joins.put(note.getId(), note);
             log.debug("Member pending join: {} view: {} context: {} on: {}", from, currentView(), context.getId(),
@@ -506,14 +509,12 @@ public class ViewManagement {
         });
     }
 
-    private void joined(List<SignedNote> joined, Digest from, StreamObserver<Gateway> responseObserver,
+    private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
                         Timer.Context timer) {
-        final var seedSet = new HashSet<SignedNote>();
-        context.successors(from, m -> context.isActive(m)).forEach(p -> seedSet.add(p.getNote().getWrapped()));
-        joined.stream()
-              .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-              .forEach(sn -> seedSet.add(sn));
-        var gateway = Gateway.newBuilder().addAllInitialSeedSet(seedSet).setDiadem(diadem.get().toHexBloome()).build();
+        final var builder = Gateway.newBuilder().addAllInitialSeedSet(seedSet).setDiadem(diadem.get().toHexBloome());
+        context.successors(from, m -> context.isActive(m))
+               .forEach(p -> builder.addInitialSeedSet(p.getNote().getWrapped()));
+        var gateway = builder.build();
         responseObserver.onNext(gateway);
         responseObserver.onCompleted();
         if (timer != null) {

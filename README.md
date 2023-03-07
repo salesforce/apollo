@@ -33,7 +33,7 @@ Apollo requires JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
 
 ### Install GraalVM (Optional)
-Apollo optionally requires the GraalVM for leveraging Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Getting Started Guide](https://www.graalvm.org/latest/docs/getting-started/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
+Apollo optionally requires the GraalVM 22.3.1+ for leveraging Isolates and other fantastic features of the GraalVM.  To install the GraalVM, see the [Getting Started Guide](https://www.graalvm.org/latest/docs/getting-started/).  For Mac and Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/homebrew-tap).
 
 ## Building Apollo
 **Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
@@ -50,13 +50,11 @@ You can, of course, use the "--also-make-dependents" argument for maven "-amd" i
 
 ### Building Apollo Isolate Enclaves
 
-Currently, the integration between Eclipse and Graalvm is a bit....  interesting.  Consequently, generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile.  When you run this profile, you'll also need to set the property *eclipse.graalvm.jdk.workaround=true*.  Yes, I know, what a PITA.  Apologies, but to quote Martin Blank, "it's not me".
+Generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile:
 
-Anyhow, this is all done so that, if you so choose, you can actually import the *[isolates](isolates/README.md)* module into Eclipse without tearing your hair out.  To perform the isolate build:
+    mvn clean install -Pisolates
 
-    mvn clean install -Pisolates -Declipse.graalvm.jdk.workaround=true
-
-This will add the *[isolates](isolates/README.md)* modules to the build as well as adding the *org.graalvm.sdk* java module dependency so the *isolates* module can build correctly.
+This will add the *[isolates](isolates/README.md)* modules to the build.
 
 ### Platform Specific Domain Socket Support
 

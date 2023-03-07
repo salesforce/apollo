@@ -58,6 +58,9 @@ import io.grpc.StatusRuntimeException;
 /**
  * Embodiment of the client side join protocol
  *
+ * @author hal.hildebrand
+ * 
+ *
  */
 class Binding {
     record Bound(HexBloom view, List<NoteWrapper> successors) {}
@@ -235,6 +238,8 @@ class Binding {
         }
         diadems.add(g.getDiadem());
         initialSeedSet.addAll(g.getInitialSeedSetList());
+        log.trace("Initial seed set count: {} view: {} from: {} on: {}", g.getInitialSeedSetCount(), v, member.getId(),
+                  node.getId());
 
         var vs = diadems.entrySet()
                         .stream()

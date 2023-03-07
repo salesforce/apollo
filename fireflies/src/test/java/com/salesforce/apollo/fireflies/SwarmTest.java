@@ -118,14 +118,14 @@ public class SwarmTest {
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
-        final var gossipDuration = Duration.ofMillis(largeTests ? 70 : 5);
+        final var gossipDuration = Duration.ofMillis(largeTests ? 150 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         views.get(0)
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
                     Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
 
-        assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -210,10 +210,11 @@ public class SwarmTest {
     private void initialize() {
         var parameters = Parameters.newBuilder()
                                    .setMaxPending(largeTests ? 10 : 10)
-                                   .setMaximumTxfr(largeTests ? 100 : 20)
-                                   .setJoinRetries(25)
-                                   .setFpr(0.0000125)
-                                   .setRetryDelay(Duration.ofMillis(largeTests ? 500 : 200))
+                                   .setMaximumTxfr(largeTests ? 20 : 20)
+                                   .setJoinRetries(30)
+                                   .setFpr(0.00000125)
+                                   .setSeedingTimout(Duration.ofSeconds(10))
+                                   .setRetryDelay(Duration.ofMillis(largeTests ? 1000 : 200))
                                    .build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();

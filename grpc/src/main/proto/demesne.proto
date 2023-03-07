@@ -32,3 +32,9 @@ message DemesneParameters {
     apollo.choam.FoundationSeal foundation = 11;
     google.protobuf.Duration timeout = 12;
 }
+
+message ViewChange {
+    utils.Digeste view = 1;
+    repeated stereotomy.EventCoords joining = 2;
+    repeated utils.Digeste leaving = 3;
+}

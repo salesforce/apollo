@@ -49,7 +49,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Minimum cardinality for bloom filters
          */
-        private int      minimumBiffCardinality = 128;
+        private int      minimumBiffCardinality = 1025;
         /**
          * Number of TTL rounds an accussed has to rebut the accusation
          */

@@ -70,6 +70,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.netty.NettyChannelBuilder;
@@ -269,20 +270,30 @@ public class DemesneImpl implements Demesne {
     }
 
     private CachingKERL kerlFrom(DemesneParameters parameters, final Path commDirectory, Digest kerlContext) {
+        final var kerlService = parameters.getKerlService();
+        final var file = commDirectory.resolve(kerlService).toFile();
+        final var serverAddress = new DomainSocketAddress(file);
+        log.error("Kerl service: {}\n comm directory: {}\n context: {}\n file: {}\n address: {}", kerlService,
+                  commDirectory, kerlContext, file, serverAddress);
+        NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
-            var channel = NettyChannelBuilder.forAddress(new DomainSocketAddress(commDirectory.resolve(parameters.getKerlService())
-                                                                                              .toFile()))
+            ManagedChannel channel = null;
+            try {
+                channel = NettyChannelBuilder.forAddress(serverAddress)
                                              .intercept(clientInterceptor(kerlContext))
                                              .eventLoopGroup(eventLoopGroup)
                                              .channelType(channelType)
                                              .keepAliveTime(1, TimeUnit.SECONDS)
                                              .usePlaintext()
                                              .build();
-            try {
                 var stub = KERLServiceGrpc.newFutureStub(channel);
                 return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
+            } catch (Throwable t) {
+                return f.apply(null);
             } finally {
-                channel.shutdown();
+                if (channel != null) {
+                    channel.shutdown();
+                }
             }
         });
     }
