@@ -57,9 +57,8 @@ public class DemesneIsolate {
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
-
     static {
-        System.setProperty(".level", "INFO");
+        System.setProperty(".level", "CONFIG");
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
@@ -89,6 +88,30 @@ public class DemesneIsolate {
         };
     }
 
+    private static void configureLogging(final DemesneParameters parameters) {
+        final var loggingConfig = parameters.getLoggingConfig();
+        File configFile = new File(loggingConfig);
+        if (!loggingConfig.isBlank() || configFile.exists()) {
+            System.err.println("Using logging configuration: " + configFile.getAbsolutePath());
+            try {
+                final var config = new FileInputStream(configFile);
+                LogManager.getLogManager().updateConfiguration(config, s -> (o, n) -> n);
+            } catch (FileNotFoundException e) {
+                System.err.println("No logging configuration found: " + configFile.getAbsolutePath());
+                System.setProperty(".level", "INFO");
+            } catch (SecurityException | IOException e) {
+                System.setProperty(".level", "FINEST");
+                log.error("Unable to initialize logging configuration", e);
+                throw new IllegalStateException("Unable to initialize logging configuration", e);
+            }
+        } else {
+            System.err.println("No logging configuration");
+            System.setProperty(".level", "INFO");
+        }
+
+        log.trace("Testing");
+    }
+
     private static EventCoordinates coords(byte[] coords) {
         try {
             return EventCoordinates.from(EventCoords.parseFrom(coords));
@@ -110,24 +133,7 @@ public class DemesneIsolate {
     private static void launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
                                JClass clazz) throws GeneralSecurityException, IOException {
         final var parameters = DemesneParameters.parseFrom(data);
-        final var loggingConfig = parameters.getLoggingConfig();
-        File configFile = new File(loggingConfig);
-        if (!loggingConfig.isBlank() || configFile.exists()) {
-            try {
-                final var config = new FileInputStream(configFile);
-                LogManager.getLogManager().readConfiguration(config);
-            } catch (FileNotFoundException e) {
-                System.err.println("No logging configuration: " + loggingConfig);
-                System.setProperty(".level", "INFO");
-            } catch (SecurityException | IOException e) {
-                System.setProperty(".level", "FINEST");
-                log.error("Unable to initialize logging configuration", e);
-                throw new IllegalStateException("Unable to initialize logging configuration", e);
-            }
-        } else {
-            System.err.println("No logging configuration");
-            System.setProperty(".level", "INFO");
-        }
+        configureLogging(parameters);
         launch(jniEnv, parameters, password, clazz);
     }
 
