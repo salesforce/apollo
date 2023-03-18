@@ -91,6 +91,7 @@ public class DemesneIsolateTest {
         var parameters = DemesneParameters.newBuilder()
                                           .setContext(context.toDigeste())
                                           .setMember(identifier.getIdentifier().toIdent())
+                                          .setLoggingConfig("src/test/resources/logging.properties")
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();

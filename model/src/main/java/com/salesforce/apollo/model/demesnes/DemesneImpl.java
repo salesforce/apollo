@@ -218,6 +218,9 @@ public class DemesneImpl implements Demesne {
         }
 
         context.activate(member);
+
+        log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), address, member.getId());
+
         var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         domain = subdomainFrom(parameters, keepAlive, commDirectory, address, member, context, exec);
@@ -266,7 +269,7 @@ public class DemesneImpl implements Demesne {
     private CachingKERL kerlFrom(DemesneParameters parameters, final Path commDirectory, Digest kerlContext) {
         final var file = commDirectory.resolve(qb64(kerlContext)).toFile();
         final var serverAddress = new DomainSocketAddress(file);
-        log.error("Kerl context: {}\n address: {}", kerlContext, serverAddress);
+        log.info("Kerl context: {} address: {}", kerlContext, serverAddress);
         NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
             ManagedChannel channel = null;

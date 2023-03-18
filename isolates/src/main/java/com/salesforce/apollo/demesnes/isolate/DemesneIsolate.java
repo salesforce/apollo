@@ -10,11 +10,15 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.LogManager;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
@@ -106,6 +110,24 @@ public class DemesneIsolate {
     private static void launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
                                JClass clazz) throws GeneralSecurityException, IOException {
         final var parameters = DemesneParameters.parseFrom(data);
+        final var loggingConfig = parameters.getLoggingConfig();
+        File configFile = new File(loggingConfig);
+        if (!loggingConfig.isBlank() || configFile.exists()) {
+            try {
+                final var config = new FileInputStream(configFile);
+                LogManager.getLogManager().readConfiguration(config);
+            } catch (FileNotFoundException e) {
+                System.err.println("No logging configuration: " + loggingConfig);
+                System.setProperty(".level", "INFO");
+            } catch (SecurityException | IOException e) {
+                System.setProperty(".level", "FINEST");
+                log.error("Unable to initialize logging configuration", e);
+                throw new IllegalStateException("Unable to initialize logging configuration", e);
+            }
+        } else {
+            System.err.println("No logging configuration");
+            System.setProperty(".level", "INFO");
+        }
         launch(jniEnv, parameters, password, clazz);
     }
 
@@ -132,8 +154,7 @@ public class DemesneIsolate {
                                                               .call(jniEnv, pwd, false),
                                                         pwdLen);
         var password = StandardCharsets.UTF_8.decode(passwordBuff);
-        log.info("Launch Demesne Isolate: {}", isolateId);
-        log.trace("Launching Demesne Isolate: {}", isolateId);
+        log.trace("Launch Demesne Isolate: {}", isolateId);
         try {
             launch(jniEnv, parametersBuff, password.array(), clazz);
             return true;

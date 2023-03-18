@@ -28,6 +28,7 @@ message DemesneParameters {
     google.protobuf.Duration keepAlive = 7;
     apollo.choam.FoundationSeal foundation = 8;
     google.protobuf.Duration timeout = 9;
+    string loggingConfig = 10;
 }
 
 message ViewChange {
