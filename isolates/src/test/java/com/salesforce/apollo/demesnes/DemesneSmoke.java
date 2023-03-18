@@ -263,6 +263,7 @@ public class DemesneSmoke {
     }
 
     public void smokin() throws Exception {
+        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
         final var ksPassword = new char[] { 'f', 'o', 'o' };
@@ -276,8 +277,7 @@ public class DemesneSmoke {
         ks.store(baos, ksPassword);
         ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
         Member serverMember = new ControlledIdentifierMember(identifier);
-        var kerlEndpoint = UUID.randomUUID().toString();
-        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(kerlEndpoint).toFile());
+        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(qb64(context)).toFile());
         var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
                                               .protocolNegotiator(new DomainSocketNegotiator())
                                               .channelType(serverChannelType)
@@ -288,14 +288,12 @@ public class DemesneSmoke {
         var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
         var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
         router.start();
-        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         @SuppressWarnings("unused")
         var comms = router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
                                   r -> new KERLServer(r, null), null, null);
 
         var parameters = DemesneParameters.newBuilder()
-                                          .setKerlContext(context.toDigeste())
-                                          .setKerlService(kerlEndpoint)
+                                          .setContext(context.toDigeste())
                                           .setMember(identifier.getIdentifier().toIdent())
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
@@ -303,7 +301,7 @@ public class DemesneSmoke {
         var demesne = new DemesneImpl(parameters, ksPassword);
         demesne.start();
 
-        demesne.getInbound();
+        Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         router.close(Duration.ofSeconds(10));
     }

@@ -17,7 +17,6 @@ import java.security.GeneralSecurityException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.slf4j.Logger;
@@ -53,10 +52,10 @@ public class DemesneIsolate {
     private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
-    private static final ObjectHandles                GLOBAL         = ObjectHandles.getGlobal();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
+
     static {
-        System.setProperty(".level", "CONFIG");
+        System.setProperty(".level", "INFO");
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
@@ -104,22 +103,21 @@ public class DemesneIsolate {
         }
     }
 
-    private static String launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
-                                 JClass clazz) throws GeneralSecurityException, IOException {
+    private static void launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
+                               JClass clazz) throws GeneralSecurityException, IOException {
         final var parameters = DemesneParameters.parseFrom(data);
-        return launch(jniEnv, parameters, password, clazz);
+        launch(jniEnv, parameters, password, clazz);
     }
 
-    private static String launch(JNIEnvironment jniEnv, DemesneParameters parameters, char[] password,
-                                 JClass clazz) throws GeneralSecurityException, IOException {
+    private static void launch(JNIEnvironment jniEnv, DemesneParameters parameters, char[] password,
+                               JClass clazz) throws GeneralSecurityException, IOException {
         if (demesne.get() != null) {
-            return null;
+            return;
         }
         final var pretending = new DemesneImpl(parameters, password);
         if (!demesne.compareAndSet(null, pretending)) {
-            return null;
+            return;
         }
-        return pretending.getInbound();
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")

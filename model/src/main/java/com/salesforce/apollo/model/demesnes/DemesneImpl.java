@@ -20,7 +20,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -180,7 +179,6 @@ public class DemesneImpl implements Demesne {
     }
 
     private final SubDomain     domain;
-    private final String        inbound;
     private final KERL          kerl;
     private SigningService      signer;
     private final AtomicBoolean started = new AtomicBoolean();
@@ -188,53 +186,49 @@ public class DemesneImpl implements Demesne {
     private EventValidation     validation;
 
     public DemesneImpl(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
+        assert parameters.hasContext() : "Must define context id";
+        var context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
         final var commDirectory = Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
                                                                                   : parameters.getCommDirectory());
-        final var address = commDirectory.resolve(UUID.randomUUID().toString()).toFile();
-        inbound = address.getCanonicalPath();
+        final var address = commDirectory.resolve(qb64(context.getId())).toFile();
 
         final var password = Arrays.copyOf(pwd, pwd.length);
         Arrays.fill(pwd, ' ');
 
         final var keystore = KeyStore.getInstance("JKS");
         keystore.load(parameters.getKeyStore().newInput(), password);
-        Digest kerlContext = Digest.from(parameters.getKerlContext());
-        kerl = kerlFrom(parameters, commDirectory, kerlContext);
+        kerl = kerlFrom(parameters, commDirectory, context.getId());
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl,
                                         SecureRandom.getInstanceStrong());
 
         ControlledIdentifierMember member;
+        final var from = (SelfAddressingIdentifier) Identifier.from(parameters.getMember());
         try {
-            member = new ControlledIdentifierMember(stereotomy.controlOf((SelfAddressingIdentifier) Identifier.from(parameters.getMember()))
-                                                              .get());
+            member = new ControlledIdentifierMember(stereotomy.controlOf(from).get());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             domain = null;
             return;
         } catch (ExecutionException e) {
-            throw new IllegalStateException("Invalid state", e.getCause());
+            throw new IllegalStateException("Cannot acquire member: %s : %s".formatted(from, e.toString()),
+                                            e.getCause());
         }
 
-        var context = Context.newBuilder().build();
         context.activate(member);
         var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         domain = subdomainFrom(parameters, keepAlive, commDirectory, address, member, context, exec);
         signer = signerFrom(parameters, commDirectory);
         Duration timeout = Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos());
-        validation = new Ani(kerlContext, kerl).eventValidation(timeout);
+        validation = new Ani(context.getId(), kerl).eventValidation(timeout);
     }
 
     @Override
     public boolean active() {
         return domain == null ? false : domain.active();
-    }
-
-    public String getInbound() {
-        return inbound;
     }
 
     @Override
@@ -270,11 +264,9 @@ public class DemesneImpl implements Demesne {
     }
 
     private CachingKERL kerlFrom(DemesneParameters parameters, final Path commDirectory, Digest kerlContext) {
-        final var kerlService = parameters.getKerlService();
-        final var file = commDirectory.resolve(kerlService).toFile();
+        final var file = commDirectory.resolve(qb64(kerlContext)).toFile();
         final var serverAddress = new DomainSocketAddress(file);
-        log.error("Kerl service: {}\n comm directory: {}\n context: {}\n file: {}\n address: {}", kerlService,
-                  commDirectory, kerlContext, file, serverAddress);
+        log.error("Kerl context: {}\n address: {}", kerlContext, serverAddress);
         NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
             ManagedChannel channel = null;

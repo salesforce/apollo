@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.model.comms;
+package com.salesforce.apollo.model.demesnes.comm;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
@@ -14,18 +14,16 @@ import com.salesforce.apollo.protocols.EndpointMetrics;
  * @author hal.hildebrand
  *
  */
-public interface SigningMetrics extends EndpointMetrics {
+public interface EnclaveMetrics extends EndpointMetrics {
 
-    Meter inboundDeregister();
+    Timer deregister();
 
-    Meter inboundRegister();
+    Meter outboundDeregister();
 
-    Meter inboundRequest();
+    Meter outboundRegister();
 
-    Timer inboundSign();
+    Meter outboundViewChange();
 
-    Meter inboundSignature();
-
-    Meter outboundRequest();
+    Timer register();
 
 }

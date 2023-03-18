@@ -8,12 +8,14 @@ package com.salesforce.apollo.domain;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -57,6 +59,7 @@ public class DemesneIsolateTest {
 
     @Test
     public void smokin() throws Exception {
+        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
         final var ksPassword = new char[] { 'f', 'o', 'o' };
@@ -70,8 +73,7 @@ public class DemesneIsolateTest {
         ks.store(baos, ksPassword);
         ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
         Member serverMember = new ControlledIdentifierMember(identifier);
-        var kerlEndpoint = UUID.randomUUID().toString();
-        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(kerlEndpoint).toFile());
+        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(qb64(context)).toFile());
         var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
                                               .protocolNegotiator(new DomainSocketNegotiator())
                                               .channelType(channelType)
@@ -82,14 +84,12 @@ public class DemesneIsolateTest {
         var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
         var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
         router.start();
-        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         @SuppressWarnings("unused")
         var comms = router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
                                   r -> new KERLServer(r, null), null, null);
 
         var parameters = DemesneParameters.newBuilder()
-                                          .setKerlContext(context.toDigeste())
-                                          .setKerlService(kerlEndpoint)
+                                          .setContext(context.toDigeste())
                                           .setMember(identifier.getIdentifier().toIdent())
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
@@ -97,6 +97,8 @@ public class DemesneIsolateTest {
         Demesne demesne = new JniBridge(parameters, ksPassword);
         demesne.start();
         Utils.waitForCondition(1000, () -> demesne.active());
+        Thread.sleep(Duration.ofSeconds(2));
+        demesne.stop();
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {

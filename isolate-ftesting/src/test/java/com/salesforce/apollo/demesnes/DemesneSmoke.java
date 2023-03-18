@@ -294,16 +294,13 @@ public class DemesneSmoke {
                                   r -> new KERLServer(r, null), null, null);
 
         var parameters = DemesneParameters.newBuilder()
-                                          .setKerlContext(context.toDigeste())
-                                          .setKerlService(kerlEndpoint)
                                           .setMember(identifier.getIdentifier().toIdent())
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
         var demesne = new DemesneImpl(parameters, ksPassword);
         demesne.start();
-
-        demesne.getInbound();
+        Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         router.close(Duration.ofSeconds(10));
     }

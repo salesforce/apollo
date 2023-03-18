@@ -21,20 +21,27 @@ service DemesneNet {
 message DemesneParameters {
     string commDirectory = 1;
     stereotomy.Ident member = 2;
-    bytes keyStore = 3;
-    string control = 4;
-    string outbound = 5;
-    string enclosing = 6;
-    utils.Digeste kerlContext = 7;
-    string kerlService = 8;
-    string signingService = 9;
-    google.protobuf.Duration keepAlive = 10;
-    apollo.choam.FoundationSeal foundation = 11;
-    google.protobuf.Duration timeout = 12;
+    bytes keyStore = 3; 
+    string outbound = 4; 
+    utils.Digeste context = 5;
+    string signingService = 6;
+    google.protobuf.Duration keepAlive = 7;
+    apollo.choam.FoundationSeal foundation = 8;
+    google.protobuf.Duration timeout = 9;
 }
 
 message ViewChange {
     utils.Digeste view = 1;
     repeated stereotomy.EventCoords joining = 2;
     repeated utils.Digeste leaving = 3;
+}
+
+service OuterContext {
+    rpc register (SubContext) returns(google.protobuf.Empty) {}
+    rpc deregister (utils.Digeste) returns(google.protobuf.Empty) {}
+}
+
+message SubContext {
+    utils.Digeste enclave = 1;
+    utils.Digeste context = 2;
 }
