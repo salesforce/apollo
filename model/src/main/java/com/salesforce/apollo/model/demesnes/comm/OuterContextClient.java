@@ -18,15 +18,16 @@ import io.grpc.ManagedChannel;
  * @author hal.hildebrand
  *
  */
-public class OuterContextClient {
+public class OuterContextClient implements OuterContextService {
     private final OuterContextBlockingStub client;
     private final EnclaveMetrics           metrics;
 
-    public OuterContextClient(ManagedChannel managedChannel, EnclaveMetrics metrics) {
+    public OuterContextClient(ManagedChannel channel, EnclaveMetrics metrics) {
         this.metrics = metrics;
-        client = OuterContextGrpc.newBlockingStub(managedChannel).withCompression("gzip");
+        client = OuterContextGrpc.newBlockingStub(channel).withCompression("gzip");
     }
 
+    @Override
     public void deregister(Digeste context) {
         Context timer = metrics != null ? metrics.deregister().time() : null;
         if (metrics != null) {
@@ -41,6 +42,7 @@ public class OuterContextClient {
         }
     }
 
+    @Override
     public void register(SubContext context) {
         Context timer = metrics != null ? metrics.register().time() : null;
         if (metrics != null) {

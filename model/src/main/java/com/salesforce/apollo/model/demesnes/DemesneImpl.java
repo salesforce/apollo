@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model.demesnes;
 
+import static com.salesforce.apollo.archipelago.Router.clientInterceptor;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
@@ -29,28 +30,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.model.proto.Request;
+import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.Enclave;
-import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
-import com.salesforce.apollo.model.comms.SigningClient;
-import com.salesforce.apollo.model.comms.SigningService;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextClient;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -65,13 +61,7 @@ import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.thoth.Ani;
 
-import io.grpc.CallOptions;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -124,83 +114,42 @@ public class DemesneImpl implements Demesne {
         }
     }
 
-    public class DemesneSigningMember extends DemesneMember implements SigningMember {
-
-        public DemesneSigningMember(EstablishmentEvent event) {
-            super(event);
-        }
-
-        @Override
-        public SignatureAlgorithm algorithm() {
-            return event.getAuthentication().getAlgorithm();
-        }
-
-        @Override
-        public JohnHancock sign(ByteString... message) {
-            final var builder = Request.newBuilder().setCoordinates(event.getCoordinates().toEventCoords());
-            for (var m : message) {
-                builder.addContent(m);
-            }
-            return JohnHancock.from(signer.sign(builder.build()));
-        }
-
-        @Override
-        public JohnHancock sign(InputStream message) {
-            try {
-                return JohnHancock.from(signer.sign(Request.newBuilder()
-                                                           .setCoordinates(event.getCoordinates().toEventCoords())
-                                                           .addContent(ByteString.readFrom(message))
-                                                           .build()));
-            } catch (IOException e) {
-                throw new IllegalStateException("Cannot sign message", e);
-            }
-        }
-    }
-
     private static final Class<? extends Channel> channelType    = getChannelType();
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
     private static final Logger                   log            = LoggerFactory.getLogger(DemesneImpl.class);
 
-    private static ClientInterceptor clientInterceptor(Digest ctx) {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, io.grpc.Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CONTEXT_KEY, qb64(ctx));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
-    }
-
-    private final SubDomain     domain;
-    private final KERL          kerl;
-    private SigningService      signer;
-    private final AtomicBoolean started = new AtomicBoolean();
-    private final Stereotomy    stereotomy;
-    private EventValidation     validation;
+    private final Context<Member>    context;
+    private final SubDomain          domain;
+    private Enclave                  enclave;
+    private final ExecutorService    exec;
+    private final KERL               kerl;
+    private final OuterContextClient outer;
+    private final AtomicBoolean      started = new AtomicBoolean();
+    private final Stereotomy         stereotomy;
+    private final EventValidation    validation;
 
     public DemesneImpl(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
-        var context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
+
+        exec = Executors.newVirtualThreadPerTaskExecutor();
+        context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
+        final var commDirectory = Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
+                                                                                  : parameters.getCommDirectory());
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
-        final var commDirectory = Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
-                                                                                  : parameters.getCommDirectory());
-        final var address = commDirectory.resolve(qb64(context.getId())).toFile();
+        var address = commDirectory.resolve(qb64(context.getId())).toFile();
+
+        outer = outerFrom(address);
 
         final var password = Arrays.copyOf(pwd, pwd.length);
         Arrays.fill(pwd, ' ');
 
         final var keystore = KeyStore.getInstance("JKS");
         keystore.load(parameters.getKeyStore().newInput(), password);
-        kerl = kerlFrom(parameters, commDirectory, context.getId());
+        kerl = kerlFrom(address);
+        Duration timeout = Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos());
+        validation = new Ani(context.getId(), kerl).eventValidation(timeout);
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl,
                                         SecureRandom.getInstanceStrong());
 
@@ -221,12 +170,10 @@ public class DemesneImpl implements Demesne {
 
         log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), address, member.getId());
 
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
-
+        enclave = new Enclave(member, new DomainSocketAddress(address), exec,
+                              new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound()).toFile()),
+                              keepAlive, ctxId -> registerContext(ctxId));
         domain = subdomainFrom(parameters, keepAlive, commDirectory, address, member, context, exec);
-        signer = signerFrom(parameters, commDirectory);
-        Duration timeout = Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos());
-        validation = new Ani(context.getId(), kerl).eventValidation(timeout);
     }
 
     @Override
@@ -266,9 +213,9 @@ public class DemesneImpl implements Demesne {
         leaving.forEach(id -> domain.getContext().remove(id));
     }
 
-    private CachingKERL kerlFrom(DemesneParameters parameters, final Path commDirectory, Digest kerlContext) {
-        final var file = commDirectory.resolve(qb64(kerlContext)).toFile();
-        final var serverAddress = new DomainSocketAddress(file);
+    private CachingKERL kerlFrom(File address) {
+        Digest kerlContext = context.getId();
+        final var serverAddress = new DomainSocketAddress(address);
         log.info("Kerl context: {} address: {}", kerlContext, serverAddress);
         NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
@@ -293,19 +240,22 @@ public class DemesneImpl implements Demesne {
         });
     }
 
-    private void registerContext(Digest ctxId) {
-        // TODO Auto-generated method stub
+    private OuterContextClient outerFrom(File address) {
+        return new OuterContextClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(address))
+                                                         .intercept(clientInterceptor(context.getId()))
+                                                         .eventLoopGroup(eventLoopGroup)
+                                                         .channelType(channelType)
+                                                         .keepAliveTime(1, TimeUnit.SECONDS)
+                                                         .usePlaintext()
+                                                         .build(),
+                                      null);
     }
 
-    private SigningClient signerFrom(DemesneParameters parameters, final Path commDirectory) {
-        return new SigningClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(commDirectory.resolve(parameters.getSigningService())
-                                                                                                     .toFile()))
-                                                    .eventLoopGroup(eventLoopGroup)
-                                                    .channelType(channelType)
-                                                    .keepAliveTime(1, TimeUnit.SECONDS)
-                                                    .usePlaintext()
-                                                    .build(),
-                                 null);
+    private void registerContext(Digest ctxId) {
+        outer.register(SubContext.newBuilder()
+                                 .setEnclave(context.getId().toDigeste())
+                                 .setContext(ctxId.toDigeste())
+                                 .build());
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, Duration keepAlive, final Path commDirectory,
@@ -313,13 +263,7 @@ public class DemesneImpl implements Demesne {
                                     ExecutorService exec) {
         return new SubDomain(member, Parameters.newBuilder(),
                              RuntimeParameters.newBuilder()
-                                              .setCommunications(new Enclave(member, new DomainSocketAddress(address),
-                                                                             exec,
-                                                                             new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound())
-                                                                                                                  .toFile()),
-                                                                             keepAlive, ctxId -> {
-                                                                                 registerContext(ctxId);
-                                                                             }).router(exec))
+                                              .setCommunications(enclave.router(exec))
                                               .setExec(exec)
                                               .setScheduler(Executors.newScheduledThreadPool(5,
                                                                                              Thread.ofVirtual()

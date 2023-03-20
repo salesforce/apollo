@@ -7,6 +7,7 @@
 package com.salesforce.apollo.archipelago;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -29,16 +30,20 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.BindableService;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
 import io.grpc.Context;
 import io.grpc.Contexts;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -129,6 +134,23 @@ public class Router {
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
 
+    public static ClientInterceptor clientInterceptor(Digest ctx) {
+        return new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                                       CallOptions callOptions, Channel next) {
+                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(Router.METADATA_CONTEXT_KEY, qb64(ctx));
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
+    }
+
     public static Limit defaultServerLimit() {
         return AIMDLimit.newBuilder().initialLimit(100).maxLimit(1000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
@@ -141,8 +163,8 @@ public class Router {
                                                                          ServerCallHandler<ReqT, RespT> next) {
                 String id = requestHeaders.get(METADATA_CONTEXT_KEY);
                 if (id == null) {
-                    log.error("No context id in call headers: {}", requestHeaders.keys());
-                    throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No context ID in call"));
+                    log.trace("No context id in call headers: {}", requestHeaders.keys());
+                    return next.startCall(call, requestHeaders);
                 }
 
                 return Contexts.interceptCall(Context.current().withValue(SERVER_CONTEXT_KEY, digest(id)), call,

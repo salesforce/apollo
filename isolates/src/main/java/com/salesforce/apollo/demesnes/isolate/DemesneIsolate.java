@@ -8,7 +8,6 @@ package com.salesforce.apollo.demesnes.isolate;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -31,18 +30,11 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 
-import io.grpc.CallOptions;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 
@@ -69,23 +61,6 @@ public class DemesneIsolate {
                                   @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
         return d == null ? false : d.active();
-    }
-
-    private static ClientInterceptor clientInterceptor(Digest ctx) {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, io.grpc.Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CONTEXT_KEY, qb64(ctx));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
     }
 
     private static void configureLogging(final DemesneParameters parameters) {

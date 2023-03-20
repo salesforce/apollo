@@ -11,6 +11,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.demesne.proto.OuterContextGrpc.OuterContextImplBase;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.model.comms.SigningMetrics;
 
 import io.grpc.stub.StreamObserver;
@@ -21,11 +22,11 @@ import io.grpc.stub.StreamObserver;
  */
 public class OuterContextServer extends OuterContextImplBase {
 
-    private final SigningMetrics      metrics;
-    private final OuterContextService service;
+    private final SigningMetrics                       metrics;
+    private final RoutableService<OuterContextService> routing;
 
-    public OuterContextServer(OuterContextService service, SigningMetrics metrics) {
-        this.service = service;
+    public OuterContextServer(RoutableService<OuterContextService> routing, SigningMetrics metrics) {
+        this.routing = routing;
         this.metrics = metrics;
     }
 
@@ -37,18 +38,20 @@ public class OuterContextServer extends OuterContextImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundDeregister().mark(serializedSize);
         }
-        try {
-            service.deregister(context);
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-        } catch (Throwable t) {
-            responseObserver.onError(t);
-        } finally {
-            if (timer != null) {
-                timer.close();
+        routing.evaluate(responseObserver, s -> {
+            try {
+                s.deregister(context);
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+            } finally {
+                if (timer != null) {
+                    timer.close();
+                }
+                responseObserver.onCompleted();
             }
-            responseObserver.onCompleted();
-        }
+        });
     }
 
     @Override
@@ -59,17 +62,18 @@ public class OuterContextServer extends OuterContextImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundRegister().mark(serializedSize);
         }
-        try {
-            service.register(context);
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-        } catch (Throwable t) {
-            responseObserver.onError(t);
-        } finally {
-            if (timer != null) {
-                timer.close();
+        routing.evaluate(responseObserver, s -> {
+            try {
+                s.register(context);
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+            } finally {
+                if (timer != null) {
+                    timer.close();
+                }
             }
-            responseObserver.onCompleted();
-        }
+        });
     }
 }

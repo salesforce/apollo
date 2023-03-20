@@ -108,7 +108,7 @@ public class Enclave implements RouterSupplier {
                                                            .bossEventLoopGroup(getEventLoopGroup())
                                                            .intercept(new DomainSocketServerInterceptor())
                                                            .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
-                                                                                                       .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
+                                                                                                       .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
         return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {

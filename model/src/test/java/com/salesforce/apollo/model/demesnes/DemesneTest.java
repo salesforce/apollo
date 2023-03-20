@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -31,10 +32,12 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
@@ -48,6 +51,8 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
@@ -287,6 +292,24 @@ public class DemesneTest {
         router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
                       r -> new KERLServer(r, null), null, null);
 
+        var registered = new TreeSet<Digest>();
+        var deregistered = new TreeSet<Digest>();
+
+        final OuterContextService service = new OuterContextService() {
+
+            @Override
+            public void deregister(Digeste context) {
+                deregistered.remove(Digest.from(context));
+            }
+
+            @Override
+            public void register(SubContext context) {
+                registered.add(Digest.from(context.getContext()));
+            }
+        };
+        router.create(serverMember, context, service, "Outer Context", r -> new OuterContextServer(r, null), null,
+                      null);
+
         var parameters = DemesneParameters.newBuilder()
                                           .setContext(context.toDigeste())
                                           .setMember(identifier.getIdentifier().toIdent())
@@ -297,6 +320,8 @@ public class DemesneTest {
         demesne.start();
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
+        assertEquals(1, registered.size());
+        assertEquals(0, deregistered.size());
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {
