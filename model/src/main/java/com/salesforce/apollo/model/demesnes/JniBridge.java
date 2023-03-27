@@ -17,8 +17,13 @@ import org.scijava.nativelib.NativeLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 
@@ -42,9 +47,15 @@ public class JniBridge implements Demesne {
 
     private static native boolean active(long isolateId);
 
+    private static native void commit(long isolateId, byte[] eventCoordinates, int eventCoordinatesLen);
+
     private static native long createIsolate();
 
+    private static native byte[] inception(long isolateId, byte[] identifier, int identifierLen);
+
     private static native boolean launch(long isolateId, byte[] parameters, int paramLen, byte[] password, int passLen);
+
+    private static native byte[] rotate(long isolateId);
 
     private static native void start(long isolateId);
 
@@ -78,6 +89,35 @@ public class JniBridge implements Demesne {
     @Override
     public boolean active() {
         return active(isolateId);
+    }
+
+    @Override
+    public void commit(EventCoords coordinates) {
+        var bytes = coordinates.toByteArray();
+        commit(isolateId, bytes, bytes.length);
+    }
+
+    @Override
+    public InceptionEvent inception(Ident identifier) {
+        final var ident = identifier.toByteString().toByteArray();
+        var bytes = inception(isolateId, ident, ident.length);
+        try {
+            return InceptionEvent.parseFrom(bytes);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Error deserializing inception event", e);
+            return InceptionEvent.getDefaultInstance();
+        }
+    }
+
+    @Override
+    public RotationEvent rotate() {
+        var bytes = rotate(isolateId);
+        try {
+            return RotationEvent.parseFrom(bytes);
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Error deserializing inception event", e);
+            return RotationEvent.getDefaultInstance();
+        }
     }
 
     @Override

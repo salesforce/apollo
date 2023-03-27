@@ -21,6 +21,7 @@ import java.util.logging.LogManager;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
@@ -61,6 +65,15 @@ public class DemesneIsolate {
                                   @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
         final Demesne d = demesne.get();
         return d == null ? false : d.active();
+    }
+
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_commit")
+    private static void commit(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId,
+                               JByteArray eventCoordinates, int eventCoordinatesLen) {
+        final Demesne d = demesne.get();
+        if (d != null) {
+            d.commit(toEventCoordinates(eventCoordinates, eventCoordinatesLen));
+        }
     }
 
     private static void configureLogging(final DemesneParameters parameters) {
@@ -103,6 +116,17 @@ public class DemesneIsolate {
             log.error("Invalid digest: {}", digest);
             throw new IllegalArgumentException("Invalid digest: " + digest, e);
         }
+    }
+
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_inception")
+    private static CCharPointer inception(JNIEnvironment jniEnv, JClass clazz,
+                                          @CEntryPoint.IsolateThreadContext long isolateId, JByteArray identifier,
+                                          int identifierLen) {
+        final Demesne d = demesne.get();
+        if (d != null) {
+            return CTypeConversion.toCBytes(d.inception(toIdentifier(identifier, identifierLen)).toByteArray()).get();
+        }
+        return CTypeConversion.toCBytes(InceptionEvent.getDefaultInstance().toByteArray()).get();
     }
 
     private static void launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
@@ -151,6 +175,16 @@ public class DemesneIsolate {
         }
     }
 
+    @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_rotate")
+    private static CCharPointer rotate(JNIEnvironment jniEnv, JClass clazz,
+                                       @CEntryPoint.IsolateThreadContext long isolateId) {
+        final Demesne d = demesne.get();
+        if (d != null) {
+            return CTypeConversion.toCBytes(d.rotate().toByteArray()).get();
+        }
+        return CTypeConversion.toCBytes(RotationEvent.getDefaultInstance().toByteArray()).get();
+    }
+
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_start")
     private static void start(JNIEnvironment jniEnv, JClass clazz,
                               @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
@@ -167,6 +201,30 @@ public class DemesneIsolate {
         if (d != null) {
             d.stop();
         }
+    }
+
+    private static JByteArray toByteArray(InceptionEvent rotate) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private static JByteArray toByteArray(RotationEvent rotate) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private static EventCoords toEventCoordinates(JByteArray eventCoordinates, int eventCoordinatesLen) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    /**
+     * @param identifier
+     * @param identifierLen
+     * @return
+     */
+    private static Ident toIdentifier(JByteArray identifier, int identifierLen) {
+        return null;
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_viewChange")

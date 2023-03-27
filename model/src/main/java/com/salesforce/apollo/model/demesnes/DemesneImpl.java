@@ -31,6 +31,10 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.choam.Parameters;
@@ -178,6 +182,24 @@ public class DemesneImpl implements Demesne {
     @Override
     public boolean active() {
         return domain == null ? false : domain.active();
+    }
+
+    @Override
+    public void commit(EventCoords coordinates) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public InceptionEvent inception(Ident identifier) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public RotationEvent rotate() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
