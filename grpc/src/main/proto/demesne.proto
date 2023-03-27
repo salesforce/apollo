@@ -22,9 +22,9 @@ message DemesneParameters {
     string commDirectory = 1;
     stereotomy.Ident member = 2;
     bytes keyStore = 3; 
-    string outbound = 4; 
-    utils.Digeste context = 5;
-    string signingService = 6;
+    string portal = 4; 
+    string parent = 5;
+    utils.Digeste context = 6;
     google.protobuf.Duration keepAlive = 7;
     apollo.choam.FoundationSeal foundation = 8;
     google.protobuf.Duration timeout = 9;

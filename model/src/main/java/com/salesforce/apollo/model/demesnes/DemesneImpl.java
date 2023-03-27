@@ -9,7 +9,6 @@ package com.salesforce.apollo.model.demesnes;
 import static com.salesforce.apollo.archipelago.Router.clientInterceptor;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.File;
 import java.io.IOException;
@@ -138,16 +137,16 @@ public class DemesneImpl implements Demesne {
         final var kpa = parameters.getKeepAlive();
         Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
                                                   : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
-        var address = commDirectory.resolve(qb64(context.getId())).toFile();
+        var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
 
-        outer = outerFrom(address);
+        outer = outerFrom(outerContextAddress);
 
         final var password = Arrays.copyOf(pwd, pwd.length);
         Arrays.fill(pwd, ' ');
 
         final var keystore = KeyStore.getInstance("JKS");
         keystore.load(parameters.getKeyStore().newInput(), password);
-        kerl = kerlFrom(address);
+        kerl = kerlFrom(outerContextAddress);
         Duration timeout = Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos());
         validation = new Ani(context.getId(), kerl).eventValidation(timeout);
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl,
@@ -168,12 +167,12 @@ public class DemesneImpl implements Demesne {
 
         context.activate(member);
 
-        log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), address, member.getId());
+        log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress, member.getId());
 
-        enclave = new Enclave(member, new DomainSocketAddress(address), exec,
-                              new DomainSocketAddress(commDirectory.resolve(parameters.getOutbound()).toFile()),
+        enclave = new Enclave(member, new DomainSocketAddress(outerContextAddress), exec,
+                              new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
                               keepAlive, ctxId -> registerContext(ctxId));
-        domain = subdomainFrom(parameters, keepAlive, commDirectory, address, member, context, exec);
+        domain = subdomainFrom(parameters, keepAlive, commDirectory, outerContextAddress, member, context, exec);
     }
 
     @Override

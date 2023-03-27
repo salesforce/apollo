@@ -69,7 +69,7 @@ public class Demultiplexer {
     }
 
     public void close(Duration await) {
-        if (!started.compareAndSet(false, true)) {
+        if (!started.compareAndSet(true, false)) {
             return;
         }
         server.shutdown();

@@ -16,9 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -188,6 +190,8 @@ public class EnclaveTest {
         var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
+        final var routes = new HashMap<String, DomainSocketAddress>();
+        final Function<String, DomainSocketAddress> router = s -> routes.get(s);
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
@@ -199,11 +203,11 @@ public class EnclaveTest {
                                                           .workerEventLoopGroup(getEventLoopGroup())
                                                           .bossEventLoopGroup(getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
+                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1), router);
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint1);
+            routes.put(qb64(d), endpoint1);
         });
         var router1 = enclave1.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
@@ -212,7 +216,7 @@ public class EnclaveTest {
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint2);
+            routes.put(qb64(d), endpoint2);
         });
         var router2 = enclave2.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),

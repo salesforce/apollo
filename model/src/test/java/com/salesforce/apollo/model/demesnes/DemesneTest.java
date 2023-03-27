@@ -12,6 +12,7 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -51,15 +53,14 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
-import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
@@ -214,30 +215,30 @@ public class DemesneTest {
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
                                                                .resolve(UUID.randomUUID().toString())
                                                                .toFile());
+        final var routes = new HashMap<String, DomainSocketAddress>();
         final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
                                                           .protocolNegotiator(new DomainSocketNegotiator())
                                                           .channelType(getServerDomainSocketChannelClass())
                                                           .workerEventLoopGroup(getEventLoopGroup())
                                                           .bossEventLoopGroup(getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
+                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1),
+                                        s -> routes.get(s));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint1);
-        });
+        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1),
+                                   d -> routes.put(qb64(d), endpoint1));
         var router1 = enclave1.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
                                                                                    "A", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint2);
-        });
+        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1),
+                                   d -> routes.put(qb64(d), endpoint2));
         var router2 = enclave2.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
-                                                                                   "A", r -> new Server(r),
+                                                                                   "B", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
         portal.start();
@@ -276,9 +277,10 @@ public class DemesneTest {
         var identifier = controller.newIdentifier().get();
         var baos = new ByteArrayOutputStream();
         ks.store(baos, ksPassword);
-        ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
         Member serverMember = new ControlledIdentifierMember(identifier);
-        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(qb64(context)).toFile());
+        var portalAddress = UUID.randomUUID().toString();
+        var parentAddress = UUID.randomUUID().toString();
+        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
         var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
                                               .protocolNegotiator(new DomainSocketNegotiator())
                                               .channelType(serverChannelType)
@@ -289,8 +291,6 @@ public class DemesneTest {
         var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
         var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
         router.start();
-        router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
-                      r -> new KERLServer(r, null), null, null);
 
         var registered = new TreeSet<Digest>();
         var deregistered = new TreeSet<Digest>();
@@ -307,11 +307,25 @@ public class DemesneTest {
                 registered.add(Digest.from(context.getContext()));
             }
         };
-        router.create(serverMember, context, service, "Outer Context", r -> new OuterContextServer(r, null), null,
-                      null);
+
+        final var parentEndpoint = new DomainSocketAddress(commDirectory.resolve(parentAddress).toFile());
+        var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
+        var outerService = new OuterContextServer(service, null);
+        var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
+                                                    .protocolNegotiator(new DomainSocketNegotiator())
+                                                    .channelType(getServerDomainSocketChannelClass())
+                                                    .addService(kerlServer)
+                                                    .addService(outerService)
+                                                    .workerEventLoopGroup(getEventLoopGroup())
+                                                    .bossEventLoopGroup(getEventLoopGroup())
+                                                    .intercept(new DomainSocketServerInterceptor())
+                                                    .build();
+        outerContextService.start();
 
         var parameters = DemesneParameters.newBuilder()
                                           .setContext(context.toDigeste())
+                                          .setPortal(portalAddress)
+                                          .setParent(parentAddress)
                                           .setMember(identifier.getIdentifier().toIdent())
                                           .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
@@ -321,6 +335,7 @@ public class DemesneTest {
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         assertEquals(1, registered.size());
+        assertTrue(registered.contains(context));
         assertEquals(0, deregistered.size());
     }
 

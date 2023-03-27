@@ -9,12 +9,14 @@ package com.salesforce.apollo.model;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,7 +29,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.SubContext;
+import com.salesfoce.apollo.model.proto.Request;
+import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.archipelago.Portal;
+import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
@@ -41,12 +48,18 @@ import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.model.comms.SigningServer;
 import com.salesforce.apollo.model.demesnes.Demesne;
+import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.KerlDHT;
 
+import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -80,13 +93,13 @@ public class ProcessDomain extends Domain {
     private final KerlDHT              dht;
     private final View                 foundation;
     private final Map<Digest, Demesne> hostedDomains = new ConcurrentHashMap<>();
-    private final DomainSocketAddress  kerlEndpoint;
-    private final Server               kerlService;
     private final UUID                 listener;
+    private final DomainSocketAddress  outerContextEndpoint;
+    private final Server               outerContextService;
     private final Portal<Member>       portal;
     private final DomainSocketAddress  portalEndpoint;
-    private final DomainSocketAddress  signingEndpoint;
-    private final Server               signingService;
+
+    private final Map<String, DomainSocketAddress> routes = new HashMap<>();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
@@ -100,6 +113,12 @@ public class ProcessDomain extends Domain {
                           .build();
         this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
                                    DigestAlgorithm.DEFAULT, null, params.exec());
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        connectionPool.setMaxConnections(10);
+        dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
+                          params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
+                          params.runtime().scheduler(), 0.00125, null);
         listener = foundation.register(listener());
         bridge = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
@@ -109,27 +128,18 @@ public class ProcessDomain extends Domain {
                                                       .workerEventLoopGroup(getEventLoopGroup())
                                                       .bossEventLoopGroup(getEventLoopGroup())
                                                       .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, runtime.getExec(), Duration.ofMillis(1));
-        signingEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        signingService = NettyServerBuilder.forAddress(signingEndpoint)
-                                           .protocolNegotiator(new DomainSocketNegotiator())
-                                           .channelType(getServerDomainSocketChannelClass())
-                                           .workerEventLoopGroup(getEventLoopGroup())
-                                           .bossEventLoopGroup(getEventLoopGroup())
-                                           .build();
-        kerlEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        kerlService = NettyServerBuilder.forAddress(kerlEndpoint)
-                                        .protocolNegotiator(new DomainSocketNegotiator())
-                                        .channelType(getServerDomainSocketChannelClass())
-                                        .workerEventLoopGroup(getEventLoopGroup())
-                                        .bossEventLoopGroup(getEventLoopGroup())
-                                        .build();
-        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
-        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
-        connectionPool.setMaxConnections(10);
-        dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
-                          params.runtime().scheduler(), 0.00125, null);
+                                    s -> handler(portalEndpoint), bridge, runtime.getExec(), Duration.ofMillis(1),
+                                    s -> routes.get(s));
+        outerContextEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
+        outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
+                                                .protocolNegotiator(new DomainSocketNegotiator())
+                                                .channelType(getServerDomainSocketChannelClass())
+                                                .addService(signingService())
+                                                .addService((BindableService) new DemesneKERLServer(dht, null))
+                                                .addService(outerContextService())
+                                                .workerEventLoopGroup(getEventLoopGroup())
+                                                .bossEventLoopGroup(getEventLoopGroup())
+                                                .build();
     }
 
     public View getFoundation() {
@@ -198,6 +208,34 @@ public class ProcessDomain extends Domain {
         };
     }
 
+    private BindableService outerContextService() {
+        return new OuterContextServer(new OuterContextService() {
+
+            @Override
+            public void deregister(Digeste context) {
+                routes.remove(qb64(Digest.from(context)));
+            }
+
+            @Override
+            public void register(SubContext context) {
+//                routes.put("",qb64(Digest.from(context)));
+            }
+        }, null);
+    }
+
+    private BindableService signingService() {
+        RoutableService<ProtoKERLService> router = new RoutableService<>(params.exec());
+        router.bind(foundation.getContext().getId(), dht);
+        return new SigningServer(new com.salesforce.apollo.model.comms.Signer() {
+
+            @Override
+            public Sig sign(Request request, Digest from) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+        }, null, null);
+    }
+
     private void startServices() {
         dht.start(params.scheduler(), Duration.ofMillis(10)); // TODO parameterize gossip frequency
         try {
@@ -207,31 +245,18 @@ public class ProcessDomain extends Domain {
             + params.member().getId());
         }
         try {
-            kerlService.start();
+            outerContextService.start();
         } catch (IOException e) {
-            throw new IllegalStateException("Unable to start KERL service, local address: " + kerlEndpoint.path()
-            + " on: " + params.member().getId());
-        }
-
-        try {
-            signingService.start();
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to start signing service, local address: " + signingEndpoint.path()
-            + " on: " + params.member().getId());
+            throw new IllegalStateException("Unable to start outer context service, local address: "
+            + outerContextEndpoint.path() + " on: " + params.member().getId());
         }
     }
 
     private void stopServices() {
         portal.close(Duration.ofSeconds(30));
-        kerlService.shutdown();
+        outerContextService.shutdown();
         try {
-            kerlService.awaitTermination(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        signingService.shutdown();
-        try {
-            signingService.awaitTermination(30, TimeUnit.SECONDS);
+            outerContextService.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

@@ -19,7 +19,6 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.google.protobuf.Any;
@@ -29,10 +28,8 @@ import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -40,7 +37,6 @@ import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -50,7 +46,6 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -164,31 +159,12 @@ public class DemesneSmoke {
     public static void main(String[] argv) throws Exception {
         var t = new DemesneSmoke();
         t.before();
-        t.portal();
-        t.after();
-        t.before();
         t.smokin();
         t.after();
         System.exit(0);
     }
 
-    private EventLoopGroup      eventLoopGroup;
-    private final TestItService local = new TestItService() {
-
-                                          @Override
-                                          public void close() throws IOException {
-                                          }
-
-                                          @Override
-                                          public Member getMember() {
-                                              return null;
-                                          }
-
-                                          @Override
-                                          public Any ping(Any request) {
-                                              return null;
-                                          }
-                                      };
+    private EventLoopGroup eventLoopGroup;
 
     public void after() throws Exception {
         if (eventLoopGroup != null) {
@@ -202,64 +178,6 @@ public class DemesneSmoke {
 
     public void before() {
         eventLoopGroup = getEventLoopGroup();
-    }
-
-    public void portal() throws Exception {
-        final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
-        final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
-        var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
-        var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
-        final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
-
-        final var portalEndpoint = new DomainSocketAddress(Path.of("target")
-                                                               .resolve(UUID.randomUUID().toString())
-                                                               .toFile());
-        final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
-                                                          .protocolNegotiator(new DomainSocketNegotiator())
-                                                          .channelType(getServerDomainSocketChannelClass())
-                                                          .workerEventLoopGroup(eventLoopGroup)
-                                                          .bossEventLoopGroup(eventLoopGroup)
-                                                          .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
-
-        final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint1);
-        });
-        var router1 = enclave1.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
-
-        final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint2);
-        });
-        var router2 = enclave2.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
-
-        portal.start();
-        router1.start();
-        router2.start();
-
-        var clientA = commsA.connect(serverMember2);
-
-        var resultA = clientA.ping(Any.getDefaultInstance());
-        resultA.unpack(ByteMessage.class);
-
-        var clientB = commsB.connect(serverMember1);
-        var resultB = clientB.ping(Any.getDefaultInstance());
-        resultB.unpack(ByteMessage.class);
-
-        portal.close(Duration.ofSeconds(10));
-        router1.close(Duration.ofSeconds(10));
-        router2.close(Duration.ofSeconds(10));
-        exec.shutdownNow();
-        exec.awaitTermination(10, TimeUnit.SECONDS);
     }
 
     public void smokin() throws Exception {
