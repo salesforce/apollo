@@ -22,7 +22,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
@@ -50,6 +52,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.comms.SigningServer;
 import com.salesforce.apollo.model.demesnes.Demesne;
+import com.salesforce.apollo.model.demesnes.JniBridge;
 import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
@@ -86,18 +89,21 @@ public class ProcessDomain extends Domain {
 
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
-    private final static EventLoopGroup eventLoopGroup = getEventLoopGroup();
-    private final static Logger         log            = LoggerFactory.getLogger(ProcessDomain.class);
+    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
 
     private final DomainSocketAddress  bridge;
+    private final EventLoopGroup       clientEventLoopGroup  = getEventLoopGroup();
+    private final Path                 communicationsDirectory;
+    private final EventLoopGroup       contextEventLoopGroup = getEventLoopGroup();
     private final KerlDHT              dht;
     private final View                 foundation;
-    private final Map<Digest, Demesne> hostedDomains = new ConcurrentHashMap<>();
+    private final Map<Digest, Demesne> hostedDomains         = new ConcurrentHashMap<>();
     private final UUID                 listener;
     private final DomainSocketAddress  outerContextEndpoint;
     private final Server               outerContextService;
     private final Portal<Member>       portal;
     private final DomainSocketAddress  portalEndpoint;
+    private final EventLoopGroup       portalEventLoopGroup  = getEventLoopGroup();
 
     private final Map<String, DomainSocketAddress> routes = new HashMap<>();
 
@@ -107,6 +113,7 @@ public class ProcessDomain extends Domain {
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
                          EventValidation eventValidation) {
         super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
+        communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
@@ -120,25 +127,27 @@ public class ProcessDomain extends Domain {
                           params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
                           params.runtime().scheduler(), 0.00125, null);
         listener = foundation.register(listener());
-        bridge = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        portalEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
+        bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
+        portalEndpoint = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString())
+                                                                        .toFile());
         portal = new Portal<Member>(NettyServerBuilder.forAddress(portalEndpoint)
                                                       .protocolNegotiator(new DomainSocketNegotiator())
                                                       .channelType(getServerDomainSocketChannelClass())
-                                                      .workerEventLoopGroup(getEventLoopGroup())
-                                                      .bossEventLoopGroup(getEventLoopGroup())
+                                                      .workerEventLoopGroup(portalEventLoopGroup)
+                                                      .bossEventLoopGroup(portalEventLoopGroup)
                                                       .intercept(new DomainSocketServerInterceptor()),
                                     s -> handler(portalEndpoint), bridge, runtime.getExec(), Duration.ofMillis(1),
                                     s -> routes.get(s));
-        outerContextEndpoint = new DomainSocketAddress(commDirectory.resolve(UUID.randomUUID().toString()).toFile());
+        outerContextEndpoint = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString())
+                                                                              .toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
                                                 .protocolNegotiator(new DomainSocketNegotiator())
                                                 .channelType(getServerDomainSocketChannelClass())
                                                 .addService(signingService())
-                                                .addService((BindableService) new DemesneKERLServer(dht, null))
+                                                .addService(new DemesneKERLServer(dht, null))
                                                 .addService(outerContextService())
-                                                .workerEventLoopGroup(getEventLoopGroup())
-                                                .bossEventLoopGroup(getEventLoopGroup())
+                                                .workerEventLoopGroup(contextEventLoopGroup)
+                                                .bossEventLoopGroup(contextEventLoopGroup)
                                                 .build();
     }
 
@@ -152,7 +161,22 @@ public class ProcessDomain extends Domain {
     }
 
     public void spawn(DemesneParameters.Builder prototype) {
-
+        var parameters = prototype.clone()
+                                  .setCommDirectory(communicationsDirectory.toString())
+                                  .setPortal(portalEndpoint.path())
+                                  .setParent(outerContextEndpoint.path())
+                                  .build();
+        var ctxId = Digest.from(parameters.getContext());
+        char[] pwd = null;
+        final AtomicBoolean added = new AtomicBoolean();
+        final var demesne = new JniBridge(parameters, pwd);
+        hostedDomains.computeIfAbsent(ctxId, k -> {
+            added.set(true);
+            return demesne;
+        });
+        if (added.get()) {
+            demesne.start();
+        }
     }
 
     @Override
@@ -164,13 +188,45 @@ public class ProcessDomain extends Domain {
     @Override
     public void stop() {
         super.stop();
+        hostedDomains.values().forEach(d -> d.stop());
         foundation.deregister(listener);
-        stopServices();
+        try {
+            stopServices();
+        } catch (RejectedExecutionException e) {
+
+        }
+        var portalELG = portalEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
+        var serverELG = contextEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
+        var clientELG = clientEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
+        try {
+            if (clientELG.await(30, TimeUnit.SECONDS)) {
+                log.info("Did not completely shutdown client event loop group for process: {}", member.getId());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        try {
+            if (!serverELG.await(30, TimeUnit.SECONDS)) {
+                log.info("Did not completely shutdown server event loop group for process: {}", member.getId());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        try {
+            if (!portalELG.await(30, TimeUnit.SECONDS)) {
+                log.info("Did not completely shutdown portal event loop group for process: {}", member.getId());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
-                                  .eventLoopGroup(eventLoopGroup)
+                                  .eventLoopGroup(clientEventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)
                                   .usePlaintext()
@@ -254,7 +310,13 @@ public class ProcessDomain extends Domain {
 
     private void stopServices() {
         portal.close(Duration.ofSeconds(30));
-        outerContextService.shutdown();
+        try {
+            outerContextService.shutdown();
+        } catch (RejectedExecutionException e) {
+            // eat
+        } catch (Throwable t) {
+            log.error("Exception shutting down process domain: {}", member.getId(), t);
+        }
         try {
             outerContextService.awaitTermination(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {

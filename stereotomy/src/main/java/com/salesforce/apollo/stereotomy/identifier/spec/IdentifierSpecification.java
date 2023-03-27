@@ -66,7 +66,7 @@ public class IdentifierSpecification<D extends Identifier> {
 
         public IdentifierSpecification<D> build() {
 
-            // --- KEYS ---
+            // Keys
 
             if (keys.isEmpty()) {
                 throw new RuntimeException("No keys provided.");
@@ -93,11 +93,12 @@ public class IdentifierSpecification<D extends Identifier> {
                 throw new IllegalArgumentException("Unknown SigningThreshold type: " + signingThreshold.getClass());
             }
 
-            // --- NEXT KEYS ---
+            // Next keys
 
             Digest nextKeyConfigurationDigest = null;
 
-            // if we don't have it, we use default of majority nextSigningThreshold
+            // if we don't have it defined already, we use default of majority
+            // nextSigningThreshold
             if (nextSigningThreshold == null) {
                 nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
             } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
@@ -124,7 +125,7 @@ public class IdentifierSpecification<D extends Identifier> {
             nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, nextKeys,
                                                                          nextKeysAlgorithm);
 
-            // --- WITNESSES ---
+            // Witnesses
 
             if ((witnessThreshold == 0) && !witnesses.isEmpty()) {
                 witnessThreshold = (witnesses.size() / 2) + 1;

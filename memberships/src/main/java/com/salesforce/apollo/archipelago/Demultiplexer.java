@@ -9,6 +9,7 @@ package com.salesforce.apollo.archipelago;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -72,11 +73,15 @@ public class Demultiplexer {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        server.shutdown();
         try {
-            server.awaitTermination(await.toNanos(), TimeUnit.NANOSECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            server.shutdown();
+            try {
+                server.awaitTermination(await.toNanos(), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        } catch (RejectedExecutionException e) {
+            // eat
         }
     }
 
