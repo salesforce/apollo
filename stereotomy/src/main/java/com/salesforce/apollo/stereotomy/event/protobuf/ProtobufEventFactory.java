@@ -305,7 +305,7 @@ public class ProtobufEventFactory implements EventFactory {
                              .setEstablishment(establishment)
                              .addAllWitnesses(specification.getWitnesses()
                                                            .stream()
-                                                           .map(i -> i.toIdent())
+                                                           .map(i -> bs(i.getPublicKey()))
                                                            .collect(Collectors.toList()))
                              .addAllConfiguration(specification.getConfigurationTraits()
                                                                .stream()

@@ -84,10 +84,17 @@ abstract public class Domain {
     public static void addMembers(Connection connection, List<byte[]> members, String state) {
         var context = DSL.using(connection, SQLDialect.H2);
         for (var m : members) {
-            context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
-            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
+            var id = context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX)
+                            .values(m)
+                            .onDuplicateKeyIgnore()
+                            .returning(IDENTIFIER.ID)
+                            .fetchOne();
             if (id != null) {
-                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
+                context.insertInto(MEMBER)
+                       .set(MEMBER.IDENTIFIER, id.value1())
+                       .set(MEMBER.DELEGATOR, id.value1())
+                       .onConflictDoNothing()
+                       .execute();
             }
         }
     }
