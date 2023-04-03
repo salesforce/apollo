@@ -59,6 +59,7 @@ import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.KerlDHT;
 
@@ -91,27 +92,28 @@ public class ProcessDomain extends Domain {
 
     private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
 
-    private final DomainSocketAddress  bridge;
-    private final EventLoopGroup       clientEventLoopGroup  = getEventLoopGroup();
-    private final Path                 communicationsDirectory;
-    private final EventLoopGroup       contextEventLoopGroup = getEventLoopGroup();
-    private final KerlDHT              dht;
-    private final View                 foundation;
-    private final Map<Digest, Demesne> hostedDomains         = new ConcurrentHashMap<>();
-    private final UUID                 listener;
-    private final DomainSocketAddress  outerContextEndpoint;
-    private final Server               outerContextService;
-    private final Portal<Member>       portal;
-    private final DomainSocketAddress  portalEndpoint;
-    private final EventLoopGroup       portalEventLoopGroup  = getEventLoopGroup();
-
-    private final Map<String, DomainSocketAddress> routes = new HashMap<>();
+    private final DomainSocketAddress                                       bridge;
+    private final EventLoopGroup                                            clientEventLoopGroup  = getEventLoopGroup();
+    private final Path                                                      communicationsDirectory;
+    private final EventLoopGroup                                            contextEventLoopGroup = getEventLoopGroup();
+    private final KerlDHT                                                   dht;
+    private final View                                                      foundation;
+    private final Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
+    private final UUID                                                      listener;
+    private final DomainSocketAddress                                       outerContextEndpoint;
+    private final Server                                                    outerContextService;
+    private final Portal<Member>                                            portal;
+    private final DomainSocketAddress                                       portalEndpoint;
+    private final EventLoopGroup                                            portalEventLoopGroup  = getEventLoopGroup();
+    private final Map<String, DomainSocketAddress>                          routes                = new HashMap<>();
+    private final IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification;
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                          InetSocketAddress endpoint, Path commDirectory,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
-                         EventValidation eventValidation) {
+                         EventValidation eventValidation,
+                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification) {
         super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
@@ -149,6 +151,7 @@ public class ProcessDomain extends Domain {
                                                 .workerEventLoopGroup(contextEventLoopGroup)
                                                 .bossEventLoopGroup(contextEventLoopGroup)
                                                 .build();
+        this.subDomainSpecification = subDomainSpecification;
     }
 
     public View getFoundation() {
@@ -167,14 +170,14 @@ public class ProcessDomain extends Domain {
                                   .setParent(outerContextEndpoint.path())
                                   .build();
         var ctxId = Digest.from(parameters.getContext());
-        char[] pwd = null;
         final AtomicBoolean added = new AtomicBoolean();
-        final var demesne = new JniBridge(parameters, pwd);
+        final var demesne = new JniBridge(parameters);
         hostedDomains.computeIfAbsent(ctxId, k -> {
             added.set(true);
             return demesne;
         });
         if (added.get()) {
+            demesne.inception(member.getIdentifier().getIdentifier().toIdent(), subDomainSpecification);
             demesne.start();
         }
     }

@@ -7,6 +7,7 @@
 package com.salesforce.apollo.thoth;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -98,16 +99,22 @@ public class Thoth {
                                                                                                                   coordinates.getDigest(),
                                                                                                                   coordinates.getSequenceNumber()
                                                                                                                              .longValue())));
-            stereotomy.commit(incp, commitment).whenComplete((cid, t) -> {
-                if (t != null) {
-                    log.error("Unable to commit inception: {}", incp, t);
-                    return;
-                }
-                identifier = cid;
-                controller = (SelfAddressingIdentifier) identifier.getDelegatingIdentifier().get();
-                pending = null;
-                log.info("Created delegated identifier: {} controller: {}", identifier.getIdentifier(), controller);
-            });
+            try {
+                stereotomy.commit(incp, commitment).whenComplete((cid, t) -> {
+                    if (t != null) {
+                        log.error("Unable to commit inception: {}", incp, t);
+                        return;
+                    }
+                    identifier = cid;
+                    controller = (SelfAddressingIdentifier) identifier.getDelegatingIdentifier().get();
+                    pending = null;
+                    log.info("Created delegated identifier: {} controller: {}", identifier.getIdentifier(), controller);
+                }).get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                log.error("Unable to commit inception", e.getCause());
+            }
         };
     }
 

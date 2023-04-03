@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -56,8 +57,14 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
@@ -274,7 +281,7 @@ public class DemesneTest {
         final var keystore = new JksKeyStore(ks, () -> ksPassword);
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         Stereotomy controller = new StereotomyImpl(keystore, kerl, SecureRandom.getInstanceStrong());
-        var identifier = controller.newIdentifier().get();
+        ControlledIdentifier<SelfAddressingIdentifier> identifier = controller.newIdentifier().get();
         var baos = new ByteArrayOutputStream();
         ks.store(baos, ksPassword);
         Member serverMember = new ControlledIdentifierMember(identifier);
@@ -326,12 +333,22 @@ public class DemesneTest {
                                           .setContext(context.toDigeste())
                                           .setPortal(portalAddress)
                                           .setParent(parentAddress)
-                                          .setMember(identifier.getIdentifier().toIdent())
-                                          .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        var demesne = new DemesneImpl(parameters, ksPassword);
-        demesne.start();
+        var demesne = new DemesneImpl(parameters);
+        Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();
+        var incp = demesne.inception(identifier.getIdentifier().toIdent(), specification);
+
+        var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(controller.digestAlgorithm()),
+                                            incp.getSequenceNumber().longValue());
+
+        var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
+
+        // Commit
+        identifier.seal(builder)
+                  .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
+                  .thenAccept(v -> demesne.start())
+                  .get();
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         assertEquals(1, registered.size());

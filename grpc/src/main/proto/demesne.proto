@@ -20,15 +20,14 @@ service DemesneNet {
 
 message DemesneParameters {
     string commDirectory = 1;
-    stereotomy.Ident member = 2;
-    bytes keyStore = 3; 
-    string portal = 4; 
-    string parent = 5;
-    utils.Digeste context = 6;
-    google.protobuf.Duration keepAlive = 7;
-    apollo.choam.FoundationSeal foundation = 8;
-    google.protobuf.Duration timeout = 9;
-    string loggingConfig = 10;
+    string portal = 2; 
+    string parent = 3;
+    utils.Digeste context = 4;
+    google.protobuf.Duration keepAlive = 5;
+    apollo.choam.FoundationSeal foundation = 6;
+    google.protobuf.Duration timeout = 7;
+    string loggingConfig = 8;
+    stereotomy.IdentifierSpec specification = 9;
 }
 
 message ViewChange {

@@ -15,6 +15,85 @@
   "name":"javax.sql.rowset.RowSetProvider"
 },
 {
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Ident",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Ident$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.utils.proto.PubKey",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.utils.proto.PubKey$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true,
+  "methods":[
+    {"name":"hasHeader","parameterTypes":[] }
+  ]
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Sig",
+    "queryAllDeclaredConstructors" : true,
+    "queryAllPublicConstructors" : true,
+    "queryAllDeclaredMethods" : true,
+    "queryAllPublicMethods" : true,
+    "allDeclaredClasses" : true,
+    "allPublicClasses" : true,
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Sig$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Header",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Header$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Establishment",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.Establishment$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec$Builder",
+  "queryAllDeclaredMethods":true,
+  "queryAllPublicConstructors":true
+},
+{
     "name" : "io.netty.channel.kqueue.KQueueServerDomainSocketChannel",
     "queryAllDeclaredConstructors" : true,
     "queryAllPublicConstructors" : true,

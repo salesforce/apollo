@@ -11,11 +11,9 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
@@ -41,8 +39,8 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
@@ -183,15 +181,9 @@ public class DemesneSmoke {
     public void smokin() throws Exception {
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
-        final var ksPassword = new char[] { 'f', 'o', 'o' };
-        final var ks = KeyStore.getInstance("JKS");
-        ks.load(null, ksPassword);
-        final var keystore = new JksKeyStore(ks, () -> ksPassword);
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
-        Stereotomy controller = new StereotomyImpl(keystore, kerl, SecureRandom.getInstanceStrong());
+        Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, SecureRandom.getInstanceStrong());
         var identifier = controller.newIdentifier().get();
-        var baos = new ByteArrayOutputStream();
-        ks.store(baos, ksPassword);
         ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
         Member serverMember = new ControlledIdentifierMember(identifier);
         var kerlEndpoint = UUID.randomUUID().toString();
@@ -211,12 +203,8 @@ public class DemesneSmoke {
         var comms = router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
                                   r -> new KERLServer(r, null), null, null);
 
-        var parameters = DemesneParameters.newBuilder()
-                                          .setMember(identifier.getIdentifier().toIdent())
-                                          .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
-                                          .setCommDirectory(commDirectory.toString())
-                                          .build();
-        var demesne = new DemesneImpl(parameters, ksPassword);
+        var parameters = DemesneParameters.newBuilder().setCommDirectory(commDirectory.toString()).build();
+        var demesne = new DemesneImpl(parameters);
         demesne.start();
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();

@@ -11,19 +11,17 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -40,8 +38,13 @@ import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 import io.grpc.ManagedChannel;
@@ -67,15 +70,9 @@ public class DemesneIsolateTest {
         Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
-        final var ksPassword = new char[] { 'f', 'o', 'o' };
-        final var ks = KeyStore.getInstance("JKS");
-        ks.load(null, ksPassword);
-        final var keystore = new JksKeyStore(ks, () -> ksPassword);
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
-        Stereotomy controller = new StereotomyImpl(keystore, kerl, SecureRandom.getInstanceStrong());
+        Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, SecureRandom.getInstanceStrong());
         var identifier = controller.newIdentifier().get();
-        var baos = new ByteArrayOutputStream();
-        ks.store(baos, ksPassword);
         Member serverMember = new ControlledIdentifierMember(identifier);
         var portalAddress = UUID.randomUUID().toString();
         var parentAddress = UUID.randomUUID().toString();
@@ -125,12 +122,22 @@ public class DemesneIsolateTest {
                                           .setContext(context.toDigeste())
                                           .setPortal(portalAddress)
                                           .setParent(parentAddress)
-                                          .setMember(identifier.getIdentifier().toIdent())
-                                          .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
                                           .setCommDirectory(commDirectory.toString())
                                           .build();
-        var demesne = new JniBridge(parameters, ksPassword);
-        demesne.start();
+        var demesne = new JniBridge(parameters);
+        Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();
+        var incp = demesne.inception(identifier.getIdentifier().toIdent(), specification);
+
+        var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(controller.digestAlgorithm()),
+                                            incp.getSequenceNumber().longValue());
+
+        var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
+
+        // Commit
+        identifier.seal(builder)
+                  .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
+                  .thenAccept(v -> demesne.start())
+                  .get();
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         assertEquals(1, registered.size());

@@ -10,10 +10,13 @@ import java.util.List;
 
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
  * Domain Isolate interface
@@ -27,9 +30,9 @@ public interface Demesne {
 
     void commit(EventCoords coordinates);
 
-    InceptionEvent inception(Ident identifier);
+    DelegatedInceptionEvent inception(Ident identifier, Builder<SelfAddressingIdentifier> specification);
 
-    RotationEvent rotate();
+    DelegatedRotationEvent rotate(RotationSpecification.Builder specification);
 
     void start();
 

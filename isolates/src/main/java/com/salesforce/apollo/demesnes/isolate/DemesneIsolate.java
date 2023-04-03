@@ -14,9 +14,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.LogManager;
 
 import org.graalvm.nativeimage.IsolateThread;
@@ -31,13 +32,18 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -52,9 +58,10 @@ public class DemesneIsolate {
     private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
     private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
+    private static final Lock                         lock           = new ReentrantLock();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
     static {
-        System.setProperty(".level", "CONFIG");
+        System.setProperty(".level", "FINEST");
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_createIsolate", builtin = CEntryPoint.Builtin.CREATE_ISOLATE)
@@ -120,48 +127,71 @@ public class DemesneIsolate {
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_inception")
     private static CCharPointer inception(JNIEnvironment jniEnv, JClass clazz,
-                                          @CEntryPoint.IsolateThreadContext long isolateId, JByteArray identifier,
-                                          int identifierLen) {
+                                          @CEntryPoint.IsolateThreadContext long isolateId, JByteArray ident,
+                                          int identLen, JByteArray spec, int specLen) {
         final Demesne d = demesne.get();
         if (d != null) {
-            return CTypeConversion.toCBytes(d.inception(toIdentifier(identifier, identifierLen)).toByteArray()).get();
+            var identBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
+                                                               .getGetByteArrayElements()
+                                                               .call(jniEnv, ident, false),
+                                                         identLen);
+            var specBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
+                                                              .getGetByteArrayElements()
+                                                              .call(jniEnv, spec, false),
+                                                        specLen);
+            log.error("identifier buffer: {} specification buffer: {}", identBuff, specBuff);
+            Ident identifier;
+            try {
+                identifier = Ident.parseFrom(identBuff);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to parse inception specification", e);
+                return CTypeConversion.toCBytes(new byte[0]).get();
+            }
+            log.error("Demesne Identifier: {}", identifier);
+            IdentifierSpecification.Builder<SelfAddressingIdentifier> specification;
+            try {
+                final var identSpec = IdentifierSpec.parseFrom(specBuff);
+                log.error("Identifier spec: {}", identSpec);
+                specification = IdentifierSpecification.Builder.from(identSpec);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to parse inception specification", e);
+                return CTypeConversion.toCBytes(new byte[0]).get();
+            }
+            return CTypeConversion.toCBytes(d.inception(identifier, specification).getBytes()).get();
         }
         return CTypeConversion.toCBytes(InceptionEvent.getDefaultInstance().toByteArray()).get();
     }
 
-    private static void launch(JNIEnvironment jniEnv, ByteBuffer data, char[] password,
-                               JClass clazz) throws GeneralSecurityException, IOException {
+    private static void launch(JNIEnvironment jniEnv, ByteBuffer data, JClass clazz) throws GeneralSecurityException,
+                                                                                     IOException {
         final var parameters = DemesneParameters.parseFrom(data);
         configureLogging(parameters);
-        launch(jniEnv, parameters, password, clazz);
+        launch(jniEnv, parameters, clazz);
     }
 
-    private static void launch(JNIEnvironment jniEnv, DemesneParameters parameters, char[] password,
+    private static void launch(JNIEnvironment jniEnv, DemesneParameters parameters,
                                JClass clazz) throws GeneralSecurityException, IOException {
-        if (demesne.get() != null) {
-            return;
-        }
-        final var pretending = new DemesneImpl(parameters, password);
-        if (!demesne.compareAndSet(null, pretending)) {
-            return;
+        try {
+            lock.lock();
+            if (demesne.get() != null) {
+                return;
+            }
+            demesne.set(new DemesneImpl(parameters));
+        } finally {
+            lock.unlock();
         }
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")
     private static boolean launch(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId,
-                                  JByteArray parameters, int parametersLen, JByteArray pwd, int pwdLen) {
+                                  JByteArray parameters, int parametersLen) {
         var parametersBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
                                                                 .getGetByteArrayElements()
                                                                 .call(jniEnv, parameters, false),
                                                           parametersLen);
-        var passwordBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                              .getGetByteArrayElements()
-                                                              .call(jniEnv, pwd, false),
-                                                        pwdLen);
-        var password = StandardCharsets.UTF_8.decode(passwordBuff);
         log.trace("Launch Demesne Isolate: {}", isolateId);
         try {
-            launch(jniEnv, parametersBuff, password.array(), clazz);
+            launch(jniEnv, parametersBuff, clazz);
             return true;
         } catch (InvalidProtocolBufferException e) {
             log.error("Cannot launch demesne", e);
@@ -177,10 +207,20 @@ public class DemesneIsolate {
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_rotate")
     private static CCharPointer rotate(JNIEnvironment jniEnv, JClass clazz,
-                                       @CEntryPoint.IsolateThreadContext long isolateId) {
+                                       @CEntryPoint.IsolateThreadContext long isolateId, JByteArray spec, int specLen) {
         final Demesne d = demesne.get();
         if (d != null) {
-            return CTypeConversion.toCBytes(d.rotate().toByteArray()).get();
+            var specBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
+                                                              .getGetByteArrayElements()
+                                                              .call(jniEnv, spec, false),
+                                                        specLen);
+            RotationSpecification.Builder specification;
+            try {
+                specification = RotationSpecification.Builder.from(RotationSpec.parseFrom(specBuff));
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalArgumentException("Unable to parse controlling rotation specification", e);
+            }
+            return CTypeConversion.toCBytes(d.rotate(specification).getBytes()).get();
         }
         return CTypeConversion.toCBytes(RotationEvent.getDefaultInstance().toByteArray()).get();
     }
@@ -215,15 +255,6 @@ public class DemesneIsolate {
 
     private static EventCoords toEventCoordinates(JByteArray eventCoordinates, int eventCoordinatesLen) {
         // TODO Auto-generated method stub
-        return null;
-    }
-
-    /**
-     * @param identifier
-     * @param identifierLen
-     * @return
-     */
-    private static Ident toIdentifier(JByteArray identifier, int identifierLen) {
         return null;
     }
 

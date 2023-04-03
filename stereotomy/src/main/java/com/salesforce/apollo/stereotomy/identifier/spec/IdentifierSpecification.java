@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -38,6 +39,10 @@ public class IdentifierSpecification<D extends Identifier> {
 
     public static class Builder<D extends Identifier> implements Cloneable {
 
+        public static <I extends Identifier> Builder<I> from(IdentifierSpec parseFrom) {
+            return new Builder<I>();
+        }
+
         private final EnumSet<ConfigurationTrait> configurationTraits           = EnumSet.noneOf(ConfigurationTrait.class);
         private Class<? extends Identifier>       derivation                    = SelfAddressingIdentifier.class;
         private DigestAlgorithm                   identifierDigestAlgorithm     = DigestAlgorithm.BLAKE3_256;
@@ -51,7 +56,8 @@ public class IdentifierSpecification<D extends Identifier> {
         private SigningThreshold                  signingThreshold;
         private Version                           version                       = Stereotomy.currentVersion();
         private final List<BasicIdentifier>       witnesses                     = new ArrayList<>();
-        private int                               witnessThreshold              = 0;
+
+        private int witnessThreshold = 0;
 
         public Builder<D> addKey(PublicKey key) {
             keys.add(requireNonNull(key));
@@ -339,6 +345,9 @@ public class IdentifierSpecification<D extends Identifier> {
             return this;
         }
 
+        public IdentifierSpec toSpec() {
+            return IdentifierSpec.newBuilder().build();
+        }
     }
 
     public static BasicIdentifier basic(PublicKey key) {

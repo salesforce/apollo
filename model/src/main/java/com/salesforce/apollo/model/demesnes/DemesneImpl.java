@@ -18,13 +18,13 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +33,6 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.choam.Parameters;
@@ -56,13 +54,19 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.CommonKERLClient;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.thoth.Ani;
+import com.salesforce.apollo.thoth.Thoth;
+import com.salesforce.apollo.utils.Hex;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
@@ -121,62 +125,45 @@ public class DemesneImpl implements Demesne {
     private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
     private static final Logger                   log            = LoggerFactory.getLogger(DemesneImpl.class);
 
-    private final Context<Member>    context;
-    private final SubDomain          domain;
+    private Context<Member>          context;
+    private SubDomain                domain;
     private Enclave                  enclave;
     private final ExecutorService    exec;
     private final KERL               kerl;
     private final OuterContextClient outer;
+    private final DemesneParameters  parameters;
     private final AtomicBoolean      started = new AtomicBoolean();
     private final Stereotomy         stereotomy;
+    private final Thoth              thoth;
     private final EventValidation    validation;
 
-    public DemesneImpl(DemesneParameters parameters, char[] pwd) throws GeneralSecurityException, IOException {
+    public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
-
+        this.parameters = parameters;
         exec = Executors.newVirtualThreadPerTaskExecutor();
         context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
-        final var commDirectory = Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
-                                                                                  : parameters.getCommDirectory());
-        final var kpa = parameters.getKeepAlive();
-        Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
-                                                  : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
+        final var commDirectory = commDirectory();
         var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
 
         outer = outerFrom(outerContextAddress);
-
-        final var password = Arrays.copyOf(pwd, pwd.length);
-        Arrays.fill(pwd, ' ');
-
+        final var pwd = new byte[64];
+        final var entropy = SecureRandom.getInstanceStrong();
+        entropy.nextBytes(pwd);
+        final var password = Hex.hexChars(pwd);
+        final Supplier<char[]> passwordProvider = () -> password;
         final var keystore = KeyStore.getInstance("JKS");
-        keystore.load(parameters.getKeyStore().newInput(), password);
+
+        keystore.load(null, password);
+
         kerl = kerlFrom(outerContextAddress);
-        Duration timeout = Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos());
-        validation = new Ani(context.getId(), kerl).eventValidation(timeout);
-        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl,
-                                        SecureRandom.getInstanceStrong());
+        validation = new Ani(context.getId(), kerl).eventValidation(Duration.ofSeconds(
+                                                                                       parameters.getTimeout()
+                                                                                                 .getSeconds(),
+                                                                                       parameters.getTimeout()
+                                                                                                 .getNanos()));
+        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
 
-        ControlledIdentifierMember member;
-        final var from = (SelfAddressingIdentifier) Identifier.from(parameters.getMember());
-        try {
-            member = new ControlledIdentifierMember(stereotomy.controlOf(from).get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            domain = null;
-            return;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("Cannot acquire member: %s : %s".formatted(from, e.toString()),
-                                            e.getCause());
-        }
-
-        context.activate(member);
-
-        log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress, member.getId());
-
-        enclave = new Enclave(member, new DomainSocketAddress(outerContextAddress), exec,
-                              new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
-                              keepAlive, ctxId -> registerContext(ctxId));
-        domain = subdomainFrom(parameters, keepAlive, commDirectory, outerContextAddress, member, context, exec);
+        thoth = new Thoth(stereotomy);
     }
 
     @Override
@@ -186,20 +173,42 @@ public class DemesneImpl implements Demesne {
 
     @Override
     public void commit(EventCoords coordinates) {
-        // TODO Auto-generated method stub
+        thoth.commit(EventCoordinates.from(coordinates));
+        final var commDirectory = commDirectory();
+        var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
 
+        context.activate(thoth.member());
+
+        log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress,
+                 thoth.member().getId());
+        final var kpa = parameters.getKeepAlive();
+        Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
+                                                  : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
+
+        enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress), exec,
+                              new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
+                              keepAlive, ctxId -> registerContext(ctxId));
+        domain = subdomainFrom(parameters, keepAlive, commDirectory, outerContextAddress, thoth.member(), context,
+                               exec);
     }
 
     @Override
-    public InceptionEvent inception(Ident identifier) {
-        // TODO Auto-generated method stub
-        return null;
+    public DelegatedInceptionEvent inception(Ident id, Builder<SelfAddressingIdentifier> specification) {
+        var identifier = (SelfAddressingIdentifier) Identifier.from(id);
+        return thoth.inception(identifier, specification);
     }
 
     @Override
-    public RotationEvent rotate() {
-        // TODO Auto-generated method stub
-        return null;
+    public DelegatedRotationEvent rotate(RotationSpecification.Builder specification) {
+        try {
+            return thoth.rotate(specification).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            log.error("Unable to rotate member: {}", thoth.member().getId(), e.getCause());
+            return null;
+        }
     }
 
     @Override
@@ -207,7 +216,11 @@ public class DemesneImpl implements Demesne {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        domain.start();
+        if (domain == null) {
+            log.error("Inception has not occurred");
+        } else {
+            domain.start();
+        }
     }
 
     @Override
@@ -232,6 +245,11 @@ public class DemesneImpl implements Demesne {
             }
         });
         leaving.forEach(id -> domain.getContext().remove(id));
+    }
+
+    private Path commDirectory() {
+        return Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
+                                                               : parameters.getCommDirectory());
     }
 
     private CachingKERL kerlFrom(File address) {
