@@ -27,7 +27,6 @@ message DemesneParameters {
     apollo.choam.FoundationSeal foundation = 6;
     google.protobuf.Duration timeout = 7;
     string loggingConfig = 8;
-    stereotomy.IdentifierSpec specification = 9;
 }
 
 message ViewChange {

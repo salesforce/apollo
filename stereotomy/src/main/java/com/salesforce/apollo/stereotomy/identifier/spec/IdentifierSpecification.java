@@ -404,6 +404,19 @@ public class IdentifierSpecification<D extends Identifier> {
         this.signatureAlgorithm = signatureAlgorithm;
     }
 
+    @Override
+    public Builder<D> clone() {
+        Object clone;
+        try {
+            clone = super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new IllegalStateException("Clone not supported", e);
+        }
+        @SuppressWarnings("unchecked")
+        final var cast = (Builder<D>) clone;
+        return cast;
+    }
+
     public Set<ConfigurationTrait> getConfigurationTraits() {
         return configurationTraits;
     }

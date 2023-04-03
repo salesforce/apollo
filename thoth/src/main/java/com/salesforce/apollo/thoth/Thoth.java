@@ -113,7 +113,7 @@ public class Thoth {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (ExecutionException e) {
-                log.error("Unable to commit inception", e.getCause());
+                log.error("Unable to create inception", e.getCause());
             }
         };
     }

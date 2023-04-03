@@ -16,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.model.proto.Request;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.archipelago.Portal;
@@ -43,7 +45,9 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
@@ -60,6 +64,7 @@ import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -167,11 +172,12 @@ public class ProcessDomain extends Domain {
     }
 
     public CompletableFuture<SelfAddressingIdentifier> spawn(DemesneParameters.Builder prototype) {
-        var parameters = prototype.clone()
-                                  .setCommDirectory(communicationsDirectory.toString())
-                                  .setPortal(portalEndpoint.path())
-                                  .setParent(outerContextEndpoint.path())
-                                  .build();
+        final var witness = member.getIdentifier().newEphemeral().get();
+        final var cloned = prototype.clone();
+        var parameters = cloned.setCommDirectory(communicationsDirectory.toString())
+                               .setPortal(portalEndpoint.path())
+                               .setParent(outerContextEndpoint.path())
+                               .build();
         var ctxId = Digest.from(parameters.getContext());
         final AtomicBoolean added = new AtomicBoolean();
         final var demesne = new JniBridge(parameters);
@@ -180,19 +186,26 @@ public class ProcessDomain extends Domain {
             return demesne;
         });
         if (added.get()) {
-            var incp = demesne.inception(member.getIdentifier().getIdentifier().toIdent(), subDomainSpecification);
-
+            var newSpec = subDomainSpecification.clone();
+            // the receiver is a witness to the sub domain's delegated key
+            var newWitnesses = new ArrayList<>(subDomainSpecification.getWitnesses());
+            newWitnesses.add(new BasicIdentifier(witness.getPublic()));
+            newSpec.setWitnesses(newWitnesses);
+            var incp = demesne.inception(member.getIdentifier().getIdentifier().toIdent(), newSpec);
+            var sigs = new HashMap<Integer, JohnHancock>();
+            sigs.put(0, new Signer.SignerImpl(witness.getPrivate()).sign(incp.toKeyEvent_().toByteString()));
+            var attached = new com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl(sigs);
             var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(dht.digestAlgorithm()),
                                                 incp.getSequenceNumber().longValue());
-
             var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
-
-            // Commit
-            return member.getIdentifier()
-                         .seal(builder)
-                         .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
-                         .thenAccept(v -> demesne.start())
-                         .thenApply(v -> (SelfAddressingIdentifier) incp.getIdentifier());
+            return dht.append(AttachmentEvent.newBuilder()
+                                             .setCoordinates(incp.getCoordinates().toEventCoords())
+                                             .setAttachment(attached.toAttachemente())
+                                             .build())
+                      .thenCompose(ks -> member.getIdentifier().seal(builder))
+                      .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
+                      .thenAccept(v -> demesne.start())
+                      .thenApply(v -> (SelfAddressingIdentifier) incp.getIdentifier());
         }
         var returned = new CompletableFuture<SelfAddressingIdentifier>();
         returned.complete(computed.getId());
