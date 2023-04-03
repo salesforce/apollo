@@ -16,6 +16,7 @@ import org.scijava.nativelib.NativeLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -27,6 +28,7 @@ import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -54,6 +56,8 @@ public class JniBridge implements Demesne {
     private static native void commit(long isolateId, byte[] eventCoordinates, int eventCoordinatesLen);
 
     private static native long createIsolate();
+
+    private static native byte[] id(long isolateId);
 
     private static native byte[] inception(long isolateId, byte[] identifier, int identifierLen, byte[] spec,
                                            int specLen);
@@ -91,6 +95,16 @@ public class JniBridge implements Demesne {
     public void commit(EventCoords coordinates) {
         var bytes = coordinates.toByteArray();
         commit(isolateId, bytes, bytes.length);
+    }
+
+    @Override
+    public SelfAddressingIdentifier getId() {
+        final var bytes = id(isolateId);
+        try {
+            return (SelfAddressingIdentifier) Identifier.from(Ident.parseFrom(bytes));
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException("Cannot get sub domain id", e);
+        }
     }
 
     @Override

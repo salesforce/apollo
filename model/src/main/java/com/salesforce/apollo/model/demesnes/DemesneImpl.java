@@ -193,6 +193,11 @@ public class DemesneImpl implements Demesne {
     }
 
     @Override
+    public SelfAddressingIdentifier getId() {
+        return thoth.identifier();
+    }
+
+    @Override
     public DelegatedInceptionEvent inception(Ident id, Builder<SelfAddressingIdentifier> specification) {
         var identifier = (SelfAddressingIdentifier) Identifier.from(id);
         return thoth.inception(identifier, specification);

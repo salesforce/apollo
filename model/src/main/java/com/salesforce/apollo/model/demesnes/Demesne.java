@@ -30,6 +30,8 @@ public interface Demesne {
 
     void commit(EventCoords coordinates);
 
+    SelfAddressingIdentifier getId();
+
     DelegatedInceptionEvent inception(Ident identifier, Builder<SelfAddressingIdentifier> specification);
 
     DelegatedRotationEvent rotate(RotationSpecification.Builder specification);

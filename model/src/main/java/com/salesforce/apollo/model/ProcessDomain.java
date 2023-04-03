@@ -16,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +59,10 @@ import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.KerlDHT;
 
@@ -163,7 +166,7 @@ public class ProcessDomain extends Domain {
         return member.getIdentifier().provision(Instant.now(), duration, signatureAlgorithm);
     }
 
-    public void spawn(DemesneParameters.Builder prototype) {
+    public CompletableFuture<SelfAddressingIdentifier> spawn(DemesneParameters.Builder prototype) {
         var parameters = prototype.clone()
                                   .setCommDirectory(communicationsDirectory.toString())
                                   .setPortal(portalEndpoint.path())
@@ -172,14 +175,28 @@ public class ProcessDomain extends Domain {
         var ctxId = Digest.from(parameters.getContext());
         final AtomicBoolean added = new AtomicBoolean();
         final var demesne = new JniBridge(parameters);
-        hostedDomains.computeIfAbsent(ctxId, k -> {
+        var computed = hostedDomains.computeIfAbsent(ctxId, k -> {
             added.set(true);
             return demesne;
         });
         if (added.get()) {
-            demesne.inception(member.getIdentifier().getIdentifier().toIdent(), subDomainSpecification);
-            demesne.start();
+            var incp = demesne.inception(member.getIdentifier().getIdentifier().toIdent(), subDomainSpecification);
+
+            var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(dht.digestAlgorithm()),
+                                                incp.getSequenceNumber().longValue());
+
+            var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
+
+            // Commit
+            return member.getIdentifier()
+                         .seal(builder)
+                         .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
+                         .thenAccept(v -> demesne.start())
+                         .thenApply(v -> (SelfAddressingIdentifier) incp.getIdentifier());
         }
+        var returned = new CompletableFuture<SelfAddressingIdentifier>();
+        returned.complete(computed.getId());
+        return returned;
     }
 
     @Override
