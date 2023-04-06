@@ -21,7 +21,6 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -110,7 +109,7 @@ public class JniBridge implements Demesne {
     @Override
     public DelegatedInceptionEvent inception(Ident identifier, Builder<SelfAddressingIdentifier> specification) {
         final var ident = identifier.toByteString().toByteArray();
-        final var spec = IdentifierSpec.newBuilder().build().toByteString().toByteArray();
+        final var spec = specification.toSpec().toByteArray();
         var bytes = inception(isolateId, ident, ident.length, spec, spec.length);
         return (DelegatedInceptionEvent) ProtobufEventFactory.toKeyEvent(bytes, KeyEvent.DELEGATED_INCEPTION_TYPE);
     }

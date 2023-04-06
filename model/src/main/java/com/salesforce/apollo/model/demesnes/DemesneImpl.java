@@ -233,7 +233,9 @@ public class DemesneImpl implements Demesne {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        domain.stop();
+        if (domain != null) {
+            domain.stop();
+        }
     }
 
     @Override

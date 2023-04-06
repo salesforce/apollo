@@ -718,12 +718,10 @@
                             </goals>
                             <configuration>
                                 <sources>
-                                    <source>${project.basedir}/src/main/antlr4</source>
                                     <source>${project.basedir}/src/main/proto</source>
                                     <source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
                                     <source>${project.basedir}/target/generated-sources/protobuf/java</source>
                                     <source>${project.basedir}/target/generated-sources/jooq</source>
-                                    <source>${project.basedir}/target/generated-sources/antlr4</source>
                                 </sources>
                             </configuration>
                         </execution>
@@ -760,18 +758,6 @@
                                 <goal>compile-custom</goal>
                                 <goal>test-compile</goal>
                                 <goal>test-compile-custom</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <groupId>org.antlr</groupId>
-                    <artifactId>antlr4-maven-plugin</artifactId>
-                    <version>${antlr4.version}</version>
-                    <executions>
-                        <execution>
-                            <goals>
-                                <goal>antlr4</goal>
                             </goals>
                         </execution>
                     </executions>
