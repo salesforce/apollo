@@ -293,12 +293,6 @@
              {"name":"newBuilder","parameterTypes":[] }]
 },
 {
-  "name":"com.salesfoce.apollo.utils.proto.Sig$Builder",
-  "queryAllDeclaredMethods":true,
-  "queryAllPublicConstructors":true,
-  "methods":[{"name":"newBuilder","parameterTypes":[] }]
-},
-{
   "name":"com.salesfoce.apollo.utils.proto.PubKey",
   "allDeclaredMethods":true,
   "allDeclaredConstructors":true,

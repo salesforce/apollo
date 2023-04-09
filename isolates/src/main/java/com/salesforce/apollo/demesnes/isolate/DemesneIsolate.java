@@ -32,6 +32,7 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
@@ -149,7 +150,6 @@ public class DemesneIsolate {
                                                               .getGetByteArrayElements()
                                                               .call(jniEnv, spec, false),
                                                         specLen);
-            log.error("identifier buffer: {} specification buffer: {}", identBuff, specBuff);
             Ident identifier;
             try {
                 identifier = Ident.parseFrom(identBuff);
@@ -157,28 +157,23 @@ public class DemesneIsolate {
                 log.error("Unable to parse inception specification", e);
                 return jniEnv.getFunctions().getNewByteArray().call(jniEnv, 0);
             }
-            log.error("Demesne Identifier: {}", identifier);
             IdentifierSpecification.Builder<SelfAddressingIdentifier> specification;
-//            try {
-//                final var identSpec = IdentifierSpec.parseFrom(specBuff);
-//                log.error("Identifier spec: {}", identSpec);
-//                specification = IdentifierSpecification.Builder.from(identSpec);
-            specification = IdentifierSpecification.newBuilder();
-//            } catch (InvalidProtocolBufferException e) {
-//                log.error("Unable to parse inception specification", e);
-//                return CTypeConversion.toCBytes(new byte[0]).get();
-//            }
+            try {
+                specification = IdentifierSpecification.Builder.from(IdentifierSpec.parseFrom(specBuff));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to parse inception specification", e);
+                return jniEnv.getFunctions().getNewByteArray().call(jniEnv, 0);
+            }
             final var inception = d.inception(identifier, specification);
-            log.error("Inception: {}", inception);
+            log.info("Inception: {}", inception);
             final var bytes = inception.getBytes();
             final var returnArray = jniEnv.getFunctions().getNewByteArray().call(jniEnv, bytes.length);
             final var buf = CTypeConversion.toCBytes(bytes);
             jniEnv.getFunctions().getSetByteArrayRegion().call(jniEnv, returnArray, 0, bytes.length, buf.get());
             return returnArray;
         }
-        log.error("No Demesne");
-        final var returnArray = jniEnv.getFunctions().getNewByteArray().call(jniEnv, 0);
-        return returnArray;
+        log.error("No Demesne!");
+        return jniEnv.getFunctions().getNewByteArray().call(jniEnv, 0);
     }
 
     private static void launch(JNIEnvironment jniEnv, ByteBuffer data, JClass clazz) throws GeneralSecurityException,

@@ -1,9 +1,5 @@
 [
 {
-  "name":"com.salesforce.apollo.demesnes.DemesneSmoke",
-  "methods":[{"name":"main","parameterTypes":["java.lang.String[]"] }]
-},
-{
   "name":"io.netty.channel.ChannelException"
 },
 {
