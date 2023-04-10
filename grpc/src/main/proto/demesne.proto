@@ -14,10 +14,6 @@ import "util.proto";
 
 package apollo.demesne;
 
-service DemesneNet {
-    rpc gossip (google.protobuf.Empty) returns (google.protobuf.Empty) {}
-}
-
 message DemesneParameters {
     string commDirectory = 1;
     string portal = 2; 
@@ -27,6 +23,8 @@ message DemesneParameters {
     apollo.choam.FoundationSeal foundation = 6;
     google.protobuf.Duration timeout = 7;
     string loggingConfig = 8;
+    google.protobuf.Duration gossipInterval = 9;
+    int32 virtualThreads = 10;
 }
 
 message ViewChange {
@@ -43,4 +41,26 @@ service OuterContext {
 message SubContext {
     utils.Digeste enclave = 1;
     utils.Digeste context = 2;
+}
+
+message DelegationUpdate {
+    int32 ring = 1;
+    utils.Biff have = 2;
+    repeated SignedDelegate update = 3;
+}
+
+message Delegate {
+    int64 view = 1;
+    stereotomy.Ident delegator = 2;
+    stereotomy.Ident delegate = 3;
+}
+
+message SignedDelegate {
+    Delegate delegate = 1;
+    utils.Sig signature = 2;
+}
+
+service Delegation {
+    rpc gossip( utils.Biff ) returns (DelegationUpdate) {}
+    rpc update( DelegationUpdate ) returns (google.protobuf.Empty) {}
 }

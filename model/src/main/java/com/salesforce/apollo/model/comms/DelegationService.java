@@ -6,16 +6,16 @@
  */
 package com.salesforce.apollo.model.comms;
 
-import com.salesfoce.apollo.model.proto.Request;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
+import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Signer {
+public interface DelegationService {
+    DelegationUpdate gossip(Biff identifiers, Digest from);
 
-    Sig sign(Request request, Digest from);
-
+    void update(DelegationUpdate update, Digest from);
 }

@@ -12,9 +12,6 @@
 			<column name="identifier" type="INT8">
 				<constraints nullable="false" primaryKey="true" />
 			</column>
-            <column name="delegator" type="INT8">
-                <constraints nullable="false"  />
-            </column>
 		</createTable>
 
 		<addForeignKeyConstraint onDelete="CASCADE"
@@ -23,16 +20,5 @@
 			constraintName="member_identifier_fk"
 			referencedTableName="identifier" referencedColumnNames="id"
 			referencedTableSchemaName="stereotomy" />
-
-        <addForeignKeyConstraint onDelete="CASCADE"
-            baseColumnNames="identifier" baseTableName="member"
-            baseTableSchemaName="apollo_kernel"
-            constraintName="member_delegator_fk"
-            referencedTableName="identifier" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-
-        <addUniqueConstraint
-            columnNames="identifier, delegator"
-            tableName="member" schemaName="apollo_kernel"  constraintName="unique_member_identifier_delegator"/>
 	</changeSet>
 </databaseChangeLog>

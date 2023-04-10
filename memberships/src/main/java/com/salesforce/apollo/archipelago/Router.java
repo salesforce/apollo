@@ -226,9 +226,10 @@ public class Router {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
     }
 
-    public <Service> CommonCommunications<Link, Service> create(Member member, Digest context, Service service,
-                                                                String routingLabel,
-                                                                Function<RoutableService<Service>, BindableService> factory) {
+    public <Service, Client extends Link> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                       Service service,
+                                                                                       String routingLabel,
+                                                                                       Function<RoutableService<Service>, BindableService> factory) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
             var route = new RoutableService<Service>(executor);
@@ -239,7 +240,7 @@ public class Router {
         routing.bind(context, service);
         contextRegistration.accept(context);
         log.info("Communications created for: " + member.getId());
-        return new CommonCommunications<Link, Service>(context, member, routing);
+        return new CommonCommunications<Client, Service>(context, member, routing);
     }
 
     public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,

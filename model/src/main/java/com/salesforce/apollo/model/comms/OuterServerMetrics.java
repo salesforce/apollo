@@ -14,18 +14,26 @@ import com.salesforce.apollo.protocols.EndpointMetrics;
  * @author hal.hildebrand
  *
  */
-public interface SigningMetrics extends EndpointMetrics {
+public interface OuterServerMetrics extends EndpointMetrics {
+
+    Timer gossip();
 
     Meter inboundDeregister();
 
-    Meter inboundRegister();
+    Meter inboundGossip();
 
-    Meter inboundRequest();
+    Meter inboundRegister();
 
     Timer inboundSign();
 
-    Meter inboundSignature();
+    Meter inboundUpdate();
 
-    Meter outboundRequest();
+    Meter outboundGossip();
+
+    Meter outboundUpdate();
+
+    Timer updateInbound();
+
+    Timer updateOutbound();
 
 }

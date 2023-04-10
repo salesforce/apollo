@@ -678,7 +678,7 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
-        this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
+        this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
         executions = Utils.newVirtualThreadPerTaskExecutor();
 

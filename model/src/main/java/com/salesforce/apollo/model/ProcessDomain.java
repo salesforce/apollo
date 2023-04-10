@@ -34,12 +34,9 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.model.proto.Request;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.archipelago.Portal;
-import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
@@ -55,7 +52,6 @@ import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.model.comms.SigningServer;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.JniBridge;
 import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
@@ -68,7 +64,6 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.KerlDHT;
 
 import io.grpc.BindableService;
@@ -153,7 +148,6 @@ public class ProcessDomain extends Domain {
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
                                                 .protocolNegotiator(new DomainSocketNegotiator())
                                                 .channelType(getServerDomainSocketChannelClass())
-                                                .addService(signingService())
                                                 .addService(new DemesneKERLServer(dht, null))
                                                 .addService(outerContextService())
                                                 .workerEventLoopGroup(contextEventLoopGroup)
@@ -310,19 +304,6 @@ public class ProcessDomain extends Domain {
 //                routes.put("",qb64(Digest.from(context)));
             }
         }, null);
-    }
-
-    private BindableService signingService() {
-        RoutableService<ProtoKERLService> router = new RoutableService<>(params.exec());
-        router.bind(foundation.getContext().getId(), dht);
-        return new SigningServer(new com.salesforce.apollo.model.comms.Signer() {
-
-            @Override
-            public Sig sign(Request request, Digest from) {
-                // TODO Auto-generated method stub
-                return null;
-            }
-        }, null, null);
     }
 
     private void startServices() {

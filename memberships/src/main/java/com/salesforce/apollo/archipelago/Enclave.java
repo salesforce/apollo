@@ -12,9 +12,7 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
-import java.time.Duration;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -69,14 +67,12 @@ public class Enclave implements RouterSupplier {
     private final Executor            executor;
     private final Member              from;
     private final String              fromString;
-    private final Duration            keepAlive;
 
     public Enclave(Member from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
-                   Duration keepAlive, Consumer<Digest> contextRegistration) {
+                   Consumer<Digest> contextRegistration) {
         this.bridge = bridge;
         this.executor = executor;
         this.endpoint = endpoint;
-        this.keepAlive = keepAlive;
         this.contextRegistration = contextRegistration;
         this.from = from;
         this.fromString = qb64(from.getId());
@@ -138,7 +134,6 @@ public class Enclave implements RouterSupplier {
         final var builder = NettyChannelBuilder.forAddress(bridge)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)
-                                               .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
                                                .usePlaintext()
                                                .executor(executor)
                                                .intercept(clientInterceptor);

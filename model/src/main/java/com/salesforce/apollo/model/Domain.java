@@ -90,11 +90,7 @@ abstract public class Domain {
                             .returning(IDENTIFIER.ID)
                             .fetchOne();
             if (id != null) {
-                context.insertInto(MEMBER)
-                       .set(MEMBER.IDENTIFIER, id.value1())
-                       .set(MEMBER.DELEGATOR, id.value1())
-                       .onConflictDoNothing()
-                       .execute();
+                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
             }
         }
     }

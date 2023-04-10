@@ -137,6 +137,7 @@
                                 <buildArg>--initialize-at-build-time=org.bouncycastle</buildArg>
                                 <buildArg>--initialize-at-build-time=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
                                 <buildArg>--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder</buildArg>
+                                <buildArg>--initialize-at-build-time=org.h2.mvstore.FilePath</buildArg>
                                 <buildArg>--initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils</buildArg>
                                 <buildArg>--initialize-at-run-time=org.jooq.impl.Convert$_JSON</buildArg>
                                 <buildArg>--initialize-at-run-time=org.jooq.tools.Convert</buildArg>

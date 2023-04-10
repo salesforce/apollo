@@ -206,7 +206,7 @@ public class EnclaveTest {
                                         s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1), router);
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
+        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, d -> {
             routes.put(qb64(d), endpoint1);
         });
         var router1 = enclave1.router(exec);
@@ -215,7 +215,7 @@ public class EnclaveTest {
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
+        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> {
             routes.put(qb64(d), endpoint2);
         });
         var router2 = enclave2.router(exec);

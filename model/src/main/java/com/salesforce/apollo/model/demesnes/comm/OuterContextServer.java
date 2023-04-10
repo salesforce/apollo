@@ -11,7 +11,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.demesne.proto.OuterContextGrpc.OuterContextImplBase;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.model.comms.SigningMetrics;
+import com.salesforce.apollo.model.comms.OuterServerMetrics;
 
 import io.grpc.stub.StreamObserver;
 
@@ -21,10 +21,10 @@ import io.grpc.stub.StreamObserver;
  */
 public class OuterContextServer extends OuterContextImplBase {
 
-    private final SigningMetrics      metrics;
+    private final OuterServerMetrics      metrics;
     private final OuterContextService service;
 
-    public OuterContextServer(OuterContextService service, SigningMetrics metrics) {
+    public OuterContextServer(OuterContextService service, OuterServerMetrics metrics) {
         this.service = service;
         this.metrics = metrics;
     }

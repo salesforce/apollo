@@ -231,16 +231,14 @@ public class DemesneTest {
                                         s -> routes.get(s));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1),
-                                   d -> routes.put(qb64(d), endpoint1));
+        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, d -> routes.put(qb64(d), endpoint1));
         var router1 = enclave1.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
                                                                                    "A", r -> new Server(r),
                                                                                    c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1),
-                                   d -> routes.put(qb64(d), endpoint2));
+        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> routes.put(qb64(d), endpoint2));
         var router2 = enclave2.router(exec);
         Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
                                                                                    "B", r -> new Server(r),

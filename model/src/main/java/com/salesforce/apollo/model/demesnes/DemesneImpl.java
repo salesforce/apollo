@@ -121,13 +121,16 @@ public class DemesneImpl implements Demesne {
         }
     }
 
-    private static final Class<? extends Channel> channelType    = getChannelType();
-    private static final EventLoopGroup           eventLoopGroup = getEventLoopGroup();
-    private static final Logger                   log            = LoggerFactory.getLogger(DemesneImpl.class);
+    private static final Class<? extends Channel> channelType = getChannelType();
 
-    private Context<Member>          context;
-    private SubDomain                domain;
-    private Enclave                  enclave;
+    private static final Duration       DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
+    private static final int            DEFAULT_VIRTUAL_THREADS = 5;
+    private static final EventLoopGroup eventLoopGroup          = getEventLoopGroup();
+    private static final Logger         log                     = LoggerFactory.getLogger(DemesneImpl.class);
+
+    private volatile Context<Member> context;
+    private volatile SubDomain       domain;
+    private volatile Enclave         enclave;
     private final ExecutorService    exec;
     private final KERL               kerl;
     private final OuterContextClient outer;
@@ -168,7 +171,8 @@ public class DemesneImpl implements Demesne {
 
     @Override
     public boolean active() {
-        return domain == null ? false : domain.active();
+        final var current = domain;
+        return current == null ? false : current.active();
     }
 
     @Override
@@ -181,15 +185,11 @@ public class DemesneImpl implements Demesne {
 
         log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress,
                  thoth.member().getId());
-        final var kpa = parameters.getKeepAlive();
-        Duration keepAlive = !kpa.isInitialized() ? Duration.ofMillis(1)
-                                                  : Duration.ofSeconds(kpa.getSeconds(), kpa.getNanos());
 
         enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress), exec,
                               new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
-                              keepAlive, ctxId -> registerContext(ctxId));
-        domain = subdomainFrom(parameters, keepAlive, commDirectory, outerContextAddress, thoth.member(), context,
-                               exec);
+                              ctxId -> registerContext(ctxId));
+        domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context, exec);
     }
 
     @Override
@@ -221,10 +221,11 @@ public class DemesneImpl implements Demesne {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        if (domain == null) {
+        final var current = domain;
+        if (current == null) {
             log.error("Inception has not occurred");
         } else {
-            domain.start();
+            current.start();
         }
     }
 
@@ -233,25 +234,27 @@ public class DemesneImpl implements Demesne {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        if (domain != null) {
-            domain.stop();
+        final var current = domain;
+        if (current != null) {
+            current.stop();
         }
     }
 
     @Override
     public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
+        final var current = domain;
         joining.forEach(coords -> {
             EstablishmentEvent keyEvent;
             try {
                 keyEvent = kerl.getKeyState(coords).thenApply(ke -> (EstablishmentEvent) ke).get();
-                domain.activate(new IdentifierMember(keyEvent));
+                current.activate(new IdentifierMember(keyEvent));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (ExecutionException e) {
                 log.error("Error retrieving last establishment event for: {}", coords, e.getCause());
             }
         });
-        leaving.forEach(id -> domain.getContext().remove(id));
+        leaving.forEach(id -> current.getContext().remove(id));
     }
 
     private Path commDirectory() {
@@ -291,7 +294,6 @@ public class DemesneImpl implements Demesne {
                                                          .intercept(clientInterceptor(context.getId()))
                                                          .eventLoopGroup(eventLoopGroup)
                                                          .channelType(channelType)
-                                                         .keepAliveTime(1, TimeUnit.SECONDS)
                                                          .usePlaintext()
                                                          .build(),
                                       null);
@@ -304,29 +306,40 @@ public class DemesneImpl implements Demesne {
                                  .build());
     }
 
-    private SubDomain subdomainFrom(DemesneParameters parameters, Duration keepAlive, final Path commDirectory,
-                                    final File address, ControlledIdentifierMember member, Context<Member> context,
-                                    ExecutorService exec) {
-        return new SubDomain(member, Parameters.newBuilder(),
-                             RuntimeParameters.newBuilder()
-                                              .setCommunications(enclave.router(exec))
-                                              .setExec(exec)
-                                              .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                             Thread.ofVirtual()
-                                                                                                   .factory()))
-                                              .setKerl(() -> {
-                                                  try {
-                                                      return member.kerl().get();
-                                                  } catch (InterruptedException e) {
-                                                      Thread.currentThread().interrupt();
-                                                      return null;
-                                                  } catch (ExecutionException e) {
-                                                      throw new IllegalStateException(e.getCause());
-                                                  }
-                                              })
-                                              .setContext(context)
-                                              .setFoundation(parameters.getFoundation()),
-                             new TransactionConfiguration(exec, Executors.newScheduledThreadPool(5, Thread.ofVirtual()
-                                                                                                          .factory())));
+    private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
+                                                        Context<Member> context, ExecutorService exec) {
+        final var current = enclave;
+        return RuntimeParameters.newBuilder()
+                                .setCommunications(current.router(exec))
+                                .setExec(exec)
+                                .setScheduler(Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
+                                                                                                                   : parameters.getVirtualThreads(),
+                                                                               Thread.ofVirtual().factory()))
+                                .setKerl(() -> {
+                                    try {
+                                        return member.kerl().get();
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        return null;
+                                    } catch (ExecutionException e) {
+                                        throw new IllegalStateException(e.getCause());
+                                    }
+                                })
+                                .setContext(context)
+                                .setFoundation(parameters.getFoundation());
+    }
+
+    private SubDomain subdomainFrom(DemesneParameters parameters, final Path commDirectory, final File address,
+                                    ControlledIdentifierMember member, Context<Member> context, ExecutorService exec) {
+        final var gossipInterval = parameters.getGossipInterval();
+        final var interval = gossipInterval.getSeconds() != 0 ||
+                             gossipInterval.getNanos() != 0 ? Duration.ofSeconds(gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
+        return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context, exec),
+                             new TransactionConfiguration(exec,
+                                                          Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
+                                                                                                                               : parameters.getVirtualThreads(),
+                                                                                           Thread.ofVirtual()
+                                                                                                 .factory())),
+                             interval);
     }
 }
