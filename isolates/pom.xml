@@ -136,8 +136,7 @@
                                 <buildArg>--initialize-at-build-time=org.slf4j.LoggerFactory</buildArg>
                                 <buildArg>--initialize-at-build-time=org.bouncycastle</buildArg>
                                 <buildArg>--initialize-at-build-time=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
-                                <buildArg>--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder</buildArg>
-                                <buildArg>--initialize-at-build-time=org.h2.mvstore.FilePath</buildArg>
+                                <buildArg>--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder</buildArg>  
                                 <buildArg>--initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils</buildArg>
                                 <buildArg>--initialize-at-run-time=org.jooq.impl.Convert$_JSON</buildArg>
                                 <buildArg>--initialize-at-run-time=org.jooq.tools.Convert</buildArg>
@@ -151,6 +150,7 @@
                                 <buildArg>--initialize-at-run-time=io.netty.channel.unix.Limits</buildArg>
                                 <buildArg>--initialize-at-run-time=io.netty.channel.unix.Socket</buildArg>
                                 <buildArg>--initialize-at-run-time=com.salesforce.apollo.domain.Demesne</buildArg>
+                                <buildArg>--initialize-at-run-time=org.h2.store.fs.FilePath</buildArg>
                                 <buildArg>--trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper</buildArg>
                                 <buildArg>--trace-object-instantiation=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
                                 <buildArg>--trace-class-initialization=jakarta.xml.bind.ContextFinder</buildArg>

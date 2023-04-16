@@ -125,7 +125,7 @@ abstract public class Domain {
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
         Path dir;
         try {
-            dir = Files.createTempDirectory(id.getDigest().toString());
+            dir = Files.createTempDirectory(qb64(id.getDigest()));
         } catch (IOException e) {
             throw new IllegalStateException("Unable to create temporary directory", e);
         }
@@ -178,6 +178,8 @@ abstract public class Domain {
                                         txnConfig.executor());
         this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
                                           params.getDigestAlgorithm(), txnConfig.executor());
+        log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
+                 member.getId(), dbURL, checkpointBaseDir);
     }
 
     public boolean activate(Member m) {

@@ -78,7 +78,8 @@ public class SubDomain extends Domain {
         super(member, prm, dbURL, checkpointBaseDir, runtime, txnConfig);
         final var identifier = qb64(member.getId());
         final var builder = params.mvBuilder().clone();
-        store = builder.setFileName(checkpointBaseDir.resolve(identifier).toFile()).build();
+        builder.setFileName(checkpointBaseDir.resolve(identifier).toFile());
+        store = builder.build();
         delegates = store.openMap(DELEGATES_MAP_TEMPLATE.formatted(identifier));
         delegations = store.openMap(DELEGATIONS_MAP_TEMPLATE.formatted(identifier));
         comms = params.communications()
