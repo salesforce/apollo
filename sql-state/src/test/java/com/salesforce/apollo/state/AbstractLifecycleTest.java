@@ -44,7 +44,7 @@ import org.junit.jupiter.api.BeforeEach;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
@@ -109,7 +109,7 @@ abstract public class AbstractLifecycleTest {
     protected CountDownLatch                     checkpointOccurred;
     protected Map<Digest, CHOAM>                 choams;
     protected List<SigningMember>                members;
-    protected Map<Digest, Router>                routers;
+    protected Map<Digest, RouterImpl>                routers;
     protected SigningMember                      testSubject;
     protected int                                toleranceLevel;
     protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();

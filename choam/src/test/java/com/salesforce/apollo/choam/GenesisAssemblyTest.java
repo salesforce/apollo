@@ -40,7 +40,7 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -120,7 +120,7 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
+        Map<Member, RouterImpl> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
             var comm = new LocalServer(prefix, m, Executors.newSingleThreadExecutor()).router( ServerConnectionCache.newBuilder(),
                                        Executors.newSingleThreadExecutor());
             return comm;
@@ -141,7 +141,7 @@ public class GenesisAssemblyTest {
                                                                                                           servers.get(m)))));
         committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
-            Router router = communications.get(m);
+            RouterImpl router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
                                                       .setExec(Executors.newFixedThreadPool(2))

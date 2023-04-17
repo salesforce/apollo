@@ -15,9 +15,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
-import com.salesforce.apollo.archipelago.Router.ServiceRouting;
+import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
@@ -56,7 +56,7 @@ public class Publisher implements ProtoEventObserver {
     private final ProtoKERLAdapter                                          kerl;
     private final EventObserver                                             service;
 
-    public Publisher(SigningMember member, ProtoKERLAdapter kerl, Router router, Digest context) {
+    public Publisher(SigningMember member, ProtoKERLAdapter kerl, RouterImpl router, Digest context) {
         this.kerl = kerl;
         this.context = context;
         service = new Service();

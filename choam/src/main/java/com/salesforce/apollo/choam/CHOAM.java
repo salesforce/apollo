@@ -67,7 +67,7 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Submitter;
 import com.salesforce.apollo.choam.comm.Terminal;

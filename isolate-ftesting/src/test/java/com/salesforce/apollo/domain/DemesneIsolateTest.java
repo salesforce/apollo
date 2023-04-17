@@ -26,6 +26,7 @@ import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
@@ -85,7 +86,7 @@ public class DemesneIsolateTest {
                                               .intercept(new DomainSocketServerInterceptor());
 
         var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
-        var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
+        Router router = new RouterImpl(serverMember, serverBuilder, cacheBuilder, null);
         router.start();
 
         var registered = new TreeSet<Digest>();

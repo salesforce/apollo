@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -39,8 +39,8 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
  */
 public class TestBinder {
 
-    private Router clientRouter;
-    private Router serverRouter;
+    private RouterImpl clientRouter;
+    private RouterImpl serverRouter;
 
     @AfterEach
     public void after() {

@@ -40,7 +40,7 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.EndpointProvider;
 import com.salesforce.apollo.archipelago.MtlsServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.archipelago.StandardEpProvider;
@@ -107,7 +107,7 @@ public class MtlsTest {
         });
     }
 
-    private List<Router> communications = new ArrayList<>();
+    private List<RouterImpl> communications = new ArrayList<>();
     private List<View>   views;
 
     @AfterEach
@@ -150,7 +150,7 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
+            RouterImpl comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
                                           Executors.newFixedThreadPool(2, Thread.ofVirtual().factory())).router(
                                                                                                                 builder,
                                                                                                                 Executors.newFixedThreadPool(2,

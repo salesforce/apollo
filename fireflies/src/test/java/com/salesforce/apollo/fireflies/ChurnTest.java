@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
@@ -80,8 +80,8 @@ public class ChurnTest {
                                                         controlled -> controlled, (a, b) -> a, TreeMap::new));
     }
 
-    private List<Router>                            communications = new ArrayList<>();
-    private List<Router>                            gateways       = new ArrayList<>();
+    private List<RouterImpl>                            communications = new ArrayList<>();
+    private List<RouterImpl>                            gateways       = new ArrayList<>();
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
@@ -219,8 +219,8 @@ public class ChurnTest {
 
         testViews.clear();
         List<View> c = new ArrayList<>(views);
-        List<Router> r = new ArrayList<>(communications);
-        List<Router> g = new ArrayList<>(gateways);
+        List<RouterImpl> r = new ArrayList<>(communications);
+        List<RouterImpl> g = new ArrayList<>(gateways);
         int delta = 5;
         for (int i = 0; i < (CARDINALITY / delta - 4); i++) {
             var removed = new ArrayList<Digest>();

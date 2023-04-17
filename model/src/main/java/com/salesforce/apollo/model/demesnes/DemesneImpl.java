@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.model.demesnes;
 
-import static com.salesforce.apollo.archipelago.Router.clientInterceptor;
+import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 

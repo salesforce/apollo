@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
@@ -65,7 +65,7 @@ public class MembershipTests {
 
     private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;
-    private Map<Digest, Router> routers;
+    private Map<Digest, RouterImpl> routers;
 
     @AfterEach
     public void after() throws Exception {

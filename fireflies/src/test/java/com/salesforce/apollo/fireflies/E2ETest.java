@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
@@ -83,8 +83,8 @@ public class E2ETest {
                                                         controlled -> controlled, (a, b) -> a, TreeMap::new));
     }
 
-    private List<Router>                            communications = new ArrayList<>();
-    private List<Router>                            gateways       = new ArrayList<>();
+    private List<RouterImpl>                            communications = new ArrayList<>();
+    private List<RouterImpl>                            gateways       = new ArrayList<>();
     private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;

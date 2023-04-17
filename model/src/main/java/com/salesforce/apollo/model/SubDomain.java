@@ -27,7 +27,7 @@ import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
 import com.salesfoce.apollo.demesne.proto.SignedDelegate;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.crypto.Digest;

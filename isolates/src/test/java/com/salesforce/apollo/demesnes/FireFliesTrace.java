@@ -29,7 +29,7 @@ import java.util.stream.IntStream;
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -180,7 +180,7 @@ public class FireFliesTrace {
     private final List<ProcessDomain> domains = new ArrayList<>();
     private ExecutorService           exec    = Executors.newVirtualThreadPerTaskExecutor();
 
-    private final Map<ProcessDomain, Router> routers = new HashMap<>();
+    private final Map<ProcessDomain, RouterImpl> routers = new HashMap<>();
 
     public void after() {
         domains.forEach(n -> n.stop());
