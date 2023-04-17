@@ -122,11 +122,17 @@
   "bundles":[
     {
       "name":"com.sun.org.apache.xerces.internal.impl.xpath.regex.message",
-      "locales":["und"]
+      "locales":[
+        "", 
+        "und"
+      ]
     }, 
     {
       "name":"com/sun/rowset/RowSetResourceBundle",
-      "locales":["und"]
+      "locales":[
+        "", 
+        "und"
+      ]
     }, 
     {
       "name":"liquibase/i18n/liquibase-core",

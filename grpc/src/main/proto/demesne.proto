@@ -25,6 +25,8 @@ message DemesneParameters {
     string loggingConfig = 8;
     google.protobuf.Duration gossipInterval = 9;
     int32 virtualThreads = 10;
+    double falsePositiveRate = 11;
+    int32 maxTransfer = 12;
 }
 
 message ViewChange {
@@ -51,8 +53,8 @@ message DelegationUpdate {
 
 message Delegate {
     int64 view = 1;
-    stereotomy.Ident delegator = 2;
-    stereotomy.Ident delegate = 3;
+    utils.Digeste delegator = 2;
+    utils.Digeste delegate = 3;
 }
 
 message SignedDelegate {

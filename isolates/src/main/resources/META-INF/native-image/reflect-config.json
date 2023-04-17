@@ -708,8 +708,7 @@
   "allPublicClasses":true,
   "queryAllDeclaredMethods":true,
   "queryAllPublicMethods":true,
-  "queryAllPublicConstructors":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
+  "queryAllPublicConstructors":true
 },
 {
   "name":"io.netty.channel.socket.nio.NioSocketChannel",

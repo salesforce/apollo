@@ -340,6 +340,6 @@ public class DemesneImpl implements Demesne {
                                                                                                                                : parameters.getVirtualThreads(),
                                                                                            Thread.ofVirtual()
                                                                                                  .factory())),
-                             interval);
+                             parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
     }
 }

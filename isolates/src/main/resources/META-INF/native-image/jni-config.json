@@ -1,5 +1,9 @@
 [
 {
+  "name":"com.salesforce.apollo.demesnes.FireFliesTrace",
+  "methods":[{"name":"main","parameterTypes":["java.lang.String[]"] }]
+},
+{
   "name":"io.netty.channel.ChannelException"
 },
 {
