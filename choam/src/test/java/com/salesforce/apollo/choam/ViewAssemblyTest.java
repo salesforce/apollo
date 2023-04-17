@@ -35,7 +35,7 @@ import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -97,7 +97,7 @@ public class ViewAssemblyTest {
     private static short CARDINALITY = 4;
 
     private Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
-    private Map<SigningMember, RouterImpl>      communications = new HashMap<>();
+    private Map<SigningMember, Router>      communications = new HashMap<>();
     private CountDownLatch                  complete;
     private Context<Member>                 context;
     private List<Ethereal>                  controllers    = new ArrayList<>();
@@ -190,7 +190,7 @@ public class ViewAssemblyTest {
                                                                                        .getClass()
                                                                                        .getCanonicalName(),
                                                                                 r -> {
-                                                                                    RouterImpl router = communications.get(m);
+                                                                                    Router router = communications.get(m);
                                                                                     return new TerminalServer(router.getClientIdentityProvider(),
                                                                                                               null, r);
                                                                                 }, TerminalClient.getCreate(null),
@@ -205,7 +205,7 @@ public class ViewAssemblyTest {
         Map<Member, ViewContext> views = new HashMap<>();
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
-            RouterImpl router = communications.get(m);
+            Router router = communications.get(m);
             ViewContext view = new ViewContext(context,
                                                params.build(RuntimeParameters.newBuilder()
                                                                              .setExec(Executors.newFixedThreadPool(2))

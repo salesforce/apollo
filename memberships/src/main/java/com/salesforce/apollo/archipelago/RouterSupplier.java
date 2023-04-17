@@ -18,15 +18,15 @@ import com.salesforce.apollo.protocols.LimitsRegistry;
  */
 public interface RouterSupplier {
 
-    default RouterImpl router(Executor executor) {
+    default Router router(Executor executor) {
         return router(ServerConnectionCache.newBuilder(), () -> RouterImpl.defaultServerLimit(), executor, null);
     }
 
-    default RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Executor executor) {
+    default Router router(ServerConnectionCache.Builder cacheBuilder, Executor executor) {
         return router(cacheBuilder, () -> RouterImpl.defaultServerLimit(), executor, null);
     }
 
-    RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+    Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
                   LimitsRegistry limitsRegistry);
 
 }

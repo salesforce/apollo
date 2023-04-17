@@ -22,7 +22,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -41,8 +41,8 @@ import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServ
  */
 public class TestEventObserver {
 
-    private RouterImpl clientRouter;
-    private RouterImpl serverRouter;
+    private Router clientRouter;
+    private Router serverRouter;
 
     @AfterEach
     public void after() {

@@ -29,7 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -97,7 +97,7 @@ public class AbstractDhtTest {
     protected Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected MemKERL                                                            kerl;
     protected String                                                             prefix;
-    protected final Map<SigningMember, RouterImpl>                                   routers = new HashMap<>();
+    protected final Map<SigningMember, Router>                                   routers = new HashMap<>();
     protected Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {

@@ -36,7 +36,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -371,14 +371,14 @@ public class Gorgoneion {
     private final ScheduledExecutorService scheduler;
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
-                      ProtoEventObserver observer, RouterImpl router, ScheduledExecutorService scheduler,
+                      ProtoEventObserver observer, Router router, ScheduledExecutorService scheduler,
                       GorgoneionMetrics metrics, Executor exec) {
         this(parameters, member, context, observer, router, scheduler, metrics, router, exec);
     }
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
-                      ProtoEventObserver observer, RouterImpl admissionsRouter, ScheduledExecutorService scheduler,
-                      GorgoneionMetrics metrics, RouterImpl endorsementRouter, Executor exec) {
+                      ProtoEventObserver observer, Router admissionsRouter, ScheduledExecutorService scheduler,
+                      GorgoneionMetrics metrics, Router endorsementRouter, Executor exec) {
         this.member = member;
         this.context = context;
         this.exec = exec;

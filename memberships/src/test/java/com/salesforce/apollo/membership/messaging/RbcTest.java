@@ -37,7 +37,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
@@ -117,7 +117,7 @@ public class RbcTest {
                                                                    .setFalsePositiveRate(0.00125)
                                                                    .setBufferSize(5000);
 
-    private final List<RouterImpl>        communications = new ArrayList<>();
+    private final List<Router>        communications = new ArrayList<>();
     private List<ReliableBroadcaster> messengers;
     private final AtomicInteger       totalReceived  = new AtomicInteger(0);
 

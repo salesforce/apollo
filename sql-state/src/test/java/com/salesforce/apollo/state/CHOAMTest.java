@@ -46,7 +46,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
@@ -104,7 +104,7 @@ public class CHOAMTest {
     private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;
     private MetricRegistry      registry;
-    private Map<Digest, RouterImpl> routers;
+    private Map<Digest, Router> routers;
 
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 

@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -186,7 +186,7 @@ public class DomainTest {
 
     private final ArrayList<Domain> domains = new ArrayList<>();
     private ExecutorService         exec    = Executors.newVirtualThreadPerTaskExecutor();
-    private final ArrayList<RouterImpl> routers = new ArrayList<>();
+    private final ArrayList<Router> routers = new ArrayList<>();
 
     @AfterEach
     public void after() {

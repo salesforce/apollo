@@ -37,7 +37,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
@@ -123,7 +123,7 @@ public class EtherealTest {
         List<Ethereal> controllers = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
         List<ChRbcGossip> gossipers = new ArrayList<>();
-        List<RouterImpl> comms = new ArrayList<>();
+        List<Router> comms = new ArrayList<>();
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });

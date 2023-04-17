@@ -39,7 +39,7 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
@@ -75,7 +75,7 @@ public class TestCHOAM {
     private Executor                     exec = Utils.newVirtualThreadPerTaskExecutor();
     private List<SigningMember>          members;
     private MetricRegistry               registry;
-    private Map<Digest, RouterImpl>          routers;
+    private Map<Digest, Router>          routers;
 
     @AfterEach
     public void after() throws Exception {

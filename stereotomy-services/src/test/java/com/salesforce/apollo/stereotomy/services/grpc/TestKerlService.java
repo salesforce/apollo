@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -52,8 +52,8 @@ public class TestKerlService {
     KERL                     kel;
     final StereotomyKeyStore ks = new MemKeyStore();
     SecureRandom             secureRandom;
-    private RouterImpl           clientRouter;
-    private RouterImpl           serverRouter;
+    private Router           clientRouter;
+    private Router           serverRouter;
 
     @AfterEach
     public void after() {
