@@ -38,6 +38,7 @@ import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -210,18 +211,18 @@ public class EnclaveTest {
             routes.put(qb64(d), endpoint1);
         });
         var router1 = enclave1.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> {
             routes.put(qb64(d), endpoint2);
         });
         var router2 = enclave2.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         portal.start();
         router1.start();

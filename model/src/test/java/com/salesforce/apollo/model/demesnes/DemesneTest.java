@@ -45,6 +45,8 @@ import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
@@ -233,16 +235,16 @@ public class DemesneTest {
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, d -> routes.put(qb64(d), endpoint1));
         var router1 = enclave1.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> routes.put(qb64(d), endpoint2));
         var router2 = enclave2.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
-                                                                                   "B", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "B",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         portal.start();
         router1.start();
@@ -277,15 +279,15 @@ public class DemesneTest {
         Member serverMember = new ControlledIdentifierMember(identifier);
         final var portalAddress = UUID.randomUUID().toString();
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
-        final var router = new Router(serverMember,
-                                      NettyServerBuilder.forAddress(portalEndpoint)
-                                                        .protocolNegotiator(new DomainSocketNegotiator())
-                                                        .channelType(serverChannelType)
-                                                        .workerEventLoopGroup(eventLoopGroup)
-                                                        .bossEventLoopGroup(eventLoopGroup)
-                                                        .intercept(new DomainSocketServerInterceptor()),
-                                      ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
-                                      null);
+        final var router = new RouterImpl(serverMember,
+                                          NettyServerBuilder.forAddress(portalEndpoint)
+                                                            .protocolNegotiator(new DomainSocketNegotiator())
+                                                            .channelType(serverChannelType)
+                                                            .workerEventLoopGroup(eventLoopGroup)
+                                                            .bossEventLoopGroup(eventLoopGroup)
+                                                            .intercept(new DomainSocketServerInterceptor()),
+                                          ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
+                                          null);
         router.start();
 
         final var registered = new TreeSet<Digest>();

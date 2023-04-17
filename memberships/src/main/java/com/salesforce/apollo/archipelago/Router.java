@@ -10,7 +10,6 @@ import java.time.Duration;
 import java.util.function.Function;
 
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
-import com.salesforce.apollo.archipelago.RouterImpl.ServiceRouting;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -26,6 +25,17 @@ import io.grpc.Metadata;
  */
 public interface Router {
 
+    @FunctionalInterface
+    interface ClientConnector<Client> {
+        Client connect(Member to);
+    }
+
+    interface ServiceRouting {
+        default String routing() {
+            return getClass().getCanonicalName();
+        }
+    }
+
     Context.Key<Digest>  CLIENT_CLIENT_ID_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.id.client");
     Metadata.Key<String> METADATA_CLIENT_ID_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.id",
                                                                   Metadata.ASCII_STRING_MARSHALLER);
@@ -39,12 +49,12 @@ public interface Router {
 
     void close(Duration await);
 
-    <Client extends Link, Service extends ServiceRouting> CommonCommunications<Client, Service> create(Member member,
-                                                                                                       Digest context,
-                                                                                                       Service service,
-                                                                                                       Function<RoutableService<Service>, BindableService> factory,
-                                                                                                       CreateClientCommunications<Client> createFunction,
-                                                                                                       Client localLoopback);
+    <Client extends Link, Service extends Router.ServiceRouting> CommonCommunications<Client, Service> create(Member member,
+                                                                                                              Digest context,
+                                                                                                              Service service,
+                                                                                                              Function<RoutableService<Service>, BindableService> factory,
+                                                                                                              CreateClientCommunications<Client> createFunction,
+                                                                                                              Client localLoopback);
 
     <Service, Client extends Link> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                 Service service, String routingLabel,

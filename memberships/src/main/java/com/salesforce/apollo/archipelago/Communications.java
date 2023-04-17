@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.salesforce.apollo.archipelago.RouterImpl.ClientConnector;
+import com.salesforce.apollo.archipelago.Router.ClientConnector;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 

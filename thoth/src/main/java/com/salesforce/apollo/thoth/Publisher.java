@@ -15,9 +15,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
-import com.salesforce.apollo.archipelago.RouterImpl.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
@@ -33,7 +33,7 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
  */
 public class Publisher implements ProtoEventObserver {
 
-    private class Service implements EventObserver, ServiceRouting {
+    private class Service implements EventObserver, Router.ServiceRouting {
         @Override
         public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations, Digest from) {
             return Publisher.this.publish(kerl, validations);

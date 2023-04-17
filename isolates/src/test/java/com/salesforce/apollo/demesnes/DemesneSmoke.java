@@ -34,6 +34,7 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
@@ -199,15 +200,15 @@ public class DemesneSmoke {
         Member serverMember = new ControlledIdentifierMember(identifier);
         final var portalAddress = UUID.randomUUID().toString();
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
-        final var router = new Router(serverMember,
-                                      NettyServerBuilder.forAddress(portalEndpoint)
-                                                        .protocolNegotiator(new DomainSocketNegotiator())
-                                                        .channelType(serverChannelType)
-                                                        .workerEventLoopGroup(eventLoopGroup)
-                                                        .bossEventLoopGroup(eventLoopGroup)
-                                                        .intercept(new DomainSocketServerInterceptor()),
-                                      ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
-                                      null);
+        final var router = new RouterImpl(serverMember,
+                                          NettyServerBuilder.forAddress(portalEndpoint)
+                                                            .protocolNegotiator(new DomainSocketNegotiator())
+                                                            .channelType(serverChannelType)
+                                                            .workerEventLoopGroup(eventLoopGroup)
+                                                            .bossEventLoopGroup(eventLoopGroup)
+                                                            .intercept(new DomainSocketServerInterceptor()),
+                                          ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
+                                          null);
         router.start();
 
         final var registered = new TreeSet<Digest>();

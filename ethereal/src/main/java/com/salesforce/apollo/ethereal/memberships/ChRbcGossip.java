@@ -27,7 +27,6 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
-import com.salesforce.apollo.archipelago.RouterImpl.ServiceRouting;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Processor;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
@@ -58,7 +57,7 @@ public class ChRbcGossip {
      * The Service implementing the 3 phase gossip
      *
      */
-    private class Terminal implements GossiperService, ServiceRouting {
+    private class Terminal implements GossiperService, Router.ServiceRouting {
         @Override
         public Update gossip(Gossip request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);

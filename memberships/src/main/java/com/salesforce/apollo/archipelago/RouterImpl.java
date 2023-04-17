@@ -54,12 +54,7 @@ import io.grpc.util.MutableHandlerRegistry;
  */
 public class RouterImpl implements Router {
 
-    @FunctionalInterface
-    public interface ClientConnector<Client> {
-        Client connect(Member to);
-    }
-
-    public class CommonCommunications<Client extends Link, Service> implements ClientConnector<Client> {
+    public class CommonCommunications<Client extends Link, Service> implements Router.ClientConnector<Client> {
         public static <Client> Client vanilla(Member from) {
             @SuppressWarnings("unchecked")
             Client client = (Client) new Link() {
@@ -115,12 +110,6 @@ public class RouterImpl implements Router {
         }
     }
 
-    public interface ServiceRouting {
-        default String routing() {
-            return getClass().getCanonicalName();
-        }
-    }
-
     private final static Logger log = LoggerFactory.getLogger(RouterImpl.class);
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
@@ -173,12 +162,12 @@ public class RouterImpl implements Router {
     private final AtomicBoolean                   started  = new AtomicBoolean();
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
-                  ClientIdentity clientIdentityProvider) {
+                      ClientIdentity clientIdentityProvider) {
         this(from, serverBuilder, cacheBuilder, clientIdentityProvider, r -> r.run());
     }
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
-                  ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration, Executor executor) {
+                      ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration, Executor executor) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.build();
         this.clientIdentityProvider = clientIdentityProvider;
@@ -188,7 +177,7 @@ public class RouterImpl implements Router {
     }
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
-                  ClientIdentity clientIdentityProvider, Executor executor) {
+                      ClientIdentity clientIdentityProvider, Executor executor) {
         this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
         }, executor);
     }
@@ -208,12 +197,12 @@ public class RouterImpl implements Router {
     }
 
     @Override
-    public <Client extends Link, Service extends ServiceRouting> CommonCommunications<Client, Service> create(Member member,
-                                                                                                              Digest context,
-                                                                                                              Service service,
-                                                                                                              Function<RoutableService<Service>, BindableService> factory,
-                                                                                                              CreateClientCommunications<Client> createFunction,
-                                                                                                              Client localLoopback) {
+    public <Client extends Link, Service extends Router.ServiceRouting> CommonCommunications<Client, Service> create(Member member,
+                                                                                                                     Digest context,
+                                                                                                                     Service service,
+                                                                                                                     Function<RoutableService<Service>, BindableService> factory,
+                                                                                                                     CreateClientCommunications<Client> createFunction,
+                                                                                                                     Client localLoopback) {
         return create(member, context, service, service.routing(), factory, createFunction, localLoopback);
     }
 
