@@ -25,6 +25,14 @@ import io.grpc.Metadata;
  */
 public interface Router {
 
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_TO_ID_SERVER = "com.salesforce.apollo.archipeligo.to.id.server";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_CONTEXT_ID_SERVER = "com.salesforce.apollo.archipeligo.context.id.server";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID_SERVER = "com.salesforce.apollo.archipeligo.from.id.server";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_TO_ID = "com.salesforce.apollo.archipeligo.to.id";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_CONTEXT_ID = "com.salesforce.apollo.archipeligo.context.id";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID = "com.salesforce.apollo.archipeligo.from.id";
+    public static final String COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID_CLIENT = "com.salesforce.apollo.archipeligo.from.id.client";
+
     @FunctionalInterface
     interface ClientConnector<Client> {
         Client connect(Member to);
@@ -36,16 +44,16 @@ public interface Router {
         }
     }
 
-    Context.Key<Digest>  CLIENT_CLIENT_ID_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.id.client");
-    Metadata.Key<String> METADATA_CLIENT_ID_KEY = Metadata.Key.of("com.salesforce.apollo.archipeligo.from.id",
+    Context.Key<Digest>  CLIENT_CLIENT_ID_KEY   = Context.key(COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID_CLIENT);
+    Metadata.Key<String> METADATA_CLIENT_ID_KEY = Metadata.Key.of(COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID,
                                                                   Metadata.ASCII_STRING_MARSHALLER);
-    Metadata.Key<String> METADATA_CONTEXT_KEY   = Metadata.Key.of("com.salesforce.apollo.archipeligo.context.id",
+    Metadata.Key<String> METADATA_CONTEXT_KEY   = Metadata.Key.of(COM_SALESFORCE_APOLLO_ARCHIPELIGO_CONTEXT_ID,
                                                                   Metadata.ASCII_STRING_MARSHALLER);
-    Metadata.Key<String> METADATA_TARGET_KEY    = Metadata.Key.of("com.salesforce.apollo.archipeligo.to.id",
+    Metadata.Key<String> METADATA_TARGET_KEY    = Metadata.Key.of(COM_SALESFORCE_APOLLO_ARCHIPELIGO_TO_ID,
                                                                   Metadata.ASCII_STRING_MARSHALLER);
-    Context.Key<Digest>  SERVER_CLIENT_ID_KEY   = Context.key("com.salesforce.apollo.archipeligo.from.id.server");
-    Context.Key<Digest>  SERVER_CONTEXT_KEY     = Context.key("com.salesforce.apollo.archipeligo.context.id.server");
-    Context.Key<Digest>  SERVER_TARGET_KEY      = Context.key("com.salesforce.apollo.archipeligo.to.id.server");
+    Context.Key<Digest>  SERVER_CLIENT_ID_KEY   = Context.key(COM_SALESFORCE_APOLLO_ARCHIPELIGO_FROM_ID_SERVER);
+    Context.Key<Digest>  SERVER_CONTEXT_KEY     = Context.key(COM_SALESFORCE_APOLLO_ARCHIPELIGO_CONTEXT_ID_SERVER);
+    Context.Key<Digest>  SERVER_TARGET_KEY      = Context.key(COM_SALESFORCE_APOLLO_ARCHIPELIGO_TO_ID_SERVER);
 
     void close(Duration await);
 
