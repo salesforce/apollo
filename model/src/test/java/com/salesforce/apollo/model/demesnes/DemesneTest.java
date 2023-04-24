@@ -215,6 +215,7 @@ public class DemesneTest {
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
         var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
         var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
+
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
@@ -223,7 +224,8 @@ public class DemesneTest {
                                                                .resolve(UUID.randomUUID().toString())
                                                                .toFile());
         final var routes = new HashMap<String, DomainSocketAddress>();
-        final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
+        final var portal = new Portal<>(serverMember1.getId(),
+                                        NettyServerBuilder.forAddress(portalEndpoint)
                                                           .protocolNegotiator(new DomainSocketNegotiator())
                                                           .channelType(getServerDomainSocketChannelClass())
                                                           .workerEventLoopGroup(getEventLoopGroup())

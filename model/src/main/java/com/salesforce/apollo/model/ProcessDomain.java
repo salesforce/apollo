@@ -135,7 +135,8 @@ public class ProcessDomain extends Domain {
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString())
                                                                         .toFile());
-        portal = new Portal<Member>(NettyServerBuilder.forAddress(portalEndpoint)
+        portal = new Portal<Member>(member.getId(),
+                                    NettyServerBuilder.forAddress(portalEndpoint)
                                                       .protocolNegotiator(new DomainSocketNegotiator())
                                                       .channelType(getServerDomainSocketChannelClass())
                                                       .workerEventLoopGroup(portalEventLoopGroup)

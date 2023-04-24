@@ -57,6 +57,10 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Enclave implements RouterSupplier {
+    interface RoutingClientIdentity extends ClientIdentity {
+        Digest getAgent();
+    }
+
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
@@ -92,7 +96,7 @@ public class Enclave implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
-                         LimitsRegistry limitsRegistry) {
+                             LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -107,12 +111,18 @@ public class Enclave implements RouterSupplier {
                                                                                                        .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
-        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
-            @Override
-            public Digest getFrom() {
-                return Router.SERVER_CLIENT_ID_KEY.get();
-            }
-        }, contextRegistration, executor);
+        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)),
+                              new RoutingClientIdentity() {
+                                  @Override
+                                  public Digest getAgent() {
+                                      return Router.SERVER_AGENT_ID_KEY.get();
+                                  }
+
+                                  @Override
+                                  public Digest getFrom() {
+                                      return Router.SERVER_CLIENT_ID_KEY.get();
+                                  }
+                              }, contextRegistration, executor);
     }
 
     private ManagedChannel connectTo(Member to) {
@@ -151,7 +161,14 @@ public class Enclave implements RouterSupplier {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
+                String agent = requestHeaders.get(Router.METADATA_AGENT_KEY);
+                if (agent == null) {
+                    log.error("No agent id in call headers: {}", requestHeaders.keys());
+                    throw new IllegalStateException("No agent ID in call");
+                }
+                Context ctx = Context.current()
+                                     .withValue(Router.SERVER_AGENT_ID_KEY, digest(agent))
+                                     .withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

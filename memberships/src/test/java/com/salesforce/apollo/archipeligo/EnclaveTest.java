@@ -37,23 +37,14 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -134,23 +125,6 @@ public class EnclaveTest {
 
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
-    public static ClientInterceptor clientInterceptor(Digest ctx) {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, qb64(ctx));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
-    }
-
     private EventLoopGroup      eventLoopGroup;
     private final TestItService local = new TestItService() {
 
@@ -198,7 +172,9 @@ public class EnclaveTest {
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
                                                                .resolve(UUID.randomUUID().toString())
                                                                .toFile());
-        final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
+        final var agent = DigestAlgorithm.DEFAULT.getLast();
+        final var portal = new Portal<>(agent,
+                                        NettyServerBuilder.forAddress(portalEndpoint)
                                                           .protocolNegotiator(new DomainSocketNegotiator())
                                                           .channelType(getServerDomainSocketChannelClass())
                                                           .workerEventLoopGroup(getEventLoopGroup())

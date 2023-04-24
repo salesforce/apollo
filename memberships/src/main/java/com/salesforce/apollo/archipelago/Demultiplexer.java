@@ -53,7 +53,7 @@ public class Demultiplexer {
                                                                          ServerCallHandler<ReqT, RespT> next) {
                 String route = requestHeaders.get(routing);
                 if (route == null) {
-                    log.error("No route id in call header: {}", routing.name());
+                    log.error("No route in call header: {}", routing.name());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No route ID in call, missing header: "
                     + routing.name()));
                 }

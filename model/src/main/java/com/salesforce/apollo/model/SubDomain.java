@@ -50,13 +50,13 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class SubDomain extends Domain {
-    private static final String DELEGATES_MAP_TEMPLATE  = "delegates-%s";
-    private static final String DELEGATORS_MAP_TEMPLATE = "delegators-%s";
-    private final static Logger log                     = LoggerFactory.getLogger(SubDomain.class);
+    private static final String DELEGATES_MAP_TEMPLATE   = "delegates-%s";
+    private static final String DELEGATIONS_MAP_TEMPLATE = "delegations-%s";
+    private final static Logger log                      = LoggerFactory.getLogger(SubDomain.class);
 
     private final MVMap<Digeste, SignedDelegate>         delegates;
     @SuppressWarnings("unused")
-    private final MVMap<Digeste, Digest>                 delegators;
+    private final MVMap<Digeste, Digest>                 delegations;
     private final double                                 fpr;
     private final Duration                               gossipInterval;
     private final int                                    maxTransfer;
@@ -87,10 +87,10 @@ public class SubDomain extends Domain {
         builder.setFileName(checkpointBaseDir.resolve(identifier).toFile());
         store = builder.build();
         delegates = store.openMap(DELEGATES_MAP_TEMPLATE.formatted(identifier));
-        delegators = store.openMap(DELEGATORS_MAP_TEMPLATE.formatted(identifier));
+        delegations = store.openMap(DELEGATIONS_MAP_TEMPLATE.formatted(identifier));
         CommonCommunications<Delegation, ?> comms = params.communications()
                                                           .create(member, params.context().getId(), delegation(),
-                                                                  "delegation",
+                                                                  "delegates",
                                                                   r -> new DelegationServer(params.communications()
                                                                                                   .getClientIdentityProvider(),
                                                                                             r, null));
