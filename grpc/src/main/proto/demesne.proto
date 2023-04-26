@@ -52,7 +52,7 @@ message DelegationUpdate {
 }
 
 message Delegate {
-    int64 view = 1;
+    utils.Digeste context = 1;
     utils.Digeste delegator = 2;
     utils.Digeste delegate = 3;
 }

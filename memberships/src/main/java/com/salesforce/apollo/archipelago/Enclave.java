@@ -57,7 +57,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Enclave implements RouterSupplier {
-    interface RoutingClientIdentity extends ClientIdentity {
+    public interface RoutingClientIdentity extends ClientIdentity {
         Digest getAgent();
     }
 

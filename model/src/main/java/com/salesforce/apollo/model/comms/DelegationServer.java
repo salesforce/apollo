@@ -11,8 +11,8 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.demesne.proto.DelegationGrpc.DelegationImplBase;
 import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
 import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesforce.apollo.archipelago.Enclave.RoutingClientIdentity;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.stub.StreamObserver;
 
@@ -21,13 +21,11 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class DelegationServer extends DelegationImplBase {
-
-    private final ClientIdentity identity;
-
+    private final RoutingClientIdentity              identity;
     private final OuterServerMetrics                 metrics;
     private final RoutableService<DelegationService> router;
 
-    public DelegationServer(ClientIdentity clientIdentity, RoutableService<DelegationService> router,
+    public DelegationServer(RoutingClientIdentity clientIdentity, RoutableService<DelegationService> router,
                             OuterServerMetrics metrics) {
         this.router = router;
         this.identity = clientIdentity;
@@ -41,7 +39,7 @@ public class DelegationServer extends DelegationImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundGossip().mark(request.getSerializedSize());
         }
-        var from = identity.getFrom();
+        var from = identity.getAgent();
         router.evaluate(responseObserver, delegation -> {
             try {
                 var update = delegation.gossip(request, from);
@@ -67,7 +65,7 @@ public class DelegationServer extends DelegationImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundUpdate().mark(request.getSerializedSize());
         }
-        var from = identity.getFrom();
+        var from = identity.getAgent();
         router.evaluate(responseObserver, delegation -> {
             try {
                 delegation.update(request, from);

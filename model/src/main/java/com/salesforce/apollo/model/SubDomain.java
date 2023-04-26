@@ -10,6 +10,8 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -27,6 +29,7 @@ import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
 import com.salesfoce.apollo.demesne.proto.SignedDelegate;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesforce.apollo.archipelago.Enclave.RoutingClientIdentity;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -50,19 +53,18 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class SubDomain extends Domain {
-    private static final String DELEGATES_MAP_TEMPLATE   = "delegates-%s";
-    private static final String DELEGATIONS_MAP_TEMPLATE = "delegations-%s";
-    private final static Logger log                      = LoggerFactory.getLogger(SubDomain.class);
+    private static final String DELEGATES_MAP_TEMPLATE = "delegates-%s";
+    private final static Logger log                    = LoggerFactory.getLogger(SubDomain.class);
 
     private final MVMap<Digeste, SignedDelegate>         delegates;
     @SuppressWarnings("unused")
-    private final MVMap<Digeste, Digest>                 delegations;
+    private final Map<Digeste, Digest>                   delegations = new HashMap<>();
     private final double                                 fpr;
     private final Duration                               gossipInterval;
     private final int                                    maxTransfer;
     private final RingCommunications<Member, Delegation> ring;
     private ScheduledFuture<?>                           scheduled;
-    private final AtomicBoolean                          started = new AtomicBoolean();
+    private final AtomicBoolean                          started     = new AtomicBoolean();
     private final MVStore                                store;
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
@@ -87,12 +89,11 @@ public class SubDomain extends Domain {
         builder.setFileName(checkpointBaseDir.resolve(identifier).toFile());
         store = builder.build();
         delegates = store.openMap(DELEGATES_MAP_TEMPLATE.formatted(identifier));
-        delegations = store.openMap(DELEGATIONS_MAP_TEMPLATE.formatted(identifier));
         CommonCommunications<Delegation, ?> comms = params.communications()
                                                           .create(member, params.context().getId(), delegation(),
                                                                   "delegates",
-                                                                  r -> new DelegationServer(params.communications()
-                                                                                                  .getClientIdentityProvider(),
+                                                                  r -> new DelegationServer((RoutingClientIdentity) params.communications()
+                                                                                                                          .getClientIdentityProvider(),
                                                                                             r, null));
         ring = new RingCommunications<Member, Delegation>(params.context(), member, comms, params.exec());
         this.gossipInterval = gossipInterval;
