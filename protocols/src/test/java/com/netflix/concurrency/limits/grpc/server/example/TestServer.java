@@ -3,7 +3,6 @@ package com.netflix.concurrency.limits.grpc.server.example;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -16,7 +15,6 @@ import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.grpc.StringMarshaller;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerRequestContext;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -116,9 +114,8 @@ public class TestServer {
 
         ServerCallHandler<String, String> handler = ServerCalls.asyncUnaryCall(new UnaryMethod<String, String>() {
             volatile int segment = 0;
-
             {
-                Executors.newSingleThreadExecutor(Utils.virtualThreadFactory()).execute(() -> {
+                Thread.ofVirtual().start(() -> {
                     while (true) {
                         Segment s = builder.segments.get(0);
                         Uninterruptibles.sleepUninterruptibly(s.duration(), TimeUnit.NANOSECONDS);
