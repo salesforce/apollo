@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.limit.SettableLimit;
-import com.salesforce.apollo.utils.Utils;
 
 public class BlockingLimiterTest {
     @Test
@@ -62,7 +61,7 @@ public class BlockingLimiterTest {
         int numThreads = 80;
         SettableLimit limit = SettableLimit.startingAt(1);
         BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
-        ExecutorService executorService = Executors.newFixedThreadPool(numThreads, Utils.virtualThreadFactory());
+        ExecutorService executorService = Executors.newFixedThreadPool(numThreads, Thread.ofVirtual().factory());
         try {
             for (Future<?> future : IntStream.range(0, numThreads)
                                              .mapToObj(x -> executorService.submit(() -> limiter.acquire(null)

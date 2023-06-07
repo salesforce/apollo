@@ -119,6 +119,11 @@
                 <version>${grpc.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-servlet</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>fireflies</artifactId>
                 <version>${project.version}</version>
@@ -563,7 +568,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>1</forkCount>
-                    <reuseForks>true</reuseForks>
+                    <reuseForks>false</reuseForks>
                     <argLine>--enable-preview</argLine>
                 </configuration>
             </plugin>

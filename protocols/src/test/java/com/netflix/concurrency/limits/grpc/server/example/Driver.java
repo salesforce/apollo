@@ -14,7 +14,6 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.distribution.UniformRealDistribution;
 
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -185,6 +184,6 @@ public class Driver {
     }
 
     public CompletableFuture<Void> runAsync() {
-        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor(Utils.virtualThreadFactory()));
+        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
     }
 }
