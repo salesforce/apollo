@@ -1,4 +1,6 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.salesforce.apollo</groupId>
@@ -15,10 +17,6 @@
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>model</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.graalvm.sdk</groupId>
-            <artifactId>graal-sdk</artifactId>
         </dependency>
         <dependency>
             <groupId>io.yupiik.logging</groupId>
@@ -83,11 +81,12 @@
                                 </requireMavenVersion>
                                 <dependencyConvergence />
                                 <requireJavaVersion>
-                                    <version>[19,)</version>
+                                    <version>[20,)</version>
                                 </requireJavaVersion>
                                 <requireJavaVendor>
                                     <includes>
                                         <include>GraalVM Community</include>
+                                        <include>Oracle Corporation</include>
                                     </includes>
                                 </requireJavaVendor>
                             </rules>
@@ -122,50 +121,83 @@
                         </executions>
                         <configuration>
                             <imageName>${imageName}</imageName>
-                            <outputDirectory>${project.build.outputDirectory}/natives/osx_arm64</outputDirectory>
+                            <outputDirectory>
+                                ${project.build.outputDirectory}/natives/osx_arm64</outputDirectory>
                             <sharedLibrary>true</sharedLibrary>
                             <buildArgs>
                                 <buildArg>-Djava.awt.headless=true</buildArg>
-                                <buildArg>-Djava.util.logging.manager=io.yupiik.logging.jul.YupiikLogManager</buildArg>
+                                <buildArg>
+                                    -Djava.util.logging.manager=io.yupiik.logging.jul.YupiikLogManager</buildArg>
                                 <buildArg>--enable-preview</buildArg>
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--add-modules java.sql.rowset</buildArg>
                                 <buildArg>--initialize-at-build-time=org.jooq</buildArg>
-                                <buildArg>--initialize-at-build-time=javax.sql.rowset.RowSetProvider</buildArg>
-                                <buildArg>--initialize-at-build-time=org.slf4j.LoggerFactory</buildArg>
-                                <buildArg>--initialize-at-build-time=org.bouncycastle</buildArg>
-                                <buildArg>--initialize-at-build-time=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
-                                <buildArg>--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder</buildArg>  
-                                <buildArg>--initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils</buildArg>
-                                <buildArg>--initialize-at-run-time=org.jooq.impl.Convert$_JSON</buildArg>
-                                <buildArg>--initialize-at-run-time=org.jooq.tools.Convert</buildArg>
-                                <buildArg>--initialize-at-run-time=org.jooq.impl.Convert$_XML</buildArg>
-                                <buildArg>--initialize-at-run-time=org.jooq.impl.DefaultRenderContext</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.util.AbstractReferenceCounted</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.epoll</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.kqueue</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.unix.Errors</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.unix.IovArray</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.unix.Limits</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty.channel.unix.Socket</buildArg>
-                                <buildArg>--initialize-at-run-time=com.salesforce.apollo.domain.Demesne</buildArg>
-                                <buildArg>--initialize-at-run-time=org.h2.store.fs.FilePath</buildArg>
-                                <buildArg>--trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper</buildArg>
-                                <buildArg>--trace-object-instantiation=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
-                                <buildArg>--trace-class-initialization=jakarta.xml.bind.ContextFinder</buildArg>
-                                <buildArg>--trace-class-initialization=org.slf4j.MDC</buildArg>
-                                <buildArg>--trace-class-initialization=io.netty.channel.DefaultFileRegion</buildArg>
-                                <buildArg>--trace-class-initialization=io.netty.channel.kqueue.KQueue</buildArg>
-                                <buildArg>--trace-class-initialization=io.netty.util.AbstractReferenceCounted</buildArg>
-                                <buildArg>--trace-class-initialization=io.netty.channel.epoll.Native</buildArg>
+                                <buildArg>
+                                    --initialize-at-build-time=javax.sql.rowset.RowSetProvider</buildArg>
+                                <buildArg>
+                                    --initialize-at-build-time=org.slf4j.LoggerFactory</buildArg>
+                                <buildArg>
+                                    --initialize-at-build-time=org.bouncycastle</buildArg>
+                                <buildArg>
+                                    --initialize-at-build-time=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
+                                <buildArg>
+                                    --initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.handler.ssl.BouncyCastleAlpnSslUtils</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=org.jooq.impl.Convert$_JSON</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=org.jooq.tools.Convert</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=org.jooq.impl.Convert$_XML</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=org.jooq.impl.DefaultRenderContext</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.util.AbstractReferenceCounted</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.epoll</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.kqueue</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.unix.Errors</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.unix.IovArray</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.unix.Limits</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=io.netty.channel.unix.Socket</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=com.salesforce.apollo.domain.Demesne</buildArg>
+                                <buildArg>
+                                    --initialize-at-run-time=org.h2.store.fs.FilePath</buildArg>
+                                <buildArg>
+                                    --trace-object-instantiation=com.fasterxml.jackson.databind.ObjectMapper</buildArg>
+                                <buildArg>
+                                    --trace-object-instantiation=org.slf4j.jul.JDK14LoggerAdapter</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=jakarta.xml.bind.ContextFinder</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=org.slf4j.MDC</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=io.netty.channel.DefaultFileRegion</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=io.netty.channel.kqueue.KQueue</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=io.netty.util.AbstractReferenceCounted</buildArg>
+                                <buildArg>
+                                    --trace-class-initialization=io.netty.channel.epoll.Native</buildArg>
+                                <buildArg>
+                                    -H:+AllowDeprecatedBuilderClassesOnImageClasspath</buildArg>
+                                <buildArg>-H:+BuildReport</buildArg>
                             </buildArgs>
                             <verbose>false</verbose>
                             <metadataRepository>
                                 <enabled>true</enabled>
                             </metadataRepository>
                             <classpath>
-                                <param>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
+                                <param>
+                                    ${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
                             </classpath>
                         </configuration>
                         <dependencies>
@@ -180,6 +212,16 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+        <profile>
+            <id>isolates</id> 
+            <dependencies>
+                <dependency>
+                    <groupId>org.graalvm.sdk</groupId>
+                    <artifactId>graal-sdk</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
         </profile>
     </profiles>
 </project>

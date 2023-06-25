@@ -41,6 +41,7 @@ import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
@@ -998,9 +999,13 @@ public class Utils {
      */
     public static URL resolveResourceURL(Class<?> base, String resource) throws IOException {
         try {
-            URL url = new URL(resource);
+            URL url = new URI(resource).toURL();
             return url;
         } catch (MalformedURLException e) {
+            LoggerFactory.getLogger(Utils.class)
+                         .trace(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
+                                              resource));
+        } catch (URISyntaxException e) {
             LoggerFactory.getLogger(Utils.class)
                          .trace(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
                                               resource));
