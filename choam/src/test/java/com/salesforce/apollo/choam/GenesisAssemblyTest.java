@@ -121,8 +121,9 @@ public class GenesisAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalServer(prefix, m, Executors.newSingleThreadExecutor()).router( ServerConnectionCache.newBuilder(),
-                                       Executors.newSingleThreadExecutor());
+            var comm = new LocalServer(prefix, m,
+                                       Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder(),
+                                                                                   Executors.newSingleThreadExecutor());
             return comm;
         }));
         CountDownLatch complete = new CountDownLatch(committee.activeCount());

@@ -12,16 +12,23 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.membership.Member;
 
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.ServerBuilder;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
@@ -41,16 +48,16 @@ import io.netty.channel.unix.DomainSocketAddress;
 public class Portal<To extends Member> {
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
-    Map<String, DomainSocketAddress>  routes         = new ConcurrentHashMap<>();
-    private final DomainSocketAddress bridge;
-    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
-    private final Demultiplexer       inbound;
-    private final Duration            keepAlive;
-    private final Demultiplexer       outbound;
+    private final String         agent;
+    private final EventLoopGroup eventLoopGroup = getEventLoopGroup();
+    private final Demultiplexer  inbound;
+    private final Duration       keepAlive;
+    private final Demultiplexer  outbound;
 
-    public Portal(ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound, DomainSocketAddress bridge,
-                  Executor executor, Duration keepAlive) {
-        this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(routes.get(d)));
+    public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
+                  DomainSocketAddress bridge, Executor executor, Duration keepAlive,
+                  Function<String, DomainSocketAddress> router) {
+        this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
                                                             .executor(executor)
                                                             .protocolNegotiator(new DomainSocketNegotiator())
@@ -59,43 +66,13 @@ public class Portal<To extends Member> {
                                                             .bossEventLoopGroup(getEventLoopGroup())
                                                             .intercept(new DomainSocketServerInterceptor()),
                                           Router.METADATA_TARGET_KEY, outbound);
-        this.bridge = bridge;
         this.keepAlive = keepAlive;
+        this.agent = QualifiedBase64.qb64(agent);
     }
 
     public void close(Duration await) {
         inbound.close(await);
         outbound.close(await);
-    }
-
-    /**
-     * Remove the route if it was previously associated with the supplied address.
-     *
-     * @param route  - the mapped route
-     * @param target - the expected target for the route
-     * @return true if the route was mapped to the target, false otherwise
-     */
-    public boolean deregister(String route, DomainSocketAddress target) {
-        return routes.remove(route, target);
-    }
-
-    /**
-     * 
-     * @return the domain socket address for outbound demultiplexing
-     */
-    public DomainSocketAddress getBridge() {
-        return bridge;
-    }
-
-    /**
-     * Map the route to the target if the route has not already been established
-     *
-     * @param route  - the mapped route
-     * @param target - the target of the route
-     * @return true if the route has not been previously mapped, false otherwise
-     */
-    public boolean register(String route, DomainSocketAddress target) {
-        return routes.putIfAbsent(route, target) == null;
     }
 
     public void start() throws IOException {
@@ -104,10 +81,25 @@ public class Portal<To extends Member> {
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {
+        var clientInterceptor = new ClientInterceptor() {
+            @Override
+            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+                                                                       CallOptions callOptions, Channel next) {
+                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        headers.put(Router.METADATA_AGENT_KEY, agent);
+                        super.start(responseListener, headers);
+                    }
+                };
+            }
+        };
         return NettyChannelBuilder.forAddress(address)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
+                                  .intercept(clientInterceptor)
                                   .usePlaintext()
                                   .build();
     }

@@ -48,8 +48,7 @@ import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
 import com.salesfoce.apollo.messaging.proto.SignedDefaultMessage;
 import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
-import com.salesforce.apollo.archipelago.Router.ServiceRouting;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -160,7 +159,7 @@ public class ReliableBroadcaster {
 
     }
 
-    public class Service implements ServiceRouting {
+    public class Service implements Router.ServiceRouting {
 
         public Reconcile gossip(MessageBff request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
@@ -383,8 +382,8 @@ public class ReliableBroadcaster {
         Function<Any, List<Digest>> source = any -> {
             try {
                 return Collections.singletonList(Digest.from(any.unpack(SignedDefaultMessage.class)
-                                                               .getContent()
-                                                               .getSource()));
+                                                                .getContent()
+                                                                .getSource()));
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }

@@ -92,7 +92,7 @@ message RotationSpec {
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated Ident witnesses = 3;
+    repeated utils.PubKey witnesses = 3;
     repeated string configuration = 4;
 }
 

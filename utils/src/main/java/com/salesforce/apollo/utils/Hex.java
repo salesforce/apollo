@@ -39,6 +39,21 @@ public final class Hex {
         return new String(hex);
     }
 
+    public static char[] hexChars(byte[] bytes) {
+        if (bytes.length == 0) {
+            return new char[] {};
+        }
+        var hex = new char[2 * bytes.length];
+
+        for (int i = 0, bytesLength = bytes.length; i < bytesLength; i++) {
+            var b = bytes[i];
+            hex[i * 2] = HEX[(b & 0xff) >>> 4];
+            hex[i * 2 + 1] = HEX[b & 0x0f];
+        }
+
+        return hex;
+    }
+
     public static String hexNoPad(int i) {
         return Integer.toString(i, 16);
     }

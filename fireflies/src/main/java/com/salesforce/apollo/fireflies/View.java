@@ -74,8 +74,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -713,13 +713,12 @@ public class View {
             if (mask.length() <= context.getRingCount()) {
                 return true;
             } else {
-                log.warn("invalid length: {} required: {}", mask.length(), context.getRingCount());
+                log.debug("invalid length: {} required: {}", mask.length(), context.getRingCount());
             }
         } else {
-            log.warn("invalid cardinality: {} required: {}", mask.cardinality(), context.majority());
+            log.debug("invalid cardinality: {} required: {}", mask.cardinality(), context.majority());
         }
         return false;
-//        return mask.cardinality() == context.majority() && mask.length() <= context.getRingCount();
     }
 
     private final CommonCommunications<Entrance, Service>     approaches;
@@ -1318,8 +1317,6 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
-            log.warn("Note: {} mask invalid: {} majority: {} on: {}", note.getId(), note.getMask(), context.majority(),
-                     node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }

@@ -72,7 +72,7 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean> checkpointOccurred;
     private Map<Digest, AtomicInteger>   blocks;
     private Map<Digest, CHOAM>           choams;
-    private Executor                     exec = Utils.newVirtualThreadPerTaskExecutor();
+    private Executor                     exec = Executors.newVirtualThreadPerTaskExecutor();
     private List<SigningMember>          members;
     private MetricRegistry               registry;
     private Map<Digest, Router>          routers;
@@ -160,7 +160,7 @@ public class TestCHOAM {
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
                                                  .setExec(exec)
-                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory()))
+                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()))
                                                  .build()));
         }));
     }
@@ -177,12 +177,12 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
-        var txExec = Utils.newVirtualThreadPerTaskExecutor();
+        var txExec = Executors.newVirtualThreadPerTaskExecutor();
         choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(c.getSession(), timeout, max,
                                                        Executors.newScheduledThreadPool(5,
-                                                                                        Utils.virtualThreadFactory()),
+                                                                                        Thread.ofVirtual().factory()),
                                                        countdown, txExec));
             }
         });

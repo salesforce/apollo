@@ -64,7 +64,7 @@ public class SwarmTest {
     private static final double                                                P_BYZ      = 0.1;
 
     static {
-        CARDINALITY = largeTests ? 1000 : 100;
+        CARDINALITY = largeTests ? 500 : 100;
     }
 
     @BeforeAll

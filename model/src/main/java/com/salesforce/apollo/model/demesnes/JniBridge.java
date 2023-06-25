@@ -10,17 +10,27 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 
 import org.scijava.nativelib.NativeLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.ViewChange;
+import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
  * Interface to SubDomain Demesne running in the GraalVM Isolate as JNI library
@@ -42,9 +52,18 @@ public class JniBridge implements Demesne {
 
     private static native boolean active(long isolateId);
 
+    private static native void commit(long isolateId, byte[] eventCoordinates, int eventCoordinatesLen);
+
     private static native long createIsolate();
 
-    private static native boolean launch(long isolateId, byte[] parameters, int paramLen, byte[] password, int passLen);
+    private static native byte[] id(long isolateId);
+
+    private static native byte[] inception(long isolateId, byte[] identifier, int identifierLen, byte[] spec,
+                                           int specLen);
+
+    private static native boolean launch(long isolateId, byte[] parameters, int paramLen);
+
+    private static native byte[] rotate(long isolateId, byte[] spec, int specLen);
 
     private static native void start(long isolateId);
 
@@ -60,24 +79,46 @@ public class JniBridge implements Demesne {
 
     private final long isolateId;
 
-    public JniBridge(DemesneParameters parameters, char[] password) {
-        try {
-            final byte[] bytes = toBytes(password);
-            try {
-                isolateId = createIsolate();
-                final var serialized = parameters.toByteString().toByteArray();
-                launch(isolateId, serialized, serialized.length, bytes, bytes.length);
-            } finally {
-                Arrays.fill(bytes, (byte) 0);
-            }
-        } finally {
-            Arrays.fill(password, ' ');
-        }
+    public JniBridge(DemesneParameters parameters) {
+        isolateId = createIsolate();
+        final var serialized = parameters.toByteString().toByteArray();
+        launch(isolateId, serialized, serialized.length);
     }
 
     @Override
     public boolean active() {
         return active(isolateId);
+    }
+
+    @Override
+    public void commit(EventCoords coordinates) {
+        var bytes = coordinates.toByteArray();
+        commit(isolateId, bytes, bytes.length);
+    }
+
+    @Override
+    public SelfAddressingIdentifier getId() {
+        final var bytes = id(isolateId);
+        try {
+            return (SelfAddressingIdentifier) Identifier.from(Ident.parseFrom(bytes));
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException("Cannot get sub domain id", e);
+        }
+    }
+
+    @Override
+    public DelegatedInceptionEvent inception(Ident identifier, Builder<SelfAddressingIdentifier> specification) {
+        final var ident = identifier.toByteString().toByteArray();
+        final var spec = specification.toSpec().toByteArray();
+        var bytes = inception(isolateId, ident, ident.length, spec, spec.length);
+        return (DelegatedInceptionEvent) ProtobufEventFactory.toKeyEvent(bytes, KeyEvent.DELEGATED_INCEPTION_TYPE);
+    }
+
+    @Override
+    public DelegatedRotationEvent rotate(RotationSpecification.Builder specification) {
+        final var spec = specification.toSpec().toByteString().toByteArray();
+        var bytes = rotate(isolateId, spec, spec.length);
+        return (DelegatedRotationEvent) ProtobufEventFactory.toKeyEvent(bytes, KeyEvent.DELEGATED_ROTATION_TYPE);
     }
 
     @Override

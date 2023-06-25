@@ -35,7 +35,7 @@ import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Earner;

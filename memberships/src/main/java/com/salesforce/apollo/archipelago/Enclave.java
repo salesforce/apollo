@@ -12,9 +12,7 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
-import java.time.Duration;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -59,6 +57,10 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Enclave implements RouterSupplier {
+    public interface RoutingClientIdentity extends ClientIdentity {
+        Digest getAgent();
+    }
+
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
@@ -69,14 +71,12 @@ public class Enclave implements RouterSupplier {
     private final Executor            executor;
     private final Member              from;
     private final String              fromString;
-    private final Duration            keepAlive;
 
     public Enclave(Member from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
-                   Duration keepAlive, Consumer<Digest> contextRegistration) {
+                   Consumer<Digest> contextRegistration) {
         this.bridge = bridge;
         this.executor = executor;
         this.endpoint = endpoint;
-        this.keepAlive = keepAlive;
         this.contextRegistration = contextRegistration;
         this.from = from;
         this.fromString = qb64(from.getId());
@@ -95,8 +95,8 @@ public class Enclave implements RouterSupplier {
     }
 
     @Override
-    public Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
-                         LimitsRegistry limitsRegistry) {
+    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+                             LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -108,15 +108,21 @@ public class Enclave implements RouterSupplier {
                                                            .bossEventLoopGroup(getEventLoopGroup())
                                                            .intercept(new DomainSocketServerInterceptor())
                                                            .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
-                                                                                                       .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
+                                                                                                       .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
-        return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
-            @Override
-            public Digest getFrom() {
-                return Router.SERVER_CLIENT_ID_KEY.get();
-            }
-        }, contextRegistration, executor);
+        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)),
+                              new RoutingClientIdentity() {
+                                  @Override
+                                  public Digest getAgent() {
+                                      return Router.SERVER_AGENT_ID_KEY.get();
+                                  }
+
+                                  @Override
+                                  public Digest getFrom() {
+                                      return Router.SERVER_CLIENT_ID_KEY.get();
+                                  }
+                              }, contextRegistration, executor);
     }
 
     private ManagedChannel connectTo(Member to) {
@@ -138,7 +144,6 @@ public class Enclave implements RouterSupplier {
         final var builder = NettyChannelBuilder.forAddress(bridge)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)
-                                               .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
                                                .usePlaintext()
                                                .executor(executor)
                                                .intercept(clientInterceptor);
@@ -156,7 +161,14 @@ public class Enclave implements RouterSupplier {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
+                String agent = requestHeaders.get(Router.METADATA_AGENT_KEY);
+                if (agent == null) {
+                    log.error("No agent id in call headers: {}", requestHeaders.keys());
+                    throw new IllegalStateException("No agent ID in call");
+                }
+                Context ctx = Context.current()
+                                     .withValue(Router.SERVER_AGENT_ID_KEY, digest(agent))
+                                     .withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

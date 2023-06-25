@@ -26,7 +26,7 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.RouterSupplier;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -135,16 +135,16 @@ public class LocalServerTest {
         RouterSupplier serverA = new LocalServer(prefix, memberA, exec);
         var routerA = serverA.router(ServerConnectionCache.newBuilder(), exec);
 
-        Router.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
-                                                                                   r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         RouterSupplier serverB = new LocalServer(prefix, memberB, exec);
         var routerB = serverB.router(ServerConnectionCache.newBuilder(), exec);
 
-        Router.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",
-                                                                                     r -> new Server(r),
-                                                                                     c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",
+                                                                              r -> new Server(r),
+                                                                              c -> new TestItClient(c), local);
 
         routerA.start();
         routerB.start();

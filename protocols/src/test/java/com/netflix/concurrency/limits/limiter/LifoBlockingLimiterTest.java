@@ -20,12 +20,11 @@ import org.junit.jupiter.api.Test;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.limit.SettableLimit;
-import com.salesforce.apollo.utils.Utils;
 
 public class LifoBlockingLimiterTest {
 
     private LifoBlockingLimiter<Integer> blockingLimiter;
-    private final Executor               executor = Utils.newVirtualThreadPerTaskExecutor();
+    private final Executor               executor = Executors.newVirtualThreadPerTaskExecutor();
     private SettableLimit                limit;
     private SimpleLimiter<Integer>       simpleLimiter;
 
@@ -106,7 +105,7 @@ public class LifoBlockingLimiterTest {
         List<Optional<Limiter.Listener>> listeners = acquireN(blockingLimiter, 4);
 
         // Schedule one to release in 250 msec
-        Executors.newSingleThreadScheduledExecutor(Utils.virtualThreadFactory())
+        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory())
                  .schedule(() -> listeners.get(0).get().onSuccess(), 250, TimeUnit.MILLISECONDS);
 
         // Next acquire will block for 1 second

@@ -84,8 +84,11 @@ abstract public class Domain {
     public static void addMembers(Connection connection, List<byte[]> members, String state) {
         var context = DSL.using(connection, SQLDialect.H2);
         for (var m : members) {
-            context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
-            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
+            var id = context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX)
+                            .values(m)
+                            .onDuplicateKeyIgnore()
+                            .returning(IDENTIFIER.ID)
+                            .fetchOne();
             if (id != null) {
                 context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
             }
@@ -122,7 +125,7 @@ abstract public class Domain {
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
         Path dir;
         try {
-            dir = Files.createTempDirectory(id.getDigest().toString());
+            dir = Files.createTempDirectory(qb64(id.getDigest()));
         } catch (IOException e) {
             throw new IllegalStateException("Unable to create temporary directory", e);
         }
@@ -175,6 +178,8 @@ abstract public class Domain {
                                         txnConfig.executor());
         this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
                                           params.getDigestAlgorithm(), txnConfig.executor());
+        log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
+                 member.getId(), dbURL, checkpointBaseDir);
     }
 
     public boolean activate(Member m) {

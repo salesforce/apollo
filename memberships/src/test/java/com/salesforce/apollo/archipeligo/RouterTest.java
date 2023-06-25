@@ -24,7 +24,7 @@ import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
@@ -130,14 +130,14 @@ public class RouterTest {
         var serverBuilder = InProcessServerBuilder.forName(name);
         var cacheBuilder = ServerConnectionCache.newBuilder()
                                                 .setFactory(to -> InProcessChannelBuilder.forName(name).build());
-        var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
+        var router = new RouterImpl(serverMember, serverBuilder, cacheBuilder, null);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
-        Router.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA, new ServerA(),
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember, ctxA, new ServerA(),
                                                                                   "A", r -> new Server(r),
                                                                                   c -> new TestItClient(c), local);
 
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
-        Router.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember, ctxB, new ServerB(),
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember, ctxB, new ServerB(),
                                                                                   "A", r -> new Server(r),
                                                                                   c -> new TestItClient(c), local);
 

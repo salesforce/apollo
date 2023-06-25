@@ -8,36 +8,45 @@ package com.salesforce.apollo.domain;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.SubContext;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.JniBridge;
+import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
+import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
-import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -52,51 +61,91 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
  *
  */
 public class DemesneIsolateTest {
-    private static final Class<? extends ServerDomainSocketChannel> channelType    = getServerDomainSocketChannelClass();
-    private EventLoopGroup                                          eventLoopGroup = getEventLoopGroup();
+    private static final Class<? extends ServerDomainSocketChannel> channelType       = getServerDomainSocketChannelClass();
+    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
+
+    private EventLoopGroup eventLoopGroup = getEventLoopGroup();
 
     @Test
     public void smokin() throws Exception {
+        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
         var commDirectory = Path.of("target").resolve(UUID.randomUUID().toString());
         Files.createDirectories(commDirectory);
-        final var ksPassword = new char[] { 'f', 'o', 'o' };
-        final var ks = KeyStore.getInstance("JKS");
-        ks.load(null, ksPassword);
-        final var keystore = new JksKeyStore(ks, () -> ksPassword);
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
-        Stereotomy controller = new StereotomyImpl(keystore, kerl, SecureRandom.getInstanceStrong());
+        Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, SecureRandom.getInstanceStrong());
         var identifier = controller.newIdentifier().get();
-        var baos = new ByteArrayOutputStream();
-        ks.store(baos, ksPassword);
-        ProtoKERLService protoService = new ProtoKERLAdapter(kerl);
         Member serverMember = new ControlledIdentifierMember(identifier);
-        var kerlEndpoint = UUID.randomUUID().toString();
-        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(kerlEndpoint).toFile());
+        var portalAddress = UUID.randomUUID().toString();
+        var parentAddress = UUID.randomUUID().toString();
+        final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
         var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
                                               .protocolNegotiator(new DomainSocketNegotiator())
-                                              .channelType(channelType)
+                                              .channelType(serverChannelType)
                                               .workerEventLoopGroup(eventLoopGroup)
                                               .bossEventLoopGroup(eventLoopGroup)
                                               .intercept(new DomainSocketServerInterceptor());
 
         var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint));
-        var router = new Router(serverMember, serverBuilder, cacheBuilder, null);
+        Router router = new RouterImpl(serverMember, serverBuilder, cacheBuilder, null);
         router.start();
-        Digest context = DigestAlgorithm.DEFAULT.getOrigin();
-        @SuppressWarnings("unused")
-        var comms = router.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
-                                  r -> new KERLServer(r, null), null, null);
+
+        var registered = new TreeSet<Digest>();
+        var deregistered = new TreeSet<Digest>();
+
+        final OuterContextService service = new OuterContextService() {
+
+            @Override
+            public void deregister(Digeste context) {
+                deregistered.remove(Digest.from(context));
+            }
+
+            @Override
+            public void register(SubContext context) {
+                registered.add(Digest.from(context.getContext()));
+            }
+        };
+
+        final var parentEndpoint = new DomainSocketAddress(commDirectory.resolve(parentAddress).toFile());
+        var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
+        var outerService = new OuterContextServer(service, null);
+        var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
+                                                    .protocolNegotiator(new DomainSocketNegotiator())
+                                                    .channelType(getServerDomainSocketChannelClass())
+                                                    .addService(kerlServer)
+                                                    .addService(outerService)
+                                                    .workerEventLoopGroup(getEventLoopGroup())
+                                                    .bossEventLoopGroup(getEventLoopGroup())
+                                                    .intercept(new DomainSocketServerInterceptor())
+                                                    .build();
+        outerContextService.start();
 
         var parameters = DemesneParameters.newBuilder()
-                                          .setKerlContext(context.toDigeste())
-                                          .setKerlService(kerlEndpoint)
-                                          .setMember(identifier.getIdentifier().toIdent())
-                                          .setKeyStore(ByteString.copyFrom(baos.toByteArray()))
+                                          .setContext(context.toDigeste())
+                                          .setPortal(portalAddress)
+                                          .setParent(parentAddress)
                                           .setCommDirectory(commDirectory.toString())
+                                          .setMaxTransfer(100)
+                                          .setFalsePositiveRate(.125)
                                           .build();
-        Demesne demesne = new JniBridge(parameters, ksPassword);
-        demesne.start();
-        Utils.waitForCondition(1000, () -> demesne.active());
+        var demesne = new JniBridge(parameters);
+        Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();
+        var incp = demesne.inception(identifier.getIdentifier().toIdent(), specification);
+
+        var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(controller.digestAlgorithm()),
+                                            incp.getSequenceNumber().longValue());
+
+        var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
+
+        // Commit
+        identifier.seal(builder)
+                  .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
+                  .thenAccept(v -> demesne.start())
+                  .get();
+        Thread.sleep(Duration.ofSeconds(2));
+        demesne.stop();
+        assertEquals(1, registered.size());
+        assertTrue(registered.contains(context));
+        assertEquals(0, deregistered.size());
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {

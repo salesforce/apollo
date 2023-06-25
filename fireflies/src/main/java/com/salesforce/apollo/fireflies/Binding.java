@@ -37,7 +37,7 @@ import com.salesfoce.apollo.fireflies.proto.Redirect;
 import com.salesfoce.apollo.fireflies.proto.Registration;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.utils.proto.HexBloome;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.HexBloom;

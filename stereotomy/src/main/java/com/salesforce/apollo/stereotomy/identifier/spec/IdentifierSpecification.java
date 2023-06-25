@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -38,6 +39,10 @@ public class IdentifierSpecification<D extends Identifier> {
 
     public static class Builder<D extends Identifier> implements Cloneable {
 
+        public static <I extends Identifier> Builder<I> from(IdentifierSpec parseFrom) {
+            return new Builder<I>();
+        }
+
         private final EnumSet<ConfigurationTrait> configurationTraits           = EnumSet.noneOf(ConfigurationTrait.class);
         private Class<? extends Identifier>       derivation                    = SelfAddressingIdentifier.class;
         private DigestAlgorithm                   identifierDigestAlgorithm     = DigestAlgorithm.BLAKE3_256;
@@ -51,7 +56,8 @@ public class IdentifierSpecification<D extends Identifier> {
         private SigningThreshold                  signingThreshold;
         private Version                           version                       = Stereotomy.currentVersion();
         private final List<BasicIdentifier>       witnesses                     = new ArrayList<>();
-        private int                               witnessThreshold              = 0;
+
+        private int witnessThreshold = 0;
 
         public Builder<D> addKey(PublicKey key) {
             keys.add(requireNonNull(key));
@@ -66,7 +72,7 @@ public class IdentifierSpecification<D extends Identifier> {
 
         public IdentifierSpecification<D> build() {
 
-            // --- KEYS ---
+            // Keys
 
             if (keys.isEmpty()) {
                 throw new RuntimeException("No keys provided.");
@@ -93,11 +99,12 @@ public class IdentifierSpecification<D extends Identifier> {
                 throw new IllegalArgumentException("Unknown SigningThreshold type: " + signingThreshold.getClass());
             }
 
-            // --- NEXT KEYS ---
+            // Next keys
 
             Digest nextKeyConfigurationDigest = null;
 
-            // if we don't have it, we use default of majority nextSigningThreshold
+            // if we don't have it defined already, we use default of majority
+            // nextSigningThreshold
             if (nextSigningThreshold == null) {
                 nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
             } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
@@ -124,7 +131,7 @@ public class IdentifierSpecification<D extends Identifier> {
             nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, nextKeys,
                                                                          nextKeysAlgorithm);
 
-            // --- WITNESSES ---
+            // Witnesses
 
             if ((witnessThreshold == 0) && !witnesses.isEmpty()) {
                 witnessThreshold = (witnesses.size() / 2) + 1;
@@ -338,6 +345,9 @@ public class IdentifierSpecification<D extends Identifier> {
             return this;
         }
 
+        public IdentifierSpec toSpec() {
+            return IdentifierSpec.newBuilder().build();
+        }
     }
 
     public static BasicIdentifier basic(PublicKey key) {
@@ -392,6 +402,19 @@ public class IdentifierSpecification<D extends Identifier> {
         this.version = version;
         this.selfAddressingDigestAlgorithm = selfAddressingDigestAlgorithm;
         this.signatureAlgorithm = signatureAlgorithm;
+    }
+
+    @Override
+    public Builder<D> clone() {
+        Object clone;
+        try {
+            clone = super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new IllegalStateException("Clone not supported", e);
+        }
+        @SuppressWarnings("unchecked")
+        final var cast = (Builder<D>) clone;
+        return cast;
     }
 
     public Set<ConfigurationTrait> getConfigurationTraits() {

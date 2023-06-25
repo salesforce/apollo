@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 
 import org.joou.ULong;
 
+import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -35,6 +36,10 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class RotationSpecification {
 
     public static class Builder implements Cloneable {
+        public static Builder from(RotationSpec rotationSpec) {
+            return new Builder();
+        }
+
         private EventCoordinates            currentCoords;
         private Digest                      currentDigest;
         private final List<BasicIdentifier> currentWitnesses   = new ArrayList<>();
@@ -50,7 +55,8 @@ public class RotationSpecification {
         private SigningThreshold            signingThreshold;
         private Version                     version            = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses          = new ArrayList<>();
-        private int                         witnessThreshold   = 0;
+
+        private int witnessThreshold = 0;
 
         public Builder() {
         }
@@ -329,6 +335,10 @@ public class RotationSpecification {
 
             this.witnessThreshold = witnessThreshold;
             return this;
+        }
+
+        public RotationSpec toSpec() {
+            return RotationSpec.newBuilder().build();
         }
 
     }

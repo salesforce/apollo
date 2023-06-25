@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -16,6 +14,7 @@ import java.util.stream.Collectors;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -58,7 +57,7 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     @Override
     public Identifier getIdentifier() {
-        return identifier(event.getIdentifier());
+        return Identifier.from(event.getIdentifier());
     }
 
     @Override
@@ -68,12 +67,7 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return event.getSpecification()
-                    .getWitnessesList()
-                    .stream()
-                    .map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
-                    .collect(Collectors.toList());
+        return event.getSpecification().getWitnessesList().stream().map(s -> witness(s)).collect(Collectors.toList());
     }
 
     @Override
@@ -98,5 +92,9 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
     @Override
     protected ByteString toByteString() {
         return event.toByteString();
+    }
+
+    private BasicIdentifier witness(PubKey pk) {
+        return new BasicIdentifier(pk);
     }
 }

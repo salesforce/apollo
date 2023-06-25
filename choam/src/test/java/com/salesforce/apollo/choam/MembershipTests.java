@@ -112,9 +112,9 @@ public class MembershipTests {
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1,
-                                                Executors.newScheduledThreadPool(1, Utils.virtualThreadFactory()),
+                                                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
                                                 countdown,
-                                                Executors.newSingleThreadExecutor(Utils.virtualThreadFactory()));
+                                                Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
 
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");

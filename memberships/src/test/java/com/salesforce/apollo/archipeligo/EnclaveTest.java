@@ -16,9 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,22 +37,14 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -131,23 +125,6 @@ public class EnclaveTest {
 
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
-    public static ClientInterceptor clientInterceptor(Digest ctx) {
-        return new ClientInterceptor() {
-            @Override
-            public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                       CallOptions callOptions, Channel next) {
-                ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
-                    @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, qb64(ctx));
-                        super.start(responseListener, headers);
-                    }
-                };
-            }
-        };
-    }
-
     private EventLoopGroup      eventLoopGroup;
     private final TestItService local = new TestItService() {
 
@@ -188,36 +165,40 @@ public class EnclaveTest {
         var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
+        final var routes = new HashMap<String, DomainSocketAddress>();
+        final Function<String, DomainSocketAddress> router = s -> routes.get(s);
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
                                                                .resolve(UUID.randomUUID().toString())
                                                                .toFile());
-        final var portal = new Portal<>(NettyServerBuilder.forAddress(portalEndpoint)
+        final var agent = DigestAlgorithm.DEFAULT.getLast();
+        final var portal = new Portal<>(agent,
+                                        NettyServerBuilder.forAddress(portalEndpoint)
                                                           .protocolNegotiator(new DomainSocketNegotiator())
                                                           .channelType(getServerDomainSocketChannelClass())
                                                           .workerEventLoopGroup(getEventLoopGroup())
                                                           .bossEventLoopGroup(getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1));
+                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1), router);
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint1);
+        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, d -> {
+            routes.put(qb64(d), endpoint1);
         });
         var router1 = enclave1.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, Duration.ofMillis(1), d -> {
-            portal.register(qb64(d), endpoint2);
+        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> {
+            routes.put(qb64(d), endpoint2);
         });
         var router2 = enclave2.router(exec);
-        Router.CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(),
-                                                                                   "A", r -> new Server(r),
-                                                                                   c -> new TestItClient(c), local);
+        CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "A",
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         portal.start();
         router1.start();

@@ -67,7 +67,7 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Submitter;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -101,7 +101,6 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
@@ -678,9 +677,9 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
-        this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
+        this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
-        executions = Utils.newVirtualThreadPerTaskExecutor();
+        executions = Executors.newVirtualThreadPerTaskExecutor();
 
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
@@ -691,7 +690,9 @@ public class CHOAM {
                                                              (Function<Any, List<Digest>>) any -> Collections.emptyList(),
                                                              (m, any) -> any,
                                                              (Function<AgedMessageOrBuilder, Any>) am -> am.getContent()));
-        linear = Executors.newSingleThreadExecutor(Utils.virtualThreadFactory("Linear " + params.member().getId()));
+        linear = Executors.newSingleThreadExecutor(Thread.ofVirtual()
+                                                         .name("Linear " + params.member().getId())
+                                                         .factory());
         combine.registerHandler((ctx, messages) -> {
             try {
                 linear.execute(() -> combine(messages));

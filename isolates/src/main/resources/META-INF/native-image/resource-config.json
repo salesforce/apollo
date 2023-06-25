@@ -2,6 +2,9 @@
   "resources":{
   "includes":[
     {
+      "pattern":"\\QMETA-INF/native/libnetty_transport_native_kqueue_aarch_64.jnilib\\E"
+    }, 
+    {
       "pattern":"\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
     }, 
     {
@@ -66,7 +69,7 @@
     }, 
     {
       "pattern":"\\QMETA-INF/services/org.apache.maven.surefire.spi.MasterProcessChannelProcessorFactory\\E"
-    },
+    }, 
     {
       "pattern":"\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
     }, 
@@ -83,6 +86,9 @@
       "pattern":"\\Qdeterministic/org/h2/util/data.zip\\E"
     }, 
     {
+      "pattern":"\\Qinitialize-thoth.xml\\E"
+    }, 
+    {
       "pattern":"\\Qinitialize.xml\\E"
     }, 
     {
@@ -90,6 +96,9 @@
     }, 
     {
       "pattern":"\\Qmodel/model.xml\\E"
+    }, 
+    {
+      "pattern":"\\Qorg/h2/util/data.zip\\E"
     }, 
     {
       "pattern":"\\Qsql-state/internal.xml\\E"
@@ -104,21 +113,33 @@
       "pattern":"\\Qstereotomy/uni-kerl.xml\\E"
     }, 
     {
+      "pattern":"\\Qthoth/thoth.xml\\E"
+    }, 
+    {
       "pattern":"\\Qwww.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd\\E"
     }
   ]},
   "bundles":[
     {
       "name":"com.sun.org.apache.xerces.internal.impl.xpath.regex.message",
-      "locales":["und"]
+      "locales":[
+        "", 
+        "und"
+      ]
     }, 
     {
       "name":"com/sun/rowset/RowSetResourceBundle",
-      "locales":["und"]
+      "locales":[
+        "", 
+        "und"
+      ]
     }, 
     {
       "name":"liquibase/i18n/liquibase-core",
-      "locales":["und"]
+      "locales":[
+        "", 
+        "und"
+      ]
     }
   ]
 }

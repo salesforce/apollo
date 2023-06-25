@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;

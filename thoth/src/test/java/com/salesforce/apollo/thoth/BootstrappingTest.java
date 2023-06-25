@@ -144,6 +144,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         // Verify client KERL published
         var ks = testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
         assertNotNull(ks);
+        admin.close();
     }
 
     @Override

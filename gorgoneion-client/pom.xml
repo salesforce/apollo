@@ -40,6 +40,11 @@
             <scope>test</scope>
         </dependency> 
         <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>gorgoneion</artifactId>
             <scope>test</scope>

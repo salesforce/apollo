@@ -46,6 +46,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -243,7 +244,7 @@ public class DomainTest {
                                                             .setExec(exec)
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
-                                           EventValidation.NONE);
+                                           EventValidation.NONE, IdentifierSpecification.newBuilder());
             domains.add(domain);
             localRouter.start();
         });

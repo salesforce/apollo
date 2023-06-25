@@ -64,7 +64,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.context.majority();
     }
 
-    public static class MvStoreBuilder {
+    public static class MvStoreBuilder implements Cloneable {
         private int     autoCommitBufferSize = -1;
         private int     autoCompactFillRate  = -1;
         private int     cachConcurrency      = -1;
@@ -125,6 +125,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 builder.fileStore(offHeap);
             }
             return builder.open();
+        }
+
+        @Override
+        public MvStoreBuilder clone() {
+            Object clone;
+            try {
+                clone = super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException("Clone not supported!", e);
+            }
+            return (MvStoreBuilder) clone;
         }
 
         public int getAutoCommitBufferSize() {

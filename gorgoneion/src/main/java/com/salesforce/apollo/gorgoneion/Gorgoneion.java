@@ -37,7 +37,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;

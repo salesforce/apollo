@@ -41,6 +41,7 @@ import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
@@ -55,9 +56,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -743,10 +741,6 @@ public class Utils {
         }
     }
 
-    public static ExecutorService newVirtualThreadPerTaskExecutor() {
-        return Executors.newVirtualThreadPerTaskExecutor();
-    }
-
     public static File relativize(File parent, File child) {
         URI base = parent.toURI();
         URI absolute = child.toURI();
@@ -1005,9 +999,13 @@ public class Utils {
      */
     public static URL resolveResourceURL(Class<?> base, String resource) throws IOException {
         try {
-            URL url = new URL(resource);
+            URL url = new URI(resource).toURL();
             return url;
         } catch (MalformedURLException e) {
+            LoggerFactory.getLogger(Utils.class)
+                         .trace(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
+                                              resource));
+        } catch (URISyntaxException e) {
             LoggerFactory.getLogger(Utils.class)
                          .trace(String.format("The resource is not a valid URL: %s\n Trying to find a corresponding file",
                                               resource));
@@ -1067,22 +1065,6 @@ public class Utils {
         return (thread, throwable) -> {
             log.error("Uncaught exception on thread: {}", thread.getName(), throwable);
         };
-    }
-
-    public static ThreadFactory virtualThreadFactory() {
-        try {
-            return Boolean.getBoolean("use.plat.threads") ? r -> new Thread(r) : VThreadHack.virtualThreadFactory();
-        } catch (Throwable e) {
-            return r -> new Thread(r);
-        }
-    }
-
-    public static ThreadFactory virtualThreadFactory(String string) {
-        try {
-            return VThreadHack.virtualThreadFactory(string);
-        } catch (Throwable e) {
-            return r -> new Thread(r, string);
-        }
     }
 
     public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {

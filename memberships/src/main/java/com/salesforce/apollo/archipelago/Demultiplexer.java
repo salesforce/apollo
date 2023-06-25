@@ -9,6 +9,7 @@ package com.salesforce.apollo.archipelago;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -52,7 +53,7 @@ public class Demultiplexer {
                                                                          ServerCallHandler<ReqT, RespT> next) {
                 String route = requestHeaders.get(routing);
                 if (route == null) {
-                    log.error("No route id in call header: {}", routing.name());
+                    log.error("No route in call header: {}", routing.name());
                     throw new StatusRuntimeException(Status.UNKNOWN.withDescription("No route ID in call, missing header: "
                     + routing.name()));
                 }
@@ -69,14 +70,18 @@ public class Demultiplexer {
     }
 
     public void close(Duration await) {
-        if (!started.compareAndSet(false, true)) {
+        if (!started.compareAndSet(true, false)) {
             return;
         }
-        server.shutdown();
         try {
-            server.awaitTermination(await.toNanos(), TimeUnit.NANOSECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            server.shutdown();
+            try {
+                server.awaitTermination(await.toNanos(), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        } catch (RejectedExecutionException e) {
+            // eat
         }
     }
 

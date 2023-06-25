@@ -162,7 +162,7 @@ public class MtlsServer implements RouterSupplier {
     }
 
     @Override
-    public Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
                          LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
@@ -190,7 +190,7 @@ public class MtlsServer implements RouterSupplier {
                 }
             }
         };
-        return new Router(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity);
+        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity);
     }
 
     private ManagedChannel connectTo(Member to) {

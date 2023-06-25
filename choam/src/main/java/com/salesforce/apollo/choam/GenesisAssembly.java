@@ -32,7 +32,7 @@ import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.Validations;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.archipelago.Router.CommonCommunications;
+import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Genesis;
 import com.salesforce.apollo.choam.support.HashedBlock;

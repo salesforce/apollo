@@ -95,6 +95,11 @@ interface JNINativeInterface extends PointerBase {
     @CField
     GetMethodId getGetStaticMethodID();
 
+    @CField
+    NewByteArray getNewByteArray();
+
+    @CField
+    SetByteArrayRegion getSetByteArrayRegion();
 }
 
 interface JObject extends PointerBase {
@@ -158,4 +163,14 @@ interface JValue extends PointerBase {
 
     @CField
     void z(boolean b);
+}
+
+interface NewByteArray extends CFunctionPointer {
+    @InvokeCFunctionPointer
+    JByteArray call(JNIEnvironment env, int len);
+}
+
+interface SetByteArrayRegion extends CFunctionPointer {
+    @InvokeCFunctionPointer
+    void call(JNIEnvironment env, JByteArray array, int start, int len, CCharPointer buf);
 }
