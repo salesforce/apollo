@@ -24,7 +24,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,7 +152,6 @@ public class DemesneImpl implements Demesne {
         final var entropy = SecureRandom.getInstanceStrong();
         entropy.nextBytes(pwd);
         final var password = Hex.hexChars(pwd);
-        final Supplier<char[]> passwordProvider = () -> password;
         final var keystore = KeyStore.getInstance("JKS");
 
         keystore.load(null, password);
@@ -164,7 +162,7 @@ public class DemesneImpl implements Demesne {
                                                                                                  .getSeconds(),
                                                                                        parameters.getTimeout()
                                                                                                  .getNanos()));
-        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
+        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, () -> password), kerl, entropy);
 
         thoth = new Thoth(stereotomy);
     }
