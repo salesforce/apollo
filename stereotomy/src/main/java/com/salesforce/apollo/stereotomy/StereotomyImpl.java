@@ -263,7 +263,7 @@ public class StereotomyImpl implements Stereotomy {
             if (this == obj) {
                 return true;
             }
-            if (!super.equals(obj) || !(obj instanceof @SuppressWarnings("rawtypes") ControlledIdentifierImpl other) ||
+            if (!super.equals(obj) || !(obj instanceof ControlledIdentifierImpl other) ||
                 !getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
