@@ -648,12 +648,12 @@
                             <id>satisfy-liquibase</id>
                             <phase>generate-sources</phase>
                             <configuration>
-                                <tasks>
+                                <target>
                                     <mkdir
                                         dir="${project.build.directory}/test-classes" />
                                     <mkdir
                                         dir="${project.build.directory}/classes" />
-                                </tasks>
+                                </target>
                             </configuration>
                             <goals>
                                 <goal>run</goal>
