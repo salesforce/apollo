@@ -45,8 +45,8 @@
         <native.maven.plugin.version>0.9.23</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
-        <version.java>20</version.java>
-        <graal.vm.version>23.0.0</graal.vm.version>
+        <version.java>21</version.java>
+        <graal.vm.version>23.1.0</graal.vm.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <dependencyManagement>
@@ -570,7 +570,6 @@
                 <configuration>
                     <forkCount>1</forkCount>
                     <reuseForks>false</reuseForks>
-                    <argLine>--enable-preview</argLine>
                 </configuration>
             </plugin>
             <plugin>
@@ -593,9 +592,6 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>${version.java}</release>
-                    <compilerArgs>
-                        <compilerArg>--enable-preview</compilerArg>
-                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
