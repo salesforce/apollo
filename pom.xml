@@ -32,17 +32,17 @@
     </modules>
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
-        <jackson.version>2.13.4</jackson.version>
+        <jackson.version>2.15.2</jackson.version>
         <dropwizard.version>4.0.0-beta.3</dropwizard.version>
         <h2.version>2.1.212</h2.version>
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.72</bc.version>
         <logback.version>1.4.4</logback.version>
-        <grpc.version>1.54.0</grpc.version>
-        <protobuf.version>3.22.2</protobuf.version>
+        <grpc.version>1.58.0</grpc.version>
+        <protobuf.version>3.24.3</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
-        <netty.version>4.1.87.Final</netty.version>
-        <native.maven.plugin.version>0.9.23</native.maven.plugin.version>
+        <netty.version>4.1.93.Final</netty.version>
+        <native.maven.plugin.version>0.9.27</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
         <version.java>21</version.java>
@@ -122,6 +122,16 @@
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-servlet</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-util</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-inprocess</artifactId>
                 <version>${grpc.version}</version>
             </dependency>
             <dependency>
