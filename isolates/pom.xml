@@ -40,9 +40,9 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
-                            <descriptorRefs>
-                                <descriptorRef>jar-with-dependencies</descriptorRef>
-                            </descriptorRefs>
+                            <descriptors>
+                                <descriptor>assembly/assembly.xml</descriptor>
+                            </descriptors>
                         </configuration>
                     </execution>
                 </executions>
@@ -190,6 +190,10 @@
                                 <buildArg>
                                     -H:+AllowDeprecatedBuilderClassesOnImageClasspath</buildArg>
                                 <buildArg>-H:+BuildReport</buildArg>
+                                <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
+<!--                                <buildArgs>-H:+StrictImageHeap</buildArgs>-->
+                                <buildArgs>--enable-sbom</buildArgs>
+                                <buildArgs>-march=native</buildArgs>
                             </buildArgs>
                             <verbose>false</verbose>
                             <metadataRepository>
@@ -197,7 +201,7 @@
                             </metadataRepository>
                             <classpath>
                                 <param>
-                                    ${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</param>
+                                    ${project.build.directory}/${project.artifactId}-${project.version}-graalvm-jar-with-dependencies.jar</param>
                             </classpath>
                         </configuration>
                         <dependencies>

@@ -117,6 +117,9 @@
     }, 
     {
       "pattern":"\\Qwww.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd\\E"
+    },
+    {
+      "pattern":"\\QMETA-INF/services/io.grpc.LoadBalancerProvider\\E"
     }
   ]},
   "bundles":[
