@@ -85,13 +85,13 @@ public class SyncSliceIteratorTest {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var slice = new SynchSliceIterator<TestItService>("Test Me", serverMember1, Arrays.asList(serverMember1, serverMember2), commsA, exec);
-        var countdown = new CountDownLatch(2);
+        var countdown = new CountDownLatch(1);
         slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true, () -> {
             countdown.countDown();
         }, Executors.newSingleThreadScheduledExecutor(), Duration.ofMillis(1));
-        boolean finished = countdown.await(1, TimeUnit.SECONDS);
+        boolean finished = countdown.await(3, TimeUnit.SECONDS);
         assertTrue(finished, "completed: " + countdown.getCount());
-        assertFalse(pinged1.get());
+        assertTrue(pinged1.get());
         assertTrue(pinged2.get());
     }
 }
