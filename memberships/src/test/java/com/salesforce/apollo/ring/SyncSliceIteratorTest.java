@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author hal.hildebrand
  **/
-public class RingIteratorSyncTest {
+public class SyncSliceIteratorTest {
     @Test
     public void smokin() throws Exception {
         var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
@@ -83,13 +84,13 @@ public class RingIteratorSyncTest {
         var frequency = Duration.ofMillis(1);
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var sync = new RingIteratorSync<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA, exec);
-        var countdown = new CountDownLatch(3);
-        sync.iterate(context.getId(), (link, round) -> link.ping(Any.getDefaultInstance()), (round, result, link) -> {
+        var slice = new SynchSliceIterator<TestItService>("Test Me", serverMember1, Arrays.asList(serverMember1, serverMember2), commsA, exec);
+        var countdown = new CountDownLatch(2);
+        slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true, () -> {
             countdown.countDown();
-            return true;
-        });
-        assertTrue(countdown.await(1, TimeUnit.SECONDS));
+        }, Executors.newSingleThreadScheduledExecutor(), Duration.ofMillis(1));
+        boolean finished = countdown.await(1, TimeUnit.SECONDS);
+        assertTrue(finished, "completed: " + countdown.getCount());
         assertFalse(pinged1.get());
         assertTrue(pinged2.get());
     }
