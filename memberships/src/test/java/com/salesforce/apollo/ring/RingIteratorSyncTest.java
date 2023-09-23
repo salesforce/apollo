@@ -73,37 +73,29 @@ public class RingIteratorSyncTest {
         };
         final var name = UUID.randomUUID().toString();
         Context<Member> context = Context.newBuilder().build();
+        context.activate(serverMember1);
+        context.activate(serverMember2);
 
         var serverBuilder = InProcessServerBuilder.forName(name);
-        var cacheBuilder = ServerConnectionCache.newBuilder()
-                .setFactory(to -> InProcessChannelBuilder.forName(name).build());
+        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
-        final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, ctxA, new ServerA(local1),
-                "A", r -> new Server(r),
-                c -> new TestItClient(c), local1);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(), new ServerA(local1), "A", Server::new, TestItClient::new, local1);
 
-        final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, ctxB, new ServerB(local2),
-                "A", r -> new Server(r),
-                c -> new TestItClient(c), local1);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(), new ServerB(local2), "B", Server::new, TestItClient::new, local2);
 
         router.start();
-        var frequency = Duration.ofMillis(100);
+        var frequency = Duration.ofMillis(1);
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var sync = new RingIteratorSync<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA, exec);
-        var countdown = new CountDownLatch(2);
-        sync.iterate(ctxA,
-                (link, round) ->
-                        link.ping(Any.getDefaultInstance()),
-                (round, result, link) -> {
-                    countdown.countDown();
-                    return true;
-                });
-        countdown.await(1, TimeUnit.SECONDS);
-        assertTrue(pinged1.get());
-        assertFalse(pinged2.get());
+        var countdown = new CountDownLatch(3);
+        sync.iterate(context.getId(), (link, round) -> link.ping(Any.getDefaultInstance()), (round, result, link) -> {
+            countdown.countDown();
+            return true;
+        });
+        assertTrue(countdown.await(300, TimeUnit.SECONDS));
+        assertFalse(pinged1.get());
+        assertTrue(pinged2.get());
     }
 
     public static interface TestIt {
@@ -162,9 +154,7 @@ public class RingIteratorSyncTest {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
             local.ping(request);
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server A"))
-                    .build()));
+            responseObserver.onNext(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server A")).build()));
             responseObserver.onCompleted();
         }
     }
@@ -179,9 +169,7 @@ public class RingIteratorSyncTest {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
             local.ping(request);
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server B"))
-                    .build()));
+            responseObserver.onNext(Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server B")).build()));
             responseObserver.onCompleted();
         }
     }
