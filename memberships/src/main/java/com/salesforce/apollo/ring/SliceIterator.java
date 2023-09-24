@@ -29,8 +29,8 @@ import java.util.function.Consumer;
 /**
  * @author hal.hildebrand
  */
-public class SyncSliceIterator<Comm extends Link> {
-    private static final Logger log = LoggerFactory.getLogger(SyncSliceIterator.class);
+public class SliceIterator<Comm extends Link> {
+    private static final Logger log = LoggerFactory.getLogger(SliceIterator.class);
     private final CommonCommunications<Comm, ?> comm;
     private final Executor exec;
     private final String label;
@@ -39,8 +39,8 @@ public class SyncSliceIterator<Comm extends Link> {
     private Member current;
     private Iterator<? extends Member> currentIteration;
 
-    public SyncSliceIterator(String label, SigningMember member, List<? extends Member> slice,
-                             CommonCommunications<Comm, ?> comm, Executor exec) {
+    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+                         CommonCommunications<Comm, ?> comm, Executor exec) {
         assert member != null && slice != null && comm != null;
         this.label = label;
         this.member = member;

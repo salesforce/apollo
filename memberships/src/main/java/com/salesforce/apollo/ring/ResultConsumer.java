@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.ring;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.ring.RingCommunications.Destination;
-
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -18,5 +15,5 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @FunctionalInterface
 public interface ResultConsumer<M, T, Comm> {
-    boolean handle(AtomicInteger tally, Optional<T> result, Destination<M, Comm> destination);
+    boolean handle(AtomicInteger tally, Optional<T> result, RingCommunications.Destination<M, Comm> destination);
 }

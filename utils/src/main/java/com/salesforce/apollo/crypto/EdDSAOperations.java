@@ -195,6 +195,8 @@ public class EdDSAOperations {
         } catch (GeneralSecurityException e) {
             // TODO handle better
             throw new RuntimeException(e);
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
         }
     }
 

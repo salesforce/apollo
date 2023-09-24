@@ -7,7 +7,6 @@
 package com.salesforce.apollo.model;
 
 import com.codahale.metrics.Timer;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
 import com.salesfoce.apollo.demesne.proto.SignedDelegate;
 import com.salesfoce.apollo.utils.proto.Biff;
@@ -22,13 +21,10 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.comms.Delegation;
 import com.salesforce.apollo.model.comms.DelegationServer;
 import com.salesforce.apollo.model.comms.DelegationService;
-import com.salesforce.apollo.ring.RingCommunications.Destination;
-import com.salesforce.apollo.ring.SyncRingCommunications;
+import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -39,7 +35,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,7 +54,7 @@ public class SubDomain extends Domain {
     private final double fpr;
     private final Duration gossipInterval;
     private final int maxTransfer;
-    private final SyncRingCommunications<Member, Delegation> ring;
+    private final RingCommunications<Member, Delegation> ring;
     private final AtomicBoolean started = new AtomicBoolean();
     private final MVStore store;
     private ScheduledFuture<?> scheduled;
@@ -92,7 +87,7 @@ public class SubDomain extends Domain {
                         r -> new DelegationServer((RoutingClientIdentity) params.communications()
                                 .getClientIdentityProvider(),
                                 r, null));
-        ring = new SyncRingCommunications<Member, Delegation>(params.context(), member, comms, params.exec());
+        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms, params.exec());
         this.gossipInterval = gossipInterval;
 
     }
@@ -150,7 +145,7 @@ public class SubDomain extends Domain {
     }
 
     private void handle(Optional< DelegationUpdate> result,
-                        SyncRingCommunications.Destination<Member, Delegation> destination, Timer.Context timer) {
+                        RingCommunications.Destination<Member, Delegation> destination, Timer.Context timer) {
         if (!started.get() || destination.link() == null) {
             if (timer != null) {
                 timer.stop();

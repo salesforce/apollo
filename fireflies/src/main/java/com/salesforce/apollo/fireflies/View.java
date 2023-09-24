@@ -31,7 +31,7 @@ import com.salesforce.apollo.fireflies.comm.gossip.FfServer;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.membership.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.ring.SyncRingCommunications;
+import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -93,7 +93,7 @@ public class View {
     private final Context<Participant> context;
     private final DigestAlgorithm digestAlgo;
     private final Executor exec;
-    private final SyncRingCommunications<Participant, Fireflies> gossiper;
+    private final RingCommunications<Participant, Fireflies> gossiper;
     private final AtomicBoolean introduced = new AtomicBoolean();
     private final Map<UUID, ViewLifecycleListener> lifecycleListeners = new HashMap<>();
     private final FireflyMetrics metrics;
@@ -135,7 +135,7 @@ public class View {
                 service.getClass().getCanonicalName() + ":approach",
                 r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                 EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
-        gossiper = new SyncRingCommunications<>(context, node, comm, exec);
+        gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
     }
 
@@ -1012,7 +1012,7 @@ public class View {
      * @param scheduler
      */
     private void gossip(Optional<Gossip> result,
-                        SyncRingCommunications.Destination<Participant, Fireflies> destination, Duration duration,
+                        RingCommunications.Destination<Participant, Fireflies> destination, Duration duration,
                         ScheduledExecutorService scheduler) {
         final var member = destination.member();
         try {
@@ -1063,7 +1063,7 @@ public class View {
         }
     }
 
-    private void handleSRE(String type, SyncRingCommunications.Destination<Participant, Fireflies> destination, final Participant member,
+    private void handleSRE(String type, RingCommunications.Destination<Participant, Fireflies> destination, final Participant member,
                            StatusRuntimeException sre) {
         switch (sre.getStatus().getCode()) {
             case PERMISSION_DENIED:

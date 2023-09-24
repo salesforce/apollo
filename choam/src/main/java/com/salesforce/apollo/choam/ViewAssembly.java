@@ -16,7 +16,7 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.ring.SyncSliceIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +47,7 @@ public class ViewAssembly {
     private final static Logger log = LoggerFactory.getLogger(ViewAssembly.class);
     protected final Transitions transitions;
     private final AtomicBoolean cancelSlice = new AtomicBoolean();
-    private final SyncSliceIterator<Terminal> committee;
+    private final SliceIterator<Terminal> committee;
     private final Map<Digest, Member> nextAssembly;
     private final Digest nextViewId;
     private final Map<Digest, Proposed> proposals = new ConcurrentHashMap<>();
@@ -65,7 +65,7 @@ public class ViewAssembly {
                 .stream()
                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
-        committee = new SyncSliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms,
+        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms,
                 params().exec());
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(new Recon(), Transitions.class,

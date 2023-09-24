@@ -24,7 +24,7 @@ import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.ring.SyncSliceIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
@@ -86,7 +86,7 @@ class Binding {
         var timer = metrics == null ? null : metrics.seedDuration().time();
         seeding.whenComplete(join(duration, scheduler, timer));
 
-        var seedlings = new SyncSliceIterator<>("Seedlings", node,
+        var seedlings = new SliceIterator<>("Seedlings", node,
                 seeds.stream()
                         .map(s -> seedFor(s))
                         .map(nw -> view.new Participant(
@@ -295,7 +295,7 @@ class Binding {
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
-        final var redirecting = new SyncSliceIterator<>("Gateways", node, successors, approaches, exec);
+        final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches, exec);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
         regate.set(() -> {

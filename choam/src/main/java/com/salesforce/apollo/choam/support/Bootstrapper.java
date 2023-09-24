@@ -16,8 +16,8 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.ring.SyncRingCommunications;
-import com.salesforce.apollo.ring.SyncRingIterator;
+import com.salesforce.apollo.ring.RingCommunications;
+import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -88,7 +88,7 @@ public class Bootstrapper {
     private void anchor(AtomicReference<ULong> start, ULong end) {
         final var randomCut = randomCut(params.digestAlgorithm());
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        new SyncRingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
                 params.scheduler()).iterate(randomCut, (link, ring) -> anchor(link, start, end),
                 (tally, futureSailor,
                  destination) -> completeAnchor(futureSailor, start, end,
@@ -148,7 +148,7 @@ public class Bootstrapper {
     }
 
     private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start,
-                                   ULong end, SyncRingCommunications.Destination<Member, Terminal> destination) {
+                                   ULong end, RingCommunications.Destination<Member, Terminal> destination) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
             log.trace("Anchor synchronized isDone: {} anchor sync: {} on: {}", sync.isDone(),
                     anchorSynchronized.isDone(), params.member().getId());
@@ -174,7 +174,7 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
-        new SyncRingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
                 params.exec()).iterate(randomCut(params.digestAlgorithm()),
                 (link, ring) -> completeViewChain(link, start, end),
                 (tally, result, destination) -> completeViewChain(result,
@@ -184,7 +184,7 @@ public class Bootstrapper {
     }
 
     private boolean completeViewChain(Optional<Blocks> futureSailor, AtomicReference<ULong> start,
-                                      ULong end, SyncRingCommunications.Destination<Member, Terminal> destination) {
+                                      ULong end, RingCommunications.Destination<Member, Terminal> destination) {
         if (sync.isDone() || viewChainSynchronized.isDone()) {
             log.trace("View chain synchronized isDone: {} sync: {} on: {}", sync.isDone(),
                     viewChainSynchronized.isDone(), params.member().getId());
@@ -367,7 +367,7 @@ public class Bootstrapper {
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder().setHeight(anchor.height().longValue()).build();
         final var randomCut = randomCut(params.digestAlgorithm());
-        new SyncRingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
                 params.scheduler()).iterate(randomCut, (link, ring) -> synchronize(s, link),
                 (tally, futureSailor,
                  destination) -> synchronize(futureSailor, votes, destination),
@@ -433,7 +433,7 @@ public class Bootstrapper {
     }
 
     private boolean synchronize(Optional<Initial> futureSailor, HashMap<Digest, Initial> votes,
-                                SyncRingCommunications.Destination<Member, Terminal> destination) {
+                                RingCommunications.Destination<Member, Terminal> destination) {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),

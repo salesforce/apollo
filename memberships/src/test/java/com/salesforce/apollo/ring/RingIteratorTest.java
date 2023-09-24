@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author hal.hildebrand
  **/
-public class SyncRingIteratorTest {
+public class RingIteratorTest {
     @Test
     public void smokin() throws Exception {
         var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
@@ -83,7 +83,7 @@ public class SyncRingIteratorTest {
         var frequency = Duration.ofMillis(1);
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var sync = new SyncRingIterator<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA, exec);
+        var sync = new RingIterator<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA, exec);
         var countdown = new CountDownLatch(3);
         sync.iterate(context.getId(), (link, round) -> link.ping(Any.getDefaultInstance()), (round, result, link) -> {
             countdown.countDown();

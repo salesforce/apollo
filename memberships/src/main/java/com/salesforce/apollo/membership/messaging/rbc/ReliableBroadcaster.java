@@ -22,7 +22,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
-import com.salesforce.apollo.ring.SyncRingCommunications;
+import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -56,7 +56,7 @@ public class ReliableBroadcaster {
     private final CommonCommunications<ReliableBroadcast, Service> comm;
     private final Context<Member> context;
     private final Executor exec;
-    private final SyncRingCommunications<Member, ReliableBroadcast> gossiper;
+    private final RingCommunications<Member, ReliableBroadcast> gossiper;
     private final SigningMember member;
     private final RbcMetrics metrics;
     private final Parameters params;
@@ -73,7 +73,7 @@ public class ReliableBroadcaster {
         this.comm = communications.create(member, context.getId(), new Service(),
                 r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                 getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
-        gossiper = new SyncRingCommunications<>(context, member, this.comm, exec);
+        gossiper = new RingCommunications<>(context, member, this.comm, exec);
         this.adapter = adapter;
     }
 
@@ -233,7 +233,7 @@ public class ReliableBroadcaster {
     }
 
     private void handle(Optional<Reconcile> result,
-                        SyncRingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
+                        RingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
         try {
             Reconcile gossip;

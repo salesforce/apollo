@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author hal.hildebrand
  **/
-public class SyncRingCommunicationsTest {
+public class RingCommunicationsTest {
     @Test
     public void smokin() throws Exception {
         var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
@@ -80,7 +80,7 @@ public class SyncRingCommunicationsTest {
 
         router.start();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var sync = new SyncRingCommunications<Member, TestItService>(context, serverMember1, commsA, exec);
+        var sync = new RingCommunications<Member, TestItService>(context, serverMember1, commsA, exec);
         var countdown = new CountDownLatch(1);
         sync.execute((link, round) -> link.ping(Any.getDefaultInstance()), (result, destination) -> countdown.countDown());
         assertTrue(countdown.await(1, TimeUnit.SECONDS), "Completed: " + countdown.getCount());

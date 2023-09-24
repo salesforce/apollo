@@ -15,5 +15,5 @@ import java.util.Optional;
  */
 @FunctionalInterface
 public interface SyncHandler<M, T, Comm> {
-    void handle(Optional<T> result, SyncRingCommunications.Destination<M, Comm> destination);
+    void handle(Optional<T> result, RingCommunications.Destination<M, Comm> destination);
 }

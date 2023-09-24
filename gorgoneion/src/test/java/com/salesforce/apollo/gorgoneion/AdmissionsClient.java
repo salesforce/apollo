@@ -6,12 +6,7 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc;
-import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc.AdmissionsFutureStub;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
@@ -20,27 +15,28 @@ import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class AdmissionsClient implements Admissions {
+
+    private final ManagedServerChannel channel;
+    private final AdmissionsGrpc.AdmissionsBlockingStub client;
+    public AdmissionsClient(ManagedServerChannel channel) {
+        this.channel = channel;
+        this.client = AdmissionsGrpc.newBlockingStub(channel).withCompression("gzip");
+    }
 
     public static CreateClientCommunications<Admissions> getCreate() {
         return (c) -> new AdmissionsClient(c);
 
     }
 
-    private final ManagedServerChannel channel;
-    private final AdmissionsFutureStub client;
-
-    public AdmissionsClient(ManagedServerChannel channel) {
-        this.channel = channel;
-        this.client = AdmissionsGrpc.newFutureStub(channel).withCompression("gzip");
-    }
-
     @Override
-    public ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout) {
+    public SignedNonce apply(KERL_ application, Duration timeout) {
         return client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).apply(application);
     }
 
@@ -55,7 +51,7 @@ public class AdmissionsClient implements Admissions {
     }
 
     @Override
-    public ListenableFuture<Validations> register(Credentials credentials, Duration timeout) {
+    public Validations register(Credentials credentials, Duration timeout) {
         return client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).register(credentials);
     }
 }

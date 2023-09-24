@@ -21,7 +21,7 @@ import com.salesforce.apollo.ethereal.memberships.comm.GossiperService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.SyncRingCommunications;
+import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
@@ -54,7 +54,7 @@ public class ChRbcGossip {
     private final SigningMember member;
     private final EtherealMetrics metrics;
     private final Processor processor;
-    private final SyncRingCommunications<Member, Gossiper> ring;
+    private final RingCommunications<Member, Gossiper> ring;
     private final AtomicBoolean started = new AtomicBoolean();
     private volatile ScheduledFuture<?> scheduled;
 
@@ -68,7 +68,7 @@ public class ChRbcGossip {
         comm = communications.create((Member) member, context.getId(), new Terminal(), getClass().getCanonicalName(),
                 r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                 getCreate(metrics), Gossiper.getLocalLoopback(member));
-        ring = new SyncRingCommunications<>(context, member, this.comm, exec);
+        ring = new RingCommunications<>(context, member, this.comm, exec);
     }
 
     public Context<Member> getContext() {
@@ -135,7 +135,7 @@ public class ChRbcGossip {
     /**
      * The second phase of the gossip. Handle the update from our gossip partner
      */
-    private void handle(Optional<Update> result, SyncRingCommunications.Destination<Member, Gossiper> destination,
+    private void handle(Optional<Update> result, RingCommunications.Destination<Member, Gossiper> destination,
                         Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
         if (!started.get() || destination.link() == null) {
             if (timer != null) {

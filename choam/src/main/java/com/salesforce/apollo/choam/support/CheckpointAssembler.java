@@ -17,7 +17,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.SyncRingIterator;
+import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVMap;
@@ -114,7 +114,7 @@ public class CheckpointAssembler {
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
                 member.getId());
-        var ringer = new SyncRingIterator<>(frequency, context, member, comms, exec, true,
+        var ringer = new RingIterator<>(frequency, context, member, comms, exec, true,
                 scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                 (tally, result, destination) -> gossip(result),

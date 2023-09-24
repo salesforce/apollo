@@ -32,7 +32,7 @@ import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.ring.SyncSliceIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -158,7 +158,7 @@ public class Gorgoneion {
                 digestOf(ident,
                         parameters.digestAlgorithm()));
         final var majority = context.totalCount() == 1 ? 1 : context.majority();
-        final var redirecting = new SyncSliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
+        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
         redirecting.iterate((link, m) -> {
@@ -200,13 +200,11 @@ public class Gorgoneion {
         return null;
     }
 
-    private CompletableFuture<Validations> notarize(Credentials credentials, Validations validations,
-                                                    CompletableFuture<Validations> invited) {
+    private void notarize(Credentials credentials, Validations validations) {
         final var kerl = credentials.getAttestation().getAttestation().getKerl();
         final var identifier = identifier(kerl);
         if (identifier == null) {
-            invited.completeExceptionally(new IllegalArgumentException("No identifier"));
-            return invited;
+            throw new IllegalArgumentException("No identifier");
         }
 
         var notarization = Notarization.newBuilder()
@@ -217,7 +215,7 @@ public class Gorgoneion {
         var successors = Context.uniqueSuccessors(context,
                 digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
-        SyncSliceIterator<Endorsement> redirecting = new SyncSliceIterator<>("Enrollment", member, successors, endorsementComm, exec);
+        SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm, exec);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
             log.debug("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
@@ -225,21 +223,16 @@ public class Gorgoneion {
             return Empty.getDefaultInstance();
         }, (futureSailor, link, m) -> completeEnrollment(futureSailor, m, completed), () -> {
             if (completed.size() < majority) {
-                invited.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment")));
-            } else {
-                invited.complete(validations);
+                throw new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
             }
         }, scheduler, parameters.frequency());
-        return invited;
     }
 
-    private CompletableFuture<Validations> register(Credentials request) {
-        var invited = new CompletableFuture<Validations>();
+    private Validations register(Credentials request) {
         final var kerl = request.getAttestation().getAttestation().getKerl();
         final var identifier = identifier(kerl);
         if (identifier == null) {
-            invited.completeExceptionally(new IllegalArgumentException("No identifier"));
-            return invited;
+            throw new IllegalArgumentException("No identifier");
         }
         log.debug("Validating credentials for: {} nonce signatures: {} on: {}", identifier,
                 request.getNonce().getSignaturesCount(), member.getId());
@@ -249,7 +242,7 @@ public class Gorgoneion {
         var successors = Context.uniqueSuccessors(context,
                 digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
-        final var redirecting = new SyncSliceIterator<>("Credential verification", member, successors, endorsementComm,
+        final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm,
                 exec);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
@@ -258,7 +251,7 @@ public class Gorgoneion {
             return link.validate(request, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeVerification(futureSailor, m, verifications), () -> {
             if (verifications.size() < majority) {
-                invited.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required credential validations")));
+                throw new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required credential validations"));
             } else {
                 validated.complete(Validations.newBuilder()
                         .setCoordinates(ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount()
@@ -269,7 +262,8 @@ public class Gorgoneion {
                         member.getId());
             }
         }, scheduler, parameters.frequency());
-        return validated.thenCompose(v -> notarize(request, v, invited));
+        validated.thenAccept(v -> notarize(request, v));
+        return validated.getNow(null);
     }
 
     private Validation_ validate(Credentials credentials) {
@@ -320,16 +314,13 @@ public class Gorgoneion {
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 return;
             }
-            Gorgoneion.this.register(request).whenComplete((invite, t) -> {
-                if (t != null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.INTERNAL.withCause(t)));
-                } else if (invite == null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
-                } else {
-                    responseObserver.onNext(invite);
-                    responseObserver.onCompleted();
-                }
-            });
+            Validations invite = Gorgoneion.this.register(request);
+            if (invite == null) {
+                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
+            } else {
+                responseObserver.onNext(invite);
+                responseObserver.onCompleted();
+            }
         }
 
         private boolean validate(Credentials credentials, Digest from) {
@@ -389,7 +380,6 @@ public class Gorgoneion {
             var identifier = identifier(kerl);
             if (!validate(request, identifier, kerl, from)) {
                 log.warn("Invalid notarization for: {} from: {} on: {}", identifier, from, member.getId());
-                var fs = new CompletableFuture<Empty>();
                 throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid notarization"));
             }
             log.info("Enrolling notorization for: {} from: {} on: {}", identifier, from, member.getId());

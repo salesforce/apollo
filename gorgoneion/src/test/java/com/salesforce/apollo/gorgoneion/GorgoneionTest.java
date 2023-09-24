@@ -6,13 +6,11 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.gorgoneion.proto.Attestation;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -57,30 +55,20 @@ public class GorgoneionTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                exec);
+        var gorgonRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2), exec);
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
-        @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
-                gorgonRouter,
-                Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null,
-                exec);
+        @SuppressWarnings("unused") var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer, gorgonRouter, Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null, exec);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                exec);
+        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2), exec);
         AdmissionsService admissions = mock(AdmissionsService.class);
-        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
-                r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
-                        r, null),
-                AdmissionsClient.getCreate(),
-                Admissions.getLocalLoopback(client));
+        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions", r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(), r, null), AdmissionsClient.getCreate(), Admissions.getLocalLoopback(client));
         clientRouter.start();
 
         // Admin client link
@@ -91,35 +79,19 @@ public class GorgoneionTest {
         // Apply for registration of the client's KERL, receiving the signed nonce from
         // the server
         final KERL_ cKerl = client.kerl();
-        ListenableFuture<SignedNonce> fs = admin.apply(cKerl, Duration.ofSeconds(1));
+        var fs = admin.apply(cKerl, Duration.ofSeconds(1));
         assertNotNull(fs);
-        var signedNonce = fs.get();
+        var signedNonce = fs;
         assertNotNull(signedNonce.getNonce());
         assertEquals(client.getIdentifier().getIdentifier().toIdent(), signedNonce.getNonce().getMember());
 
         // Create attestation
         final var now = Instant.now();
-        // Attestation document from fundamental identity service (AWS, PAL, GCM, etc)
+        // Attestation document from fundamental identity service (AWS, PAL, GCM, etc.)
         final var attestationDocument = Any.getDefaultInstance();
-        final var attestation = Attestation.newBuilder()
-                .setTimestamp(Timestamp.newBuilder()
-                        .setSeconds(now.getEpochSecond())
-                        .setNanos(now.getNano()))
-                .setNonce(client.sign(signedNonce.toByteString()).toSig())
-                .setKerl(client.kerl())
-                .setAttestation(attestationDocument)
-                .build();
+        final var attestation = Attestation.newBuilder().setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano())).setNonce(client.sign(signedNonce.toByteString()).toSig()).setKerl(client.kerl()).setAttestation(attestationDocument).build();
 
-        var invitation = admin.register(Credentials.newBuilder()
-                                .setAttestation(SignedAttestation.newBuilder()
-                                        .setAttestation(attestation)
-                                        .setSignature(client.sign(attestation.toByteString())
-                                                .toSig())
-                                        .build())
-                                .setNonce(signedNonce)
-                                .build(),
-                        Duration.ofSeconds(1))
-                .get(60, TimeUnit.SECONDS);
+        var invitation = admin.register(Credentials.newBuilder().setAttestation(SignedAttestation.newBuilder().setAttestation(attestation).setSignature(client.sign(attestation.toByteString()).toSig()).build()).setNonce(signedNonce).build(), Duration.ofSeconds(1));
         gorgonRouter.close(Duration.ofSeconds(1));
         clientRouter.close(Duration.ofSeconds(1));
         assertNotNull(invitation);
