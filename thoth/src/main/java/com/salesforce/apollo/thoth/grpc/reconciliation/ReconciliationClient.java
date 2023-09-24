@@ -50,23 +50,19 @@ public class ReconciliationClient implements ReconciliationService {
             }
 
             @Override
-            public ListenableFuture<Update> reconcile(Intervals intervals) {
-                SettableFuture<Update> fs = SettableFuture.create();
-                fs.set(Update.getDefaultInstance());
-                return fs;
+            public  Update reconcile(Intervals intervals) {
+                return Update.getDefaultInstance();
             }
 
             @Override
-            public ListenableFuture<Empty> update(Updating update) {
-                SettableFuture<Empty> fs = SettableFuture.create();
-                fs.set(Empty.getDefaultInstance());
-                return fs;
+            public  Empty update(Updating update) {
+                return Empty.getDefaultInstance();
             }
         };
     }
 
     private final ManagedServerChannel     channel;
-    private final ReconciliationFutureStub client;
+    private final ReconciliationGrpc.ReconciliationBlockingStub client;
     @SuppressWarnings("unused")
     private final Digeste                  context;
     @SuppressWarnings("unused")
@@ -75,7 +71,7 @@ public class ReconciliationClient implements ReconciliationService {
     public ReconciliationClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.channel = channel;
-        this.client = ReconciliationGrpc.newFutureStub(channel).withCompression("gzip");
+        this.client = ReconciliationGrpc.newBlockingStub(channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -90,12 +86,12 @@ public class ReconciliationClient implements ReconciliationService {
     }
 
     @Override
-    public ListenableFuture<Update> reconcile(Intervals intervals) {
+    public  Update reconcile(Intervals intervals) {
         return client.reconcile(intervals);
     }
 
     @Override
-    public ListenableFuture<Empty> update(Updating update) {
+    public  Empty update(Updating update) {
         return client.update(update);
     }
 }

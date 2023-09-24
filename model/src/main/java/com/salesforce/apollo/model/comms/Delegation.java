@@ -17,7 +17,7 @@ import com.salesforce.apollo.archipelago.Link;
  */
 public interface Delegation extends Link {
 
-    ListenableFuture<DelegationUpdate> gossip(Biff identifers);
+     DelegationUpdate gossip(Biff identifers);
 
     void update(DelegationUpdate update);
 

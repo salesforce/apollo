@@ -6,14 +6,10 @@
  */
 package com.salesforce.apollo.ethereal.memberships.comm;
 
-import java.util.concurrent.ExecutionException;
-
 import com.codahale.metrics.Timer.Context;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc;
-import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperFutureStub;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
@@ -25,21 +21,21 @@ import com.salesforce.apollo.membership.Member;
  */
 public class GossiperClient implements Gossiper {
 
+    private final ManagedServerChannel channel;
+    private final GossiperGrpc.GossiperBlockingStub client;
+    private final EtherealMetrics metrics;
+
+    public GossiperClient(ManagedServerChannel channel, EtherealMetrics metrics) {
+        this.channel = channel;
+        this.client = GossiperGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.metrics = metrics;
+    }
+
     public static CreateClientCommunications<Gossiper> getCreate(EtherealMetrics metrics) {
         return (c) -> {
             return new GossiperClient(c, metrics);
         };
 
-    }
-
-    private final ManagedServerChannel channel;
-    private final GossiperFutureStub   client;
-    private final EtherealMetrics      metrics;
-
-    public GossiperClient(ManagedServerChannel channel, EtherealMetrics metrics) {
-        this.channel = channel;
-        this.client = GossiperGrpc.newFutureStub(channel).withCompression("gzip");
-        this.metrics = metrics;
     }
 
     @Override
@@ -53,27 +49,20 @@ public class GossiperClient implements Gossiper {
     }
 
     @Override
-    public ListenableFuture<Update> gossip(Gossip request) {
+    public Update gossip(Gossip request) {
         Context timer = metrics == null ? null : metrics.outboundGossipTimer().time();
         if (metrics != null) {
             metrics.outboundGossip().update(request.getSerializedSize());
             metrics.outboundBandwidth().mark(request.getSerializedSize());
         }
-        ListenableFuture<Update> result = client.gossip(request);
-        result.addListener(() -> {
-            try {
-                var messages = result.get();
-                var serializedSize = messages.getSerializedSize();
-                if (timer != null) {
-                    timer.stop();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gossipResponse().update(serializedSize);
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                return;
-            }
-        }, r -> r.run());
-        return result;
+        var messages = client.gossip(request);
+        var serializedSize = messages.getSerializedSize();
+        if (timer != null) {
+            timer.stop();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.gossipResponse().update(serializedSize);
+        }
+        return messages;
     }
 
     public void start() {
@@ -92,10 +81,8 @@ public class GossiperClient implements Gossiper {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
         }
         var complete = client.update(request);
-        complete.addListener(() -> {
-            if (timer != null) {
-                timer.stop();
-            }
-        }, r -> r.run());
+        if (timer != null) {
+            timer.stop();
+        }
     }
 }

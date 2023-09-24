@@ -11,7 +11,6 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.*;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
@@ -32,7 +31,6 @@ import com.salesforce.apollo.fireflies.comm.gossip.FfServer;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.membership.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.ring.RingCommunications.Destination;
 import com.salesforce.apollo.ring.SyncRingCommunications;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -111,11 +109,13 @@ public class View {
     private final ReadWriteLock viewChange = new ReentrantReadWriteLock(true);
     private final ViewManagement viewManagement;
     private volatile ScheduledFuture<?> futureGossip;
+
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics, Executor exec) {
         this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics, exec);
     }
+
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, Parameters params, Router gateway,
                 DigestAlgorithm digestAlgo, FireflyMetrics metrics, Executor exec) {
@@ -944,13 +944,13 @@ public class View {
     /**
      * Gossip with the member
      *
-     * @param ring       - the index of the gossip ring the gossip is originating
-     *                   from in this view
-     * @param link       - the outbound communications to the paired member
+     * @param ring - the index of the gossip ring the gossip is originating
+     *             from in this view
+     * @param link - the outbound communications to the paired member
      * @param ring
      * @throws Exception
      */
-    private  Gossip gossip(Fireflies link, int ring) {
+    private Gossip gossip(Fireflies link, int ring) {
         roundTimers.tick();
         if (shunned.contains(link.getMember().getId())) {
             log.trace("Shunning gossip view: {} with: {} on: {}", currentView(), link.getMember().getId(),

@@ -6,18 +6,16 @@
  */
 package com.salesforce.apollo.ethereal.memberships.comm;
 
-import java.io.IOException;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
+import java.io.IOException;
+
 /**
  * @author hal.hildebrand
- *
  */
 public interface Gossiper extends Link {
 
@@ -34,7 +32,7 @@ public interface Gossiper extends Link {
             }
 
             @Override
-            public ListenableFuture<Update> gossip(Gossip request) {
+            public Update gossip(Gossip request) {
                 return null;
             }
 
@@ -44,7 +42,7 @@ public interface Gossiper extends Link {
         };
     }
 
-    ListenableFuture<Update> gossip(Gossip request);
+    Update gossip(Gossip request);
 
     void update(ContextUpdate update);
 }

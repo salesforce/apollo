@@ -43,7 +43,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ring.RingCommunications" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.ring.SyncRingCommunications" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
