@@ -31,15 +31,15 @@ import java.util.function.Consumer;
 /**
  * @author hal.hildebrand
  */
-public class RingIteratorSync<T extends Member, Comm extends Link> extends RingCommunications<T, Comm> {
-    private static final Logger log = LoggerFactory.getLogger(RingIteratorSync.class);
+public class SyncRingIterator<T extends Member, Comm extends Link> extends SyncRingCommunications<T, Comm> {
+    private static final Logger log = LoggerFactory.getLogger(SyncRingIterator.class);
 
     private final Duration frequency;
     private final ScheduledExecutorService scheduler;
     private volatile boolean majorityFailed = false;
     private volatile boolean majoritySucceed = false;
 
-    public RingIteratorSync(Duration frequency, Context<T> context, SigningMember member,
+    public SyncRingIterator(Duration frequency, Context<T> context, SigningMember member,
                             CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
                             ScheduledExecutorService scheduler) {
         super(context, member, comm, exec, ignoreSelf);
@@ -47,12 +47,12 @@ public class RingIteratorSync<T extends Member, Comm extends Link> extends RingC
         this.frequency = frequency;
     }
 
-    public RingIteratorSync(Duration frequency, Context<T> context, SigningMember member,
+    public SyncRingIterator(Duration frequency, Context<T> context, SigningMember member,
                             ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
         this(frequency, context, member, comm, exec, false, scheduler);
     }
 
-    public RingIteratorSync(Duration frequency, Direction direction, Context<T> context, SigningMember member,
+    public SyncRingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
                             CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
                             ScheduledExecutorService scheduler) {
         super(direction, context, member, comm, exec, ignoreSelf);
@@ -60,23 +60,23 @@ public class RingIteratorSync<T extends Member, Comm extends Link> extends RingC
         this.frequency = frequency;
     }
 
-    public RingIteratorSync(Duration frequency, Direction direction, Context<T> context, SigningMember member,
+    public SyncRingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
                             ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
         this(frequency, direction, context, member, comm, exec, false, scheduler);
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round,
-                            ResultConsumer<T, Q, Comm> handler) {
+                            SyncResultConsumer<T, Q, Comm> handler) {
         iterate(digest, null, round, null, handler, null);
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round,
-                            ResultConsumer<T, Q, Comm> handler, Consumer<Integer> onComplete) {
+                            SyncResultConsumer<T, Q, Comm> handler, Consumer<Integer> onComplete) {
         iterate(digest, null, round, null, handler, onComplete);
     }
 
     public <Q> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, Q> round,
-                            Runnable failedMajority, ResultConsumer<T, Q, Comm> handler,
+                            Runnable failedMajority, SyncResultConsumer<T, Q, Comm> handler,
                             Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
         var traversed = new ConcurrentSkipListSet<Member>();
@@ -90,7 +90,7 @@ public class RingIteratorSync<T extends Member, Comm extends Link> extends RingC
     }
 
     @Override
-    public RingIteratorSync<T, Comm> noDuplicates() {
+    public SyncRingIterator<T, Comm> noDuplicates() {
         super.noDuplicates();
         return this;
     }
@@ -102,7 +102,7 @@ public class RingIteratorSync<T extends Member, Comm extends Link> extends RingC
 
     private <Q> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, Q> round, Runnable failedMajority,
-                                     ResultConsumer<T, Q, Comm> handler, Consumer<Integer> onComplete,
+                                     SyncResultConsumer<T, Q, Comm> handler, Consumer<Integer> onComplete,
                                      AtomicInteger tally, Set<Member> traversed) {
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
