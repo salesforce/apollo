@@ -262,8 +262,10 @@ public class Gorgoneion {
                         member.getId());
             }
         }, scheduler, parameters.frequency());
-        validated.thenAccept(v -> notarize(request, v));
-        return validated.getNow(null);
+        return validated.thenApply(v -> {
+            notarize(request, v);
+            return v;
+        }).getNow(null);
     }
 
     private Validation_ validate(Credentials credentials) {
@@ -440,7 +442,8 @@ public class Gorgoneion {
                                 from, member.getId());
                     }
                 }
-                final var majority = count >= context.majority();
+                // If there is only one active member in our context, it's us.
+                final var majority = count >= (context.activeCount() == 1 ? 1 :  context.majority());
                 if (!majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
                             context.majority(), identifier, from, member.getId());

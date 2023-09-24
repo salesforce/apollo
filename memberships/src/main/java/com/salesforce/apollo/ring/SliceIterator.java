@@ -52,18 +52,18 @@ public class SliceIterator<Comm extends Link> {
         log.debug("Slice: {}", slice.stream().map(m -> m.getId()).toList());
     }
 
-    public <T> void iterate(BiFunction<Comm, Member, T> round, SyncSlicePredicateHandler<T, Comm> handler,
+    public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
                             Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
         internalIterate(round, handler, onComplete, scheduler, frequency);
     }
 
-    public <T> void iterate(BiFunction<Comm, Member, T> round, SyncSlicePredicateHandler<T, Comm> handler,
+    public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
                             ScheduledExecutorService scheduler, Duration frequency) {
         iterate(round, handler, null, scheduler, frequency);
     }
 
     private <T> void internalIterate(BiFunction<Comm, Member, T> round,
-                                     SyncSlicePredicateHandler<T, Comm> handler, Runnable onComplete,
+                                     SlicePredicateHandler<T, Comm> handler, Runnable onComplete,
                                      ScheduledExecutorService scheduler, Duration frequency) {
         Runnable proceed = () -> internalIterate(round, handler, onComplete, scheduler, frequency);
 
@@ -120,7 +120,7 @@ public class SliceIterator<Comm extends Link> {
     }
 
     @FunctionalInterface
-    public interface SyncSlicePredicateHandler<T, Comm> {
+    public interface SlicePredicateHandler<T, Comm> {
         boolean handle(Optional<T> result, Comm communications, Member member);
     }
 }
