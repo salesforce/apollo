@@ -6,25 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static com.salesforce.apollo.choam.support.Bootstrapper.randomCut;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
-
-import org.h2.mvstore.MVMap;
-import org.joou.ULong;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
@@ -36,28 +17,43 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.ring.SyncRingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import org.h2.mvstore.MVMap;
+import org.joou.ULong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import static com.salesforce.apollo.choam.support.Bootstrapper.randomCut;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class CheckpointAssembler {
     private static final Logger log = LoggerFactory.getLogger(CheckpointAssembler.class);
 
-    private final CompletableFuture<CheckpointState>        assembled = new CompletableFuture<>();
-    private final Checkpoint                                checkpoint;
+    private final CompletableFuture<CheckpointState> assembled = new CompletableFuture<>();
+    private final Checkpoint checkpoint;
     private final CommonCommunications<Terminal, Concierge> comms;
-    private final Context<Member>                           context;
-    private final DigestAlgorithm                           digestAlgorithm;
-    private final double                                    fpr;
-    private final Duration                                  frequency;
-    private final List<Digest>                              hashes    = new ArrayList<>();
-    private final ULong                                     height;
-    private final SigningMember                             member;
-    private final MVMap<Integer, byte[]>                    state;
+    private final Context<Member> context;
+    private final DigestAlgorithm digestAlgorithm;
+    private final double fpr;
+    private final Duration frequency;
+    private final List<Digest> hashes = new ArrayList<>();
+    private final ULong height;
+    private final SigningMember member;
+    private final MVMap<Integer, byte[]> state;
 
     public CheckpointAssembler(Duration frequency, ULong height, Checkpoint checkpoint, SigningMember member,
                                Store store, CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
@@ -78,7 +74,7 @@ public class CheckpointAssembler {
                                                        Executor exec) {
         if (checkpoint.getSegmentsCount() == 0) {
             log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                     member.getId());
+                    member.getId());
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
             gossip(scheduler, duration, exec);
@@ -93,27 +89,21 @@ public class CheckpointAssembler {
             segmentsBff.add(i);
         });
         return CheckpointReplication.newBuilder()
-                                    .setCheckpoint(height.longValue())
-                                    .setCheckpointSegments(segmentsBff.toBff())
-                                    .build();
+                .setCheckpoint(height.longValue())
+                .setCheckpointSegments(segmentsBff.toBff())
+                .build();
     }
 
-    private boolean gossip(Optional<ListenableFuture<CheckpointSegments>> futureSailor) {
+    private boolean gossip(Optional<CheckpointSegments> futureSailor) {
         if (futureSailor.isEmpty()) {
             return true;
         }
-        try {
-            if (process(futureSailor.get().get())) {
-                CheckpointState cs = new CheckpointState(checkpoint, state);
-                log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                         member.getId());
-                assembled.complete(cs);
-                return false;
-            }
-        } catch (InterruptedException e) {
-            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member.getId(), e);
-        } catch (ExecutionException e) {
-            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member.getId(), e.getCause());
+        if (process(futureSailor.get())) {
+            CheckpointState cs = new CheckpointState(checkpoint, state);
+            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                    member.getId());
+            assembled.complete(cs);
+            return false;
         }
         return true;
     }
@@ -123,17 +113,17 @@ public class CheckpointAssembler {
             return;
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                 member.getId());
-        RingIterator<Member, Terminal> ringer = new RingIterator<>(frequency, context, member, comms, exec, true,
-                                                                   scheduler);
+                member.getId());
+        var ringer = new SyncRingIterator<>(frequency, context, member, comms, exec, true,
+                scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
-                       (tally, futureSailor, destination) -> gossip(futureSailor),
-                       t -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
-                                               TimeUnit.MILLISECONDS));
+                (tally, result, destination) -> gossip(result),
+                t -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
+                        TimeUnit.MILLISECONDS));
 
     }
 
-    private ListenableFuture<CheckpointSegments> gossip(Terminal link) {
+    private CheckpointSegments gossip(Terminal link) {
         if (member.equals(link.getMember())) {
             log.trace("Ignoring loopback checkpoint assembly gossip on: {}", link.getMember(), member.getId());
             return null;

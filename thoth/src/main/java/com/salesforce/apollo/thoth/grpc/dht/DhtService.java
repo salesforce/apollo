@@ -6,53 +6,44 @@
  */
 package com.salesforce.apollo.thoth.grpc.dht;
 
-import java.util.List;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesforce.apollo.archipelago.Link;
 
+import java.util.List;
+
 /**
  * @author hal.hildebrand
- *
  */
 
 public interface DhtService extends Link {
 
-    ListenableFuture<KeyStates> append(KERL_ kerl);
+    KeyStates
 
-    ListenableFuture<KeyStates> append(List<KeyEvent_> events);
+    append(KERL_ kerl);
 
-    ListenableFuture<KeyStates> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
+    KeyStates append(List<KeyEvent_> events);
 
-    ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
+    KeyStates append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
-    ListenableFuture<Empty> appendValidations(Validations attachments);
+    Empty appendAttachments(List<AttachmentEvent> attachments);
 
-    ListenableFuture<Attachment> getAttachment(EventCoords coordinates);
+    Empty appendValidations(Validations attachments);
 
-    ListenableFuture<KERL_> getKERL(Ident identifier);
+    Attachment getAttachment(EventCoords coordinates);
 
-    ListenableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates);
+    KERL_ getKERL(Ident identifier);
 
-    ListenableFuture<KeyState_> getKeyState(EventCoords coordinates);
+    KeyEvent_ getKeyEvent(EventCoords coordinates);
 
-    ListenableFuture<KeyState_> getKeyState(Ident identifier);
+    KeyState_ getKeyState(EventCoords coordinates);
 
-    ListenableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates);
+    KeyState_ getKeyState(Ident identifier);
 
-    ListenableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
+    KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates);
 
-    ListenableFuture<Validations> getValidations(EventCoords coordinates);
+    KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
+
+    Validations getValidations(EventCoords coordinates);
 }

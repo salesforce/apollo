@@ -1524,14 +1524,7 @@ public class View {
         }
 
         public KERL_ kerl() {
-            try {
-                return wrapped.kerl().get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return KERL_.getDefaultInstance();
-            } catch (ExecutionException e) {
-                throw new IllegalStateException(e.getCause());
-            }
+            return wrapped.kerl();
         }
 
         public JohnHancock sign(byte[] message) {

@@ -6,24 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
-
-import org.h2.mvstore.MVStore;
-import org.joou.ULong;
-import org.junit.jupiter.api.Test;
-
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
@@ -45,10 +27,25 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import org.h2.mvstore.MVStore;
+import org.joou.ULong;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class BootstrapperTest {
     private static final int CARDINALITY = 10;
@@ -59,38 +56,32 @@ public class BootstrapperTest {
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         context.activate(members);
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()
-                 .userBlocks(10)
-                 .viewChange()
-                 .userBlocks(10)
-                 .viewChange()
-                 .userBlocks(10)
-                 .viewChange()
-                 .userBlocks(10)
-                 .viewChange()
-                 .userBlocks(10)
-                 .checkpoint()
-                 .userBlocks(10)
-                 .synchronizeView()
-                 .userBlocks(10)
-                 .synchronizeCheckpoint()
-                 .userBlocks(5)
-                 .viewChange()
-                 .userBlocks(20)
-                 .anchor()
-                 .userBlocks(5);
+                .userBlocks(10)
+                .viewChange()
+                .userBlocks(10)
+                .viewChange()
+                .userBlocks(10)
+                .viewChange()
+                .userBlocks(10)
+                .viewChange()
+                .userBlocks(10)
+                .checkpoint()
+                .userBlocks(10)
+                .synchronizeView()
+                .userBlocks(10)
+                .synchronizeCheckpoint()
+                .userBlocks(5)
+                .viewChange()
+                .userBlocks(20)
+                .anchor()
+                .userBlocks(5);
 
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
 
@@ -108,14 +99,14 @@ public class BootstrapperTest {
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
-                                             Parameters.newBuilder()
-                                                       .setGossipDuration(Duration.ofMillis(10))
-                                                       .build(RuntimeParameters.newBuilder()
-                                                                               .setContext(context)
-                                                                               .setMember(member)
-                                                                               .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                                                                               .build()),
-                                             store, comms);
+                Parameters.newBuilder()
+                        .setGossipDuration(Duration.ofMillis(10))
+                        .build(RuntimeParameters.newBuilder()
+                                .setContext(context)
+                                .setMember(member)
+                                .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                .build()),
+                store, comms);
 
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
         SynchronizedState state = syncFuture.get(10, TimeUnit.SECONDS);
@@ -133,9 +124,9 @@ public class BootstrapperTest {
         when(client.sync(any())).then(invocation -> {
             SettableFuture<Initial> futureSailor = SettableFuture.create();
             Initial.Builder initial = Initial.newBuilder()
-                                             .setCheckpoint(testChain.getSynchronizeCheckpoint().certifiedBlock)
-                                             .setCheckpointView(testChain.getSynchronizeView().certifiedBlock)
-                                             .setGenesis(testChain.getGenesis().certifiedBlock);
+                    .setCheckpoint(testChain.getSynchronizeCheckpoint().certifiedBlock)
+                    .setCheckpointView(testChain.getSynchronizeView().certifiedBlock)
+                    .setGenesis(testChain.getGenesis().certifiedBlock);
             futureSailor.set(initial.build());
             return futureSailor;
         });

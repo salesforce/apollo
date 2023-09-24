@@ -17,16 +17,14 @@ import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.protocols.ClientIdentity;
-
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EndorsementServer extends EndorsementImplBase {
-    private final ClientIdentity                      identity;
-    private final GorgoneionMetrics                   metrics;
+    private final ClientIdentity identity;
+    private final GorgoneionMetrics metrics;
     private final RoutableService<EndorsementService> router;
 
     public EndorsementServer(ClientIdentity identity, RoutableService<EndorsementService> r,
@@ -50,17 +48,12 @@ public class EndorsementServer extends EndorsementImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            s.endorse(request, from).whenComplete((v, t) -> {
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(v);
-                    responseObserver.onCompleted();
-                }
-                if (timer != null) {
-                    timer.close();
-                }
-            });
+            MemberSignature v = s.endorse(request, from);
+            responseObserver.onNext(v);
+            responseObserver.onCompleted();
+            if (timer != null) {
+                timer.close();
+            }
         });
     }
 
@@ -78,17 +71,12 @@ public class EndorsementServer extends EndorsementImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            s.enroll(request, from).whenComplete((e, t) -> {
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(e);
-                    responseObserver.onCompleted();
-                }
-                if (timer != null) {
-                    timer.close();
-                }
-            });
+            s.enroll(request, from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+            if (timer != null) {
+                timer.close();
+            }
         });
     }
 
@@ -106,17 +94,12 @@ public class EndorsementServer extends EndorsementImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            s.validate(request, from).whenComplete((v, t) -> {
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(v);
-                    responseObserver.onCompleted();
-                }
-                if (timer != null) {
-                    timer.close();
-                }
-            });
+            Validation_ v = s.validate(request, from);
+            responseObserver.onNext(v);
+            responseObserver.onCompleted();
+            if (timer != null) {
+                timer.close();
+            }
         });
     }
 }

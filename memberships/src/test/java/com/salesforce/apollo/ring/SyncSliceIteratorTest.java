@@ -84,7 +84,7 @@ public class SyncSliceIteratorTest {
         var frequency = Duration.ofMillis(1);
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var slice = new SynchSliceIterator<TestItService>("Test Me", serverMember1, Arrays.asList(serverMember1, serverMember2), commsA, exec);
+        var slice = new SyncSliceIterator<TestItService>("Test Me", serverMember1, Arrays.asList(serverMember1, serverMember2), commsA, exec);
         var countdown = new CountDownLatch(1);
         slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true, () -> {
             countdown.countDown();

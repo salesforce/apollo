@@ -6,23 +6,21 @@
  */
 package com.salesforce.apollo.membership;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ContextTests {
 
@@ -31,11 +29,11 @@ public class ContextTests {
         Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         for (int i = 0; i < 10; i++) {
-            SigningMember m = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+            SigningMember m = new ControlledIdentifierMember(stereotomy.newIdentifier());
             members.add(m);
             context.activate(m);
         }

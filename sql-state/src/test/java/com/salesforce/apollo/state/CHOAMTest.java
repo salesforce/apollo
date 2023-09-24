@@ -6,41 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.batch;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.io.File;
-import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.Statement;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.joou.ULong;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -68,16 +33,35 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+import org.joou.ULong;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static com.salesforce.apollo.state.Mutator.batch;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class CHOAMTest {
-    private static final int               CARDINALITY;
+    private static final int CARDINALITY;
     private static final List<Transaction> GENESIS_DATA;
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-    private static final boolean           LARGE_TESTS     = Boolean.getBoolean("large_tests");
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
 
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
@@ -89,24 +73,23 @@ public class CHOAMTest {
         CARDINALITY = LARGE_TESTS ? 10 : 5;
     }
 
-    private static Txn initialInsert() {
-        return Txn.newBuilder()
-                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                  .build();
-    }
-
-    private File                baseDir;
-    private File                checkpointDirBase;
-    private Map<Digest, CHOAM>  choams;
+    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private File baseDir;
+    private File checkpointDirBase;
+    private Map<Digest, CHOAM> choams;
     private List<SigningMember> members;
-    private MetricRegistry      registry;
+    private MetricRegistry registry;
     private Map<Digest, Router> routers;
 
-    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private static Txn initialInsert() {
+        return Txn.newBuilder()
+                .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                        "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                        "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                        "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                        "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                .build();
+    }
 
     @AfterEach
     public void after() throws Exception {
@@ -124,10 +107,10 @@ public class CHOAMTest {
         System.out.println();
 
         ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .build()
+                .report();
         registry = null;
     }
 
@@ -141,41 +124,37 @@ public class CHOAMTest {
         Utils.clean(baseDir);
         baseDir.mkdirs();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGossipDuration(Duration.ofMillis(10))
-                               .setProducer(ProducerParameters.newBuilder()
-                                                              .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(15))
-                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
-                                                              .setMaxBatchCount(10_000)
-                                                              .build())
-                               .setCheckpointBlockDelta(2);
+                .setGenesisViewId(GENESIS_VIEW_ID)
+                .setGossipDuration(Duration.ofMillis(10))
+                .setProducer(ProducerParameters.newBuilder()
+                        .setGossipDuration(Duration.ofMillis(10))
+                        .setBatchInterval(Duration.ofMillis(15))
+                        .setMaxBatchByteSize(10 * 1024 * 1024)
+                        .setMaxBatchCount(10_000)
+                        .build())
+                .setCheckpointBlockDelta(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(7).setEpochLength(60);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
+            return stereotomy.newIdentifier();
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                      exec);
+                    exec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()), exec);
+                    Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory()), exec);
         }));
     }
 
@@ -194,89 +173,90 @@ public class CHOAMTest {
         choams.values().forEach(ch -> ch.start());
 
         final var activated = Utils.waitForCondition(30_000, 1_000,
-                                                     () -> choams.values()
-                                                                 .stream()
-                                                                 .filter(c -> !c.active())
-                                                                 .count() == 0);
+                () -> choams.values()
+                        .stream()
+                        .filter(c -> !c.active())
+                        .count() == 0);
         assertTrue(activated, "System did not become active: "
-        + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList()));
+                + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList()));
 
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
-                                                       countdown,
-                                                       Executors.newScheduledThreadPool(5,
-                                                                                        Thread.ofVirtual().factory())));
+                        countdown,
+                        Executors.newScheduledThreadPool(5,
+                                Thread.ofVirtual().factory())));
             }
         });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         final var finished = countdown.await(LARGE_TESTS ? 1200 : 120, TimeUnit.SECONDS);
         assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
-        + transactioneers.stream().map(t -> t.completed()).toList());
+                + transactioneers.stream().map(t -> t.completed()).toList());
 
         try {
             assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
                 if (transactioneers.stream()
-                                   .mapToInt(t -> t.inFlight())
-                                   .filter(t -> t == 0)
-                                   .count() != transactioneers.size()) {
+                        .mapToInt(t -> t.inFlight())
+                        .filter(t -> t == 0)
+                        .count() != transactioneers.size()) {
                     return false;
                 }
                 final ULong target = updaters.values()
-                                             .stream()
-                                             .map(ssm -> ssm.getCurrentBlock())
-                                             .filter(cb -> cb != null)
-                                             .map(cb -> cb.height())
-                                             .max((a, b) -> a.compareTo(b))
-                                             .get();
+                        .stream()
+                        .map(ssm -> ssm.getCurrentBlock())
+                        .filter(cb -> cb != null)
+                        .map(cb -> cb.height())
+                        .max((a, b) -> a.compareTo(b))
+                        .get();
                 return members.stream()
-                              .map(m -> updaters.get(m))
-                              .map(ssm -> ssm.getCurrentBlock())
-                              .filter(cb -> cb != null)
-                              .map(cb -> cb.height())
-                              .filter(l -> l.compareTo(target) == 0)
-                              .count() == members.size();
+                        .map(m -> updaters.get(m))
+                        .map(ssm -> ssm.getCurrentBlock())
+                        .filter(cb -> cb != null)
+                        .map(cb -> cb.height())
+                        .filter(l -> l.compareTo(target) == 0)
+                        .count() == members.size();
             }), "members did not stabilize at same block: " + updaters.values()
-                                                                      .stream()
-                                                                      .map(ssm -> ssm.getCurrentBlock())
-                                                                      .filter(cb -> cb != null)
-                                                                      .map(cb -> cb.height())
-                                                                      .toList());
+                    .stream()
+                    .map(ssm -> ssm.getCurrentBlock())
+                    .filter(cb -> cb != null)
+                    .map(cb -> cb.height())
+                    .toList());
         } finally {
             choams.values().forEach(e -> e.stop());
             routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
 
             System.out.println("Final block height: " + members.stream()
-                                                               .map(m -> updaters.get(m))
-                                                               .map(ssm -> ssm.getCurrentBlock())
-                                                               .filter(cb -> cb != null)
-                                                               .map(cb -> cb.height())
-                                                               .toList());
+                    .map(m -> updaters.get(m))
+                    .map(ssm -> ssm.getCurrentBlock())
+                    .filter(cb -> cb != null)
+                    .map(cb -> cb.height())
+                    .toList());
         }
         final ULong target = updaters.values()
-                                     .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
-                                     .get();
+                .stream()
+                .map(ssm -> ssm.getCurrentBlock())
+                .filter(cb -> cb != null)
+                .map(cb -> cb.height())
+                .max((a, b) -> a.compareTo(b))
+                .get();
         assertTrue(members.stream()
-                          .map(m -> updaters.get(m))
-                          .map(ssm -> ssm.getCurrentBlock())
-                          .filter(cb -> cb != null)
-                          .map(cb -> cb.height())
-                          .filter(l -> l.compareTo(target) == 0)
-                          .count() == members.size(),
-                   "members did not end at same block: " + updaters.values()
-                                                                   .stream()
-                                                                   .map(ssm -> ssm.getCurrentBlock())
-                                                                   .filter(cb -> cb != null)
-                                                                   .map(cb -> cb.height())
-                                                                   .toList());
+                        .map(m -> updaters.get(m))
+                        .map(ssm -> ssm.getCurrentBlock())
+                        .filter(cb -> cb != null)
+                        .map(cb -> cb.height())
+                        .filter(l -> l.compareTo(target) == 0)
+                        .count() == members.size(),
+                "members did not end at same block: " + updaters.values()
+                        .stream()
+                        .map(ssm -> ssm.getCurrentBlock())
+                        .filter(cb -> cb != null)
+                        .map(cb -> cb.height())
+                        .toList());
 
-        record row(float price, int quantity) {}
+        record row(float price, int quantity) {
+        }
 
         System.out.println("Validating consistency");
 
@@ -288,7 +268,7 @@ public class CHOAMTest {
             ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
             while (results.next()) {
                 manifested.computeIfAbsent(m, k -> new HashMap<>())
-                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+                        .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
             }
             connection.close();
         }
@@ -308,46 +288,46 @@ public class CHOAMTest {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
-                                                 new File(checkpointDirBase, m.getId().toString()));
+                new File(checkpointDirBase, m.getId().toString()));
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
-                                                       .setContext(context)
-                                                       .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(scheduler)
-                                                       .setMember(m)
-                                                       .setCommunications(routers.get(m.getId()))
-                                                       .setExec(exec)
-                                                       .setCheckpointer(up.getCheckpointer())
-                                                       .setMetrics(metrics)
-                                                       .setProcessor(new TransactionExecutor() {
+                .setContext(context)
+                .setGenesisData(view -> GENESIS_DATA)
+                .setScheduler(scheduler)
+                .setMember(m)
+                .setCommunications(routers.get(m.getId()))
+                .setExec(exec)
+                .setCheckpointer(up.getCheckpointer())
+                .setMetrics(metrics)
+                .setProcessor(new TransactionExecutor() {
 
-                                                           @Override
-                                                           public void beginBlock(ULong height, Digest hash) {
-                                                               up.getExecutor().beginBlock(height, hash);
-                                                           }
+                    @Override
+                    public void beginBlock(ULong height, Digest hash) {
+                        up.getExecutor().beginBlock(height, hash);
+                    }
 
-                                                           @Override
-                                                           public void endBlock(ULong height, Digest hash) {
-                                                               up.getExecutor().endBlock(height, hash);
-                                                           }
+                    @Override
+                    public void endBlock(ULong height, Digest hash) {
+                        up.getExecutor().endBlock(height, hash);
+                    }
 
-                                                           @Override
-                                                           public void execute(int i, Digest hash, Transaction tx,
-                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete,
-                                                                               Executor executor) {
-                                                               up.getExecutor()
-                                                                 .execute(i, hash, tx, onComplete, executor);
-                                                           }
+                    @Override
+                    public void execute(int i, Digest hash, Transaction tx,
+                                        @SuppressWarnings("rawtypes") CompletableFuture onComplete,
+                                        Executor executor) {
+                        up.getExecutor()
+                                .execute(i, hash, tx, onComplete, executor);
+                    }
 
-                                                           @Override
-                                                           public void genesis(Digest hash,
-                                                                               List<Transaction> initialization) {
-                                                               up.getExecutor().genesis(hash, initialization);
-                                                           }
-                                                       })
-                                                       .build()));
+                    @Override
+                    public void genesis(Digest hash,
+                                        List<Transaction> initialization) {
+                        up.getExecutor().genesis(hash, initialization);
+                    }
+                })
+                .build()));
     }
 
     private Txn update(Random entropy, Mutator mutator) {

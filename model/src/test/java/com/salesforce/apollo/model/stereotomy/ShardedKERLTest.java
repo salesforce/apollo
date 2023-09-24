@@ -6,31 +6,12 @@
  */
 package com.salesforce.apollo.model.stereotomy;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
-import org.joou.ULong;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
 import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
@@ -43,10 +24,21 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
+import org.joou.ULong;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ShardedKERLTest {
     private SecureRandom secureRandom;
@@ -54,7 +46,7 @@ public class ShardedKERLTest {
     @BeforeEach
     public void before() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
-        secureRandom.setSeed(new byte[] { 0 });
+        secureRandom.setSeed(new byte[]{0});
     }
 
     @Test
@@ -66,22 +58,22 @@ public class ShardedKERLTest {
         emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                                           DigestAlgorithm.DEFAULT, exec);
+                DigestAlgorithm.DEFAULT, exec);
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
-        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier().get();
+        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier();
 
         var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());
-        ControlledIdentifier<? extends Identifier> identifier = opti2.get();
+        ControlledIdentifier<? extends Identifier> identifier = opti2;
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
         assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
-                     Hex.hex(sap.getDigest().getBytes()));
+                Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
 
@@ -89,8 +81,7 @@ public class ShardedKERLTest {
         assertEquals(1, identifier.getKeys().size());
         assertNotNull(identifier.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(identifier.getLastEstablishmentEvent())
-                                                                             .get();
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(identifier.getLastEstablishmentEvent());
         assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
@@ -103,10 +94,10 @@ public class ShardedKERLTest {
         var keyStoreNextKeyPair = ks.getNextKey(keyCoordinates);
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
-                                                               List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest()
-                                                                         .get()
-                                                                         .getAlgorithm());
+                List.of(keyStoreNextKeyPair.get().getPublic()),
+                identifier.getNextKeyConfigurationDigest()
+                        .get()
+                        .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
         // witnesses
@@ -122,16 +113,16 @@ public class ShardedKERLTest {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        assertTrue(kerl.getKeyEvent(identifier.getLastEvent()).get() == null);
+        assertTrue(kerl.getKeyEvent(identifier.getLastEvent()) == null);
 
         // delegation
         assertTrue(identifier.getDelegatingIdentifier().isPresent());
         assertTrue(identifier.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(identifier.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(identifier.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+                CoordinatesSeal.construct(event));
 
         identifier.rotate();
         identifier.seal(InteractionSpecification.newBuilder());
@@ -148,16 +139,16 @@ public class ShardedKERLTest {
         emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                                           DigestAlgorithm.DEFAULT, exec);
+                DigestAlgorithm.DEFAULT, exec);
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var i = controller.newIdentifier().get();
+        var i = controller.newIdentifier();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+                CoordinatesSeal.construct(event));
 
         i.rotate();
         i.seal(InteractionSpecification.newBuilder());
@@ -167,8 +158,8 @@ public class ShardedKERLTest {
         i.rotate();
         var opti = kerl.kerl(i.getIdentifier());
         assertNotNull(opti);
-        assertNotNull(opti.get());
-        var iKerl = opti.get();
+        assertNotNull(opti);
+        var iKerl = opti;
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());

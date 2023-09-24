@@ -6,16 +6,7 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.choam.proto.BlockReplication;
-import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.CheckpointReplication;
-import com.salesfoce.apollo.choam.proto.CheckpointSegments;
-import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.Synchronize;
-import com.salesfoce.apollo.choam.proto.TerminalGrpc;
-import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
-import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -24,25 +15,23 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TerminalClient implements Terminal {
+
+    private final ManagedServerChannel channel;
+    private final TerminalGrpc.TerminalBlockingStub client;
+    @SuppressWarnings("unused")
+    private final ChoamMetrics metrics;
+
+    public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
+        this.channel = channel;
+        this.client = TerminalGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.metrics = metrics;
+    }
 
     public static CreateClientCommunications<Terminal> getCreate(ChoamMetrics metrics) {
         return (c) -> new TerminalClient(c, metrics);
 
-    }
-
-    private final ManagedServerChannel channel;
-
-    private final TerminalFutureStub client;
-    @SuppressWarnings("unused")
-    private final ChoamMetrics       metrics;
-
-    public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
-        this.channel = channel;
-        this.client = TerminalGrpc.newFutureStub(channel).withCompression("gzip");
-        this.metrics = metrics;
     }
 
     @Override
@@ -51,17 +40,17 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
+    public CheckpointSegments fetch(CheckpointReplication request) {
         return client.fetch(request);
     }
 
     @Override
-    public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
+    public Blocks fetchBlocks(BlockReplication replication) {
         return client.fetchBlocks(replication);
     }
 
     @Override
-    public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
+    public Blocks fetchViewChain(BlockReplication replication) {
         return client.fetchViewChain(replication);
     }
 
@@ -71,7 +60,7 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ListenableFuture<ViewMember> join(Digest nextView) {
+    public ViewMember join(Digest nextView) {
         return client.join(nextView.toDigeste());
     }
 
@@ -80,7 +69,7 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ListenableFuture<Initial> sync(Synchronize sync) {
+    public Initial sync(Synchronize sync) {
         return client.sync(sync);
     }
 }

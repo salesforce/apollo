@@ -6,17 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
@@ -34,10 +23,18 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Executors;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestEventObserver {
 
@@ -61,11 +58,11 @@ public class TestEventObserver {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
@@ -78,40 +75,31 @@ public class TestEventObserver {
         EventObserver protoService = new EventObserver() {
 
             @Override
-            public CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations, Digest from) {
-                CompletableFuture<Void> f = new CompletableFuture<>();
-                f.complete(null);
-                return f;
+            public void publish(KERL_ kerl, List<Validations> validations, Digest from) {
             }
 
             @Override
-            public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments, Digest from) {
-                CompletableFuture<Void> f = new CompletableFuture<>();
-                f.complete(null);
-                return f;
+            public void publishAttachments(List<AttachmentEvent> attachments, Digest from) {
             }
 
             @Override
-            public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations,
-                                                         Digest from) {
-                CompletableFuture<Void> f = new CompletableFuture<>();
-                f.complete(null);
-                return f;
+            public void publishEvents(List<KeyEvent_> events, List<Validations> validations,
+                                      Digest from) {
             }
         };
 
         ClientIdentity identity = () -> clientMember.getId();
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                            r -> new EventObserverServer(r, identity, null), null, null);
+                r -> new EventObserverServer(r, identity, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new EventObserverServer(r, identity, null),
-                                              EventObserverClient.getCreate(null), null);
+                r -> new EventObserverServer(r, identity, null),
+                EventObserverClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 
-        client.publishAttachments(Collections.emptyList()).get();
-        client.publish(KERL_.getDefaultInstance(), Collections.emptyList()).get();
-        client.publishEvents(Collections.emptyList(), Collections.emptyList()).get();
+        client.publishAttachments(Collections.emptyList());
+        client.publish(KERL_.getDefaultInstance(), Collections.emptyList());
+        client.publishEvents(Collections.emptyList(), Collections.emptyList());
     }
 }

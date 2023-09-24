@@ -51,7 +51,7 @@ public class AniTest extends AbstractDhtTest {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
-        dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
+        dht.append(Collections.singletonList(inception.toKeyEvent_())) ;
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 

@@ -6,29 +6,6 @@
  */
 package com.salesforce.apollo.model.demesnes;
 
-import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Path;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -48,11 +25,7 @@ import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextClient;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -67,78 +40,55 @@ import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.thoth.Ani;
 import com.salesforce.apollo.thoth.Thoth;
 import com.salesforce.apollo.utils.Hex;
-
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+
+import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 
 /**
  * Isolate for the Apollo SubDomain stack
  *
  * @author hal.hildebrand
- *
  */
 public class DemesneImpl implements Demesne {
-    public class DemesneMember implements Member {
-        protected EstablishmentEvent event;
-        private final Digest         id;
-
-        public DemesneMember(EstablishmentEvent event) {
-            this.event = event;
-            if (event.getIdentifier() instanceof SelfAddressingIdentifier sai) {
-                id = sai.getDigest();
-            } else {
-                throw new IllegalArgumentException("Only self addressing identifiers supported: "
-                + event.getIdentifier());
-            }
-        }
-
-        @Override
-        public int compareTo(Member m) {
-            return id.compareTo(m.getId());
-        }
-
-        @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return validation.filtered(event.getCoordinates(), threshold, signature, message);
-        }
-
-        @Override
-        public Digest getId() {
-            return id;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, InputStream message) {
-            return validation.verify(event.getCoordinates(), signature, message);
-        }
-
-        @Override
-        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return validation.verify(event.getCoordinates(), threshold, signature, message);
-        }
-    }
-
     private static final Class<? extends Channel> channelType = getChannelType();
-
-    private static final Duration       DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
-    private static final int            DEFAULT_VIRTUAL_THREADS = 5;
-    private static final EventLoopGroup eventLoopGroup          = getEventLoopGroup();
-    private static final Logger         log                     = LoggerFactory.getLogger(DemesneImpl.class);
-
-    private volatile Context<Member> context;
-    private volatile SubDomain       domain;
-    private volatile Enclave         enclave;
-    private final ExecutorService    exec;
-    private final KERL               kerl;
+    private static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
+    private static final int DEFAULT_VIRTUAL_THREADS = 5;
+    private static final EventLoopGroup eventLoopGroup = getEventLoopGroup();
+    private static final Logger log = LoggerFactory.getLogger(DemesneImpl.class);
+    private final ExecutorService exec;
+    private final KERL kerl;
     private final OuterContextClient outer;
-    private final DemesneParameters  parameters;
-    private final AtomicBoolean      started = new AtomicBoolean();
-    private final Stereotomy         stereotomy;
-    private final Thoth              thoth;
-    private final EventValidation    validation;
+    private final DemesneParameters parameters;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final Stereotomy stereotomy;
+    private final Thoth thoth;
+    private final EventValidation validation;
+    private volatile Context<Member> context;
+    private volatile SubDomain domain;
+    private volatile Enclave enclave;
 
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
@@ -160,10 +110,10 @@ public class DemesneImpl implements Demesne {
 
         kerl = kerlFrom(outerContextAddress);
         validation = new Ani(context.getId(), kerl).eventValidation(Duration.ofSeconds(
-                                                                                       parameters.getTimeout()
-                                                                                                 .getSeconds(),
-                                                                                       parameters.getTimeout()
-                                                                                                 .getNanos()));
+                parameters.getTimeout()
+                        .getSeconds(),
+                parameters.getTimeout()
+                        .getNanos()));
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
 
         thoth = new Thoth(stereotomy);
@@ -184,11 +134,11 @@ public class DemesneImpl implements Demesne {
         context.activate(thoth.member());
 
         log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress,
-                 thoth.member().getId());
+                thoth.member().getId());
 
         enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress), exec,
-                              new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
-                              ctxId -> registerContext(ctxId));
+                new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
+                ctxId -> registerContext(ctxId));
         domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context, exec);
     }
 
@@ -205,15 +155,7 @@ public class DemesneImpl implements Demesne {
 
     @Override
     public DelegatedRotationEvent rotate(RotationSpecification.Builder specification) {
-        try {
-            return thoth.rotate(specification).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (ExecutionException e) {
-            log.error("Unable to rotate member: {}", thoth.member().getId(), e.getCause());
-            return null;
-        }
+        return thoth.rotate(specification);
     }
 
     @Override
@@ -245,21 +187,15 @@ public class DemesneImpl implements Demesne {
         final var current = domain;
         joining.forEach(coords -> {
             EstablishmentEvent keyEvent;
-            try {
-                keyEvent = kerl.getKeyState(coords).thenApply(ke -> (EstablishmentEvent) ke).get();
-                current.activate(new IdentifierMember(keyEvent));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (ExecutionException e) {
-                log.error("Error retrieving last establishment event for: {}", coords, e.getCause());
-            }
+            keyEvent = (EstablishmentEvent) kerl.getKeyState(coords);
+            current.activate(new IdentifierMember(keyEvent));
         });
         leaving.forEach(id -> current.getContext().remove(id));
     }
 
     private Path commDirectory() {
         return Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
-                                                               : parameters.getCommDirectory());
+                : parameters.getCommDirectory());
     }
 
     private CachingKERL kerlFrom(File address) {
@@ -271,13 +207,13 @@ public class DemesneImpl implements Demesne {
             ManagedChannel channel = null;
             try {
                 channel = NettyChannelBuilder.forAddress(serverAddress)
-                                             .intercept(clientInterceptor(kerlContext))
-                                             .eventLoopGroup(eventLoopGroup)
-                                             .channelType(channelType)
-                                             .keepAliveTime(1, TimeUnit.SECONDS)
-                                             .usePlaintext()
-                                             .build();
-                var stub = KERLServiceGrpc.newFutureStub(channel);
+                        .intercept(clientInterceptor(kerlContext))
+                        .eventLoopGroup(eventLoopGroup)
+                        .channelType(channelType)
+                        .keepAliveTime(1, TimeUnit.SECONDS)
+                        .usePlaintext()
+                        .build();
+                var stub = KERLServiceGrpc.newBlockingStub(channel);
                 return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
             } catch (Throwable t) {
                 return f.apply(null);
@@ -291,55 +227,88 @@ public class DemesneImpl implements Demesne {
 
     private OuterContextClient outerFrom(File address) {
         return new OuterContextClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(address))
-                                                         .intercept(clientInterceptor(context.getId()))
-                                                         .eventLoopGroup(eventLoopGroup)
-                                                         .channelType(channelType)
-                                                         .usePlaintext()
-                                                         .build(),
-                                      null);
+                .intercept(clientInterceptor(context.getId()))
+                .eventLoopGroup(eventLoopGroup)
+                .channelType(channelType)
+                .usePlaintext()
+                .build(),
+                null);
     }
 
     private void registerContext(Digest ctxId) {
         outer.register(SubContext.newBuilder()
-                                 .setEnclave(context.getId().toDigeste())
-                                 .setContext(ctxId.toDigeste())
-                                 .build());
+                .setEnclave(context.getId().toDigeste())
+                .setContext(ctxId.toDigeste())
+                .build());
     }
 
     private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
                                                         Context<Member> context, ExecutorService exec) {
         final var current = enclave;
         return RuntimeParameters.newBuilder()
-                                .setCommunications(current.router(exec))
-                                .setExec(exec)
-                                .setScheduler(Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
-                                                                                                                   : parameters.getVirtualThreads(),
-                                                                               Thread.ofVirtual().factory()))
-                                .setKerl(() -> {
-                                    try {
-                                        return member.kerl().get();
-                                    } catch (InterruptedException e) {
-                                        Thread.currentThread().interrupt();
-                                        return null;
-                                    } catch (ExecutionException e) {
-                                        throw new IllegalStateException(e.getCause());
-                                    }
-                                })
-                                .setContext(context)
-                                .setFoundation(parameters.getFoundation());
+                .setCommunications(current.router(exec))
+                .setExec(exec)
+                .setScheduler(Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
+                                : parameters.getVirtualThreads(),
+                        Thread.ofVirtual().factory()))
+                .setKerl(() -> {
+                    return member.kerl();
+                })
+                .setContext(context)
+                .setFoundation(parameters.getFoundation());
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, final Path commDirectory, final File address,
                                     ControlledIdentifierMember member, Context<Member> context, ExecutorService exec) {
         final var gossipInterval = parameters.getGossipInterval();
         final var interval = gossipInterval.getSeconds() != 0 ||
-                             gossipInterval.getNanos() != 0 ? Duration.ofSeconds(gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
+                gossipInterval.getNanos() != 0 ? Duration.ofSeconds(gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
         return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context, exec),
-                             new TransactionConfiguration(exec,
-                                                          Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
-                                                                                                                               : parameters.getVirtualThreads(),
-                                                                                           Thread.ofVirtual()
-                                                                                                 .factory())),
-                             parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
+                new TransactionConfiguration(exec,
+                        Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
+                                        : parameters.getVirtualThreads(),
+                                Thread.ofVirtual()
+                                        .factory())),
+                parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
+    }
+
+    public class DemesneMember implements Member {
+        private final Digest id;
+        protected EstablishmentEvent event;
+
+        public DemesneMember(EstablishmentEvent event) {
+            this.event = event;
+            if (event.getIdentifier() instanceof SelfAddressingIdentifier sai) {
+                id = sai.getDigest();
+            } else {
+                throw new IllegalArgumentException("Only self addressing identifiers supported: "
+                        + event.getIdentifier());
+            }
+        }
+
+        @Override
+        public int compareTo(Member m) {
+            return id.compareTo(m.getId());
+        }
+
+        @Override
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return validation.filtered(event.getCoordinates(), threshold, signature, message);
+        }
+
+        @Override
+        public Digest getId() {
+            return id;
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return validation.verify(event.getCoordinates(), signature, message);
+        }
+
+        @Override
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return validation.verify(event.getCoordinates(), threshold, signature, message);
+        }
     }
 }

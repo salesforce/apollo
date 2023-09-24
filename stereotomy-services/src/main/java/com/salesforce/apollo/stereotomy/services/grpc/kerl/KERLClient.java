@@ -20,7 +20,7 @@ public class KERLClient extends CommonKERLClient implements KERLService {
 
     private final ManagedServerChannel  channel;
     public KERLClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
-        super(KERLServiceGrpc.newFutureStub(channel).withCompression("gzip"), metrics);
+        super(KERLServiceGrpc.newBlockingStub(channel).withCompression("gzip"), metrics);
         this.channel = channel;
     }
 

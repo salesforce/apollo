@@ -52,20 +52,20 @@ public class DhtRebalanceTest extends AbstractDhtTest {
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var i = controller.newIdentifier().get();
+        var i = controller.newIdentifier() ;
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()) );
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        i.rotate().get();
-        i.seal(InteractionSpecification.newBuilder()).get();
-        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
-        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
-        i.rotate().get();
-        i.rotate().get();
-        var iKerl = kerl.kerl(i.getIdentifier()).get();
+        i.rotate();
+        i.seal(InteractionSpecification.newBuilder()) ;
+        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
+        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
+        i.rotate();
+        i.rotate();
+        var iKerl = kerl.kerl(i.getIdentifier());
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());

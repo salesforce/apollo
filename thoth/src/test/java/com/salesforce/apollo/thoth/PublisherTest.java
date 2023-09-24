@@ -6,17 +6,6 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.mock;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
@@ -31,10 +20,19 @@ import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClie
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServer;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverService;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class PublisherTest {
 
@@ -43,10 +41,10 @@ public class PublisherTest {
 
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
-        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
         var kerl = new ProtoKERLAdapter(kerl_);
         var prefix = UUID.randomUUID().toString();
         final var builder = ServerConnectionCache.newBuilder().setTarget(2);
@@ -56,7 +54,7 @@ public class PublisherTest {
         var maat = new Publisher(serverMember, kerl, serverRouter, context);
         assertNotNull(maat); // lol
 
-        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
         var clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
 
         serverRouter.start();
@@ -64,23 +62,23 @@ public class PublisherTest {
 
         var protoService = mock(EventObserver.class);
         CommonCommunications<EventObserverService, EventObserver> clientComms = clientRouter.create(clientMember,
-                                                                                                    context,
-                                                                                                    protoService,
-                                                                                                    protoService.getClass()
-                                                                                                                .toString(),
-                                                                                                    r -> new EventObserverServer(r,
-                                                                                                                                 clientRouter.getClientIdentityProvider(),
-                                                                                                                                 null),
-                                                                                                    EventObserverClient.getCreate(null),
-                                                                                                    null);
+                context,
+                protoService,
+                protoService.getClass()
+                        .toString(),
+                r -> new EventObserverServer(r,
+                        clientRouter.getClientIdentityProvider(),
+                        null),
+                EventObserverClient.getCreate(null),
+                null);
         try {
 
             var client = clientComms.connect(serverMember);
             assertNotNull(client);
 
-            client.publishAttachments(Collections.emptyList()).get();
-            client.publish(KERL_.getDefaultInstance(), Collections.emptyList()).get();
-            client.publishEvents(Collections.emptyList(), Collections.emptyList()).get();
+            client.publishAttachments(Collections.emptyList());
+            client.publish(KERL_.getDefaultInstance(), Collections.emptyList());
+            client.publishEvents(Collections.emptyList(), Collections.emptyList());
         } finally {
             clientRouter.close(Duration.ofSeconds(1));
             serverRouter.close(Duration.ofSeconds(1));

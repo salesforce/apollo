@@ -6,61 +6,54 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class ReadOnlyKERL extends DelegatedKERL {
-
-    private static <T> CompletableFuture<T> complete() {
-        var fs = new CompletableFuture<T>();
-        fs.complete(null);
-        return fs;
-    }
-
-    private static <T> CompletableFuture<List<T>> completeList() {
-        var fs = new CompletableFuture<List<T>>();
-        fs.complete(Collections.emptyList());
-        return fs;
-    }
 
     public ReadOnlyKERL(KERL delegate) {
         super(delegate);
     }
 
+    private static <T> T complete() {
+        return null;
+    }
+
+    private static <T> List<T> completeList() {
+        return Collections.emptyList();
+    }
+
     @Override
-    public CompletableFuture<KeyState> append(KeyEvent event) {
+    public KeyState append(KeyEvent event) {
         return complete();
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(KeyEvent... events) {
+    public List<KeyState> append(KeyEvent... events) {
         return completeList();
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+    public Void append(List<AttachmentEvent> events) {
         return complete();
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+    public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         return completeList();
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates,
+                                  Map<EventCoordinates, JohnHancock> validations) {
         return complete();
     }
-
 }

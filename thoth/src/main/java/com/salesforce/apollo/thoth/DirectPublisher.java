@@ -6,11 +6,6 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static java.util.concurrent.CompletableFuture.allOf;
-
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
@@ -18,9 +13,10 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
+import java.util.List;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class DirectPublisher implements ProtoEventObserver {
     private final ProtoKERLAdapter kerl;
@@ -31,21 +27,18 @@ public class DirectPublisher implements ProtoEventObserver {
     }
 
     @Override
-    public CompletableFuture<Void> publish(KERL_ kerl_, List<Validations> validations) {
-        var valids = validations.stream().map(v -> kerl.appendValidations(v)).toList();
-        return allOf(valids.toArray(new CompletableFuture[valids.size()])).thenCompose(v -> kerl.append(kerl_)
-                                                                                                .thenApply(ks -> null));
+    public void publish(KERL_ kerl_, List<Validations> validations) {
+        validations.stream().forEach(v -> kerl.appendValidations(v));
     }
 
     @Override
-    public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
-        return kerl.appendAttachments(attachments).thenApply(e -> null);
+    public void publishAttachments(List<AttachmentEvent> attachments) {
+        kerl.appendAttachments(attachments);
     }
 
     @Override
-    public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
-        var valids = validations.stream().map(v -> kerl.appendValidations(v)).toList();
-        return allOf(valids.toArray(new CompletableFuture[valids.size()])).thenCompose(v -> kerl.append(events)
-                                                                                                .thenApply(ks -> null));
+    public void publishEvents(List<KeyEvent_> events, List<Validations> validations) {
+        validations.forEach(v -> kerl.appendValidations(v));
+        kerl.append(events);
     }
 }

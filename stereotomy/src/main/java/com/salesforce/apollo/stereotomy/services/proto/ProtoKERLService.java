@@ -6,29 +6,23 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
+
+import java.util.List;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ProtoKERLService extends ProtoKERLProvider {
 
-    CompletableFuture<List<KeyState_>> append(KERL_ kerl);
+    List<KeyState_> append(KERL_ kerl);
 
-    CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events);
+    List<KeyState_> append(List<KeyEvent_> events);
 
-    CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
+    List<KeyState_> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
-    CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
+    Empty appendAttachments(List<AttachmentEvent> attachments);
 
-    CompletableFuture<Empty> appendValidations(Validations validations);
+    Empty appendValidations(Validations validations);
 }

@@ -6,35 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
-import java.io.File;
-import java.io.IOException;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.joou.ULong;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -55,27 +26,50 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
+import org.joou.ULong;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * @author hal.hildebrand
- * 
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY;
+    private static final int CARDINALITY;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
+
     static {
         CARDINALITY = LARGE_TESTS ? 10 : 5;
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
     }
+
     protected CompletableFuture<Boolean> checkpointOccurred;
-    private Map<Digest, AtomicInteger>   blocks;
-    private Map<Digest, CHOAM>           choams;
-    private Executor                     exec = Executors.newVirtualThreadPerTaskExecutor();
-    private List<SigningMember>          members;
-    private MetricRegistry               registry;
-    private Map<Digest, Router>          routers;
+    private Map<Digest, AtomicInteger> blocks;
+    private Map<Digest, CHOAM> choams;
+    private Executor exec = Executors.newVirtualThreadPerTaskExecutor();
+    private List<SigningMember> members;
+    private MetricRegistry registry;
+    private Map<Digest, Router> routers;
 
     @AfterEach
     public void after() throws Exception {
@@ -98,18 +92,18 @@ public class TestCHOAM {
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
         blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
 
         var params = Parameters.newBuilder()
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(20))
-                               .setProducer(ProducerParameters.newBuilder()
-                                                              .setMaxBatchCount(15_000)
-                                                              .setMaxBatchByteSize(200 * 1024 * 1024)
-                                                              .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(50))
-                                                              .build())
-                               .setCheckpointBlockDelta(1);
+                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
+                .setGossipDuration(Duration.ofMillis(20))
+                .setProducer(ProducerParameters.newBuilder()
+                        .setMaxBatchCount(15_000)
+                        .setMaxBatchByteSize(200 * 1024 * 1024)
+                        .setGossipDuration(Duration.ofMillis(10))
+                        .setBatchInterval(Duration.ofMillis(50))
+                        .build())
+                .setCheckpointBlockDelta(1);
         if (LARGE_TESTS) {
             params.getProducer().ethereal().setNumberOfEpochs(5).setEpochLength(60);
         }
@@ -117,25 +111,19 @@ public class TestCHOAM {
         checkpointOccurred = new CompletableFuture<>();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalServer(prefix, m,
-                                                                        exec).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), exec)));
+                .collect(Collectors.toMap(m -> m.getId(),
+                        m -> new LocalServer(prefix, m,
+                                exec).router(ServerConnectionCache.newBuilder().setMetrics(new ServerConnectionCacheMetricsImpl(registry)).setTarget(CARDINALITY), exec)));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
 
-                @SuppressWarnings({ "unchecked", "rawtypes" })
+                @SuppressWarnings({"unchecked", "rawtypes"})
                 @Override
                 public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
                     if (f != null) {
@@ -154,14 +142,14 @@ public class TestCHOAM {
             }
 //            params.getMvBuilder().setFileName(fn);
             return new CHOAM(params.build(runtime.setMember(m)
-                                                 .setMetrics(metrics)
-                                                 .setCommunications(routers.get(m.getId()))
-                                                 .setProcessor(processor)
-                                                 .setCheckpointer(wrap(runtime.getCheckpointer()))
-                                                 .setContext(context)
-                                                 .setExec(exec)
-                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()))
-                                                 .build()));
+                    .setMetrics(metrics)
+                    .setCommunications(routers.get(m.getId()))
+                    .setProcessor(processor)
+                    .setCheckpointer(wrap(runtime.getCheckpointer()))
+                    .setContext(context)
+                    .setExec(exec)
+                    .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()))
+                    .build()));
         }));
     }
 
@@ -181,25 +169,25 @@ public class TestCHOAM {
         choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(c.getSession(), timeout, max,
-                                                       Executors.newScheduledThreadPool(5,
-                                                                                        Thread.ofVirtual().factory()),
-                                                       countdown, txExec));
+                        Executors.newScheduledThreadPool(5,
+                                Thread.ofVirtual().factory()),
+                        countdown, txExec));
             }
         });
 
         boolean activated = Utils.waitForCondition(30_000, 1_000,
-                                                   () -> choams.values()
-                                                               .stream()
-                                                               .filter(c -> !c.active())
-                                                               .count() == 0);
+                () -> choams.values()
+                        .stream()
+                        .filter(c -> !c.active())
+                        .count() == 0);
         assertTrue(activated, "System did not become active: "
-        + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList());
+                + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.logState()).toList());
 
         transactioneers.stream().forEach(e -> e.start());
         try {
             final var complete = countdown.await(LARGE_TESTS ? 3200 : 60, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: "
-            + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
+                    + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {
             routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
             choams.values().forEach(e -> e.stop());
@@ -207,10 +195,10 @@ public class TestCHOAM {
             System.out.println();
 
             ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
+                    .convertRatesTo(TimeUnit.SECONDS)
+                    .convertDurationsTo(TimeUnit.MILLISECONDS)
+                    .build()
+                    .report();
         }
         assertTrue(checkpointOccurred.get());
     }

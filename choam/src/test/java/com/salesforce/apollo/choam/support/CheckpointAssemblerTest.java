@@ -6,37 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.stream.IntStream;
-import java.util.zip.GZIPOutputStream;
-
-import org.h2.mvstore.MVStore;
-import org.joou.ULong;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
@@ -59,14 +28,32 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import org.h2.mvstore.MVStore;
+import org.joou.ULong;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+
+import java.io.*;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+import java.util.zip.GZIPOutputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class CheckpointAssemblerTest {
 
-    private static final int CARDINALITY  = 10;
+    private static final int CARDINALITY = 10;
     private static final int SEGMENT_SIZE = 256;
 
     private CompletableFuture<CheckpointState> assembled;
@@ -99,16 +86,10 @@ public class CheckpointAssemblerTest {
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
         members.forEach(m -> context.activate(m));
 
         Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
@@ -116,8 +97,7 @@ public class CheckpointAssemblerTest {
         SigningMember bootstrapping = members.get(0);
 
         Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointState state = new CheckpointState(checkpoint,
-                                                    store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
+        CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
 
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
         testFile.deleteOnExit();
@@ -144,14 +124,11 @@ public class CheckpointAssemblerTest {
                 return futureSailor;
             }
         });
-        @SuppressWarnings("unchecked")
-        CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
+        @SuppressWarnings("unchecked") CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
         when(comm.connect(any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint,
-                                                           bootstrapping, store2, comm, context, 0.00125,
-                                                           DigestAlgorithm.DEFAULT);
+        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint, bootstrapping, store2, comm, context, 0.00125, DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());

@@ -122,7 +122,7 @@ public interface Stereotomy {
     /**
      * Answer the BoundIdentifier of the EventCoordinates
      */
-    <D extends Identifier> CompletableFuture<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates);
+    <D extends Identifier>  BoundIdentifier<D> bindingOf(EventCoordinates coordinates);
 
     /**
      * Publish the delegated inception event, answering the future supplying the
@@ -132,32 +132,32 @@ public interface Stereotomy {
      * @param commitment - the attachment with the seal to the delegation event
      * @return
      */
-    CompletableFuture<ControlledIdentifier<SelfAddressingIdentifier>> commit(DelegatedInceptionEvent delegation,
+     ControlledIdentifier<SelfAddressingIdentifier> commit(DelegatedInceptionEvent delegation,
                                                                              AttachmentEvent commitment);
 
     /**
      * Answer the Controllable identifier
      */
-    <D extends Identifier> CompletableFuture<ControlledIdentifier<D>> controlOf(D identifier);
+    <D extends Identifier>  ControlledIdentifier<D> controlOf(D identifier);
 
     DigestAlgorithm digestAlgorithm();
 
     /**
      * Answer the KeyState of the provided event coordinates
      */
-    CompletableFuture<KeyState> getKeyState(EventCoordinates eventCoordinates);
+     KeyState getKeyState(EventCoordinates eventCoordinates);
 
     /**
      * Answer the KeyState of the key coordinates
      */
-    default CompletableFuture<KeyState> getKeyState(KeyCoordinates keyCoordinates) {
+    default  KeyState getKeyState(KeyCoordinates keyCoordinates) {
         return getKeyState(keyCoordinates.getEstablishmentEvent());
     }
 
     /**
      * Answer the Verifier for the key coordinates
      */
-    CompletableFuture<Verifier> getVerifier(KeyCoordinates coordinates);
+     Verifier getVerifier(KeyCoordinates coordinates);
 
     /**
      * Create but do no publish a new delegated identifier.
@@ -174,17 +174,17 @@ public interface Stereotomy {
      * {@link SelfAddressingIdentifier} prototype and Identifier.NONE as the base
      * identifier
      */
-    CompletableFuture<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier();
+     ControlledIdentifier<SelfAddressingIdentifier> newIdentifier();
 
     /**
      * Answer a new delegated ControlledIdentifier
      */
-    <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(Identifier controller,
+    <T extends Identifier>  ControlledIdentifier<T> newIdentifier(Identifier controller,
                                                                                     Builder<T> specification);
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification
      * prototype and Identifier.NONE as the base identifier
      */
-    <T extends Identifier> CompletableFuture<ControlledIdentifier<T>> newIdentifier(IdentifierSpecification.Builder<T> spec);
+    <T extends Identifier>  ControlledIdentifier<T> newIdentifier(IdentifierSpecification.Builder<T> spec);
 }

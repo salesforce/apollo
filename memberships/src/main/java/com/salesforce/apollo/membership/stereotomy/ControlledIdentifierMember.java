@@ -6,19 +6,8 @@
  */
 package com.salesforce.apollo.membership.stereotomy;
 
-import java.io.InputStream;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.*;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -27,13 +16,17 @@ import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
+import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class ControlledIdentifierMember implements SigningMember {
 
-    private final Digest                                         id;
+    private final Digest id;
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
 
     public ControlledIdentifierMember(ControlledIdentifier<SelfAddressingIdentifier> identifier) {
@@ -43,15 +36,7 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public SignatureAlgorithm algorithm() {
-        Signer signer;
-        try {
-            signer = identifier.getSigner().get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return SignatureAlgorithm.NULL_SIGNATURE;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e);
-        }
+        Signer signer = identifier.getSigner();
         return signer.algorithm();
     }
 
@@ -81,25 +66,11 @@ public class ControlledIdentifierMember implements SigningMember {
 
     public CertificateWithPrivateKey getCertificateWithPrivateKey(Instant validFrom, Duration valid,
                                                                   SignatureAlgorithm signatureAlgorithm) {
-        try {
-            return identifier.provision(validFrom, valid, signatureAlgorithm).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e);
-        }
+        return identifier.provision(validFrom, valid, signatureAlgorithm);
     }
 
     public EstablishmentEvent getEvent() {
-        try {
-            return identifier.getLastEstablishingEvent().get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e);
-        }
+        return identifier.getLastEstablishingEvent();
     }
 
     @Override
@@ -116,21 +87,14 @@ public class ControlledIdentifierMember implements SigningMember {
         return id.hashCode();
     }
 
-    public CompletableFuture<KERL_> kerl() {
-        return identifier.getKerl().thenApply(kerl -> kerl(kerl));
+    public KERL_ kerl() {
+        List<EventWithAttachments> ker = identifier.getKerl();
+        return kerl(ker);
     }
 
     @Override
     public JohnHancock sign(InputStream message) {
-        Signer signer;
-        try {
-            signer = identifier.getSigner().get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("cannot obtain signer for: " + getId());
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("cannot obtain signer for: " + getId(), e);
-        }
+        Signer signer = identifier.getSigner();
         return signer.sign(message);
     }
 

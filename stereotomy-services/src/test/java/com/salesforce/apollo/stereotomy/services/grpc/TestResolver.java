@@ -6,17 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -30,10 +19,19 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestResolver {
 
@@ -57,11 +55,11 @@ public class TestResolver {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
@@ -80,10 +78,10 @@ public class TestResolver {
         };
 
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                            r -> new ResolverServer(r, null), null, null);
+                r -> new ResolverServer(r, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                                              r -> new ResolverServer(r, null), ResolverClient.getCreate(null), null);
+                r -> new ResolverServer(r, null), ResolverClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

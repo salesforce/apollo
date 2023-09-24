@@ -69,10 +69,10 @@ public class KerlTest extends AbstractDhtTest {
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
-        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier().get();
+        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier();
 
         var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());
-        ControlledIdentifier<? extends Identifier> delegated = opti2.get();
+        ControlledIdentifier<? extends Identifier> delegated = opti2;
 
         // identifier
         assertTrue(delegated.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -87,8 +87,7 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(1, delegated.getKeys().size());
         assertNotNull(delegated.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(delegated.getLastEstablishmentEvent())
-                                                                             .get();
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(delegated.getLastEstablishmentEvent());
         assertEquals(delegated.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
@@ -120,7 +119,7 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), delegated.getDigest());
 
         // lastEvent
-        assertNull(kerl.getKeyEvent(delegated.getLastEvent()).get());
+        assertNull(kerl.getKeyEvent(delegated.getLastEvent()) );
 
         // delegation
         assertTrue(delegated.getDelegatingIdentifier().isPresent());
@@ -128,14 +127,14 @@ public class KerlTest extends AbstractDhtTest {
         assertTrue(delegated.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()) );
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        delegated.rotate().get();
-        delegated.seal(InteractionSpecification.newBuilder()).get();
-        delegated.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
-        delegated.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
+        delegated.rotate() ;
+        delegated.seal(InteractionSpecification.newBuilder()) ;
+        delegated.rotate(RotationSpecification.newBuilder().addAllSeals(seals)) ;
+        delegated.seal(InteractionSpecification.newBuilder().addAllSeals(seals)) ;
     }
 
     @Test
@@ -149,20 +148,20 @@ public class KerlTest extends AbstractDhtTest {
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var i = controller.newIdentifier().get();
+        var i = controller.newIdentifier() ;
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()).get());
+        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()) );
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        i.rotate().get();
-        i.seal(InteractionSpecification.newBuilder()).get();
-        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals)).get();
-        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals)).get();
-        i.rotate().get();
-        i.rotate().get();
-        var iKerl = kerl.kerl(i.getIdentifier()).get();
+        i.rotate();
+        i.seal(InteractionSpecification.newBuilder()) ;
+        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
+        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
+        i.rotate();
+        i.rotate();
+        var iKerl = kerl.kerl(i.getIdentifier());
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());

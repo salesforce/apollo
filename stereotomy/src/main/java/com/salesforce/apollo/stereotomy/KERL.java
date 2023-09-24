@@ -6,14 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -24,34 +16,70 @@ import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidat
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
 /**
  * The Key Event Receipt Log
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public interface KERL extends KEL {
 
+    Void append(List<AttachmentEvent> events);
+
+    Void appendValidations(EventCoordinates coordinates,
+                           Map<EventCoordinates, JohnHancock> validations);
+
+    default KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
+        var ks = getKeyStateWithAttachments(coordinates);
+        if (ks != null) {
+            return null;
+        }
+        return KeyStateWithEndorsementsAndValidations.create(ks.state(),
+                ks.attachments().endorsements(),
+                getValidations(coordinates));
+    }
+
+    Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates);
+
+    default List<EventWithAttachments> kerl(Identifier identifier) {
+        // TODO use a real DB query instead of this really expensive iterative lookup
+        var ks = getKeyState(identifier);
+        if (ks == null) {
+            return Collections.emptyList();
+        }
+        var ke = getKeyEvent(ks.getCoordinates());
+        return kerl(ke);
+    }
+
+    private EventWithAttachments completeKerl(EventCoordinates c,
+                                              List<EventWithAttachments> result) {
+        if (c == null) {
+            return null;
+        }
+        var a = getAttachment(c);
+        var e = getKeyEvent(c);
+        if (e == null) {
+            return null;
+        }
+        result.add(new EventWithAttachments(e, a));
+        return completeKerl(e.getPrevious(), result);
+    }
+
+    private List<EventWithAttachments> kerl(KeyEvent event) {
+        var fs = new CompletableFuture<List<EventWithAttachments>>();
+        var result = new ArrayList<EventWithAttachments>();
+        Attachment a = getAttachment(event.getCoordinates());
+
+        result.add(new EventWithAttachments(event, a));
+        var c = event.getPrevious();
+        completeKerl(c, result);
+        Collections.reverse(result);
+        return result;
+    }
+
     record EventWithAttachments(KeyEvent event, Attachment attachments) {
-
-        public KeyEventWithAttachments toKeyEvente() {
-            var builder = KeyEventWithAttachments.newBuilder();
-            event.setEventOf(builder);
-            if (attachments != null) {
-                builder.setAttachment(attachments.toAttachemente());
-            }
-            return builder.build();
-        }
-
-        public String toBase64() {
-            var encoder = Base64.getUrlEncoder().withoutPadding();
-            var attachBytes = attachments == null ? com.salesfoce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
-                                                                                                          .toByteArray()
-                                                  : attachments.toAttachemente().toByteArray();
-            var encoded = event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|"
-            + encoder.encodeToString(attachBytes);
-            return encoded;
-        }
 
         static EventWithAttachments fromBase64(String encoded) {
             var decoder = Base64.getUrlDecoder();
@@ -67,75 +95,26 @@ public interface KERL extends KEL {
                 throw new IllegalArgumentException("Invalid encoding: " + encoded);
             }
             return new EventWithAttachments(ProtobufEventFactory.toKeyEvent(decoder.decode(split[1]), split[0]),
-                                            attachment);
+                    attachment);
         }
-    }
 
-    CompletableFuture<Void> append(List<AttachmentEvent> events);
-
-    CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                              Map<EventCoordinates, JohnHancock> validations);
-
-    default CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
-        var ksa = new AtomicReference<KeyStateWithAttachments>();
-        return getKeyStateWithAttachments(coordinates).thenApply(k -> {
-            ksa.set(k);
-            return k;
-        }).thenCompose(k -> getValidations(coordinates)).thenApply(validations -> {
-            return ksa.get() == null ? null
-                                     : KeyStateWithEndorsementsAndValidations.create(ksa.get().state(),
-                                                                                     ksa.get()
-                                                                                        .attachments()
-                                                                                        .endorsements(),
-                                                                                     validations);
-        });
-    }
-
-    CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates);
-
-    default CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
-        // TODO use a real DB query instead of this really expensive iterative lookup
-        return getKeyState(identifier).thenApply(ks -> ks == null ? null : ks.getCoordinates())
-                                      .thenCompose(c -> c == null ? complete(Collections.emptyList())
-                                                                  : getKeyEvent(c).thenCompose(ks -> kerl(ks)));
-    }
-
-    private <T> CompletableFuture<T> complete(T value) {
-        var fs = new CompletableFuture<T>();
-        fs.complete(value);
-        return fs;
-    }
-
-    private CompletableFuture<EventWithAttachments> completeKerl(EventCoordinates c,
-                                                                 List<EventWithAttachments> result) {
-        if (c == null) {
-            var fs = new CompletableFuture<EventWithAttachments>();
-            fs.complete(null);
-            return fs;
+        public KeyEventWithAttachments toKeyEvente() {
+            var builder = KeyEventWithAttachments.newBuilder();
+            event.setEventOf(builder);
+            if (attachments != null) {
+                builder.setAttachment(attachments.toAttachemente());
+            }
+            return builder.build();
         }
-        return getAttachment(c).thenCombine(getKeyEvent(c), (a, e) -> {
-            if (e == null) {
-                return null;
-            }
-            result.add(new EventWithAttachments(e, a));
-            return e.getPrevious();
-        }).thenCompose(coords -> completeKerl(coords, result));
-    }
 
-    private CompletableFuture<List<EventWithAttachments>> kerl(KeyEvent event) {
-        var fs = new CompletableFuture<List<EventWithAttachments>>();
-        var result = new ArrayList<EventWithAttachments>();
-        getAttachment(event.getCoordinates()).thenApply(a -> {
-            result.add(new EventWithAttachments(event, a));
-            return event.getPrevious();
-        }).thenCompose(c -> completeKerl(c, result)).whenComplete((r, t) -> {
-            if (t != null) {
-                fs.completeExceptionally(t);
-            } else {
-                Collections.reverse(result);
-                fs.complete(result);
-            }
-        });
-        return fs;
+        public String toBase64() {
+            var encoder = Base64.getUrlEncoder().withoutPadding();
+            var attachBytes = attachments == null ? com.salesfoce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
+                    .toByteArray()
+                    : attachments.toAttachemente().toByteArray();
+            var encoded = event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|"
+                    + encoder.encodeToString(attachBytes);
+            return encoded;
+        }
     }
 }

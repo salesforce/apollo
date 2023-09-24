@@ -6,14 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -27,13 +20,17 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class KERLAdapter implements KERL {
 
-    private final DigestAlgorithm  algorithm;
+    private final DigestAlgorithm algorithm;
     private final ProtoKERLService kerl;
 
     public KERLAdapter(ProtoKERLService kerl, DigestAlgorithm algorithm) {
@@ -42,44 +39,44 @@ public class KERLAdapter implements KERL {
     }
 
     @Override
-    public CompletableFuture<KeyState> append(KeyEvent event) {
-        return kerl.append(Collections.singletonList(event.toKeyEvent_()))
-                   .thenApply(l -> l.isEmpty() ? null : new KeyStateImpl(l.get(0)));
+    public KeyState append(KeyEvent event) {
+        return new KeyStateImpl(kerl.append(Collections.singletonList(event.toKeyEvent_())).getFirst());
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
-        return kerl.appendAttachments(events.stream().map(e -> e.toEvent_()).toList()).thenApply(l -> null);
+    public Void append(List<AttachmentEvent> events) {
+        kerl.appendAttachments(events.stream().map(e -> e.toEvent_()).toList());
+        return null;
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
-        return kerl.append(events.stream().map(ke -> ke.toKeyEvent_()).toList(),
-                           attachments.stream().map(ae -> ae.toEvent_()).toList())
-                   .thenApply(l -> l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
+    public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+        var l = kerl.append(events.stream().map(d -> d.toKeyEvent_()).toList(), attachments.stream().map(ae -> ae.toEvent_()).toList());
+        return l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList();
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> validations) {
-        return kerl.appendValidations(Validations.newBuilder()
-                                                 .setCoordinates(coordinates.toEventCoords())
-                                                 .addAllValidations(validations.entrySet()
-                                                                               .stream()
-                                                                               .map(e -> Validation_.newBuilder()
-                                                                                                    .setValidator(e.getKey()
-                                                                                                                   .toEventCoords())
-                                                                                                    .setSignature(e.getValue()
-                                                                                                                   .toSig())
-                                                                                                    .build())
-                                                                               .toList())
-                                                 .build())
-                   .thenApply(e -> null);
+    public Void appendValidations(EventCoordinates coordinates,
+                                  Map<EventCoordinates, JohnHancock> validations) {
+        kerl.appendValidations(Validations.newBuilder()
+                .setCoordinates(coordinates.toEventCoords())
+                .addAllValidations(validations.entrySet()
+                        .stream()
+                        .map(e -> Validation_.newBuilder()
+                                .setValidator(e.getKey()
+                                        .toEventCoords())
+                                .setSignature(e.getValue()
+                                        .toSig())
+                                .build())
+                        .toList())
+                .build());
+        return null;
     }
 
     @Override
-    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
-        return kerl.getAttachment(coordinates.toEventCoords()).thenApply(attch -> Attachment.of(attch));
+    public Attachment getAttachment(EventCoordinates coordinates) {
+        com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment = kerl.getAttachment(coordinates.toEventCoords());
+        return Attachment.of(attachment);
     }
 
     @Override
@@ -88,38 +85,40 @@ public class KERLAdapter implements KERL {
     }
 
     @Override
-    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return kerl.getKeyEvent(coordinates.toEventCoords()).thenApply(event -> ProtobufEventFactory.from(event));
+    public KeyEvent getKeyEvent(EventCoordinates coordinates) {
+        KeyEvent_ event = kerl.getKeyEvent(coordinates.toEventCoords());
+        return ProtobufEventFactory.from(event);
     }
 
     @Override
-    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
-        return kerl.getKeyState(coordinates.toEventCoords()).thenApply(ks -> new KeyStateImpl(ks));
+    public KeyState getKeyState(EventCoordinates coordinates) {
+        KeyState_ ks = kerl.getKeyState(coordinates.toEventCoords());
+        return new KeyStateImpl(ks);
     }
 
     @Override
-    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
-        return kerl.getKeyState(identifier.toIdent()).thenApply(ks -> new KeyStateImpl(ks));
+    public KeyState getKeyState(Identifier identifier) {
+        KeyState_ ks = kerl.getKeyState(identifier.toIdent());
+        return new KeyStateImpl(ks);
     }
 
     @Override
-    public CompletableFuture<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
-        return kerl.getKeyStateWithAttachments(coordinates.toEventCoords())
-                   .thenApply(ksa -> KeyStateWithAttachments.from(ksa));
+    public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
+        KeyStateWithAttachments_ ksa = kerl.getKeyStateWithAttachments(coordinates.toEventCoords());
+        return KeyStateWithAttachments.from(ksa);
     }
 
     @Override
-    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
-        return kerl.getValidations(coordinates.toEventCoords())
-                   .thenApply(v -> v.getValidationsList()
-                                    .stream()
-                                    .collect(Collectors.toMap(val -> EventCoordinates.from(val.getValidator()),
-                                                              val -> JohnHancock.from(val.getSignature()))));
+    public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
+        Validations v = kerl.getValidations(coordinates.toEventCoords());
+        return v.getValidationsList()
+                .stream()
+                .collect(Collectors.toMap(val -> EventCoordinates.from(val.getValidator()),
+                        val -> JohnHancock.from(val.getSignature())));
     }
 
     @Override
-    public CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
-        return kerl.getKERL(identifier.toIdent())
-                   .thenApply(k -> k.getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList());
+    public List<EventWithAttachments> kerl(Identifier identifier) {
+        return kerl.getKERL(identifier.toIdent()).getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList();
     }
 }

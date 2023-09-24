@@ -7,31 +7,6 @@
 
 package com.salesforce.apollo.ethereal;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.Test;
-
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -53,32 +28,29 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
+import org.junit.jupiter.api.Test;
+
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 
  * @author hal.hildebrand
- *
  */
 public class EtherealTest {
 
-    private static class SimpleDataSource implements DataSource {
-        private final Deque<ByteString> dataStack = new ArrayDeque<>();
-
-        @Override
-        public ByteString getData() {
-            try {
-                Thread.sleep(Entropy.nextBitsStreamLong(DELAY_MS * 2));
-            } catch (InterruptedException e) {
-            }
-            return dataStack.pollFirst();
-        }
-    }
-
-    private final static long    DELAY_MS;
-    private static final int     EPOCH_LENGTH = 30;
+    private final static long DELAY_MS;
+    private static final int EPOCH_LENGTH = 30;
     private static final boolean LARGE_TESTS;
-    private static final int     NPROC;
-    private static final int     NUM_EPOCHS   = 3;
+    private static final int NPROC;
+    private static final int NUM_EPOCHS = 3;
 
     static {
         LARGE_TESTS = Boolean.getBoolean("large_tests");
@@ -112,8 +84,8 @@ public class EtherealTest {
     }
 
     private void one(int iteration, List<ThreadPoolExecutor> consumers) throws NoSuchAlgorithmException,
-                                                                        InterruptedException,
-                                                                        InvalidProtocolBufferException {
+            InterruptedException,
+            InvalidProtocolBufferException {
         final var gossipPeriod = Duration.ofMillis(5);
 
         var registry = new MetricRegistry();
@@ -126,16 +98,10 @@ public class EtherealTest {
         List<Router> comms = new ArrayList<>();
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, (short) NPROC).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, (short) NPROC).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
@@ -143,10 +109,10 @@ public class EtherealTest {
             context.activate(m);
         }
         var builder = Config.newBuilder()
-                            .setnProc((short) NPROC)
-                            .setNumberOfEpochs(NUM_EPOCHS)
-                            .setEpochLength(EPOCH_LENGTH)
-                            .setVerifiers(members.toArray(new Verifier[members.size()]));
+                .setnProc((short) NPROC)
+                .setNumberOfEpochs(NUM_EPOCHS)
+                .setEpochLength(EPOCH_LENGTH)
+                .setVerifiers(members.toArray(new Verifier[members.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < (short) NPROC; i++) {
@@ -167,17 +133,17 @@ public class EtherealTest {
             var com = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder(), exec);
             comms.add(com);
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
-                                          (pb, last) -> {
-                                              System.out.println("block: " + level.incrementAndGet() + " pid: " + pid);
-                                              output.add(pb);
-                                              if (last) {
-                                                  finished.countDown();
-                                              }
-                                          }, ep -> {
-                                              if (pid == 0) {
-                                                  System.out.println("new epoch: " + ep);
-                                              }
-                                          }, consumers.get(i));
+                    (pb, last) -> {
+                        System.out.println("block: " + level.incrementAndGet() + " pid: " + pid);
+                        output.add(pb);
+                        if (last) {
+                            finished.countDown();
+                        }
+                    }, ep -> {
+                if (pid == 0) {
+                    System.out.println("new epoch: " + ep);
+                }
+            }, consumers.get(i));
 
             var e = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
             executors.add(e);
@@ -187,9 +153,9 @@ public class EtherealTest {
             controllers.add(controller);
             for (int d = 0; d < 5000; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
-                                            .build()
-                                            .toByteString());
+                        .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
+                        .build()
+                        .toByteString());
             }
         }
         try {
@@ -218,7 +184,7 @@ public class EtherealTest {
         final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);
         final var first = produced.stream().filter(l -> l.size() == expected).findFirst();
         assertFalse(first.isEmpty(), "Iteration: " + iteration + ", no process produced " + expected + " blocks: "
-        + produced.stream().map(l -> l.size()).toList());
+                + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
         Set<Short> failed = new HashSet<>();
@@ -226,7 +192,7 @@ public class EtherealTest {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != expected) {
                 System.out.println("Iteration: " + iteration + ", did not get all expected blocks on: " + i
-                + " blocks received: " + output.size());
+                        + " blocks received: " + output.size());
             } else {
                 for (int j = 0; j < preblocks.size(); j++) {
                     var a = preblocks.get(j);
@@ -234,18 +200,18 @@ public class EtherealTest {
                     if (a.data().size() != b.data().size()) {
                         failed.add(i);
                         System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " process: " + i
-                        + " data size: " + a.data().size() + " != " + b.data().size());
+                                + " data size: " + a.data().size() + " != " + b.data().size());
                     } else {
                         for (int k = 0; k < a.data().size(); k++) {
                             if (!a.data().get(k).equals(b.data().get(k))) {
                                 failed.add(i);
                                 System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " unit: "
-                                + k + " process: " + i + " expected: " + a.data().get(k) + " received: "
-                                + b.data().get(k));
+                                        + k + " process: " + i + " expected: " + a.data().get(k) + " received: "
+                                        + b.data().get(k));
                             }
                             outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k))
-                                                                  .getContents()
-                                                                  .toByteArray()));
+                                    .getContents()
+                                    .toByteArray()));
                         }
                     }
                 }
@@ -253,9 +219,22 @@ public class EtherealTest {
         }
         assertTrue((NPROC - failed.size()) >= context.majority(), "Failed iteration: " + iteration);
         assertTrue(produced.stream()
-                           .map(pbs -> pbs.size())
-                           .filter(count -> count == expected)
-                           .count() >= context.majority(),
-                   "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
+                        .map(pbs -> pbs.size())
+                        .filter(count -> count == expected)
+                        .count() >= context.majority(),
+                "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
+    }
+
+    private static class SimpleDataSource implements DataSource {
+        private final Deque<ByteString> dataStack = new ArrayDeque<>();
+
+        @Override
+        public ByteString getData() {
+            try {
+                Thread.sleep(Entropy.nextBitsStreamLong(DELAY_MS * 2));
+            } catch (InterruptedException e) {
+            }
+            return dataStack.pollFirst();
+        }
     }
 }

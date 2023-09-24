@@ -7,11 +7,6 @@
 
 package com.salesforce.apollo.stereotomy.caching;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -21,9 +16,12 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class CachingKERL extends CachingKEL<KERL> implements KERL {
 
@@ -37,29 +35,24 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> event) {
-        try {
-            return complete(kerl -> kerl.append(event));
-        } catch (Throwable t) {
-            var fs = new CompletableFuture<Void>();
-            fs.completeExceptionally(t);
-            return fs;
-        }
+    public Void append(List<AttachmentEvent> event) {
+        complete(kerl -> kerl.append(event));
+        return null;
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates,
+                                  Map<EventCoordinates, JohnHancock> validations) {
         return complete(kerl -> kerl.appendValidations(coordinates, validations));
     }
 
     @Override
-    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
+    public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
         return complete(kerl -> kerl.getValidations(coordinates));
     }
 
     @Override
-    public CompletableFuture<List<EventWithAttachments>> kerl(Identifier identifier) {
+    public List<EventWithAttachments> kerl(Identifier identifier) {
         return complete(kerl -> kerl.kerl(identifier));
     }
 
