@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.fireflies.comm.gossip;
 
-import java.io.IOException;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -16,9 +13,10 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
+import java.io.IOException;
+
 /**
  * @author hal.hildebrand
- *
  */
 public interface Fireflies extends Link {
 
@@ -35,7 +33,7 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(SayWhat sw) {
+            public Gossip gossip(SayWhat sw) {
                 return null;
             }
 
@@ -45,7 +43,7 @@ public interface Fireflies extends Link {
         };
     }
 
-    ListenableFuture<Gossip> gossip(SayWhat sw);
+    Gossip gossip(SayWhat sw);
 
     void update(State state);
 
