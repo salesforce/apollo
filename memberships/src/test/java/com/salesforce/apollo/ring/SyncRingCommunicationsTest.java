@@ -12,7 +12,6 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -83,9 +82,7 @@ public class SyncRingCommunicationsTest {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var sync = new SyncRingCommunications<Member, TestItService>(context, serverMember1, commsA, exec);
         var countdown = new CountDownLatch(1);
-        sync.execute((link, round) -> {return link.ping(Any.getDefaultInstance());}, (result, destination) -> {
-            countdown.countDown();
-        });
+        sync.execute((link, round) -> link.ping(Any.getDefaultInstance()), (result, destination) -> countdown.countDown());
         assertTrue(countdown.await(1, TimeUnit.SECONDS), "Completed: " + countdown.getCount());
         assertFalse(pinged1.get());
         assertTrue(pinged2.get());

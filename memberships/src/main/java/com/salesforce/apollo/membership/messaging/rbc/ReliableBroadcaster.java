@@ -9,14 +9,7 @@ package com.salesforce.apollo.membership.messaging.rbc;
 import static com.salesforce.apollo.membership.messaging.rbc.comms.RbcClient.getCreate;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.PriorityQueue;
-import java.util.Queue;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -31,6 +24,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import com.salesforce.apollo.ring.SyncRingCommunications;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -416,7 +410,7 @@ public class ReliableBroadcaster {
     private final CommonCommunications<ReliableBroadcast, Service> comm;
     private final Context<Member>                                  context;
     private final Executor                                         exec;
-    private final RingCommunications<Member, ReliableBroadcast>    gossiper;
+    private final SyncRingCommunications<Member, ReliableBroadcast>    gossiper;
     private final SigningMember                                    member;
     private final RbcMetrics                                       metrics;
     private final Parameters                                       params;
@@ -434,7 +428,7 @@ public class ReliableBroadcaster {
         this.comm = communications.create(member, context.getId(), new Service(),
                                           r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
-        gossiper = new RingCommunications<>(context, member, this.comm, exec);
+        gossiper = new SyncRingCommunications<>(context, member, this.comm, exec);
         this.adapter = adapter;
     }
 
@@ -522,7 +516,7 @@ public class ReliableBroadcaster {
         });
     }
 
-    private ListenableFuture<Reconcile> gossipRound(ReliableBroadcast link, int ring) {
+    private Reconcile gossipRound(ReliableBroadcast link, int ring) {
         if (!started.get()) {
             return null;
         }
@@ -540,24 +534,15 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor,
-                        Destination<Member, ReliableBroadcast> destination, Duration duration,
+    private void handle(Optional<Reconcile> result,
+                        SyncRingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
         try {
-            if (futureSailor.isEmpty()) {
-                if (timer != null) {
-                    timer.stop();
-                }
-                return;
-            }
             Reconcile gossip;
             try {
-                gossip = futureSailor.get().get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (ExecutionException e) {
-                log.debug("error gossiping with {} on: {}", destination.member().getId(), member.getId(), e.getCause());
+                gossip = result.get();
+            } catch (NoSuchElementException e) {
+                log.debug("null gossiping with {} on: {}", destination.member().getId(), member.getId(), e.getCause());
                 return;
             }
             buffer.receive(gossip.getUpdatesList());
