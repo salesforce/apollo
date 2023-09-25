@@ -173,7 +173,7 @@ abstract public class UniKERL implements DigestKERL {
                     .execute();
         } catch (DataAccessException e) {
             if (e.getCause() instanceof JdbcSQLIntegrityConstraintViolationException icv) {
-                log.info("Constraint violation ignored: {}", icv.toString());
+                log.trace("Constraint violation ignored: {}", icv.toString());
             } else {
                 throw e;
             }
@@ -195,7 +195,7 @@ abstract public class UniKERL implements DigestKERL {
                     .fetchOne()
                     .value1();
         } catch (DataAccessException e) {
-            log.info("already published: {} : {}", event.getCoordinates(), e.toString());
+            log.trace("already published: {} : {}", event.getCoordinates(), e.toString());
             // Already exists
             var coordinates = event.getCoordinates();
             id = context.select(COORDINATES.ID)
@@ -220,7 +220,7 @@ abstract public class UniKERL implements DigestKERL {
                     .execute();
         } catch (DataAccessException e) {
             // ignore
-            log.info("already inserted event: {} : {}",e,  e.toString());
+            log.trace("already inserted event: {} : {}",e,  e.toString());
         }
         context.mergeInto(CURRENT_KEY_STATE)
                 .using(context.selectOne())
