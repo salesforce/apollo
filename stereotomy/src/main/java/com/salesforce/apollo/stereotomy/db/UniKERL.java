@@ -26,6 +26,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
+import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.exception.DataAccessException;
@@ -163,12 +164,20 @@ abstract public class UniKERL implements DigestKERL {
 
         final var identBytes = event.getIdentifier().toIdent().toByteArray();
 
-        context.mergeInto(IDENTIFIER)
-                .using(context.selectOne())
-                .on(IDENTIFIER.PREFIX.eq(identBytes))
-                .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
-                .values(identBytes)
-                .execute();
+        try {
+            context.mergeInto(IDENTIFIER)
+                    .using(context.selectOne())
+                    .on(IDENTIFIER.PREFIX.eq(identBytes))
+                    .whenNotMatchedThenInsert(IDENTIFIER.PREFIX)
+                    .values(identBytes)
+                    .execute();
+        } catch (DataAccessException e) {
+            if (e.getCause() instanceof JdbcSQLIntegrityConstraintViolationException icv) {
+                log.info("Constraint violation ignored: {}", icv.toString());
+            } else {
+                throw e;
+            }
+        }
 
         var identifierId = context.select(IDENTIFIER.ID)
                 .from(IDENTIFIER)
@@ -186,6 +195,7 @@ abstract public class UniKERL implements DigestKERL {
                     .fetchOne()
                     .value1();
         } catch (DataAccessException e) {
+            log.info("already published: {} : {}", event.getCoordinates(), e.toString());
             // Already exists
             var coordinates = event.getCoordinates();
             id = context.select(COORDINATES.ID)
@@ -210,8 +220,8 @@ abstract public class UniKERL implements DigestKERL {
                     .execute();
         } catch (DataAccessException e) {
             // ignore
+            log.info("already inserted event: {} : {}",e,  e.toString());
         }
-        log.trace("Inserted event: {}", event);
         context.mergeInto(CURRENT_KEY_STATE)
                 .using(context.selectOne())
                 .on(CURRENT_KEY_STATE.IDENTIFIER.eq(identifierId.value1()))
@@ -221,7 +231,7 @@ abstract public class UniKERL implements DigestKERL {
                 .set(CURRENT_KEY_STATE.IDENTIFIER, identifierId.value1())
                 .set(CURRENT_KEY_STATE.CURRENT, id)
                 .execute();
-        log.trace("Inserted key state: {}", event);
+        log.info("Inserted key state: {}", event);
     }
 
     public static void appendAttachments(Connection connection, List<byte[]> attachments) {

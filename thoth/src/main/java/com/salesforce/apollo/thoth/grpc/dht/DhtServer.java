@@ -206,7 +206,7 @@ public class DhtServer extends KerlDhtImplBase {
                 var kerl = response == null ? KERL_.getDefaultInstance() : response;
                 responseObserver.onNext(kerl);
                 responseObserver.onCompleted();
-                if (metrics == null) {
+                if (metrics != null) {
                     final var serializedSize = kerl.getSerializedSize();
                     metrics.outboundBandwidth().mark(serializedSize);
                     metrics.outboundGetKERLResponse().mark(serializedSize);

@@ -262,10 +262,17 @@ public class Gorgoneion {
                         member.getId());
             }
         }, scheduler, parameters.frequency());
-        return validated.thenApply(v -> {
-            notarize(request, v);
-            return v;
-        }).getNow(null);
+        try {
+            return validated.thenApply(v -> {
+                notarize(request, v);
+                return v;
+            }).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private Validation_ validate(Credentials credentials) {

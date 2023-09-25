@@ -15,6 +15,8 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ import java.util.function.Function;
  * @author hal.hildebrand
  */
 public class CachingKERL extends CachingKEL<KERL> implements KERL {
+    private static final Logger log = LoggerFactory.getLogger(CachingKERL.class);
 
     public CachingKERL(Function<Function<KERL, ?>, ?> kelSupplier) {
         super(kelSupplier);
@@ -36,24 +39,43 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
 
     @Override
     public Void append(List<AttachmentEvent> event) {
-        complete(kerl -> kerl.append(event));
+        try {
+            complete(kerl -> kerl.append(event));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
         return null;
     }
 
     @Override
     public Void appendValidations(EventCoordinates coordinates,
                                   Map<EventCoordinates, JohnHancock> validations) {
-        return complete(kerl -> kerl.appendValidations(coordinates, validations));
+        try {
+            return complete(kerl -> kerl.appendValidations(coordinates, validations));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
     public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
-        return complete(kerl -> kerl.getValidations(coordinates));
+        try {
+            return complete(kerl -> kerl.getValidations(coordinates));
+        } catch (Throwable e) {
+            log.error("Cannot complete getValidations", e);
+            return null;
+        }
     }
 
     @Override
     public List<EventWithAttachments> kerl(Identifier identifier) {
-        return complete(kerl -> kerl.kerl(identifier));
+        try {
+            return complete(kerl -> kerl.kerl(identifier));
+        } catch (Throwable e) {
+            log.error("Cannot complete kerl", e);
+            return null;
+        }
     }
-
 }

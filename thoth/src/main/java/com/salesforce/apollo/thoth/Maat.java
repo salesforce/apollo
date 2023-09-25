@@ -27,9 +27,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
@@ -67,28 +65,19 @@ public class Maat extends DelegatedKERL {
         final List<KeyEvent> filtered = events.stream().filter(e -> {
             if (e instanceof EstablishmentEvent est &&
                     est.getCoordinates().getSequenceNumber().equals(ULong.valueOf(0))) {
-                try {
-                    return validate(est).get();
-                } catch (InterruptedException e1) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e1) {
-                    log.error("error validating: {}", est.getCoordinates(), e1.getCause());
-                    return false;
-                }
+                return validate(est);
             }
             return true;
         }).toList();
         return filtered.isEmpty() && attachments.isEmpty() ? Collections.emptyList() : super.append(filtered, attachments);
     }
 
-    public CompletableFuture<Boolean> validate(EstablishmentEvent event) {
+    public boolean validate(EstablishmentEvent event) {
         Digest digest;
         if (event.getIdentifier() instanceof SelfAddressingIdentifier said) {
             digest = said.getDigest();
         } else {
-            final CompletableFuture<Boolean> fs = new CompletableFuture<Boolean>();
-            fs.complete(false);
-            return fs;
+            return false;
         }
         final Context<Member> ctx = context;
         var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
@@ -122,30 +111,29 @@ public class Maat extends DelegatedKERL {
             }
             return event;
         }).toList();
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(e -> {
-            log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(),
-                    validations.size(), mapped.size());
-            if (mapped.size() == 0) {
-                log.warn("No validations of: {} ", event.getCoordinates());
-                return false;
-            }
 
-            var verified = 0;
-            for (var r : mapped) {
-                var verifier = new DefaultVerifier(r.validating.getKeys().get(0));
-                if (verifier.verify(r.signature, serialized)) {
-                    verified++;
-                } else {
-                    log.trace("Cannot verify sig: {} of: {} by: {}", r.signature, event.getCoordinates(),
-                            r.validating.getIdentifier());
-                }
-            }
-            var validated = verified >= context.majority();
+        log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(),
+                validations.size(), mapped.size());
+        if (mapped.size() == 0) {
+            log.warn("No validations of: {} ", event.getCoordinates());
+            return false;
+        }
 
-            log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified,
-                    mapped.size(), ctx.majority(), event.getCoordinates());
-            return validated;
-        });
+        var verified = 0;
+        for (var r : mapped) {
+            var verifier = new DefaultVerifier(r.validating.getKeys().get(0));
+            if (verifier.verify(r.signature, serialized)) {
+                verified++;
+            } else {
+                log.trace("Cannot verify sig: {} of: {} by: {}", r.signature, event.getCoordinates(),
+                        r.validating.getIdentifier());
+            }
+        }
+        var validated = verified >= context.majority();
+
+        log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified,
+                mapped.size(), ctx.majority(), event.getCoordinates());
+        return validated;
     }
 }
 

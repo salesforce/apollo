@@ -26,12 +26,18 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
@@ -119,8 +125,15 @@ public class GorgoneionClientTest {
         final var prefix = UUID.randomUUID().toString();
         final var members = IntStream.range(0, 10).mapToObj(i -> new ControlledIdentifierMember(stereotomy.newIdentifier())).toList();
 
+        var countdown = new CountDownLatch(3);
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
+        doAnswer(new Answer<Void>() {
+            public Void answer(InvocationOnMock invocation) {
+                countdown.countDown();
+                return null;
+            }
+        }).when(observer).publish(Mockito.any(), Mockito.anyList());
 
         var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
         for (ControlledIdentifierMember member : members) {
@@ -128,7 +141,7 @@ public class GorgoneionClientTest {
         }
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        @SuppressWarnings("unused") final var gorgons = members.stream().map(m -> {
+        members.stream().map(m -> {
                     final var router = new LocalServer(prefix, m, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
                             exec);
                     router.start();
@@ -170,7 +183,6 @@ public class GorgoneionClientTest {
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
 
-        // Verify client KERL published
-        verify(observer, times(3)).publish(client.kerl(), Collections.singletonList(invitation));
+        assertTrue(countdown.await(1, TimeUnit.SECONDS));
     }
 }

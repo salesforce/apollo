@@ -90,7 +90,7 @@ import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH
 public class KerlDHT implements ProtoKERLService {
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
     private final Ani ani;
-    private final KERL cache;
+    private final CachingKERL cache;
     private final JdbcConnectionPool connectionPool;
     private final Context<Member> context;
     private final CommonCommunications<DhtService, ProtoKERLService> dhtComms;
@@ -117,7 +117,14 @@ public class KerlDHT implements ProtoKERLService {
         this.fpr = falsePositiveRate;
         this.frequency = frequency;
         this.scheduler = scheduler;
-        this.cache = new CachingKERL(f -> f.apply(new KERLAdapter(this, digestAlgorithm())));
+        this.cache = new CachingKERL(f -> {
+            try {
+                return f.apply(new KERLAdapter(this, digestAlgorithm()));
+            } catch (Throwable t) {
+                log.error("error applying cache", t);
+                return null;
+            }
+        });
         dhtComms = communications.create(member, context.getId(), service, service.getClass().getCanonicalName(), r -> new DhtServer(r, metrics), DhtClient.getCreate(metrics), DhtClient.getLocalLoopback(service, member));
         reconcileComms = communications.create(member, context.getId(), reconciliation, reconciliation.getClass().getCanonicalName(), r -> new ReconciliationServer(r, communications.getClientIdentityProvider(), metrics), ReconciliationClient.getCreate(context.getId(), metrics), ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connectionPool = connectionPool;
@@ -131,7 +138,8 @@ public class KerlDHT implements ProtoKERLService {
             try (var k = kerlPool.create()) {
                 return f.apply(wrap.apply(this, wrap(k)));
             } catch (Throwable e) {
-                return completeExceptionally(e);
+                log.error("Cannot apply kerl", e);
+                return null;
             }
         });
         this.ani = new Ani(member.getId(), asKERL());
@@ -139,12 +147,6 @@ public class KerlDHT implements ProtoKERLService {
 
     public KerlDHT(Duration frequency, Context<? extends Member> context, SigningMember member, JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout, ScheduledExecutorService scheduler, double falsePositiveRate, StereotomyMetrics metrics) {
         this(frequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications, executor, timeout, scheduler, falsePositiveRate, metrics);
-    }
-
-    public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
-        var fs = new CompletableFuture<T>();
-        fs.completeExceptionally(t);
-        return fs;
     }
 
     public static void updateLocationHash(Identifier identifier, DigestAlgorithm digestAlgorithm, DSLContext dsl) {
@@ -166,6 +168,13 @@ public class KerlDHT implements ProtoKERLService {
         return result;
     }
 
+    /**
+     * Clear the caches of the receiver
+     */
+    public void clearCache() {
+        cache.clear();
+    }
+
     public KeyState_ append(AttachmentEvent event) {
         if (event == null) {
             return null;
@@ -181,7 +190,8 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).noDuplicates().iterate(identifier, null, (link, r) -> link.append(Collections.emptyList(), Collections.singletonList(event)), null, (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut, tally, destination, "append events"), t -> completeIt(result, gathered));
         try {
-            return result.get().getKeyStatesList().getFirst();
+            List<KeyState_> s = result.get().getKeyStatesList();
+            return s.isEmpty() ? null : s.getFirst();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
@@ -547,14 +557,23 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private <T> T complete(Function<ProtoKERLAdapter, T> func) {
-        return func.apply(new ProtoKERLAdapter(kerl));
+        try {
+            return func.apply(new ProtoKERLAdapter(kerl));
+        } catch (Throwable t) {
+            log.error("Error completing", t);
+            return null;
+        }
     }
 
     private <T> void completeIt(CompletableFuture<T> result, HashMultiset<T> gathered) {
         var max = gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
         if (max != null) {
             if (max.getCount() >= context.majority()) {
-                result.complete(max.getElement());
+                try {
+                    result.complete(max.getElement());
+                } catch (Throwable t) {
+                    log.error("Unable to complete it", t);
+                }
                 return;
             }
         }

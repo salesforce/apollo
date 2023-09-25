@@ -40,7 +40,13 @@ public class KERLAdapter implements KERL {
 
     @Override
     public KeyState append(KeyEvent event) {
-        return new KeyStateImpl(kerl.append(Collections.singletonList(event.toKeyEvent_())).getFirst());
+        List<KeyState_> appended = kerl.append(Collections.singletonList(event.toKeyEvent_()));
+        if (appended.isEmpty()) {
+            return null;
+        }
+        KeyState_ published = appended.getFirst();
+        return published.equals(KeyState_.getDefaultInstance())
+                ? null : new KeyStateImpl(published);
     }
 
     @Override

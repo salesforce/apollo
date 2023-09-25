@@ -21,6 +21,7 @@ import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -33,7 +34,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -72,7 +72,8 @@ public class BootstrappingTest extends AbstractDhtTest {
                     Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
         }).toList();
 
-        final KERL testKerl = dhts.values().stream().findFirst().get().asKERL();
+        final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
+        final KERL testKerl = dht.asKERL();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[]{7, 7, 7});
         var clientKerl = new MemKERL(DigestAlgorithm.DEFAULT);
@@ -104,7 +105,9 @@ public class BootstrappingTest extends AbstractDhtTest {
         testKerl.getKeyEvent(client.getEvent().getCoordinates());
 
         // Verify we can't publish without correct validation
-        testKerl.append(client.getEvent());
+        KeyState ks = testKerl.append(client.getEvent());
+        assertNull(ks);
+        dht.clearCache();
 
         var gorgoneionClient = new GorgoneionClient(client, attester, Clock.systemUTC(), admin);
 
@@ -113,10 +116,10 @@ public class BootstrappingTest extends AbstractDhtTest {
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
 
-//        Thread.sleep(1000);
+        Thread.sleep(3000);
         // Verify client KERL published
-        var ks = testKerl.getKeyEvent(client.getEvent().getCoordinates());
-        assertNotNull(ks);
+        var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());
+        assertNotNull(keyS);
         admin.close();
     }
 

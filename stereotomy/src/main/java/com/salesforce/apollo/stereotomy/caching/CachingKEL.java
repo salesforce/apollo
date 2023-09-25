@@ -50,8 +50,7 @@ public class CachingKEL<K extends KEL> implements KEL {
         this(kelSupplier, defaultKsCoordsBuilder(), defaultEventCoordsBuilder());
     }
 
-    public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
-                      Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+    public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
         ksCoords = builder.build(new CacheLoader<EventCoordinates, KeyState>() {
 
 
@@ -71,26 +70,19 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder() {
-        return Caffeine.newBuilder()
-                .maximumSize(10_000)
-                .expireAfterWrite(Duration.ofMinutes(10))
-                .removalListener((EventCoordinates coords, KeyEvent e,
-                                  RemovalCause cause) -> log.trace("KeyEvent {} was removed ({})", coords,
-                        cause));
+        return Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(10)).removalListener((EventCoordinates coords, KeyEvent e, RemovalCause cause) -> log.trace("KeyEvent {} was removed ({})", coords, cause));
     }
 
     public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
-        return Caffeine.newBuilder()
-                .maximumSize(10_000)
-                .expireAfterWrite(Duration.ofMinutes(10))
-                .removalListener((EventCoordinates coords, KeyState ks,
-                                  RemovalCause cause) -> log.trace("KeyState {} was removed ({})", coords,
-                        cause));
+        return Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(10)).removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace("KeyState {} was removed ({})", coords, cause));
     }
 
     public KeyState append(KeyEvent event) {
         try {
             return complete(kel -> kel.append(event));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
         } finally {
             keyCoords.invalidate(event.getCoordinates());
         }
@@ -103,6 +95,12 @@ public class CachingKEL<K extends KEL> implements KEL {
         }
         try {
             return complete(kel -> kel.append(events));
+        } catch (ClassCastException e) {
+            log.error("Cannot complete append", e);
+            return null;
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
         } finally {
             for (var event : events) {
                 keyCoords.invalidate(event.getCoordinates());
@@ -115,17 +113,32 @@ public class CachingKEL<K extends KEL> implements KEL {
         if (events.isEmpty() && attachments.isEmpty()) {
             return Collections.emptyList();
         }
-        return complete(kel -> kel.append(events, attachments));
+        try {
+            return complete(kel -> kel.append(events, attachments));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
     public Attachment getAttachment(EventCoordinates coordinates) {
-        return complete(kel -> kel.getAttachment(coordinates));
+        try {
+            return complete(kel -> kel.getAttachment(coordinates));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
     public DigestAlgorithm getDigestAlgorithm() {
-        return complete(kel -> kel.getDigestAlgorithm());
+        try {
+            return complete(kel -> kel.getDigestAlgorithm());
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
@@ -140,21 +153,46 @@ public class CachingKEL<K extends KEL> implements KEL {
 
     @Override
     public KeyState getKeyState(Identifier identifier) {
-        return complete(kel -> kel.getKeyState(identifier));
+        try {
+            return complete(kel -> kel.getKeyState(identifier));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
     public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
-        return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
+        try {
+            return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     @Override
     public Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
-        return complete(kel -> kel.getVerifier(coordinates));
+        try {
+            return complete(kel -> kel.getVerifier(coordinates));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
     }
 
     protected <T, I> T complete(Function<K, I> func) {
-        @SuppressWarnings("unchecked") final var result = (T) kelSupplier.apply(func);
-        return result;
+        try {
+            @SuppressWarnings("unchecked") final var result = (T) kelSupplier.apply(func);
+            return result;
+        } catch (Throwable t) {
+            log.error("Error completing cache", t);
+            return null;
+        }
+    }
+
+    public void clear() {
+        keyCoords.invalidateAll();
+        ksCoords.invalidateAll();
     }
 }

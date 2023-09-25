@@ -23,6 +23,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -56,7 +57,8 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         for (KeyEvent event : keyEventList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList()) {
             events[i++] = event;
         }
-        return kerl.append(events).stream().map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_()).toList();
+        List<KeyState> keyStates = kerl.append(events);
+        return keyStates == null ? Collections.emptyList() : (keyStates.stream().map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_()).toList());
     }
 
     @Override

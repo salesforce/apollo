@@ -12,8 +12,6 @@ import com.salesforce.apollo.stereotomy.KERL;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**

@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
@@ -44,7 +43,6 @@ public class GorgoneionClient {
     }
 
     public Validations apply(Duration timeout) {
-        var invitation = new CompletableFuture<Validations>();
         KERL_ application = member.kerl();
         var fs = client.apply(application, timeout);
         Credentials credentials = credentials(fs);

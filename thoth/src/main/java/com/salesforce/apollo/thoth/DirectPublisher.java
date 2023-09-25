@@ -29,6 +29,7 @@ public class DirectPublisher implements ProtoEventObserver {
     @Override
     public void publish(KERL_ kerl_, List<Validations> validations) {
         validations.stream().forEach(v -> kerl.appendValidations(v));
+        kerl.append(kerl_);
     }
 
     @Override
