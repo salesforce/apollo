@@ -12,6 +12,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,12 @@ public class SliceIterator<Comm extends Link> {
             }
             log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(),
                     member.getId());
-            var result = round.apply(link, link.getMember());
+            T result = null;
+            try {
+                result = round.apply(link, link.getMember());
+            } catch (StatusRuntimeException e) {
+                log.trace("Error applying round", e);
+            }
             allowed.accept(handler.handle(Optional.ofNullable(result), link, link.getMember()));
         } catch (IOException e) {
             log.debug("Error closing", e);

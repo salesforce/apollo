@@ -15,6 +15,7 @@ import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.Ring.IterateResult;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Entropy;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,7 +154,12 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         if (destination.link == null) {
             handler.handle(Optional.empty(), destination);
         } else {
-            var result = round.apply(destination.link, destination.ring);
+            Q result = null;
+            try {
+                result = round.apply(destination.link, destination.ring);
+            } catch (StatusRuntimeException e) {
+                log.trace("error applying round to: %s", destination.member.getId(), e);
+            }
             handler.handle(Optional.ofNullable(result), destination);
         }
     }
