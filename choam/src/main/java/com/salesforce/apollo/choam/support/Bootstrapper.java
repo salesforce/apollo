@@ -408,7 +408,7 @@ public class Bootstrapper {
                 sample();
             } catch (Throwable e) {
                 log.error("Unable to sample sync state on: {}", params.member().getId(), e);
-                sync.completeExceptionally(e);
+                sync.completeExceptionally(e);e.printStackTrace();
             }
         }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }

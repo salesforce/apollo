@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -122,31 +121,25 @@ public class BootstrapperTest {
         when(client.getMember()).thenReturn(to);
 
         when(client.sync(any())).then(invocation -> {
-            SettableFuture<Initial> futureSailor = SettableFuture.create();
             Initial.Builder initial = Initial.newBuilder()
                     .setCheckpoint(testChain.getSynchronizeCheckpoint().certifiedBlock)
                     .setCheckpointView(testChain.getSynchronizeView().certifiedBlock)
                     .setGenesis(testChain.getGenesis().certifiedBlock);
-            futureSailor.set(initial.build());
-            return futureSailor;
+            return initial.build();
         });
         when(client.fetchViewChain(any())).then(invocation -> {
-            SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
             BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
             bootstrapStore.fetchViewChain(bff, blocks, 1, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
-            futureSailor.set(blocks.build());
-            return futureSailor;
+            return blocks.build();
         });
         when(client.fetchBlocks(any())).then(invocation -> {
-            SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
             BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
             bootstrapStore.fetchBlocks(bff, blocks, 5, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
-            futureSailor.set(blocks.build());
-            return futureSailor;
+            return blocks.build();
         });
         return client;
     }

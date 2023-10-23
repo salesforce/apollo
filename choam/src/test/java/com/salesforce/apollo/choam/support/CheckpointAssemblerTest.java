@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
@@ -115,13 +113,11 @@ public class CheckpointAssemblerTest {
         Terminal client = mock(Terminal.class);
         when(client.fetch(any())).then(new Answer<>() {
             @Override
-            public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
-                SettableFuture<CheckpointSegments> futureSailor = SettableFuture.create();
+            public CheckpointSegments answer(InvocationOnMock invocation) throws Throwable {
                 CheckpointReplication rep = invocation.getArgument(0, CheckpointReplication.class);
                 List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 2);
                 System.out.println("Fetched: " + fetched.size());
-                futureSailor.set(CheckpointSegments.newBuilder().addAllSegments(fetched).build());
-                return futureSailor;
+                return CheckpointSegments.newBuilder().addAllSegments(fetched).build();
             }
         });
         @SuppressWarnings("unchecked") CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
