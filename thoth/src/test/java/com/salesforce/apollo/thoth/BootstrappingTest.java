@@ -33,7 +33,6 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -55,27 +54,28 @@ public class BootstrappingTest extends AbstractDhtTest {
 
     @Test
     public void smokin() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
-                Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
         dhts.values()
-                .forEach(dht -> dht.start(scheduler, LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
+            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(getCardinality(), Thread.ofVirtual().factory()),
+                                      LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
-        identities.entrySet().forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));
+        identities.entrySet()
+                  .forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));
 
         gate.set(true);
         final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        @SuppressWarnings("unused") final var gorgons = routers.values().stream().map(r -> {
+        @SuppressWarnings("unused")
+        final var gorgons = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
             return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
-                    context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
+                                  context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
+                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
         final KERL testKerl = dht.asKERL();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{7, 7, 7});
+        entropy.setSeed(new byte[] { 7, 7, 7 });
         var clientKerl = new MemKERL(DigestAlgorithm.DEFAULT);
         var clientStereotomy = new StereotomyImpl(new MemKeyStore(), clientKerl, entropy);
 
@@ -84,13 +84,13 @@ public class BootstrappingTest extends AbstractDhtTest {
 
         // Registering client comms
         var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                exec);
+                                                                        exec);
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
-                r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
-                        r, null),
-                AdmissionsClient.getCreate(null),
-                Admissions.getLocalLoopback(client));
+                                                       r -> new AdmissionsServer(
+                                                       clientRouter.getClientIdentityProvider(), r, null),
+                                                       AdmissionsClient.getCreate(null),
+                                                       Admissions.getLocalLoopback(client));
         clientRouter.start();
 
         // Admin client link
