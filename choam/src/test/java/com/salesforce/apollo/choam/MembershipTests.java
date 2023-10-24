@@ -188,7 +188,6 @@ public class MembershipTests {
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
                     .setMember(m)
                     .setCommunications(routers.get(m.getId()))
-                    .setScheduler(Executors.newSingleThreadScheduledExecutor())
                     .setProcessor(processor)
                     .setContext(context)
                     .setExec(Executors.newFixedThreadPool(2))

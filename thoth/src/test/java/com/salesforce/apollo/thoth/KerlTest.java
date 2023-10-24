@@ -6,31 +6,10 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
-import org.joou.ULong;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
@@ -43,10 +22,18 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
+import org.joou.ULong;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class KerlTest extends AbstractDhtTest {
     private SecureRandom secureRandom;
@@ -59,10 +46,8 @@ public class KerlTest extends AbstractDhtTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
-                                                                              Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
+        dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
         KERL kerl = dhts.values().stream().findFirst().get().asKERL();
 
@@ -87,7 +72,8 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(1, delegated.getKeys().size());
         assertNotNull(delegated.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(delegated.getLastEstablishmentEvent());
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(
+        delegated.getLastEstablishmentEvent());
         assertEquals(delegated.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
@@ -119,7 +105,7 @@ public class KerlTest extends AbstractDhtTest {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), delegated.getDigest());
 
         // lastEvent
-        assertNull(kerl.getKeyEvent(delegated.getLastEvent()) );
+        assertNull(kerl.getKeyEvent(delegated.getLastEvent()));
 
         // delegation
         assertTrue(delegated.getDelegatingIdentifier().isPresent());
@@ -127,36 +113,34 @@ public class KerlTest extends AbstractDhtTest {
         assertTrue(delegated.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()) );
+        var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
-        delegated.rotate() ;
-        delegated.seal(InteractionSpecification.newBuilder()) ;
-        delegated.rotate(RotationSpecification.newBuilder().addAllSeals(seals)) ;
-        delegated.seal(InteractionSpecification.newBuilder().addAllSeals(seals)) ;
+        delegated.rotate();
+        delegated.seal(InteractionSpecification.newBuilder());
+        delegated.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
+        delegated.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
     }
 
     @Test
     public void direct() throws Exception {
         routers.values().forEach(r -> r.start());
-        dhts.values()
-            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
-                                      Duration.ofSeconds(1)));
+        dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
         KERL kerl = dhts.values().stream().findFirst().get().asKERL();
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var i = controller.newIdentifier() ;
+        var i = controller.newIdentifier();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()) );
+        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
         i.rotate();
-        i.seal(InteractionSpecification.newBuilder()) ;
+        i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
         i.rotate();

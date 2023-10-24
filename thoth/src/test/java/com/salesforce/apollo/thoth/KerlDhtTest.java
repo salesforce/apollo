@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,11 +25,9 @@ public class KerlDhtTest extends AbstractDhtTest {
     @Test
     public void smokin() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         routers.values().forEach(r -> r.start());
-        dhts.values()
-                .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
-                        Duration.ofMillis(10)));
+        dhts.values().forEach(dht -> dht.start(Duration.ofMillis(10)));
 
         // inception
         var specification = IdentifierSpecification.newBuilder();

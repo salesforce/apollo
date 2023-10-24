@@ -140,8 +140,7 @@ public class AbstractDhtTest {
         routers.put(member, router);
         dhts.put(member,
                 new KerlDHT(Duration.ofMillis(5), context, member, wrap(), connectionPool, DigestAlgorithm.DEFAULT,
-                        router, exec, Duration.ofSeconds(10),
-                        Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), 0.0125, null));
+                        router, exec, Duration.ofSeconds(10), 0.0125, null));
     }
 
     protected BiFunction<KerlDHT, KERL, KERL> wrap() {

@@ -167,7 +167,7 @@ public class GenesisAssembly implements Genesis {
         proposals.put(params().member().getId(), proposed);
 
         ds.setValue(join.toByteString());
-        coordinator.start(params().producer().gossipDuration(), params().scheduler());
+        coordinator.start(params().producer().gossipDuration());
         controller.start();
     }
 

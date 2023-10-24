@@ -6,16 +6,6 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.Executors;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -27,10 +17,17 @@ import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DhtRebalanceTest extends AbstractDhtTest {
     private SecureRandom secureRandom;
@@ -44,23 +41,21 @@ public class DhtRebalanceTest extends AbstractDhtTest {
     @Test
     public void lifecycle() throws Exception {
         routers.values().forEach(r -> r.start());
-        dhts.values()
-            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()),
-                                      Duration.ofSeconds(1)));
+        dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
         KERL kerl = dhts.values().stream().findFirst().get().asKERL();
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var i = controller.newIdentifier() ;
+        var i = controller.newIdentifier();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
-        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()) );
+        var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
                             CoordinatesSeal.construct(event));
 
         i.rotate();
-        i.seal(InteractionSpecification.newBuilder()) ;
+        i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
         i.rotate();

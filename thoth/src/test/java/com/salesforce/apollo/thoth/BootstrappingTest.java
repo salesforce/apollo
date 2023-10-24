@@ -56,8 +56,7 @@ public class BootstrappingTest extends AbstractDhtTest {
     public void smokin() throws Exception {
         routers.values().forEach(r -> r.start());
         dhts.values()
-            .forEach(dht -> dht.start(Executors.newScheduledThreadPool(getCardinality(), Thread.ofVirtual().factory()),
-                                      LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
+            .forEach(dht -> dht.start(LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
         identities.entrySet()
                   .forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));

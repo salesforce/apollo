@@ -148,7 +148,6 @@ public class TestCHOAM {
                     .setCheckpointer(wrap(runtime.getCheckpointer()))
                     .setContext(context)
                     .setExec(exec)
-                    .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()))
                     .build()));
         }));
     }

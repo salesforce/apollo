@@ -50,16 +50,16 @@ import static org.mockito.Mockito.when;
 
 public class ViewAssemblyTest {
 
-    private static short CARDINALITY = 4;
-    private Map<Member, ViewAssembly> assemblies = new HashMap<>();
-    private Map<SigningMember, Router> communications = new HashMap<>();
-    private CountDownLatch complete;
-    private Context<Member> context;
-    private List<Ethereal> controllers = new ArrayList<>();
-    private Map<SigningMember, VDataSource> dataSources;
-    private List<ChRbcGossip> gossipers = new ArrayList<>();
-    private List<SigningMember> members;
-    private Digest nextViewId;
+    private static short                           CARDINALITY    = 4;
+    private        Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
+    private        Map<SigningMember, Router>      communications = new HashMap<>();
+    private        CountDownLatch                  complete;
+    private        Context<Member>                 context;
+    private        List<Ethereal>                  controllers    = new ArrayList<>();
+    private        Map<SigningMember, VDataSource> dataSources;
+    private        List<ChRbcGossip>               gossipers      = new ArrayList<>();
+    private        List<SigningMember>             members;
+    private        Digest                          nextViewId;
 
     @AfterEach
     public void after() {
@@ -72,16 +72,19 @@ public class ViewAssemblyTest {
     public void before() throws Exception {
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        members = IntStream.range(0, CARDINALITY)
+                           .mapToObj(i -> stereotomy.newIdentifier())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(e -> (SigningMember) e)
+                           .toList();
 
         final var prefix = UUID.randomUUID().toString();
         members.forEach(m -> {
-            var com = new LocalServer(prefix, m,
-                    Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder(),
-                    Executors.newFixedThreadPool(2));
+            var com = new LocalServer(prefix, m, Executors.newSingleThreadExecutor()).router(
+            ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(2));
             communications.put(m, com);
         });
         context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
@@ -104,16 +107,16 @@ public class ViewAssemblyTest {
         assemblies.values().forEach(assembly -> assembly.assembled());
         controllers.forEach(e -> e.start());
         communications.values().forEach(e -> e.start());
-        gossipers.forEach(e -> e.start(gossipPeriod, Executors.newSingleThreadScheduledExecutor()));
+        gossipers.forEach(e -> e.start(gossipPeriod));
         assertTrue(complete.await(60, TimeUnit.SECONDS), "Failed to reconfigure");
     }
 
     private void buildAssemblies() {
         Parameters.Builder params = Parameters.newBuilder()
-                .setProducer(ProducerParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(10))
-                        .build())
-                .setGossipDuration(Duration.ofMillis(10));
+                                              .setProducer(ProducerParameters.newBuilder()
+                                                                             .setGossipDuration(Duration.ofMillis(10))
+                                                                             .build())
+                                              .setGossipDuration(Duration.ofMillis(10));
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
         Map<Member, KeyPair> consensusPairs = new HashMap<>();
         servers.forEach((m, s) -> {
@@ -124,47 +127,49 @@ public class ViewAssemblyTest {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     return ViewMember.newBuilder()
-                            .setId(m.getId().toDigeste())
-                            .setConsensusKey(consensus)
-                            .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
-                            .build();
+                                     .setId(m.getId().toDigeste())
+                                     .setConsensusKey(consensus)
+                                     .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
+                                     .build();
                 }
             });
         });
         var comms = members.stream()
-                .collect(Collectors.toMap(m -> m,
-                        m -> communications.get(m)
-                                .create(m, context.getId(), servers.get(m),
-                                        servers.get(m)
-                                                .getClass()
-                                                .getCanonicalName(),
-                                        r -> {
-                                            Router router = communications.get(m);
-                                            return new TerminalServer(router.getClientIdentityProvider(),
-                                                    null, r);
-                                        }, TerminalClient.getCreate(null),
-                                        Terminal.getLocalLoopback(m,
-                                                servers.get(m)))));
+                           .collect(Collectors.toMap(m -> m, m -> communications.get(m)
+                                                                                .create(m, context.getId(),
+                                                                                        servers.get(m), servers.get(m)
+                                                                                                               .getClass()
+                                                                                                               .getCanonicalName(),
+                                                                                        r -> {
+                                                                                            Router router = communications.get(
+                                                                                            m);
+                                                                                            return new TerminalServer(
+                                                                                            router.getClientIdentityProvider(),
+                                                                                            null, r);
+                                                                                        },
+                                                                                        TerminalClient.getCreate(null),
+                                                                                        Terminal.getLocalLoopback(m,
+                                                                                                                  servers.get(
+                                                                                                                  m)))));
 
         Map<Member, Verifier> validators = consensusPairs.entrySet()
-                .stream()
-                .collect(Collectors.toMap(e -> e.getKey(),
-                        e -> new Verifier.DefaultVerifier(e.getValue()
-                                .getPublic())));
+                                                         .stream()
+                                                         .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                   e -> new Verifier.DefaultVerifier(
+                                                                                   e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            ViewContext view = new ViewContext(context,
-                    params.build(RuntimeParameters.newBuilder()
-                            .setExec(Executors.newFixedThreadPool(2))
-                            .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                            .setContext(context)
-                            .setMember(sm)
-                            .setCommunications(router)
-                            .build()),
-                    new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
-                    null);
+            ViewContext view = new ViewContext(context, params.build(RuntimeParameters.newBuilder()
+                                                                                      .setExec(
+                                                                                      Executors.newFixedThreadPool(2))
+                                                                                      .setContext(context)
+                                                                                      .setMember(sm)
+                                                                                      .setCommunications(router)
+                                                                                      .build()),
+                                               new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
+                                               null);
             views.put(m, view);
             var ds = dataSources.get(m);
             var com = comms.get(m);
@@ -180,8 +185,8 @@ public class ViewAssemblyTest {
 
     private void initEthereals() {
         var builder = Config.newBuilder()
-                .setnProc(CARDINALITY)
-                .setVerifiers(members.toArray(new Verifier[members.size()]));
+                            .setnProc(CARDINALITY)
+                            .setVerifiers(members.toArray(new Verifier[members.size()]));
 
         for (short i = 0; i < CARDINALITY; i++) {
             final short pid = i;
@@ -191,11 +196,11 @@ public class ViewAssemblyTest {
                 assembly.inbound().accept(process(pb, last));
             };
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
-                    dataSources.get(member), blocker, ep -> {
+                                          dataSources.get(member), blocker, ep -> {
             }, Ethereal.consumer(Integer.toString(i)));
 
             var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member),
-                    Executors.newFixedThreadPool(2), null);
+                                           Executors.newFixedThreadPool(2), null);
             gossipers.add(gossiper);
             controllers.add(controller);
         }

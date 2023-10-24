@@ -781,7 +781,7 @@ public class CHOAM {
             return;
         }
         log.info("CHOAM startup, majority: {} on: {}", params.majority(), params.member().getId());
-        combine.start(params.producer().gossipDuration(), params.scheduler());
+        combine.start(params.producer().gossipDuration());
         transitions.fsm().enterStartState();
         transitions.start();
     }

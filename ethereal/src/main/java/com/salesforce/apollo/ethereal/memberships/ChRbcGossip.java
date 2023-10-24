@@ -31,32 +31,30 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
 /**
- * Handles the gossip propigation of proposals, commits and preVotes from this
- * node, as well as the notification of the adder of such from other nodes.
+ * Handles the gossip propigation of proposals, commits and preVotes from this node, as well as the notification of the
+ * adder of such from other nodes.
  *
  * @author hal.hildebrand
  */
 public class ChRbcGossip {
 
-    private static final Logger log = LoggerFactory.getLogger(ChRbcGossip.class);
-    private final CommonCommunications<Gossiper, GossiperService> comm;
-    private final Context<Member> context;
-    private final Executor exec;
-    private final SigningMember member;
-    private final EtherealMetrics metrics;
-    private final Processor processor;
-    private final RingCommunications<Member, Gossiper> ring;
-    private final AtomicBoolean started = new AtomicBoolean();
-    private volatile ScheduledFuture<?> scheduled;
+    private static final Logger                                          log     = LoggerFactory.getLogger(
+    ChRbcGossip.class);
+    private final        CommonCommunications<Gossiper, GossiperService> comm;
+    private final        Context<Member>                                 context;
+    private final        Executor                                        exec;
+    private final        SigningMember                                   member;
+    private final        EtherealMetrics                                 metrics;
+    private final        Processor                                       processor;
+    private final        RingCommunications<Member, Gossiper>            ring;
+    private final        AtomicBoolean                                   started = new AtomicBoolean();
+    private volatile     ScheduledFuture<?>                              scheduled;
 
     public ChRbcGossip(Context<Member> context, SigningMember member, Processor processor, Router communications,
                        Executor exec, EtherealMetrics m) {
@@ -66,8 +64,8 @@ public class ChRbcGossip {
         this.metrics = m;
         this.exec = exec;
         comm = communications.create((Member) member, context.getId(), new Terminal(), getClass().getCanonicalName(),
-                r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
-                getCreate(metrics), Gossiper.getLocalLoopback(member));
+                                     r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
+                                     getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<>(context, member, this.comm, exec);
     }
 
@@ -78,13 +76,14 @@ public class ChRbcGossip {
     /**
      * Start the receiver's gossip
      */
-    public void start(Duration duration, ScheduledExecutorService scheduler) {
+    public void start(Duration duration) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamLong(duration.toMillis()));
         log.trace("Starting GossipService[{}] on: {}", context.getId(), member.getId());
         comm.register(context.getId(), new Terminal());
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         scheduler.schedule(() -> {
             try {
                 oneRound(duration, scheduler);
@@ -111,8 +110,7 @@ public class ChRbcGossip {
     }
 
     /**
-     * Perform the first phase of the gossip. Send our partner the Have state of the
-     * receiver
+     * Perform the first phase of the gossip. Send our partner the Have state of the receiver
      */
     private Update gossipRound(Gossiper link, int ring) {
         if (!started.get()) {
@@ -123,11 +121,11 @@ public class ChRbcGossip {
             return link.gossip(processor.gossip(context.getId(), ring));
         } catch (StatusRuntimeException e) {
             log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(),
-                    member.getId(), ring, link.getMember().getId(), member.getId(), e);
+                      member.getId(), ring, link.getMember().getId(), member.getId(), e);
             return null;
         } catch (Throwable e) {
             log.warn("gossiping[{}] failed from {} with {} ring: {} on {}", context.getId(), member.getId(), ring,
-                    link.getMember().getId(), ring, member.getId(), e);
+                     link.getMember().getId(), ring, member.getId(), e);
             return null;
         }
     }
@@ -163,17 +161,17 @@ public class ChRbcGossip {
             }
             log.trace("Null gossip update with {} on: {}", destination.member().getId(), member.getId());
             destination.link()
-                    .update(ContextUpdate.newBuilder()
-                            .setRing(destination.ring())
-                            .setUpdate(processor.update(update))
-                            .build());
+                       .update(ContextUpdate.newBuilder()
+                                            .setRing(destination.ring())
+                                            .setUpdate(processor.update(update))
+                                            .build());
         } finally {
             if (timer != null) {
                 timer.stop();
             }
             if (started.get()) {
                 scheduled = scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
-                        TimeUnit.MILLISECONDS);
+                                               TimeUnit.MILLISECONDS);
             }
         }
     }
@@ -188,7 +186,7 @@ public class ChRbcGossip {
         exec.execute(Utils.wrapped(() -> {
             var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
             ring.execute((link, ring) -> gossipRound(link, ring),
-                    (result, destination) -> handle(result, destination, duration, scheduler, timer));
+                         (result, destination) -> handle(result, destination, duration, scheduler, timer));
         }, log));
     }
 
@@ -201,12 +199,12 @@ public class ChRbcGossip {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.debug("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                        member, from, request.getRing(), predecessor.getId());
+                          member, from, request.getRing(), predecessor.getId());
                 return Update.getDefaultInstance();
             }
             final var update = processor.gossip(request);
             log.trace("GossipService received from: {} missing: {} on: {}", from, update.getMissingCount(),
-                    member.getId());
+                      member.getId());
             return update;
         }
 
@@ -215,7 +213,7 @@ public class ChRbcGossip {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.debug("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                        member.getId(), from, request.getRing(), predecessor.getId());
+                          member.getId(), from, request.getRing(), predecessor.getId());
                 return;
             }
             log.trace("gossip update with {} on: {}", from, member);

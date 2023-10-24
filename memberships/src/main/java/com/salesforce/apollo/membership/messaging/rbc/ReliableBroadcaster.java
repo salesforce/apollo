@@ -180,13 +180,14 @@ public class ReliableBroadcaster {
         roundListeners.remove(registration);
     }
 
-    public void start(Duration duration, ScheduledExecutorService scheduler) {
+    public void start(Duration duration) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay, TimeUnit.MILLISECONDS);
     }
 

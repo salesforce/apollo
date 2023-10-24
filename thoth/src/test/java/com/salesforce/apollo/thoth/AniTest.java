@@ -33,7 +33,7 @@ public class AniTest extends AbstractDhtTest {
 
         routers.values().forEach(lr -> lr.start());
         dhts.values()
-            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
+            .forEach(e -> e.start(
                                   Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();

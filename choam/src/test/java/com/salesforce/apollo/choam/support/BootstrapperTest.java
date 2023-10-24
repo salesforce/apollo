@@ -103,7 +103,6 @@ public class BootstrapperTest {
                         .build(RuntimeParameters.newBuilder()
                                 .setContext(context)
                                 .setMember(member)
-                                .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                 .build()),
                 store, comms);
 

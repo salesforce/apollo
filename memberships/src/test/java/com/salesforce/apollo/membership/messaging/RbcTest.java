@@ -99,7 +99,7 @@ public class RbcTest {
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        messengers.forEach(view -> view.start(Duration.ofMillis(10), Executors.newScheduledThreadPool(3)));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10)));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);

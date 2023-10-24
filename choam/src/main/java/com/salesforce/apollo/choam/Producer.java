@@ -163,7 +163,7 @@ public class Producer {
         public void startProduction() {
             log.debug("Starting production for: {} on: {}", getViewId(), params().member().getId());
             controller.start();
-            coordinator.start(params().producer().gossipDuration(), params().scheduler());
+            coordinator.start(params().producer().gossipDuration());
         }
     }
 

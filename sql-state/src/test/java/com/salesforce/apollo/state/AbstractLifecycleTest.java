@@ -335,8 +335,6 @@ abstract public class AbstractLifecycleTest {
                         .setContext(context)
                         .setExec(exec)
                         .setGenesisData(view -> GENESIS_DATA)
-                        .setScheduler(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                .factory()))
                         .setMember(m)
                         .setCommunications(routers.get(m.getId()))
                         .setCheckpointer(wrap(up))

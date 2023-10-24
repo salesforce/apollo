@@ -295,7 +295,6 @@ public class CHOAMTest {
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                 .setContext(context)
                 .setGenesisData(view -> GENESIS_DATA)
-                .setScheduler(scheduler)
                 .setMember(m)
                 .setCommunications(routers.get(m.getId()))
                 .setExec(exec)

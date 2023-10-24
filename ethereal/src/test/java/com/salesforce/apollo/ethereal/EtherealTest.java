@@ -162,9 +162,7 @@ public class EtherealTest {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
             gossipers.forEach(e -> {
-                final var sched = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
-                executors.add(sched);
-                e.start(gossipPeriod, sched);
+                e.start(gossipPeriod);
             });
             finished.await(LARGE_TESTS ? 90 : 10, TimeUnit.SECONDS);
         } finally {

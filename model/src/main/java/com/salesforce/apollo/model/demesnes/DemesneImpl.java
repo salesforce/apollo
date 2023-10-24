@@ -248,9 +248,6 @@ public class DemesneImpl implements Demesne {
         return RuntimeParameters.newBuilder()
                 .setCommunications(current.router(exec))
                 .setExec(exec)
-                .setScheduler(Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
-                                : parameters.getVirtualThreads(),
-                        Thread.ofVirtual().factory()))
                 .setKerl(() -> {
                     return member.kerl();
                 })

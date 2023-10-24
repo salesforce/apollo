@@ -128,7 +128,6 @@ public class GenesisAssemblyTest {
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
                     .setExec(Executors.newFixedThreadPool(2))
-                    .setScheduler(Executors.newSingleThreadScheduledExecutor())
                     .setContext(base)
                     .setMember(sm)
                     .setCommunications(router)
