@@ -168,7 +168,7 @@ public class ChRbcGossip {
                                                 .build());
             } catch (StatusRuntimeException e) {
                 log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(),
-                          member.getId(), ring, link.getMember().getId(), member.getId(), e);
+                          member.getId(), ring, destination.member().getId(), member.getId(), e);
             }
         } finally {
             if (timer != null) {
