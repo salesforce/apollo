@@ -160,11 +160,16 @@ public class ChRbcGossip {
                 return;
             }
             log.trace("Null gossip update with {} on: {}", destination.member().getId(), member.getId());
-            destination.link()
-                       .update(ContextUpdate.newBuilder()
-                                            .setRing(destination.ring())
-                                            .setUpdate(processor.update(update))
-                                            .build());
+            try {
+                destination.link()
+                           .update(ContextUpdate.newBuilder()
+                                                .setRing(destination.ring())
+                                                .setUpdate(processor.update(update))
+                                                .build());
+            } catch (StatusRuntimeException e) {
+                log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(),
+                          member.getId(), ring, link.getMember().getId(), member.getId(), e);
+            }
         } finally {
             if (timer != null) {
                 timer.stop();
