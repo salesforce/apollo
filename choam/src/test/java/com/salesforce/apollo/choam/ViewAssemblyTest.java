@@ -162,8 +162,6 @@ public class ViewAssemblyTest {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(RuntimeParameters.newBuilder()
-                                                                                      .setExec(
-                                                                                      Executors.newFixedThreadPool(2))
                                                                                       .setContext(context)
                                                                                       .setMember(sm)
                                                                                       .setCommunications(router)
@@ -173,7 +171,8 @@ public class ViewAssemblyTest {
             views.put(m, view);
             var ds = dataSources.get(m);
             var com = comms.get(m);
-            assemblies.put(m, new ViewAssembly(nextViewId, view, r -> ds.publish(r), com) {
+            assemblies.put(m, new ViewAssembly(nextViewId, view, r -> ds.publish(r), com,
+                                               Executors.newVirtualThreadPerTaskExecutor()) {
                 @Override
                 public void complete() {
                     super.complete();

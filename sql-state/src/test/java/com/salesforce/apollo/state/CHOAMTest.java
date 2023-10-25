@@ -297,7 +297,6 @@ public class CHOAMTest {
                 .setGenesisData(view -> GENESIS_DATA)
                 .setMember(m)
                 .setCommunications(routers.get(m.getId()))
-                .setExec(exec)
                 .setCheckpointer(up.getCheckpointer())
                 .setMetrics(metrics)
                 .setProcessor(new TransactionExecutor() {

@@ -190,7 +190,6 @@ public class MembershipTests {
                     .setCommunications(routers.get(m.getId()))
                     .setProcessor(processor)
                     .setContext(context)
-                    .setExec(Executors.newFixedThreadPool(2))
                     .build()));
         }));
         return testSubject;

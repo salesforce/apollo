@@ -333,7 +333,6 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                 .build(RuntimeParameters.newBuilder()
                         .setContext(context)
-                        .setExec(exec)
                         .setGenesisData(view -> GENESIS_DATA)
                         .setMember(m)
                         .setCommunications(routers.get(m.getId()))

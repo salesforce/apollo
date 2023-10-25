@@ -55,32 +55,36 @@ public class BootstrapperTest {
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, CARDINALITY)
+                                               .mapToObj(i -> stereotomy.newIdentifier())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
+                                               .toList();
         context.activate(members);
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()
-                .userBlocks(10)
-                .viewChange()
-                .userBlocks(10)
-                .viewChange()
-                .userBlocks(10)
-                .viewChange()
-                .userBlocks(10)
-                .viewChange()
-                .userBlocks(10)
-                .checkpoint()
-                .userBlocks(10)
-                .synchronizeView()
-                .userBlocks(10)
-                .synchronizeCheckpoint()
-                .userBlocks(5)
-                .viewChange()
-                .userBlocks(20)
-                .anchor()
-                .userBlocks(5);
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .checkpoint()
+                 .userBlocks(10)
+                 .synchronizeView()
+                 .userBlocks(10)
+                 .synchronizeCheckpoint()
+                 .userBlocks(5)
+                 .viewChange()
+                 .userBlocks(20)
+                 .anchor()
+                 .userBlocks(5);
 
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
 
@@ -97,14 +101,14 @@ public class BootstrapperTest {
         });
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
-        Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
-                Parameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(10))
-                        .build(RuntimeParameters.newBuilder()
-                                .setContext(context)
-                                .setMember(member)
-                                .build()),
-                store, comms);
+        Bootstrapper boot = new Bootstrapper(testChain.getAnchor(), Parameters.newBuilder()
+                                                                              .setGossipDuration(Duration.ofMillis(10))
+                                                                              .build(RuntimeParameters.newBuilder()
+                                                                                                      .setContext(
+                                                                                                      context)
+                                                                                                      .setMember(member)
+                                                                                                      .build()), store,
+                                             comms, Executors.newVirtualThreadPerTaskExecutor());
 
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
         SynchronizedState state = syncFuture.get(10, TimeUnit.SECONDS);
@@ -121,9 +125,9 @@ public class BootstrapperTest {
 
         when(client.sync(any())).then(invocation -> {
             Initial.Builder initial = Initial.newBuilder()
-                    .setCheckpoint(testChain.getSynchronizeCheckpoint().certifiedBlock)
-                    .setCheckpointView(testChain.getSynchronizeView().certifiedBlock)
-                    .setGenesis(testChain.getGenesis().certifiedBlock);
+                                             .setCheckpoint(testChain.getSynchronizeCheckpoint().certifiedBlock)
+                                             .setCheckpointView(testChain.getSynchronizeView().certifiedBlock)
+                                             .setGenesis(testChain.getGenesis().certifiedBlock);
             return initial.build();
         });
         when(client.fetchViewChain(any())).then(invocation -> {

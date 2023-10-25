@@ -127,7 +127,6 @@ public class GenesisAssemblyTest {
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
-                    .setExec(Executors.newFixedThreadPool(2))
                     .setContext(base)
                     .setMember(sm)
                     .setCommunications(router)

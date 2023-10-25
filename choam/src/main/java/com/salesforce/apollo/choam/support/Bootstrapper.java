@@ -30,10 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -52,6 +49,7 @@ public class Bootstrapper {
     private final        CompletableFuture<SynchronizedState>      sync                  = new CompletableFuture<>();
     private final        CompletableFuture<Boolean>                viewChainSynchronized = new CompletableFuture<>();
     private final        ScheduledExecutorService                  scheduler;
+    private final        Executor                                  executor;
     private volatile     HashedCertifiedBlock                      checkpoint;
     private volatile     CompletableFuture<CheckpointState>        checkpointAssembled;
     private volatile     CheckpointState                           checkpointState;
@@ -59,11 +57,12 @@ public class Bootstrapper {
     private volatile     HashedCertifiedBlock                      genesis;
 
     public Bootstrapper(HashedCertifiedBlock anchor, Parameters params, Store store,
-                        CommonCommunications<Terminal, Concierge> bootstrapComm) {
+                        CommonCommunications<Terminal, Concierge> bootstrapComm, Executor executor) {
         this.anchor = anchor;
         this.params = params;
         this.store = store;
         this.comms = bootstrapComm;
+        this.executor = executor;
         CertifiedBlock g = store.getCertifiedBlock(ULong.valueOf(0));
         store.put(anchor);
         if (g != null) {
@@ -93,7 +92,7 @@ public class Bootstrapper {
     private void anchor(AtomicReference<ULong> start, ULong end) {
         final var randomCut = randomCut(params.digestAlgorithm());
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, executor, true,
                            scheduler).iterate(randomCut, (link, ring) -> anchor(link, start, end),
                                               (tally, futureSailor, destination) -> completeAnchor(futureSailor, start,
                                                                                                    end, destination),
@@ -134,7 +133,7 @@ public class Bootstrapper {
                                                                 params.digestAlgorithm());
 
         // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration(), params.exec())
+        checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration(), executor)
                                        .whenComplete((cps, t) -> {
                                            log.info("Restored checkpoint: {} on: {}", checkpoint.height(),
                                                     params.member().getId());
@@ -179,11 +178,11 @@ public class Bootstrapper {
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), scheduler, comms,
-                           params.exec()).iterate(randomCut(params.digestAlgorithm()),
-                                                  (link, ring) -> completeViewChain(link, start, end),
-                                                  (tally, result, destination) -> completeViewChain(result, start, end,
-                                                                                                    destination),
-                                                  t -> scheduleViewChainCompletion(start, end));
+                           executor).iterate(randomCut(params.digestAlgorithm()),
+                                             (link, ring) -> completeViewChain(link, start, end),
+                                             (tally, result, destination) -> completeViewChain(result, start, end,
+                                                                                               destination),
+                                             t -> scheduleViewChainCompletion(start, end));
     }
 
     private boolean completeViewChain(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
@@ -365,7 +364,7 @@ public class Bootstrapper {
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder().setHeight(anchor.height().longValue()).build();
         final var randomCut = randomCut(params.digestAlgorithm());
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, executor, true,
                            scheduler).iterate(randomCut, (link, ring) -> synchronize(s, link),
                                               (tally, futureSailor, destination) -> synchronize(futureSailor, votes,
                                                                                                 destination),

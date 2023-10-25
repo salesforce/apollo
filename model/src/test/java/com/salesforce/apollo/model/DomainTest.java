@@ -52,11 +52,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author hal.hildebrand
  */
 public class DomainTest {
-    private static final int CARDINALITY = 5;
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-    private final ArrayList<Domain> domains = new ArrayList<>();
-    private final ArrayList<Router> routers = new ArrayList<>();
-    private ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
+    private static final int               CARDINALITY     = 5;
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    "Give me food or give me slack or kill me".getBytes());
+    private final        ArrayList<Domain> domains         = new ArrayList<>();
+    private final        ArrayList<Router> routers         = new ArrayList<>();
+    private final        ExecutorService   exec            = Executors.newVirtualThreadPerTaskExecutor();
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -91,16 +92,15 @@ public class DomainTest {
 
         // Map direct edges. Transitive edges added as a side effect
         CompletableFuture.allOf(oracle.map(helpDeskMembers, adminMembers), oracle.map(ali, adminMembers),
-                        oracle.map(ali, userMembers), oracle.map(burcu, userMembers),
-                        oracle.map(can, userMembers), oracle.map(managerMembers, userMembers),
-                        oracle.map(technicianMembers, userMembers), oracle.map(demet, helpDeskMembers),
-                        oracle.map(egin, helpDeskMembers), oracle.map(egin, userMembers),
-                        oracle.map(fuat, managerMembers), oracle.map(gl, managerMembers),
-                        oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
-                        oracle.map(abcTechMembers, technicianMembers),
-                        oracle.map(flaggedTechnicianMembers, technicianMembers),
-                        oracle.map(jale, abcTechMembers))
-                .get();
+                                oracle.map(ali, userMembers), oracle.map(burcu, userMembers),
+                                oracle.map(can, userMembers), oracle.map(managerMembers, userMembers),
+                                oracle.map(technicianMembers, userMembers), oracle.map(demet, helpDeskMembers),
+                                oracle.map(egin, helpDeskMembers), oracle.map(egin, userMembers),
+                                oracle.map(fuat, managerMembers), oracle.map(gl, managerMembers),
+                                oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
+                                oracle.map(abcTechMembers, technicianMembers),
+                                oracle.map(flaggedTechnicianMembers, technicianMembers),
+                                oracle.map(jale, abcTechMembers)).get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -147,7 +147,7 @@ public class DomainTest {
         var inferredViewers = oracle.expand(object123View);
         assertEquals(14, inferredViewers.size());
         for (var s : Arrays.asList(ali, jale, egin, irmak, hakan, gl, fuat, can, burcu, managerMembers,
-                technicianMembers, abcTechMembers, userMembers, flaggedTechnicianMembers)) {
+                                   technicianMembers, abcTechMembers, userMembers, flaggedTechnicianMembers)) {
             assertTrue(inferredViewers.contains(s), "Should contain: " + s);
         }
 
@@ -184,7 +184,7 @@ public class DomainTest {
 
     @AfterEach
     public void after() {
-        domains.forEach(n -> n.stop());
+        domains.forEach(Domain::stop);
         domains.clear();
         routers.forEach(r -> r.close(Duration.ofSeconds(1)));
         routers.clear();
@@ -198,7 +198,7 @@ public class DomainTest {
 
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
@@ -206,32 +206,30 @@ public class DomainTest {
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
-        var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            return stereotomy.newIdentifier();
-        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .mapToObj(i -> stereotomy.newIdentifier())
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                Executors.newScheduledThreadPool(1,
-                        Thread.ofVirtual()
-                                .factory()));
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec, Executors.newScheduledThreadPool(1,
+                                                                                                                 Thread.ofVirtual()
+                                                                                                                       .factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
-                            .setTarget(30),
-                    exec);
+            var localRouter = new LocalServer(prefix, member, exec).router(
+            ServerConnectionCache.newBuilder().setTarget(30), exec);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
-                    RuntimeParameters.newBuilder()
-                            .setFoundation(sealed)
-                            .setContext(context)
-                            .setExec(exec)
-                            .setCommunications(localRouter),
-                    new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
-                    EventValidation.NONE, IdentifierSpecification.newBuilder());
+                                           RuntimeParameters.newBuilder()
+                                                            .setFoundation(sealed)
+                                                            .setContext(context)
+                                                            .setCommunications(localRouter), new InetSocketAddress(0),
+                                           commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                           IdentifierSpecification.newBuilder(), exec);
             domains.add(domain);
             localRouter.start();
         });
@@ -241,11 +239,13 @@ public class DomainTest {
 
     @Test
     public void smoke() throws Exception {
-        domains.forEach(n -> n.start());
+        domains.forEach(Domain::start);
         final var activated = Utils.waitForCondition(60_000, 1_000,
-                () -> domains.stream().filter(d -> !d.active()).count() == 0);
-        assertTrue(activated, "Domains did not fully activate: "
-                + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
+                                                     () -> domains.stream().allMatch(Domain::active));
+        assertTrue(activated, "Domains did not fully activate: " + (domains.stream()
+                                                                           .filter(c -> !c.active())
+                                                                           .map(Domain::logState)
+                                                                           .toList()));
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
@@ -253,15 +253,15 @@ public class DomainTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                .setGenesisViewId(GENESIS_VIEW_ID)
-                .setGossipDuration(Duration.ofMillis(10))
-                .setProducer(ProducerParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(20))
-                        .setBatchInterval(Duration.ofMillis(100))
-                        .setMaxBatchByteSize(1024 * 1024)
-                        .setMaxBatchCount(3000)
-                        .build())
-                .setCheckpointBlockDelta(200);
+                               .setGenesisViewId(GENESIS_VIEW_ID)
+                               .setGossipDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(20))
+                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(3000)
+                                                              .build())
+                               .setCheckpointBlockDelta(200);
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }

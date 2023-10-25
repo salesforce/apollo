@@ -35,6 +35,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -62,19 +63,22 @@ public class SubDomain extends Domain {
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, int maxTransfer,
-                     Duration gossipInterval, double fpr) {
-        this(member, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig, maxTransfer, gossipInterval, fpr);
+                     Duration gossipInterval, double fpr, Executor executor) {
+        this(member, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig, maxTransfer, gossipInterval, fpr,
+             executor);
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder params, RuntimeParameters.Builder runtime,
-                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr) {
-        this(member, params, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval, fpr);
+                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr,
+                     Executor executor) {
+        this(member, params, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval, fpr,
+             executor);
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder prm, String dbURL, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, int maxTransfer,
-                     Duration gossipInterval, double fpr) {
-        super(member, prm, dbURL, checkpointBaseDir, runtime, txnConfig);
+                     Duration gossipInterval, double fpr, Executor executor) {
+        super(member, prm, dbURL, checkpointBaseDir, runtime, txnConfig, executor);
         this.maxTransfer = maxTransfer;
         this.fpr = fpr;
         final var identifier = qb64(member.getId());
@@ -88,15 +92,16 @@ public class SubDomain extends Domain {
                                                           (RoutingClientIdentity) params.communications()
                                                                                         .getClientIdentityProvider(), r,
                                                           null));
-        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms, params.exec());
+        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms, executor);
         this.gossipInterval = gossipInterval;
 
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder params, String dbURL, RuntimeParameters.Builder runtime,
-                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr) {
+                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr,
+                     Executor executor) {
         this(member, params, dbURL, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval,
-             fpr);
+             fpr, executor);
     }
 
     @Override

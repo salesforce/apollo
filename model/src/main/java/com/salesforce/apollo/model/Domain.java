@@ -77,11 +77,13 @@ abstract public class Domain {
     protected final Parameters params;
     protected final SqlStateMachine sqlStateMachine;
     protected final Connection stateConnection;
+    protected final Executor executor;
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
-                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, Executor executor) {
         var paramsClone = params.clone();
         var runtimeClone = runtime.clone();
         this.member = member;
+        this.executor = executor;
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
             if (!dir.mkdirs()) {

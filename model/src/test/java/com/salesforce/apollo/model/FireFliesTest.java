@@ -56,12 +56,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author hal.hildebrand
  */
 public class FireFliesTest {
-    private static final int CARDINALITY = 5;
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final int    CARDINALITY     = 5;
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    "Give me food or give me slack or kill me".getBytes());
 
-    private final List<ProcessDomain> domains = new ArrayList<>();
+    private final List<ProcessDomain>        domains = new ArrayList<>();
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
-    private ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
+    private       ExecutorService            exec    = Executors.newVirtualThreadPerTaskExecutor();
 
     @AfterEach
     public void after() {
@@ -79,7 +80,7 @@ public class FireFliesTest {
 
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
@@ -95,22 +96,20 @@ public class FireFliesTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                        .factory()));
+                                                                          Executors.newSingleThreadScheduledExecutor(
+                                                                          Thread.ofVirtual().factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
-                            .setTarget(30),
-                    exec);
+            var localRouter = new LocalServer(prefix, member, exec).router(
+            ServerConnectionCache.newBuilder().setTarget(30), exec);
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
-                    RuntimeParameters.newBuilder()
-                            .setFoundation(sealed)
-                            .setContext(context)
-                            .setExec(exec)
-                            .setCommunications(localRouter),
-                    new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
-                    EventValidation.NONE, IdentifierSpecification.newBuilder());
+                                         RuntimeParameters.newBuilder()
+                                                          .setFoundation(sealed)
+                                                          .setContext(context)
+                                                          .setCommunications(localRouter), new InetSocketAddress(0),
+                                         commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                         IdentifierSpecification.newBuilder(), exec);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();
@@ -122,8 +121,8 @@ public class FireFliesTest {
         final var gossipDuration = Duration.ofMillis(10);
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
-        final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
-                new InetSocketAddress(0)));
+        final var seeds = Collections.singletonList(
+        new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
@@ -137,12 +136,14 @@ public class FireFliesTest {
                 public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
                                        List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
-                        System.out.println(String.format("Full view: %s members: %s on: %s", viewId,
-                                context.totalCount(), d.getMember().getId()));
+                        System.out.println(
+                        String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
+                                      d.getMember().getId()));
                         countdown.countDown();
                     } else {
-                        System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
-                                context.totalCount(), d.getMember().getId()));
+                        System.out.println(
+                        String.format("Members joining: %s members: %s on: %s", viewId, context.totalCount(),
+                                      d.getMember().getId()));
                     }
                 }
             };
@@ -152,41 +153,44 @@ public class FireFliesTest {
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
         domains.get(0)
-                .getFoundation()
-                .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                        Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+               .getFoundation()
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
+                      Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
             d.getFoundation()
-                    .start(() -> started.get().countDown(), gossipDuration, seeds,
-                            Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+             .start(() -> started.get().countDown(), gossipDuration, seeds,
+                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         });
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
 
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
-            return domains.stream()
-                    .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())
-                    .count() == 0;
+            return domains.stream().filter(d -> d.getFoundation().getContext().activeCount() != domains.size()).count()
+            == 0;
         }));
         System.out.println();
         System.out.println("******");
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + domains.size() + " members");
+        System.out.println(
+        "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + domains.size()
+        + " members");
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
         final var activated = Utils.waitForCondition(60_000, 1_000,
-                () -> domains.stream().filter(c -> !c.active()).count() == 0);
-        assertTrue(activated, "Domains did not become active : "
-                + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
+                                                     () -> domains.stream().filter(c -> !c.active()).count() == 0);
+        assertTrue(activated, "Domains did not become active : " + (domains.stream()
+                                                                           .filter(c -> !c.active())
+                                                                           .map(d -> d.logState())
+                                                                           .toList()));
         System.out.println();
         System.out.println("******");
-        System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + domains.size() + " members");
+        System.out.println(
+        "Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all " + domains.size()
+        + " members");
         System.out.println("******");
         System.out.println();
         var oracle = domains.get(0).getDelphi();
@@ -196,15 +200,15 @@ public class FireFliesTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                .setGenesisViewId(GENESIS_VIEW_ID)
-                .setGossipDuration(Duration.ofMillis(50))
-                .setProducer(ProducerParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(50))
-                        .setBatchInterval(Duration.ofMillis(100))
-                        .setMaxBatchByteSize(1024 * 1024)
-                        .setMaxBatchCount(3000)
-                        .build())
-                .setCheckpointBlockDelta(200);
+                               .setGenesisViewId(GENESIS_VIEW_ID)
+                               .setGossipDuration(Duration.ofMillis(50))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(50))
+                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(3000)
+                                                              .build())
+                               .setCheckpointBlockDelta(200);
 
         params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;

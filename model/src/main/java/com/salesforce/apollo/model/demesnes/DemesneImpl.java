@@ -73,22 +73,22 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
  * @author hal.hildebrand
  */
 public class DemesneImpl implements Demesne {
-    private static final Class<? extends Channel> channelType = getChannelType();
-    private static final Duration DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
-    private static final int DEFAULT_VIRTUAL_THREADS = 5;
-    private static final EventLoopGroup eventLoopGroup = getEventLoopGroup();
-    private static final Logger log = LoggerFactory.getLogger(DemesneImpl.class);
-    private final ExecutorService exec;
-    private final KERL kerl;
-    private final OuterContextClient outer;
-    private final DemesneParameters parameters;
-    private final AtomicBoolean started = new AtomicBoolean();
-    private final Stereotomy stereotomy;
-    private final Thoth thoth;
-    private final EventValidation validation;
-    private volatile Context<Member> context;
-    private volatile SubDomain domain;
-    private volatile Enclave enclave;
+    private static final Class<? extends Channel> channelType             = getChannelType();
+    private static final Duration                 DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
+    private static final int                      DEFAULT_VIRTUAL_THREADS = 5;
+    private static final EventLoopGroup           eventLoopGroup          = getEventLoopGroup();
+    private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
+    private final        ExecutorService          exec;
+    private final        KERL                     kerl;
+    private final        OuterContextClient       outer;
+    private final        DemesneParameters        parameters;
+    private final        AtomicBoolean            started                 = new AtomicBoolean();
+    private final        Stereotomy               stereotomy;
+    private final        Thoth                    thoth;
+    private final        EventValidation          validation;
+    private volatile     Context<Member>          context;
+    private volatile     SubDomain                domain;
+    private volatile     Enclave                  enclave;
 
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
@@ -109,11 +109,8 @@ public class DemesneImpl implements Demesne {
         keystore.load(null, password);
 
         kerl = kerlFrom(outerContextAddress);
-        validation = new Ani(context.getId(), kerl).eventValidation(Duration.ofSeconds(
-                parameters.getTimeout()
-                        .getSeconds(),
-                parameters.getTimeout()
-                        .getNanos()));
+        validation = new Ani(context.getId(), kerl).eventValidation(
+        Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos()));
         stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
 
         thoth = new Thoth(stereotomy);
@@ -134,11 +131,11 @@ public class DemesneImpl implements Demesne {
         context.activate(thoth.member());
 
         log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress,
-                thoth.member().getId());
+                 thoth.member().getId());
 
         enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress), exec,
-                new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
-                ctxId -> registerContext(ctxId));
+                              new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
+                              ctxId -> registerContext(ctxId));
         domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context, exec);
     }
 
@@ -194,8 +191,8 @@ public class DemesneImpl implements Demesne {
     }
 
     private Path commDirectory() {
-        return Path.of(parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home")
-                : parameters.getCommDirectory());
+        return Path.of(
+        parameters.getCommDirectory().isEmpty() ? System.getProperty("user.home") : parameters.getCommDirectory());
     }
 
     private CachingKERL kerlFrom(File address) {
@@ -207,12 +204,12 @@ public class DemesneImpl implements Demesne {
             ManagedChannel channel = null;
             try {
                 channel = NettyChannelBuilder.forAddress(serverAddress)
-                        .intercept(clientInterceptor(kerlContext))
-                        .eventLoopGroup(eventLoopGroup)
-                        .channelType(channelType)
-                        .keepAliveTime(1, TimeUnit.SECONDS)
-                        .usePlaintext()
-                        .build();
+                                             .intercept(clientInterceptor(kerlContext))
+                                             .eventLoopGroup(eventLoopGroup)
+                                             .channelType(channelType)
+                                             .keepAliveTime(1, TimeUnit.SECONDS)
+                                             .usePlaintext()
+                                             .build();
                 var stub = KERLServiceGrpc.newBlockingStub(channel);
                 return f.apply(new KERLAdapter(new CommonKERLClient(stub, null), DigestAlgorithm.DEFAULT));
             } catch (Throwable t) {
@@ -227,59 +224,48 @@ public class DemesneImpl implements Demesne {
 
     private OuterContextClient outerFrom(File address) {
         return new OuterContextClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(address))
-                .intercept(clientInterceptor(context.getId()))
-                .eventLoopGroup(eventLoopGroup)
-                .channelType(channelType)
-                .usePlaintext()
-                .build(),
-                null);
+                                                         .intercept(clientInterceptor(context.getId()))
+                                                         .eventLoopGroup(eventLoopGroup)
+                                                         .channelType(channelType)
+                                                         .usePlaintext()
+                                                         .build(), null);
     }
 
     private void registerContext(Digest ctxId) {
-        outer.register(SubContext.newBuilder()
-                .setEnclave(context.getId().toDigeste())
-                .setContext(ctxId.toDigeste())
-                .build());
+        outer.register(
+        SubContext.newBuilder().setEnclave(context.getId().toDigeste()).setContext(ctxId.toDigeste()).build());
     }
 
     private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
                                                         Context<Member> context, ExecutorService exec) {
         final var current = enclave;
-        return RuntimeParameters.newBuilder()
-                .setCommunications(current.router(exec))
-                .setExec(exec)
-                .setKerl(() -> {
-                    return member.kerl();
-                })
-                .setContext(context)
-                .setFoundation(parameters.getFoundation());
+        return RuntimeParameters.newBuilder().setCommunications(current.router(exec)).setKerl(() -> {
+            return member.kerl();
+        }).setContext(context).setFoundation(parameters.getFoundation());
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, final Path commDirectory, final File address,
                                     ControlledIdentifierMember member, Context<Member> context, ExecutorService exec) {
         final var gossipInterval = parameters.getGossipInterval();
-        final var interval = gossipInterval.getSeconds() != 0 ||
-                gossipInterval.getNanos() != 0 ? Duration.ofSeconds(gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
+        final var interval = gossipInterval.getSeconds() != 0 || gossipInterval.getNanos() != 0 ? Duration.ofSeconds(
+        gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
         return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context, exec),
-                new TransactionConfiguration(exec,
-                        Executors.newScheduledThreadPool(parameters.getVirtualThreads() == 0 ? DEFAULT_VIRTUAL_THREADS
-                                        : parameters.getVirtualThreads(),
-                                Thread.ofVirtual()
-                                        .factory())),
-                parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
+                             new TransactionConfiguration(exec, Executors.newScheduledThreadPool(1, Thread.ofVirtual()
+                                                                                                          .factory())),
+                             parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate(), exec);
     }
 
     public class DemesneMember implements Member {
-        private final Digest id;
-        protected EstablishmentEvent event;
+        private final Digest             id;
+        protected     EstablishmentEvent event;
 
         public DemesneMember(EstablishmentEvent event) {
             this.event = event;
             if (event.getIdentifier() instanceof SelfAddressingIdentifier sai) {
                 id = sai.getDigest();
             } else {
-                throw new IllegalArgumentException("Only self addressing identifiers supported: "
-                        + event.getIdentifier());
+                throw new IllegalArgumentException(
+                "Only self addressing identifiers supported: " + event.getIdentifier());
             }
         }
 

@@ -13,10 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -142,7 +139,7 @@ public class Producer {
         @Override
         public void reconfigure() {
             log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
-            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
+            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms, executor) {
                 @Override
                 public void complete() {
                     super.complete();
@@ -175,6 +172,7 @@ public class Producer {
     private final CommonCommunications<Terminal, ?> comms;
     private final Ethereal                          controller;
     private final ChRbcGossip                       coordinator;
+    private final Executor executor;
     private final TxDataSource                      ds;
     private final int                               lastEpoch;
     private final Set<Member>                       nextAssembly       = new HashSet<>();
@@ -186,13 +184,14 @@ public class Producer {
     private final Transitions                       transitions;
     private final ViewContext                       view;
 
-    public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
+    public Producer(Executor executor, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms, ThreadPoolExecutor consumer) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.comms = comms;
         this.checkpoint.set(checkpoint);
+        this.executor = executor;
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
@@ -232,7 +231,7 @@ public class Producer {
                                   (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
                                   consumer);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
-                                      params().communications(), params().exec(), producerMetrics);
+                                      params().communications(), executor, producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 

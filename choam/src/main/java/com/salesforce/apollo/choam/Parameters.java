@@ -40,7 +40,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -95,10 +94,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public BiConsumer<HashedBlock, CheckpointState> restorer() {
         return runtime.restorer;
-    }
-
-    public Executor exec() {
-        return runtime.exec;
     }
 
     public Supplier<KERL_> kerl() {
@@ -291,8 +286,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
-                                    Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
-                                    Supplier<KERL_> kerl, FoundationSeal foundation) {
+                                    Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
+                                    FoundationSeal foundation) {
         public static Builder newBuilder() {
             return new Builder();
         }
@@ -319,7 +314,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private Function<ULong, File>                          checkpointer = NULL_CHECKPOINTER;
             private Router                                         communications;
             private Context<Member>                                context;
-            private Executor                                       exec         = r -> r.run();
             private FoundationSeal                                 foundation   = FoundationSeal.getDefaultInstance();
             private Function<Map<Member, Join>, List<Transaction>> genesisData  = view -> new ArrayList<>();
             private Supplier<KERL_>                                kerl         = () -> KERL_.getDefaultInstance();
@@ -332,7 +326,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
             public RuntimeParameters build() {
                 return new RuntimeParameters(context, communications, member, genesisData, processor, restorer,
-                                             checkpointer, metrics, exec, kerl, foundation);
+                                             checkpointer, metrics, kerl, foundation);
             }
 
             @Override
@@ -371,15 +365,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             @SuppressWarnings("unchecked")
             public Builder setContext(Context<? extends Member> context) {
                 this.context = (Context<Member>) context;
-                return this;
-            }
-
-            public Executor getExec() {
-                return exec;
-            }
-
-            public Builder setExec(Executor exec) {
-                this.exec = exec;
                 return this;
             }
 

@@ -55,6 +55,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -99,21 +100,22 @@ public class ProcessDomain extends Domain {
                          InetSocketAddress endpoint, Path commDirectory,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
                          EventValidation eventValidation,
-                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification) {
-        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
+                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification,
+                         Executor exec) {
+        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig, exec);
         communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
         this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
-                                   DigestAlgorithm.DEFAULT, null, params.exec());
+                                   DigestAlgorithm.DEFAULT, null, executor);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
-                          0.00125, null);
+                          params.digestAlgorithm(), params.communications(), executor, Duration.ofSeconds(1), 0.00125,
+                          null);
         listener = foundation.register(listener());
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(
@@ -124,7 +126,7 @@ public class ProcessDomain extends Domain {
                                                                       .workerEventLoopGroup(portalEventLoopGroup)
                                                                       .bossEventLoopGroup(portalEventLoopGroup)
                                                                       .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, runtime.getExec(), Duration.ofMillis(1),
+                                    s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1),
                                     s -> routes.get(s));
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());

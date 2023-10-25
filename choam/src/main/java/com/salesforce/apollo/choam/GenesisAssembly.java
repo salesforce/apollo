@@ -6,31 +6,10 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-
-import java.security.PublicKey;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesfoce.apollo.choam.proto.Validations;
-import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.choam.proto.*;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -49,39 +28,47 @@ import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.security.PublicKey;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 /**
  * Construction of the genesis block
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class GenesisAssembly implements Genesis {
-    private record Proposed(Join join, Member member, Map<Member, Certification> certifications) {
-        public Proposed(Join join, Member member) {
-            this(join, member, new HashMap<>());
-        }
-    }
-
-    private static final Logger log = LoggerFactory.getLogger(GenesisAssembly.class);
-
-    private volatile Thread             blockingThread;
-    private final Ethereal              controller;
-    private final ChRbcGossip           coordinator;
-    private volatile OneShot            ds;
-    private final ViewMember            genesisMember;
-    private final Map<Digest, Member>   nextAssembly;
-    private final Map<Digest, Proposed> proposals = new ConcurrentHashMap<>();
-    private final AtomicBoolean         published = new AtomicBoolean();
-    private volatile HashedBlock        reconfiguration;
-    private final Map<Member, Join>     slate     = new ConcurrentHashMap<>();
-    private final AtomicBoolean         started   = new AtomicBoolean();
-    private final Transitions           transitions;
-    private final ViewContext           view;
-    private final Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
+    private static final Logger                log       = LoggerFactory.getLogger(GenesisAssembly.class);
+    private final        Ethereal              controller;
+    private final        ChRbcGossip           coordinator;
+    private final        ViewMember            genesisMember;
+    private final        Map<Digest, Member>   nextAssembly;
+    private final        Map<Digest, Proposed> proposals = new ConcurrentHashMap<>();
+    private final        AtomicBoolean         published = new AtomicBoolean();
+    private final        Map<Member, Join>     slate     = new ConcurrentHashMap<>();
+    private final        AtomicBoolean         started   = new AtomicBoolean();
+    private final        Transitions           transitions;
+    private final        ViewContext           view;
+    private final        Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
+    private volatile     Thread                blockingThread;
+    private volatile     OneShot               ds;
+    private volatile     HashedBlock           reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
-                           ThreadPoolExecutor consumer) {
+                           ThreadPoolExecutor executor) {
         view = vc;
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
@@ -118,9 +105,9 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch), consumer);
+                                  epoch -> transitions.nextEpoch(epoch), executor);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
-                                      params().exec(),
+                                      Executors.newVirtualThreadPerTaskExecutor(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
@@ -132,9 +119,9 @@ public class GenesisAssembly implements Genesis {
                  .stream()
                  .filter(p -> p.certifications.size() >= params().majority())
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
-        reconfiguration = new HashedBlock(params().digestAlgorithm(),
-                                          view.genesis(slate, view.context().getId(),
-                                                       new NullBlock(params().digestAlgorithm())));
+        reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
+                                                                                   new NullBlock(
+                                                                                   params().digestAlgorithm())));
         var validate = view.generateValidation(reconfiguration);
         log.trace("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
                   slate.size(), params().member().getId());
@@ -196,13 +183,15 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void nominations(PreBlock preblock, boolean last) {
-        preblock.data().stream().map(bs -> {
-            try {
-                return Validations.parseFrom(bs);
-            } catch (InvalidProtocolBufferException e) {
-                return null;
-            }
-        })
+        preblock.data()
+                .stream()
+                .map(bs -> {
+                    try {
+                        return Validations.parseFrom(bs);
+                    } catch (InvalidProtocolBufferException e) {
+                        return null;
+                    }
+                })
                 .filter(v -> v != null)
                 .flatMap(vs -> vs.getValidationsList().stream())
                 .filter(v -> !v.equals(Validate.getDefaultInstance()))
@@ -326,7 +315,8 @@ public class GenesisAssembly implements Genesis {
     private Join joinOf(Proposed candidate) {
         final List<Certification> witnesses = candidate.certifications.values()
                                                                       .stream()
-                                                                      .sorted(Comparator.comparing(c -> new Digest(c.getId())))
+                                                                      .sorted(
+                                                                      Comparator.comparing(c -> new Digest(c.getId())))
                                                                       .collect(Collectors.toList());
         return Join.newBuilder(candidate.join).clearEndorsements().addAllEndorsements(witnesses).build();
     }
@@ -360,5 +350,11 @@ public class GenesisAssembly implements Genesis {
         proposed.certifications.put(certifier, v.getWitness());
         log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), hash,
                   certifier.getId(), params().member().getId());
+    }
+
+    private record Proposed(Join join, Member member, Map<Member, Certification> certifications) {
+        public Proposed(Join join, Member member) {
+            this(join, member, new HashMap<>());
+        }
     }
 }
