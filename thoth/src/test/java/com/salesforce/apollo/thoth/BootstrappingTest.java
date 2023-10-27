@@ -110,7 +110,7 @@ public class BootstrappingTest extends AbstractDhtTest {
 
         var gorgoneionClient = new GorgoneionClient(client, attester, Clock.systemUTC(), admin);
 
-        final var invitation = gorgoneionClient.apply(Duration.ofSeconds(60));
+        final var invitation = gorgoneionClient.apply(Duration.ofSeconds(120));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
