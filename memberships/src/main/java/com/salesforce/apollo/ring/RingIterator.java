@@ -13,6 +13,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,7 +140,14 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             log.trace("Continuation on iteration: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", iteration(),
                     tally.get(), digest, context.getId(), next.ring(),
                     link.getMember() == null ? null : link.getMember().getId(), member.getId());
-            var result = round.apply(link, next.ring());
+            Q result = null;
+            try {
+               result =round.apply(link, next.ring());
+            } catch (StatusRuntimeException e) {
+                log.trace("Exception in round for: {} on: {} iteration: {} from: {} on: {}", digest,
+                          context.getId(), iteration(), link.getMember() == null ? null : link.getMember().getId(),
+                          member.getId());
+            }
             if (result == null) {
                 log.trace("No asynchronous response for: {} on: {} iteration: {} from: {} on: {}", digest,
                         context.getId(), iteration(), link.getMember() == null ? null : link.getMember().getId(),

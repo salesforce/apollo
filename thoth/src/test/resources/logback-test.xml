@@ -51,19 +51,19 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="debug" additivity="false">
+    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="debug" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth.Maat" level="debug" additivity="false">
+    <logger name="com.salesforce.apollo.thoth.Maat" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.gorgoneion" level="debug" additivity="false">
+    <logger name="com.salesforce.apollo.gorgoneion" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

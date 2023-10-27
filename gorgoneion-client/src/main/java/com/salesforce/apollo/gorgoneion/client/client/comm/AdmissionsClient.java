@@ -23,9 +23,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class AdmissionsClient implements Admissions {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel                  channel;
     private final AdmissionsGrpc.AdmissionsBlockingStub client;
-    private final GorgoneionClientMetrics metrics;
+    private final GorgoneionClientMetrics               metrics;
 
     public AdmissionsClient(ManagedServerChannel channel, GorgoneionClientMetrics metrics) {
         this.channel = channel;
@@ -46,16 +46,11 @@ public class AdmissionsClient implements Admissions {
             metrics.outboundApplication().update(serializedSize);
         }
 
-        SignedNonce result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                .apply(application);
+        SignedNonce result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).apply(application);
         if (metrics != null) {
-            try {
-                var serializedSize = result.getSerializedSize();
-                metrics.inboundBandwidth().mark(serializedSize);
-                metrics.inboundApplication().update(serializedSize);
-            } catch (Throwable e) {
-                // nothing
-            }
+            var serializedSize = result.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundApplication().update(serializedSize);
         }
         return result;
     }
@@ -78,8 +73,7 @@ public class AdmissionsClient implements Admissions {
             metrics.outboundCredentials().update(serializedSize);
         }
 
-        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                .register(credentials);
+        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).register(credentials);
         if (metrics != null) {
             try {
                 var serializedSize = result.getSerializedSize();

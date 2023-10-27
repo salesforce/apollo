@@ -78,7 +78,7 @@ public class MtlsTest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[]{6, 6, 6});
-        String localhost = InetAddress.getLocalHost().getHostName();
+        String localhost = InetAddress.getLoopbackAddress().getHostName();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
             return stereotomy.newIdentifier();

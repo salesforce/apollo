@@ -47,12 +47,7 @@ public class TestMtls {
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
         var notBefore = Instant.now();
         var notAfter = Instant.now().plusSeconds(10_000);
-        String localhost;
-        try {
-            localhost = InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException e) {
-            throw new IllegalStateException("Cannot resolve local host name", e);
-        }
+        String localhost = InetAddress.getLoopbackAddress().getHostName();
         X509Certificate generated = Certificates.selfSign(false,
                                                           Utils.encode(id, localhost, Utils.allocatePort(),
                                                                        keyPair.getPublic()),
@@ -68,7 +63,7 @@ public class TestMtls {
 
     @Test
     public void smoke() throws Exception {
-        InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getLocalHost(), Utils.allocatePort());
+        InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getLoopbackAddress(), Utils.allocatePort());
 
         MtlsServer server = server(serverAddress);
         server.start();
