@@ -63,7 +63,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.gorgoneion" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.gorgoneion" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
