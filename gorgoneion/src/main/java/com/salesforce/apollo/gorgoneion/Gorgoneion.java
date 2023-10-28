@@ -323,12 +323,16 @@ public class Gorgoneion {
                 responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 return;
             }
-            Validations invite = Gorgoneion.this.register(request);
-            if (invite == null) {
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
-            } else {
-                responseObserver.onNext(invite);
-                responseObserver.onCompleted();
+            try {
+                Validations invite =Gorgoneion.this.register(request);
+                if (invite == null) {
+                    responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
+                } else {
+                    responseObserver.onNext(invite);
+                    responseObserver.onCompleted();
+                }
+            } catch (StatusRuntimeException e) {
+                responseObserver.onError(e);
             }
         }
 
