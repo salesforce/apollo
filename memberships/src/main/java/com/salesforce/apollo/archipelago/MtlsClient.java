@@ -8,6 +8,7 @@ package com.salesforce.apollo.archipelago;
 
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
@@ -26,11 +27,12 @@ import io.netty.handler.ssl.ClientAuth;
  *
  */
 public class MtlsClient {
+    private final static Executor exec = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ManagedChannel channel;
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, ClientContextSupplier supplier,
-                      CertificateValidator validator, Executor exec) {
+                      CertificateValidator validator) {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)

@@ -65,7 +65,7 @@ public class TestEventObserver {
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         serverRouter = new LocalServer(prefix, serverMember).router(builder);
         clientRouter = new LocalServer(prefix, clientMember).router(builder);
 

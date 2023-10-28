@@ -130,8 +130,6 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            final var exec = Executors.newFixedThreadPool(2, Thread.ofVirtual().factory());
-            executors.add(exec);
             final var member = members.get(i);
             var com = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder());
             comms.add(com);

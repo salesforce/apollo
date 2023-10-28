@@ -54,17 +54,15 @@ public class MtlsServer implements RouterSupplier {
     private final        LoadingCache<X509Certificate, Digest>   cachedMembership;
     private final        Function<Member, ClientContextSupplier> contextSupplier;
     private final        EndpointProvider                        epProvider;
-    private final        Executor                                exec;
     private final        Member                                  from;
     private final        Context.Key<SSLSession>                 sslSessionContext = Context.key("SSLSession");
     private final        ServerContextSupplier                   supplier;
 
     public MtlsServer(Member from, EndpointProvider epProvider, Function<Member, ClientContextSupplier> contextSupplier,
-                      ServerContextSupplier supplier, Executor exec) {
+                      ServerContextSupplier supplier) {
         this.from = from;
         this.epProvider = epProvider;
         this.contextSupplier = contextSupplier;
-        this.exec = exec;
         this.supplier = supplier;
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
@@ -167,7 +165,7 @@ public class MtlsServer implements RouterSupplier {
 
     private ManagedChannel connectTo(Member to) {
         return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                              contextSupplier.apply(from), epProvider.getValiator(), exec).getChannel();
+                              contextSupplier.apply(from), epProvider.getValiator()).getChannel();
     }
 
     private X509Certificate getCert() {
