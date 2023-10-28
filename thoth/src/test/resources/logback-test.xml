@@ -55,6 +55,10 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
+    <logger name="com.salesforce.apollo.stereotomy.db" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
     <logger name="com.salesforce.apollo.thoth" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
