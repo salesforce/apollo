@@ -51,15 +51,23 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.stereotomy" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth.Maat" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.thoth.KerlDHT" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.thoth.grpc" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.thoth.metrics" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
