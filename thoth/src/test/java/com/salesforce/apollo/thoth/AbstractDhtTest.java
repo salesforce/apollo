@@ -97,7 +97,7 @@ public class AbstractDhtTest {
 
     @AfterEach
     public void after() {
-        routers.values().forEach(r -> r.close(Duration.ofMillis(1)));
+        routers.values().forEach(r -> r.close(Duration.ofSeconds(2)));
         routers.clear();
         dhts.values().forEach(t -> t.stop());
         dhts.clear();
