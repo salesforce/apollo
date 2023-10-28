@@ -9,7 +9,7 @@ package com.salesforce.apollo.archipeligo;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -167,7 +167,6 @@ public class EnclaveTest {
 
         final var routes = new HashMap<String, DomainSocketAddress>();
         final Function<String, DomainSocketAddress> router = s -> routes.get(s);
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
 
         final var portalEndpoint = new DomainSocketAddress(Path.of("target")
                                                                .resolve(UUID.randomUUID().toString())
@@ -180,22 +179,22 @@ public class EnclaveTest {
                                                           .workerEventLoopGroup(getEventLoopGroup())
                                                           .bossEventLoopGroup(getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1), router);
+                                        s -> handler(portalEndpoint), bridge,  Duration.ofMillis(1), router);
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1, exec, bridge, d -> {
+        var enclave1 = new Enclave(serverMember1, endpoint1,  bridge, d -> {
             routes.put(qb64(d), endpoint1);
         });
-        var router1 = enclave1.router(exec);
+        var router1 = enclave1.router( );
         CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
                                                                             r -> new Server(r),
                                                                             c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2, exec, bridge, d -> {
+        var enclave2 = new Enclave(serverMember2, endpoint2,   bridge, d -> {
             routes.put(qb64(d), endpoint2);
         });
-        var router2 = enclave2.router(exec);
+        var router2 = enclave2.router( );
         CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "A",
                                                                             r -> new Server(r),
                                                                             c -> new TestItClient(c), local);

@@ -58,7 +58,7 @@ public class TestEventObserver {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -66,8 +66,8 @@ public class TestEventObserver {
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
-        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        serverRouter = new LocalServer(prefix, serverMember).router(builder);
+        clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();
@@ -83,18 +83,17 @@ public class TestEventObserver {
             }
 
             @Override
-            public void publishEvents(List<KeyEvent_> events, List<Validations> validations,
-                                      Digest from) {
+            public void publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from) {
             }
         };
 
         ClientIdentity identity = () -> clientMember.getId();
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                r -> new EventObserverServer(r, identity, null), null, null);
+                            r -> new EventObserverServer(r, identity, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                r -> new EventObserverServer(r, identity, null),
-                EventObserverClient.getCreate(null), null);
+                                              r -> new EventObserverServer(r, identity, null),
+                                              EventObserverClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

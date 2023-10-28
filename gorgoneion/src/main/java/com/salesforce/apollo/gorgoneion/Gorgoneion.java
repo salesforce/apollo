@@ -63,7 +63,6 @@ public class Gorgoneion {
     private final CommonCommunications<?, AdmissionsService> admissionsComm;
     private final Context<Member> context;
     private final CommonCommunications<Endorsement, EndorsementService> endorsementComm;
-    private final Executor exec;
     private final ControlledIdentifierMember member;
     private final ProtoEventObserver observer;
     private final Parameters parameters;
@@ -71,16 +70,15 @@ public class Gorgoneion {
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
                       ProtoEventObserver observer, Router router, ScheduledExecutorService scheduler,
-                      GorgoneionMetrics metrics, Executor exec) {
-        this(parameters, member, context, observer, router, scheduler, metrics, router, exec);
+                      GorgoneionMetrics metrics) {
+        this(parameters, member, context, observer, router, scheduler, metrics, router);
     }
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
                       ProtoEventObserver observer, Router admissionsRouter, ScheduledExecutorService scheduler,
-                      GorgoneionMetrics metrics, Router endorsementRouter, Executor exec) {
+                      GorgoneionMetrics metrics, Router endorsementRouter) {
         this.member = member;
         this.context = context;
-        this.exec = exec;
         this.parameters = parameters;
         this.scheduler = scheduler;
         this.observer = observer;
@@ -158,7 +156,7 @@ public class Gorgoneion {
                 digestOf(ident,
                         parameters.digestAlgorithm()));
         final var majority = context.totalCount() == 1 ? 1 : context.majority();
-        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm, exec);
+        final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
         redirecting.iterate((link, m) -> {
@@ -215,7 +213,7 @@ public class Gorgoneion {
         var successors = Context.uniqueSuccessors(context,
                 digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
-        SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm, exec);
+        SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
             log.debug("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
@@ -242,8 +240,7 @@ public class Gorgoneion {
         var successors = Context.uniqueSuccessors(context,
                 digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
-        final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm,
-                exec);
+        final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
             log.debug("Validating  credentials for: {} contacting: {} on: {}", identifier, link.getMember().getId(),

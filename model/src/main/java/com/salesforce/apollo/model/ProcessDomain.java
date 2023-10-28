@@ -100,21 +100,20 @@ public class ProcessDomain extends Domain {
                          InetSocketAddress endpoint, Path commDirectory,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
                          EventValidation eventValidation,
-                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification,
-                         Executor exec) {
-        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig, exec);
+                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification ) {
+        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
         this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
-                                   DigestAlgorithm.DEFAULT, null, executor);
+                                   DigestAlgorithm.DEFAULT, null);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), executor, Duration.ofSeconds(1), 0.00125,
+                          params.digestAlgorithm(), params.communications(), Duration.ofSeconds(1), 0.00125,
                           null);
         listener = foundation.register(listener());
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
@@ -126,7 +125,7 @@ public class ProcessDomain extends Domain {
                                                                       .workerEventLoopGroup(portalEventLoopGroup)
                                                                       .bossEventLoopGroup(portalEventLoopGroup)
                                                                       .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, exec, Duration.ofMillis(1),
+                                    s -> handler(portalEndpoint), bridge, Duration.ofMillis(1),
                                     s -> routes.get(s));
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());

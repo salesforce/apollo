@@ -51,7 +51,7 @@ import static org.mockito.Mockito.when;
  */
 public class CheckpointAssemblerTest {
 
-    private static final int CARDINALITY = 10;
+    private static final int CARDINALITY  = 10;
     private static final int SEGMENT_SIZE = 256;
 
     private CompletableFuture<CheckpointState> assembled;
@@ -84,10 +84,14 @@ public class CheckpointAssemblerTest {
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, CARDINALITY)
+                                               .mapToObj(i -> stereotomy.newIdentifier())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
+                                               .toList();
         members.forEach(m -> context.activate(m));
 
         Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
@@ -95,7 +99,8 @@ public class CheckpointAssemblerTest {
         SigningMember bootstrapping = members.get(0);
 
         Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
+        CheckpointState state = new CheckpointState(checkpoint,
+                                                    store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
 
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
         testFile.deleteOnExit();
@@ -120,14 +125,17 @@ public class CheckpointAssemblerTest {
                 return CheckpointSegments.newBuilder().addAllSegments(fetched).build();
             }
         });
-        @SuppressWarnings("unchecked") CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
+        @SuppressWarnings("unchecked")
+        CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
         when(comm.connect(any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint, bootstrapping, store2, comm, context, 0.00125, DigestAlgorithm.DEFAULT);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint,
+                                                           bootstrapping, store2, comm, context, 0.00125,
+                                                           DigestAlgorithm.DEFAULT);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
-        assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());
+        assembled = boot.assemble(scheduler, Duration.ofMillis(10));
         CheckpointState assembledCs;
         try {
             assembledCs = assembled.get(300, TimeUnit.SECONDS);

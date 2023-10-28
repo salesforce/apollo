@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -31,23 +30,21 @@ import java.util.function.Consumer;
  * @author hal.hildebrand
  */
 public class SliceIterator<Comm extends Link> {
-    private static final Logger log = LoggerFactory.getLogger(SliceIterator.class);
-    private final CommonCommunications<Comm, ?> comm;
-    private final Executor exec;
-    private final String label;
-    private final SigningMember member;
-    private final List<? extends Member> slice;
-    private Member current;
-    private Iterator<? extends Member> currentIteration;
+    private static final Logger                        log = LoggerFactory.getLogger(SliceIterator.class);
+    private final        CommonCommunications<Comm, ?> comm;
+    private final        String                        label;
+    private final        SigningMember                 member;
+    private final        List<? extends Member>        slice;
+    private              Member                        current;
+    private              Iterator<? extends Member>    currentIteration;
 
     public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
-                         CommonCommunications<Comm, ?> comm, Executor exec) {
+                         CommonCommunications<Comm, ?> comm) {
         assert member != null && slice != null && comm != null;
         this.label = label;
         this.member = member;
         this.slice = slice;
         this.comm = comm;
-        this.exec = exec;
         Entropy.secureShuffle(slice);
         this.currentIteration = slice.iterator();
         log.debug("Slice: {}", slice.stream().map(m -> m.getId()).toList());
@@ -55,7 +52,10 @@ public class SliceIterator<Comm extends Link> {
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
                             Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
-        internalIterate(round, handler, onComplete, scheduler, frequency);
+        Thread.ofVirtual()
+              .factory()
+              .newThread(Utils.wrapped(() -> internalIterate(round, handler, onComplete, scheduler, frequency), log))
+              .start();
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
@@ -63,9 +63,8 @@ public class SliceIterator<Comm extends Link> {
         iterate(round, handler, null, scheduler, frequency);
     }
 
-    private <T> void internalIterate(BiFunction<Comm, Member, T> round,
-                                     SlicePredicateHandler<T, Comm> handler, Runnable onComplete,
-                                     ScheduledExecutorService scheduler, Duration frequency) {
+    private <T> void internalIterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
+                                     Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
         Runnable proceed = () -> internalIterate(round, handler, onComplete, scheduler, frequency);
 
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, scheduler, frequency);
@@ -75,7 +74,7 @@ public class SliceIterator<Comm extends Link> {
                 return;
             }
             log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(),
-                    member.getId());
+                      member.getId());
             T result = null;
             try {
                 result = round.apply(link, link.getMember());
@@ -93,7 +92,7 @@ public class SliceIterator<Comm extends Link> {
             return comm.connect(m);
         } catch (Throwable e) {
             log.error("error opening connection to {}: {}", m.getId(),
-                    (e.getCause() != null ? e.getCause() : e).getMessage());
+                      (e.getCause() != null ? e.getCause() : e).getMessage());
         }
         return null;
     }
@@ -110,7 +109,7 @@ public class SliceIterator<Comm extends Link> {
     private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, ScheduledExecutorService scheduler,
                          Duration frequency) {
         log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, !currentIteration.hasNext(),
-                allow, member.getId());
+                  allow, member.getId());
         if (!currentIteration.hasNext() && allow) {
             log.trace("Final iteration of: {} on: {}", label, member.getId());
             if (onComplete != null) {

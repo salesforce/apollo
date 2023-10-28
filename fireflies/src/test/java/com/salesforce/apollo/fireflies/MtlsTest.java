@@ -133,14 +133,10 @@ public class MtlsTest {
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
                     Executors.newFixedThreadPool(2, Thread.ofVirtual().factory())).router(
-                    builder,
-                    Executors.newFixedThreadPool(2,
-                            Thread.ofVirtual()
-                                    .factory()));
+                    builder);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                    DigestAlgorithm.DEFAULT, metrics,
-                    Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                    DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();

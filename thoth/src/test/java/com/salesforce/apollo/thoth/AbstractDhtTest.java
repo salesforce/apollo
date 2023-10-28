@@ -138,12 +138,11 @@ public class AbstractDhtTest {
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var router = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                  exec);
+        var router = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         routers.put(member, router);
         dhts.put(member,
                  new KerlDHT(Duration.ofMillis(5), context, member, wrap(), connectionPool, DigestAlgorithm.DEFAULT,
-                             router, exec, Duration.ofSeconds(10), 0.0125, null));
+                             router, Duration.ofSeconds(10), 0.0125, null));
     }
 
     protected BiFunction<KerlDHT, KERL, KERL> wrap() {

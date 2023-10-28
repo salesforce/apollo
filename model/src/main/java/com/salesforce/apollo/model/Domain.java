@@ -77,13 +77,11 @@ abstract public class Domain {
     protected final Parameters params;
     protected final SqlStateMachine sqlStateMachine;
     protected final Connection stateConnection;
-    protected final Executor executor;
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
-                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, Executor executor) {
+                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         var paramsClone = params.clone();
         var runtimeClone = runtime.clone();
         this.member = member;
-        this.executor = executor;
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
             if (!dir.mkdirs()) {
@@ -107,10 +105,9 @@ abstract public class Domain {
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
-        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
-                txnConfig.executor());
+        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout() );
         this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
-                params.getDigestAlgorithm(), txnConfig.executor());
+                params.getDigestAlgorithm() );
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
                 member.getId(), dbURL, checkpointBaseDir);
     }
@@ -327,6 +324,6 @@ abstract public class Domain {
                 .build();
     }
 
-    public record TransactionConfiguration(Executor executor, ScheduledExecutorService scheduler) {
+    public record TransactionConfiguration( ScheduledExecutorService scheduler) {
     }
 }

@@ -57,7 +57,6 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -78,7 +77,6 @@ public class DemesneImpl implements Demesne {
     private static final int                      DEFAULT_VIRTUAL_THREADS = 5;
     private static final EventLoopGroup           eventLoopGroup          = getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
-    private final        ExecutorService          exec;
     private final        KERL                     kerl;
     private final        OuterContextClient       outer;
     private final        DemesneParameters        parameters;
@@ -93,7 +91,6 @@ public class DemesneImpl implements Demesne {
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
         this.parameters = parameters;
-        exec = Executors.newVirtualThreadPerTaskExecutor();
         context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
         final var commDirectory = commDirectory();
         var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
@@ -133,10 +130,10 @@ public class DemesneImpl implements Demesne {
         log.info("Creating Demesne: {} bridge: {} on: {}", context.getId(), outerContextAddress,
                  thoth.member().getId());
 
-        enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress), exec,
+        enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress),
                               new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
                               ctxId -> registerContext(ctxId));
-        domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context, exec);
+        domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context);
     }
 
     @Override
@@ -237,22 +234,22 @@ public class DemesneImpl implements Demesne {
     }
 
     private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
-                                                        Context<Member> context, ExecutorService exec) {
+                                                        Context<Member> context) {
         final var current = enclave;
-        return RuntimeParameters.newBuilder().setCommunications(current.router(exec)).setKerl(() -> {
+        return RuntimeParameters.newBuilder().setCommunications(current.router()).setKerl(() -> {
             return member.kerl();
         }).setContext(context).setFoundation(parameters.getFoundation());
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, final Path commDirectory, final File address,
-                                    ControlledIdentifierMember member, Context<Member> context, ExecutorService exec) {
+                                    ControlledIdentifierMember member, Context<Member> context) {
         final var gossipInterval = parameters.getGossipInterval();
         final var interval = gossipInterval.getSeconds() != 0 || gossipInterval.getNanos() != 0 ? Duration.ofSeconds(
         gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
-        return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context, exec),
-                             new TransactionConfiguration(exec, Executors.newScheduledThreadPool(1, Thread.ofVirtual()
-                                                                                                          .factory())),
-                             parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate(), exec);
+        return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context),
+                             new TransactionConfiguration(
+                             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())),
+                             parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
     }
 
     public class DemesneMember implements Member {

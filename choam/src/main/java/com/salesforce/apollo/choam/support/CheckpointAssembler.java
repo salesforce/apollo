@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -43,17 +42,17 @@ import static com.salesforce.apollo.choam.support.Bootstrapper.randomCut;
 public class CheckpointAssembler {
     private static final Logger log = LoggerFactory.getLogger(CheckpointAssembler.class);
 
-    private final CompletableFuture<CheckpointState> assembled = new CompletableFuture<>();
-    private final Checkpoint checkpoint;
+    private final CompletableFuture<CheckpointState>        assembled = new CompletableFuture<>();
+    private final Checkpoint                                checkpoint;
     private final CommonCommunications<Terminal, Concierge> comms;
-    private final Context<Member> context;
-    private final DigestAlgorithm digestAlgorithm;
-    private final double fpr;
-    private final Duration frequency;
-    private final List<Digest> hashes = new ArrayList<>();
-    private final ULong height;
-    private final SigningMember member;
-    private final MVMap<Integer, byte[]> state;
+    private final Context<Member>                           context;
+    private final DigestAlgorithm                           digestAlgorithm;
+    private final double                                    fpr;
+    private final Duration                                  frequency;
+    private final List<Digest>                              hashes    = new ArrayList<>();
+    private final ULong                                     height;
+    private final SigningMember                             member;
+    private final MVMap<Integer, byte[]>                    state;
 
     public CheckpointAssembler(Duration frequency, ULong height, Checkpoint checkpoint, SigningMember member,
                                Store store, CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
@@ -70,14 +69,13 @@ public class CheckpointAssembler {
         checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
     }
 
-    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration,
-                                                       Executor exec) {
+    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
         if (checkpoint.getSegmentsCount() == 0) {
             log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                    member.getId());
+                     member.getId());
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
-            gossip(scheduler, duration, exec);
+            gossip(scheduler, duration);
         }
         return assembled;
     }
@@ -89,9 +87,9 @@ public class CheckpointAssembler {
             segmentsBff.add(i);
         });
         return CheckpointReplication.newBuilder()
-                .setCheckpoint(height.longValue())
-                .setCheckpointSegments(segmentsBff.toBff())
-                .build();
+                                    .setCheckpoint(height.longValue())
+                                    .setCheckpointSegments(segmentsBff.toBff())
+                                    .build();
     }
 
     private boolean gossip(Optional<CheckpointSegments> futureSailor) {
@@ -101,25 +99,24 @@ public class CheckpointAssembler {
         if (process(futureSailor.get())) {
             CheckpointState cs = new CheckpointState(checkpoint, state);
             log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                    member.getId());
+                     member.getId());
             assembled.complete(cs);
             return false;
         }
         return true;
     }
 
-    private void gossip(ScheduledExecutorService scheduler, Duration duration, Executor exec) {
+    private void gossip(ScheduledExecutorService scheduler, Duration duration) {
         if (assembled.isDone()) {
             return;
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                member.getId());
-        var ringer = new RingIterator<>(frequency, context, member, comms, exec, true,
-                scheduler);
+                 member.getId());
+        var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
-                (tally, result, destination) -> gossip(result),
-                t -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
-                        TimeUnit.MILLISECONDS));
+                       (tally, result, destination) -> gossip(result),
+                       t -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
+                                               TimeUnit.MILLISECONDS));
 
     }
 

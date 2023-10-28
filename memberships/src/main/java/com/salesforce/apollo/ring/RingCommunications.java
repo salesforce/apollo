@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.TreeSet;
-import java.util.concurrent.Executor;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
@@ -34,36 +33,34 @@ import java.util.function.Function;
  * @author hal.hildebrand
  */
 public class RingCommunications<T extends Member, Comm extends Link> {
-    private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
-    final Context<T> context;
-    final Executor exec;
-    final SigningMember member;
-    private final CommonCommunications<Comm, ?> comm;
-    private final Direction direction;
-    private final boolean ignoreSelf;
-    private final Lock lock = new ReentrantLock();
-    private final List<iteration<T>> traversalOrder = new ArrayList<>();
-    protected boolean noDuplicates = false;
-    volatile int currentIndex = -1;
+    private final static Logger                        log            = LoggerFactory.getLogger(
+    RingCommunications.class);
+    final                Context<T>                    context;
+    final                SigningMember                 member;
+    private final        CommonCommunications<Comm, ?> comm;
+    private final        Direction                     direction;
+    private final        boolean                       ignoreSelf;
+    private final        Lock                          lock           = new ReentrantLock();
+    private final        List<iteration<T>>            traversalOrder = new ArrayList<>();
+    protected            boolean                       noDuplicates   = false;
+    volatile             int                           currentIndex   = -1;
 
-    public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                              Executor exec) {
-        this(context, member, comm, exec, false);
+    public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
+        this(context, member, comm, false);
     }
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                              Executor exec, boolean ignoreSelf) {
-        this(Direction.SUCCESSOR, context, member, comm, exec, ignoreSelf);
+                              boolean ignoreSelf) {
+        this(Direction.SUCCESSOR, context, member, comm, ignoreSelf);
     }
 
     public RingCommunications(Direction direction, Context<T> context, SigningMember member,
-                              CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf) {
+                              CommonCommunications<Comm, ?> comm, boolean ignoreSelf) {
         assert direction != null && context != null && member != null && comm != null;
         this.direction = direction;
         this.context = context;
         this.member = member;
         this.comm = comm;
-        this.exec = exec;
         this.ignoreSelf = ignoreSelf;
     }
 
@@ -137,7 +134,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                 traversalOrder.clear();
                 traversalOrder.addAll(calculateTraversal(digest));
                 assert traversalOrder.size() == context.getRingCount() : "Invalid traversal order size: "
-                        + traversalOrder.size() + " expected: " + context.getRingCount();
+                + traversalOrder.size() + " expected: " + context.getRingCount();
                 Entropy.secureShuffle(traversalOrder);
                 log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
@@ -171,12 +168,12 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             final Comm link = comm.connect(successor.m);
             if (link == null) {
                 log.trace("No connection to {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
-                        member.getId());
+                          member.getId());
             }
             return new Destination<>(successor.m, link, successor.ring);
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
-                    (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
+                      (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
             return new Destination<>(successor.m, null, successor.ring);
         }
     }
@@ -192,8 +189,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
                 return ring.findPredecessor(member, test);
             }
-        },
-        SUCCESSOR {
+        }, SUCCESSOR {
             @Override
             public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
                 return ring.findSuccessor(hash, test);

@@ -62,8 +62,8 @@ public class TestEventValidation {
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
-        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        serverRouter = new LocalServer(prefix, serverMember).router(builder);
+        clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -72,17 +71,24 @@ public class RingCommunicationsTest {
         context.activate(serverMember2);
 
         var serverBuilder = InProcessServerBuilder.forName(name);
-        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> InProcessChannelBuilder.forName(name).build());
+        var cacheBuilder = ServerConnectionCache.newBuilder()
+                                                .setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(), new ServiceImpl(local1, "A"), "A", ServerImpl::new, TestItClient::new, local1);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(),
+                                                                                      new ServiceImpl(local1, "A"), "A",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local1);
 
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(), new ServiceImpl(local2, "B"), "B", ServerImpl::new, TestItClient::new, local2);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(),
+                                                                                      new ServiceImpl(local2, "B"), "B",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local2);
 
         router.start();
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var sync = new RingCommunications<Member, TestItService>(context, serverMember1, commsA, exec);
+        var sync = new RingCommunications<Member, TestItService>(context, serverMember1, commsA);
         var countdown = new CountDownLatch(1);
-        sync.execute((link, round) -> link.ping(Any.getDefaultInstance()), (result, destination) -> countdown.countDown());
+        sync.execute((link, round) -> link.ping(Any.getDefaultInstance()),
+                     (result, destination) -> countdown.countDown());
         assertTrue(countdown.await(1, TimeUnit.SECONDS), "Completed: " + countdown.getCount());
         assertFalse(pinged1.get());
         assertTrue(pinged2.get());

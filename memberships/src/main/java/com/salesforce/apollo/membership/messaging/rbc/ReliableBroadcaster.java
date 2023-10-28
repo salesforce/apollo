@@ -24,7 +24,6 @@ import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 import org.slf4j.Logger;
@@ -49,31 +48,31 @@ import static com.salesforce.apollo.membership.messaging.rbc.comms.RbcClient.get
  */
 public class ReliableBroadcaster {
 
-    private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
-    private final MessageAdapter adapter;
-    private final Buffer buffer;
-    private final Map<UUID, MessageHandler> channelHandlers = new ConcurrentHashMap<>();
-    private final CommonCommunications<ReliableBroadcast, Service> comm;
-    private final Context<Member> context;
-    private final Executor exec;
-    private final RingCommunications<Member, ReliableBroadcast> gossiper;
-    private final SigningMember member;
-    private final RbcMetrics metrics;
-    private final Parameters params;
-    private final Map<UUID, Consumer<Integer>> roundListeners = new ConcurrentHashMap<>();
-    private final AtomicBoolean started = new AtomicBoolean();
-    public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters, Executor exec,
+    private static final Logger                                           log             = LoggerFactory.getLogger(
+    ReliableBroadcaster.class);
+    private final        MessageAdapter                                   adapter;
+    private final        Buffer                                           buffer;
+    private final        Map<UUID, MessageHandler>                        channelHandlers = new ConcurrentHashMap<>();
+    private final        CommonCommunications<ReliableBroadcast, Service> comm;
+    private final        Context<Member>                                  context;
+    private final        RingCommunications<Member, ReliableBroadcast>    gossiper;
+    private final        SigningMember                                    member;
+    private final        RbcMetrics                                       metrics;
+    private final        Parameters                                       params;
+    private final        Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
+    private final        AtomicBoolean                                    started         = new AtomicBoolean();
+
+    public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters,
                                Router communications, RbcMetrics metrics, MessageAdapter adapter) {
         this.params = parameters;
         this.context = context;
         this.member = member;
         this.metrics = metrics;
-        this.exec = exec;
         buffer = new Buffer(context.timeToLive() + 1);
         this.comm = communications.create(member, context.getId(), new Service(),
-                r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
-                getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
-        gossiper = new RingCommunications<>(context, member, this.comm, exec);
+                                          r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
+                                          getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
+        gossiper = new RingCommunications<>(context, member, this.comm);
         this.adapter = adapter;
     }
 
@@ -101,9 +100,8 @@ public class ReliableBroadcaster {
         };
         Function<Any, List<Digest>> source = any -> {
             try {
-                return Collections.singletonList(Digest.from(any.unpack(SignedDefaultMessage.class)
-                        .getContent()
-                        .getSource()));
+                return Collections.singletonList(
+                Digest.from(any.unpack(SignedDefaultMessage.class).getContent().getSource()));
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
@@ -111,14 +109,12 @@ public class ReliableBroadcaster {
         var sn = new AtomicInteger();
         BiFunction<SigningMember, Any, Any> wrapper = (m, any) -> {
             final var dm = DefaultMessage.newBuilder()
-                    .setNonce(sn.incrementAndGet())
-                    .setSource(m.getId().toDigeste())
-                    .setContent(any)
-                    .build();
-            return Any.pack(SignedDefaultMessage.newBuilder()
-                    .setContent(dm)
-                    .setSignature(m.sign(dm.toByteString()).toSig())
-                    .build());
+                                         .setNonce(sn.incrementAndGet())
+                                         .setSource(m.getId().toDigeste())
+                                         .setContent(any)
+                                         .build();
+            return Any.pack(
+            SignedDefaultMessage.newBuilder().setContent(dm).setSignature(m.sign(dm.toByteString()).toSig()).build());
         };
         Function<AgedMessageOrBuilder, Any> extractor = am -> {
             try {
@@ -154,8 +150,8 @@ public class ReliableBroadcaster {
         log.debug("publishing message on: {}", member.getId());
         AgedMessage m = buffer.send(Any.pack(message), member);
         if (notifyLocal) {
-            deliver(Collections.singletonList(new Msg(Collections.singletonList(member.getId()),
-                    adapter.extractor.apply(m),
+            deliver(Collections.singletonList(
+            new Msg(Collections.singletonList(member.getId()), adapter.extractor.apply(m),
                     adapter.hasher.apply(m.getContent()))));
         }
     }
@@ -220,15 +216,13 @@ public class ReliableBroadcaster {
             return null;
         }
         log.trace("rbc gossiping[{}] from {} with {} on {}", buffer.round(), member.getId(), link.getMember().getId(),
-                ring);
+                  ring);
         try {
-            return link.gossip(MessageBff.newBuilder()
-                    .setRing(ring)
-                    .setDigests(buffer.forReconcilliation().toBff())
-                    .build());
+            return link.gossip(
+            MessageBff.newBuilder().setRing(ring).setDigests(buffer.forReconcilliation().toBff()).build());
         } catch (Throwable e) {
             log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member.getId(),
-                    link.getMember().getId(), ring, e);
+                      link.getMember().getId(), ring, e);
             return null;
         }
     }
@@ -246,11 +240,11 @@ public class ReliableBroadcaster {
             }
             buffer.receive(gossip.getUpdatesList());
             destination.link()
-                    .update(ReconcileContext.newBuilder()
-                            .setRing(destination.ring())
-                            .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
-                                    destination.member().getId()))
-                            .build());
+                       .update(ReconcileContext.newBuilder()
+                                               .setRing(destination.ring())
+                                               .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
+                                                                               destination.member().getId()))
+                                               .build());
         } finally {
             if (timer != null) {
                 timer.stop();
@@ -279,12 +273,9 @@ public class ReliableBroadcaster {
             return;
         }
 
-        exec.execute(() -> {
-            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-            gossiper.execute((link, ring) -> gossipRound(link, ring),
-                    (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler,
-                            timer));
-        });
+        var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+        gossiper.execute((link, ring) -> gossipRound(link, ring),
+                         (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler, timer));
     }
 
     @FunctionalInterface
@@ -310,11 +301,11 @@ public class ReliableBroadcaster {
         }
 
         public static class Builder implements Cloneable {
-            private int bufferSize = 1500;
-            private int deliveredCacheSize = 100;
-            private DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
-            private double falsePositiveRate = 0.00125;
-            private int maxMessages = 500;
+            private int             bufferSize         = 1500;
+            private int             deliveredCacheSize = 100;
+            private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
+            private double          falsePositiveRate  = 0.00125;
+            private int             maxMessages        = 500;
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate, deliveredCacheSize);
@@ -386,22 +377,22 @@ public class ReliableBroadcaster {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
-                        context.getId(), member.getId(), from, request.getRing(),
-                        predecessor == null ? "<null>" : predecessor.getId());
+                         context.getId(), member.getId(), from, request.getRing(),
+                         predecessor == null ? "<null>" : predecessor.getId());
                 return Reconcile.getDefaultInstance();
             }
             return Reconcile.newBuilder()
-                    .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests()), from))
-                    .setDigests(buffer.forReconcilliation().toBff())
-                    .build();
+                            .addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests()), from))
+                            .setDigests(buffer.forReconcilliation().toBff())
+                            .build();
         }
 
         public void update(ReconcileContext reconcile, Digest from) {
             Member predecessor = context.ring(reconcile.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages reconcile on {}:{} from: {} on ring: {} - not predecessor: {}",
-                        context.getId(), member.getId(), from, reconcile.getRing(),
-                        predecessor == null ? "<null>" : predecessor.getId());
+                         context.getId(), member.getId(), from, reconcile.getRing(),
+                         predecessor == null ? "<null>" : predecessor.getId());
                 return;
             }
             buffer.receive(reconcile.getUpdatesList());
@@ -409,13 +400,13 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final DigestWindow delivered;
-        private final Semaphore garbageCollecting = new Semaphore(1);
-        private final int highWaterMark;
-        private final int maxAge;
-        private final AtomicInteger round = new AtomicInteger();
-        private final Map<Digest, state> state = new ConcurrentHashMap<>();
-        private final Semaphore tickGate = new Semaphore(1);
+        private final DigestWindow       delivered;
+        private final Semaphore          garbageCollecting = new Semaphore(1);
+        private final int                highWaterMark;
+        private final int                maxAge;
+        private final AtomicInteger      round             = new AtomicInteger();
+        private final Map<Digest, state> state             = new ConcurrentHashMap<>();
+        private final Semaphore          tickGate          = new Semaphore(1);
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
@@ -439,25 +430,25 @@ public class ReliableBroadcaster {
             }
             log.trace("receiving: {} msgs on: {}", messages.size(), member);
             deliver(messages.stream()
-                    .limit(params.maxMessages)
-                    .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
-                    .filter(s -> !dup(s))
-                    .filter(s -> adapter.verifier.test(s.msg.getContent()))
-                    .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
-                    .map(s -> new Msg(adapter.source.apply(s.msg.getContent()), adapter.extractor.apply(s.msg),
-                            s.hash))
-                    .filter(m -> delivered.add(m.hash, null))
-                    .toList());
+                            .limit(params.maxMessages)
+                            .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
+                            .filter(s -> !dup(s))
+                            .filter(s -> adapter.verifier.test(s.msg.getContent()))
+                            .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
+                            .map(s -> new Msg(adapter.source.apply(s.msg.getContent()), adapter.extractor.apply(s.msg),
+                                              s.hash))
+                            .filter(m -> delivered.add(m.hash, null))
+                            .toList());
             gc();
         }
 
         public Iterable<? extends AgedMessage> reconcile(BloomFilter<Digest> biff, Digest from) {
             PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(Comparator.comparingInt(s -> s.getAge()));
             state.values()
-                    .stream()
-                    .filter(s -> !biff.contains(s.hash))
-                    .filter(s -> s.msg.getAge() < maxAge)
-                    .forEach(s -> mailBox.add(s.msg));
+                 .stream()
+                 .filter(s -> !biff.contains(s.hash))
+                 .filter(s -> s.msg.getAge() < maxAge)
+                 .forEach(s -> mailBox.add(s.msg));
             List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
             if (!reconciled.isEmpty()) {
                 log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member);
@@ -486,7 +477,7 @@ public class ReliableBroadcaster {
             round.incrementAndGet();
             if (!tickGate.tryAcquire()) {
                 log.trace("Unable to acquire tick gate for: {} tick already in progress on: {}", context.getId(),
-                        member);
+                          member);
                 return;
             }
             try {
@@ -509,7 +500,7 @@ public class ReliableBroadcaster {
         private boolean dup(state s) {
             if (s.msg.getAge() > maxAge) {
                 log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge,
-                        member.getId());
+                          member.getId());
                 return true;
             }
             var previous = state.get(s.hash);
@@ -530,35 +521,30 @@ public class ReliableBroadcaster {
             if ((size() < highWaterMark) || !garbageCollecting.tryAcquire()) {
                 return;
             }
-            exec.execute(Utils.wrapped(() -> {
-                try {
-                    int startSize = state.size();
-                    if (startSize < highWaterMark) {
-                        return;
-                    }
-                    log.trace("Compacting buffer: {} size: {} on: {}", context.getId(), startSize, member.getId());
-                    purgeTheAged();
-                    if (buffer.size() > params.bufferSize) {
-                        log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", buffer.size(),
-                                params.bufferSize, context.getId(), member);
-                    }
-                    int freed = startSize - state.size();
-                    if (freed > 0) {
-                        log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, context.getId(),
-                                member.getId());
-                    }
-                } finally {
-                    garbageCollecting.release();
+            try {
+                int startSize = state.size();
+                if (startSize < highWaterMark) {
+                    return;
                 }
-            }, log));
-
+                log.trace("Compacting buffer: {} size: {} on: {}", context.getId(), startSize, member.getId());
+                purgeTheAged();
+                if (buffer.size() > params.bufferSize) {
+                    log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", buffer.size(), params.bufferSize,
+                             context.getId(), member);
+                }
+                int freed = startSize - state.size();
+                if (freed > 0) {
+                    log.debug("Buffer freed: {} after compact for: {} on: {} ", freed, context.getId(), member.getId());
+                }
+            } finally {
+                garbageCollecting.release();
+            }
         }
 
         private void purgeTheAged() {
             log.debug("Purging the aged of: {} buffer size: {}   on: {}", context.getId(), size(), member.getId());
-            Queue<state> candidates = new PriorityQueue<>(Collections.reverseOrder((a,
-                                                                                    b) -> Integer.compare(a.msg.getAge(),
-                    b.msg.getAge())));
+            Queue<state> candidates = new PriorityQueue<>(
+            Collections.reverseOrder((a, b) -> Integer.compare(a.msg.getAge(), b.msg.getAge())));
             candidates.addAll(state.values());
             var processing = candidates.iterator();
             while (processing.hasNext()) {

@@ -47,16 +47,16 @@ public class MembershipTests {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
         });
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    private Map<Digest, CHOAM> choams;
+    private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;
     private Map<Digest, Router> routers;
 
@@ -69,56 +69,55 @@ public class MembershipTests {
     @Test
     public void genesisBootstrap() throws Exception {
         SigningMember testSubject = initialize(2000, 5);
-        System.out.println("Test subject: " + testSubject.getId() + " membership: "
-                + members.stream().map(e -> e.getId()).toList());
+        System.out.println(
+        "Test subject: " + testSubject.getId() + " membership: " + members.stream().map(e -> e.getId()).toList());
         routers.entrySet()
-                .stream()
-                .filter(e -> !e.getKey().equals(testSubject.getId()))
-                .forEach(r -> r.getValue().start());
+               .stream()
+               .filter(e -> !e.getKey().equals(testSubject.getId()))
+               .forEach(r -> r.getValue().start());
         choams.entrySet()
-                .stream()
-                .filter(e -> !e.getKey().equals(testSubject.getId()))
-                .forEach(ch -> ch.getValue().start());
+              .stream()
+              .filter(e -> !e.getKey().equals(testSubject.getId()))
+              .forEach(ch -> ch.getValue().start());
 
         final Duration timeout = Duration.ofSeconds(6);
         var txneer = choams.get(members.get(0).getId());
 
         System.out.println("Transactioneer: " + txneer.getId());
 
-        boolean active = Utils.waitForCondition(12_000, 1_000,
-                () -> choams.entrySet()
-                        .stream()
-                        .filter(e -> !testSubject.getId().equals(e.getKey()))
-                        .map(e -> e.getValue())
-                        .filter(c -> !c.active())
-                        .count() == 0);
+        boolean active = Utils.waitForCondition(12_000, 1_000, () -> choams.entrySet()
+                                                                           .stream()
+                                                                           .filter(
+                                                                           e -> !testSubject.getId().equals(e.getKey()))
+                                                                           .map(e -> e.getValue())
+                                                                           .filter(c -> !c.active())
+                                                                           .count() == 0);
         assertTrue(active,
-                "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
-                        + " inactive: "
-                        + choams.entrySet()
-                        .stream()
-                        .filter(e -> !testSubject.getId().equals(e.getKey()))
-                        .map(e -> e.getValue())
-                        .filter(c -> !c.active())
-                        .map(c -> c.logState())
-                        .toList());
+                   "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
+                   + " inactive: " + choams.entrySet()
+                                           .stream()
+                                           .filter(e -> !testSubject.getId().equals(e.getKey()))
+                                           .map(e -> e.getValue())
+                                           .filter(c -> !c.active())
+                                           .map(c -> c.logState())
+                                           .toList());
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1,
-                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
-                countdown,
-                Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
+                                                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
+                                                countdown,
+                                                Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
 
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
 
         var target = choams.values()
-                .stream()
-                .map(l -> l.currentHeight())
-                .filter(h -> h != null)
-                .mapToInt(u -> u.intValue())
-                .max()
-                .getAsInt();
+                           .stream()
+                           .map(l -> l.currentHeight())
+                           .filter(h -> h != null)
+                           .mapToInt(u -> u.intValue())
+                           .max()
+                           .getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
@@ -127,7 +126,7 @@ public class MembershipTests {
             return currentHeight != null && currentHeight.intValue() >= target;
         });
         assertTrue(targetMet,
-                "Expecting: " + target + " completed: " + choams.get(testSubject.getId()).currentHeight());
+                   "Expecting: " + target + " completed: " + choams.get(testSubject.getId()).currentHeight());
 
     }
 
@@ -135,35 +134,34 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
-                .setBootstrap(BootstrapParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(20))
-                        .build())
-                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                .setGossipDuration(Duration.ofMillis(10))
-                .setProducer(ProducerParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(20))
-                        .setBatchInterval(Duration.ofMillis(10))
-                        .setMaxBatchByteSize(1024 * 1024)
-                        .setMaxBatchCount(10_000)
-                        .build())
-                .setCheckpointBlockDelta(checkpointBlockSize);
+                               .setBootstrap(
+                               BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(20)).build())
+                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
+                               .setGossipDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(20))
+                                                              .setBatchInterval(Duration.ofMillis(10))
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(10_000)
+                                                              .build())
+                               .setCheckpointBlockDelta(checkpointBlockSize);
         params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, cardinality).mapToObj(i -> stereotomy.newIdentifier())
-                .map(cpk -> new ControlledIdentifierMember(cpk))
-                .map(e -> (SigningMember) e)
-                .peek(m -> context.activate(m))
-                .toList();
+        members = IntStream.range(0, cardinality)
+                           .mapToObj(i -> stereotomy.newIdentifier())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(e -> (SigningMember) e)
+                           .peek(m -> context.activate(m))
+                           .toList();
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalServer(prefix, m,
-                    Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(cardinality), Executors.newFixedThreadPool(2));
+            var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(cardinality));
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -173,7 +171,7 @@ public class MembershipTests {
                 public void endBlock(ULong height, Digest hash) {
                 }
 
-                @SuppressWarnings({"unchecked", "rawtypes"})
+                @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
                     if (f != null) {
@@ -186,11 +184,11 @@ public class MembershipTests {
                 params.setSynchronizationCycles(1);
             }
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
-                    .setMember(m)
-                    .setCommunications(routers.get(m.getId()))
-                    .setProcessor(processor)
-                    .setContext(context)
-                    .build()));
+                                                           .setMember(m)
+                                                           .setCommunications(routers.get(m.getId()))
+                                                           .setProcessor(processor)
+                                                           .setContext(context)
+                                                           .build()));
         }));
         return testSubject;
     }

@@ -6,31 +6,24 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.batch;
-import static com.salesforce.apollo.state.Mutator.changeLog;
-import static com.salesforce.apollo.state.Mutator.update;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 import java.sql.ResultSet;
 import java.time.Duration;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.junit.jupiter.api.Test;
+import static com.salesforce.apollo.state.Mutator.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EmulationTest {
 
     @Test
     public void functional() throws Exception {
         // Resources to manage
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
 
         // How long to wait until timing out ;)
@@ -47,9 +40,8 @@ public class EmulationTest {
         var mutator = emmy.getMutator();
 
         // Establish the book schema via a Liquibase migration transaction
-        var results = mutator.execute(exec, update(changeLog(MigrationTest.BOOK_RESOURCE_PATH,
-                                                             MigrationTest.BOOK_SCHEMA_ROOT)),
-                                      timeout, scheduler);
+        var results = mutator.execute(
+        update(changeLog(MigrationTest.BOOK_RESOURCE_PATH, MigrationTest.BOOK_SCHEMA_ROOT)), timeout, scheduler);
 
         // Should have gotten something...
         assertNotNull(results);
@@ -60,13 +52,13 @@ public class EmulationTest {
         assertTrue(set.booleanValue());
 
         // Insert some rows into the DB
-        var insertResults = mutator.execute(exec,
-                                            batch("insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                                  "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                                  "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                                  "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                                  "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                            timeout, scheduler);
+        var insertResults = mutator.execute(
+        batch("insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+              "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+              "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+              "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"), timeout,
+        scheduler);
         assertNotNull(insertResults);
         var inserted = insertResults.get();
         assertNotNull(inserted);

@@ -41,7 +41,7 @@ public class PublisherTest {
 
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
         var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -50,27 +50,28 @@ public class PublisherTest {
         final var builder = ServerConnectionCache.newBuilder().setTarget(2);
         final var context = DigestAlgorithm.DEFAULT.getOrigin();
 
-        var serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
+        var serverRouter = new LocalServer(prefix, serverMember).router(builder);
         var maat = new Publisher(serverMember, kerl, serverRouter, context);
         assertNotNull(maat); // lol
 
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        var clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();
 
         var protoService = mock(EventObserver.class);
         CommonCommunications<EventObserverService, EventObserver> clientComms = clientRouter.create(clientMember,
-                context,
-                protoService,
-                protoService.getClass()
-                        .toString(),
-                r -> new EventObserverServer(r,
-                        clientRouter.getClientIdentityProvider(),
-                        null),
-                EventObserverClient.getCreate(null),
-                null);
+                                                                                                    context,
+                                                                                                    protoService,
+                                                                                                    protoService.getClass()
+                                                                                                                .toString(),
+                                                                                                    r -> new EventObserverServer(
+                                                                                                    r,
+                                                                                                    clientRouter.getClientIdentityProvider(),
+                                                                                                    null),
+                                                                                                    EventObserverClient.getCreate(
+                                                                                                    null), null);
         try {
 
             var client = clientComms.connect(serverMember);

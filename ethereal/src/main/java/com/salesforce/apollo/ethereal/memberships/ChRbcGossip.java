@@ -23,7 +23,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +30,10 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.concurrent.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
@@ -48,7 +50,6 @@ public class ChRbcGossip {
     ChRbcGossip.class);
     private final        CommonCommunications<Gossiper, GossiperService> comm;
     private final        Context<Member>                                 context;
-    private final        Executor                                        exec;
     private final        SigningMember                                   member;
     private final        EtherealMetrics                                 metrics;
     private final        Processor                                       processor;
@@ -57,16 +58,15 @@ public class ChRbcGossip {
     private volatile     ScheduledFuture<?>                              scheduled;
 
     public ChRbcGossip(Context<Member> context, SigningMember member, Processor processor, Router communications,
-                       Executor exec, EtherealMetrics m) {
+                       EtherealMetrics m) {
         this.processor = processor;
         this.context = context;
         this.member = member;
         this.metrics = m;
-        this.exec = exec;
         comm = communications.create((Member) member, context.getId(), new Terminal(), getClass().getCanonicalName(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
-        ring = new RingCommunications<>(context, member, this.comm, exec);
+        ring = new RingCommunications<>(context, member, this.comm);
     }
 
     public Context<Member> getContext() {
@@ -188,11 +188,9 @@ public class ChRbcGossip {
         if (!started.get()) {
             return;
         }
-        exec.execute(Utils.wrapped(() -> {
-            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-            ring.execute((link, ring) -> gossipRound(link, ring),
-                         (result, destination) -> handle(result, destination, duration, scheduler, timer));
-        }, log));
+        var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+        ring.execute((link, ring) -> gossipRound(link, ring),
+                     (result, destination) -> handle(result, destination, duration, scheduler, timer));
     }
 
     /**

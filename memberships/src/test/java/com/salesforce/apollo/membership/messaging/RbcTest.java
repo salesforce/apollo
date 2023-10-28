@@ -84,18 +84,16 @@ public class RbcTest {
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
         members.forEach(m -> context.activate(m));
 
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
         final var authentication = ReliableBroadcaster.defaultMessageAdapter(context, DigestAlgorithm.DEFAULT);
         messengers = members.stream().map(node -> {
-            var comms = new LocalServer(prefix, node, exec).router(
+            var comms = new LocalServer(prefix, node).router(
                     ServerConnectionCache.newBuilder()
                             .setTarget(30)
-                            .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                    exec);
+                            .setMetrics(new ServerConnectionCacheMetricsImpl(registry)));
             communications.add(comms);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics, authentication);
+            return new ReliableBroadcaster(context, node, parameters.build(), comms, metrics, authentication);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");

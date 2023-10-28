@@ -26,7 +26,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -55,16 +54,15 @@ public class TestResolver {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
-        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        serverRouter = new LocalServer(prefix, serverMember).router(builder);
+        clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();
@@ -78,10 +76,10 @@ public class TestResolver {
         };
 
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                r -> new ResolverServer(r, null), null, null);
+                            r -> new ResolverServer(r, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                r -> new ResolverServer(r, null), ResolverClient.getCreate(null), null);
+                                              r -> new ResolverServer(r, null), ResolverClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

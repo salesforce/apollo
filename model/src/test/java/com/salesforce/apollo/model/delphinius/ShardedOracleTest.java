@@ -6,26 +6,21 @@ s * Copyright (c) 2021, salesforce.com, inc.
  */
 package com.salesforce.apollo.model.delphinius;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ShardedOracleTest {
 
@@ -33,12 +28,11 @@ public class ShardedOracleTest {
     public void func() throws Exception {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
 
         emmy.start(Domain.boostrapMigration());
 
-        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout, exec);
+        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout);
         smoke(oracle);
     }
 
@@ -143,9 +137,9 @@ public class ShardedOracleTest {
         }
 
         // Transitive grants to view the document
-//        var inferredViewable = oracle.expand(egin);
-//        assertEquals(1, inferredViewable.size());
-//        assertTrue(inferredViewable.contains(object123View), "Should contain: " + object123View);
+        //        var inferredViewable = oracle.expand(egin);
+        //        assertEquals(1, inferredViewable.size());
+        //        assertTrue(inferredViewable.contains(object123View), "Should contain: " + object123View);
 
         // Transitive subjects filtered by flag predicate
         var inferredFlaggedViewers = oracle.expand(flag, object123View);

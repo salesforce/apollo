@@ -6,10 +6,14 @@
  */
 package com.salesforce.apollo.model;
 
-import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.state.Emulator;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
+import org.junit.jupiter.api.Test;
 
+import javax.xml.bind.DatatypeConverter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Random;
@@ -17,19 +21,12 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import javax.xml.bind.DatatypeConverter;
-
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
-import org.junit.jupiter.api.Test;
-
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.state.Emulator;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class StoredProceduresTest {
 
@@ -51,7 +48,7 @@ public class StoredProceduresTest {
                        .call("{call apollo_kernel.add_members(?, ?) }",
                              ids.stream().map(d -> d.getDigest().getBytes()).toList(), "active");
 
-        var result = emmy.getMutator().execute(exec, call, timeout, scheduler);
+        var result = emmy.getMutator().execute(call, timeout, scheduler);
         result.get();
 
         var connector = emmy.newConnector();

@@ -62,13 +62,12 @@ public class BootstrappingTest extends AbstractDhtTest {
                   .forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));
 
         gate.set(true);
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         @SuppressWarnings("unused")
         final var gorgons = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
             return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
                                   context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
-                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
+                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null);
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
@@ -82,8 +81,8 @@ public class BootstrappingTest extends AbstractDhtTest {
         var client = new ControlledIdentifierMember(clientStereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                        exec);
+        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2)
+                                                                        );
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
                                                        r -> new AdmissionsServer(

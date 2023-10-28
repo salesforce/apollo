@@ -6,6 +6,18 @@
  */
 package com.salesforce.apollo.state;
 
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
+import com.salesfoce.apollo.state.proto.*;
+import com.salesfoce.apollo.state.proto.ChangeLog.Builder;
+import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.support.InvalidTransaction;
+import com.salesforce.apollo.state.SqlStateMachine.CallResult;
+import deterministic.org.h2.value.Value;
+import deterministic.org.h2.value.ValueToObjectConverter;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URL;
@@ -20,108 +32,23 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import deterministic.org.h2.value.Value;
-import deterministic.org.h2.value.ValueToObjectConverter;
-
-import com.google.protobuf.ByteString;
-import com.google.protobuf.Message;
-import com.salesfoce.apollo.state.proto.Arguments;
-import com.salesfoce.apollo.state.proto.Batch;
-import com.salesfoce.apollo.state.proto.BatchUpdate;
-import com.salesfoce.apollo.state.proto.BatchedTransaction;
-import com.salesfoce.apollo.state.proto.Call;
-import com.salesfoce.apollo.state.proto.ChangeLog;
-import com.salesfoce.apollo.state.proto.ChangeLog.Builder;
-import com.salesfoce.apollo.state.proto.EXECUTION;
-import com.salesfoce.apollo.state.proto.Migration;
-import com.salesfoce.apollo.state.proto.Script;
-import com.salesfoce.apollo.state.proto.Statement;
-import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.choam.Session;
-import com.salesforce.apollo.choam.support.InvalidTransaction;
-import com.salesforce.apollo.state.SqlStateMachine.CallResult;
-
-import liquibase.Contexts;
-import liquibase.LabelExpression;
-
 /**
  * The mutation API for the materialized view
- * 
+ *
  * @author hal.hildebrand
- * 
  */
 public class Mutator {
-    public static class BatchBuilder {
-        private final BatchedTransaction.Builder batch = BatchedTransaction.newBuilder();
-        private final Session                    session;
+    private final deterministic.org.h2.engine.Session h2Session;
+    private final Session                             session;
 
-        public BatchBuilder(Session session) {
-            this.session = session;
-        }
-
-        public BatchedTransaction build() {
-            return batch.build();
-        }
-
-        public BatchBuilder execute(BatchUpdate update) {
-            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update));
-            return this;
-        }
-
-        public BatchBuilder execute(Call call) {
-            batch.addTransactions(Txn.newBuilder().setCall(call));
-            return this;
-        }
-
-        public BatchBuilder execute(Migration migration) {
-            batch.addTransactions(Txn.newBuilder().setMigration(migration));
-            return this;
-        }
-
-        public BatchBuilder execute(Script script) {
-            batch.addTransactions(Txn.newBuilder().setScript(script));
-            return this;
-        }
-
-        public BatchBuilder execute(Statement statement) {
-            batch.addTransactions(Txn.newBuilder().setStatement(statement));
-            return this;
-        }
-
-        @SuppressWarnings("unchecked")
-        public CompletableFuture<List<?>> submit(Executor exec, Duration timeout,
-                                                 ScheduledExecutorService scheduler) throws InvalidTransaction {
-            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout,
-                                                         scheduler);
-            return (CompletableFuture<List<?>>) submit;
-        }
-    }
-
-    public static class BatchedTransactionException extends Exception {
-
-        private static final long serialVersionUID = 1L;
-
-        private final int index;
-
-        public BatchedTransactionException(int index, String message, Throwable cause) {
-            super(message, cause);
-            this.index = index;
-        }
-
-        public BatchedTransactionException(int index, Throwable cause) {
-            this(index, "Exception in " + index, cause);
-        }
-
-        public int getIndex() {
-            return index;
-        }
-
+    public Mutator(Session session, deterministic.org.h2.engine.Session h2Session) {
+        this.session = session;
+        this.h2Session = h2Session;
     }
 
     public static BatchedTransaction batch(Message... messages) {
@@ -247,15 +174,6 @@ public class Mutator {
         return Migration.newBuilder().setUpdate(changeLog).build();
     }
 
-    private final deterministic.org.h2.engine.Session h2Session;
-
-    private final Session session;
-
-    public Mutator(Session session, deterministic.org.h2.engine.Session h2Session) {
-        this.session = session;
-        this.h2Session = h2Session;
-    }
-
     public BatchBuilder batch() {
         return new BatchBuilder(session);
     }
@@ -271,10 +189,9 @@ public class Mutator {
     }
 
     public BatchUpdate batchOf(String sql, List<List<Object>> batch) {
-        return batch(sql,
-                     batch.stream()
-                          .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
-                          .collect(Collectors.toList()));
+        return batch(sql, batch.stream()
+                               .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
+                               .collect(Collectors.toList()));
     }
 
     public Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Object... arguments) {
@@ -293,8 +210,8 @@ public class Mutator {
                    .setSql(sql)
                    .setArgs(Arguments.newBuilder()
                                      .setVersion(tfr.getVersion())
-                                     .setArgs(arguments == null ? ByteString.EMPTY
-                                                                : tfr.write(Arrays.asList(arguments))))
+                                     .setArgs(
+                                     arguments == null ? ByteString.EMPTY : tfr.write(Arrays.asList(arguments))))
                    .build();
     }
 
@@ -316,9 +233,8 @@ public class Mutator {
                      .setClassName(className)
                      .setMethod(method)
                      .setSource(source)
-                     .setArgs(Arguments.newBuilder()
-                                       .setVersion(tfr.getVersion())
-                                       .setArgs(tfr.write(Arrays.asList(args))))
+                     .setArgs(
+                     Arguments.newBuilder().setVersion(tfr.getVersion()).setArgs(tfr.write(Arrays.asList(args))))
                      .build();
     }
 
@@ -326,32 +242,32 @@ public class Mutator {
         return ValueToObjectConverter.objectToValue(h2Session, x, Value.UNKNOWN);
     }
 
-    public CompletableFuture<int[]> execute(Executor exec, Batch batch, Duration timeout,
-                                            ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public CompletableFuture<int[]> execute(Batch batch, Duration timeout, ScheduledExecutorService scheduler)
+    throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setBatch(batch).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<int[]> execute(Executor exec, BatchUpdate batchUpdate, Duration timeout,
+    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, Duration timeout,
                                             ScheduledExecutorService scheduler) throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setBatchUpdate(batchUpdate).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<CallResult> execute(Executor exec, Call call, Duration timeout,
-                                                 ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public CompletableFuture<CallResult> execute(Call call, Duration timeout, ScheduledExecutorService scheduler)
+    throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setCall(call).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<Boolean> execute(Executor exec, Migration migration, Duration timeout,
-                                              ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public CompletableFuture<Boolean> execute(Migration migration, Duration timeout, ScheduledExecutorService scheduler)
+    throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setMigration(migration).build(), timeout, scheduler);
     }
 
-    public <T> CompletableFuture<T> execute(Executor exec, Script script, Duration timeout,
-                                            ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public <T> CompletableFuture<T> execute(Script script, Duration timeout, ScheduledExecutorService scheduler)
+    throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setScript(script).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<List<ResultSet>> execute(Executor exec, Statement statement, Duration timeout,
+    public CompletableFuture<List<ResultSet>> execute(Statement statement, Duration timeout,
                                                       ScheduledExecutorService scheduler) throws InvalidTransaction {
         return session.submit(Txn.newBuilder().setStatement(statement).build(), timeout, scheduler);
     }
@@ -374,9 +290,8 @@ public class Mutator {
         return Statement.newBuilder()
                         .setSql(sql)
                         .setExecution(execution)
-                        .setArgs(Arguments.newBuilder()
-                                          .setVersion(tfr.getVersion())
-                                          .setArgs(tfr.write(Arrays.asList(args))))
+                        .setArgs(
+                        Arguments.newBuilder().setVersion(tfr.getVersion()).setArgs(tfr.write(Arrays.asList(args))))
                         .build();
     }
 
@@ -386,5 +301,72 @@ public class Mutator {
 
     public Statement statement(String sql, Object... args) {
         return statement(EXECUTION.EXECUTE, sql, args);
+    }
+
+    public static class BatchBuilder {
+        private final BatchedTransaction.Builder batch = BatchedTransaction.newBuilder();
+        private final Session                    session;
+
+        public BatchBuilder(Session session) {
+            this.session = session;
+        }
+
+        public BatchedTransaction build() {
+            return batch.build();
+        }
+
+        public BatchBuilder execute(BatchUpdate update) {
+            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update));
+            return this;
+        }
+
+        public BatchBuilder execute(Call call) {
+            batch.addTransactions(Txn.newBuilder().setCall(call));
+            return this;
+        }
+
+        public BatchBuilder execute(Migration migration) {
+            batch.addTransactions(Txn.newBuilder().setMigration(migration));
+            return this;
+        }
+
+        public BatchBuilder execute(Script script) {
+            batch.addTransactions(Txn.newBuilder().setScript(script));
+            return this;
+        }
+
+        public BatchBuilder execute(Statement statement) {
+            batch.addTransactions(Txn.newBuilder().setStatement(statement));
+            return this;
+        }
+
+        @SuppressWarnings("unchecked")
+        public CompletableFuture<List<?>> submit(Duration timeout, ScheduledExecutorService scheduler)
+        throws InvalidTransaction {
+            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout,
+                                                         scheduler);
+            return (CompletableFuture<List<?>>) submit;
+        }
+    }
+
+    public static class BatchedTransactionException extends Exception {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int index;
+
+        public BatchedTransactionException(int index, String message, Throwable cause) {
+            super(message, cause);
+            this.index = index;
+        }
+
+        public BatchedTransactionException(int index, Throwable cause) {
+            this(index, "Exception in " + index, cause);
+        }
+
+        public int getIndex() {
+            return index;
+        }
+
     }
 }

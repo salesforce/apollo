@@ -6,16 +6,6 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
-import java.lang.reflect.Method;
-import java.util.concurrent.Executor;
-import java.util.function.Supplier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
@@ -23,44 +13,38 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.LimitsRegistry;
-
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.Context;
-import io.grpc.Contexts;
+import io.grpc.*;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.ServerBuilder;
-import io.grpc.ServerCall;
-import io.grpc.ServerCallHandler;
-import io.grpc.ServerInterceptor;
-import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.inprocess.InternalInProcessChannelBuilder;
 import io.grpc.internal.ManagedChannelImplBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Method;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.function.Supplier;
+
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class LocalServer implements RouterSupplier {
-    private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
-    private static final String NAME_TEMPLATE = "%s-%s";
+    private static final Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
+    private static final Logger   log           = LoggerFactory.getLogger(LocalServer.class);
+    private static final String   NAME_TEMPLATE = "%s-%s";
 
     private final ClientInterceptor clientInterceptor;
-    private final Executor          executor;
     private final Member            from;
     private final String            prefix;
 
-    public LocalServer(String prefix, Member member, Executor executor) {
+    public LocalServer(String prefix, Member member) {
         this.from = member;
         this.prefix = prefix;
-        this.executor = executor;
         clientInterceptor = new ClientInterceptor() {
             @Override
             public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
@@ -82,8 +66,8 @@ public class LocalServer implements RouterSupplier {
     }
 
     @Override
-    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
-                         LimitsRegistry limitsRegistry) {
+    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
+                             LimitsRegistry limitsRegistry) {
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
@@ -91,8 +75,11 @@ public class LocalServer implements RouterSupplier {
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
                                                                .executor(executor)
-                                                               .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
-                                                                                                           .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Server concurrency limit reached"))
+                                                               .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
+                                                                                                           limitsBuilder.build())
+                                                                                                           .statusSupplier(
+                                                                                                           () -> Status.RESOURCE_EXHAUSTED.withDescription(
+                                                                                                           "Server concurrency limit reached"))
                                                                                                            .build())
                                                                .intercept(serverInterceptor());
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {

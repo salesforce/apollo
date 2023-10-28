@@ -63,22 +63,19 @@ public class SubDomain extends Domain {
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, int maxTransfer,
-                     Duration gossipInterval, double fpr, Executor executor) {
-        this(member, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig, maxTransfer, gossipInterval, fpr,
-             executor);
+                     Duration gossipInterval, double fpr ) {
+        this(member, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig, maxTransfer, gossipInterval, fpr );
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder params, RuntimeParameters.Builder runtime,
-                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr,
-                     Executor executor) {
-        this(member, params, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval, fpr,
-             executor);
+                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr ) {
+        this(member, params, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval, fpr );
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder prm, String dbURL, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig, int maxTransfer,
-                     Duration gossipInterval, double fpr, Executor executor) {
-        super(member, prm, dbURL, checkpointBaseDir, runtime, txnConfig, executor);
+                     Duration gossipInterval, double fpr) {
+        super(member, prm, dbURL, checkpointBaseDir, runtime, txnConfig);
         this.maxTransfer = maxTransfer;
         this.fpr = fpr;
         final var identifier = qb64(member.getId());
@@ -92,16 +89,15 @@ public class SubDomain extends Domain {
                                                           (RoutingClientIdentity) params.communications()
                                                                                         .getClientIdentityProvider(), r,
                                                           null));
-        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms, executor);
+        ring = new RingCommunications<Member, Delegation>(params.context(), member, comms);
         this.gossipInterval = gossipInterval;
 
     }
 
     public SubDomain(ControlledIdentifierMember member, Builder params, String dbURL, RuntimeParameters.Builder runtime,
-                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr,
-                     Executor executor) {
+                     TransactionConfiguration txnConfig, int maxTransfer, Duration gossipInterval, double fpr ) {
         this(member, params, dbURL, tempDirOf(member.getIdentifier()), runtime, txnConfig, maxTransfer, gossipInterval,
-             fpr, executor);
+             fpr  );
     }
 
     @Override

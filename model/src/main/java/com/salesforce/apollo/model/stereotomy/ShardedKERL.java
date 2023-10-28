@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
@@ -38,15 +37,13 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public class ShardedKERL extends UniKERL {
 
-    private final Executor exec;
-    private final Mutator mutator;
+    private final Mutator                  mutator;
     private final ScheduledExecutorService scheduler;
-    private final Duration timeout;
+    private final Duration                 timeout;
 
     public ShardedKERL(Connection connection, Mutator mutator, ScheduledExecutorService scheduler, Duration timeout,
-                       DigestAlgorithm digestAlgorithm, Executor exec) {
+                       DigestAlgorithm digestAlgorithm) {
         super(connection, digestAlgorithm);
-        this.exec = exec;
         this.mutator = mutator;
         this.scheduler = scheduler;
         this.timeout = timeout;
@@ -55,12 +52,12 @@ public class ShardedKERL extends UniKERL {
     @Override
     public KeyState append(KeyEvent event) {
         var call = mutator.call("{ ? = call stereotomy.append(?, ?, ?) }", Collections.singletonList(JDBCType.BINARY),
-                event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode());
+                                event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode());
         CompletableFuture<CallResult> submitted;
         try {
-            submitted = mutator.execute(exec, call, timeout, scheduler);
+            submitted = mutator.execute(call, timeout, scheduler);
         } catch (InvalidTransaction e) {
-           throw new IllegalStateException(e);
+            throw new IllegalStateException(e);
         }
         var b = submitted.thenApply(callResult -> {
             return (byte[]) callResult.outValues.get(0);
@@ -79,11 +76,11 @@ public class ShardedKERL extends UniKERL {
     @Override
     public Void append(List<AttachmentEvent> events) {
         var call = mutator.call("{ ? = call stereotomy.appendAttachements(?) }",
-                Collections.singletonList(JDBCType.BINARY),
-                events.stream().map(ae -> ae.getBytes()).toList());
+                                Collections.singletonList(JDBCType.BINARY),
+                                events.stream().map(ae -> ae.getBytes()).toList());
         CompletableFuture<CallResult> submitted;
         try {
-            submitted = mutator.execute(exec, call, timeout, scheduler);
+            submitted = mutator.execute(call, timeout, scheduler);
         } catch (InvalidTransaction e) {
             throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
         }
@@ -94,24 +91,25 @@ public class ShardedKERL extends UniKERL {
     public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         var batch = mutator.batch();
         for (KeyEvent event : events) {
-            batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
-                    Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
-                    DigestAlgorithm.DEFAULT.digestCode()));
+            batch.execute(
+            mutator.call("{ ? = call stereotomy.append(?, ?, ?) }", Collections.singletonList(JDBCType.BINARY),
+                         event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode()));
         }
         try {
-            return batch.submit(exec, timeout, scheduler)
-                    .thenApply(results -> results.stream()
-                            .map(result -> (CallResult) result)
-                            .map(cr -> cr.get(0))
-                            .map(o -> (byte[]) o)
-                            .map(b -> {
-                                try {
-                                    return new KeyStateImpl(keyStateOf(b));
-                                } catch (InvalidProtocolBufferException e) {
-                                    return (KeyState) null;
-                                }
-                            })
-                            .toList()).get();
+            return batch.submit( timeout, scheduler)
+                        .thenApply(results -> results.stream()
+                                                     .map(result -> (CallResult) result)
+                                                     .map(cr -> cr.get(0))
+                                                     .map(o -> (byte[]) o)
+                                                     .map(b -> {
+                                                         try {
+                                                             return new KeyStateImpl(keyStateOf(b));
+                                                         } catch (InvalidProtocolBufferException e) {
+                                                             return (KeyState) null;
+                                                         }
+                                                     })
+                                                     .toList())
+                        .get();
         } catch (InvalidTransaction | InterruptedException | ExecutionException e) {
             throw new IllegalStateException(e);
         }
@@ -119,8 +117,7 @@ public class ShardedKERL extends UniKERL {
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                  Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
         // TODO Auto-generated method stub
         return null;
     }

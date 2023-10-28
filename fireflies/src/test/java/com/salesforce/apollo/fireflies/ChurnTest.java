@@ -48,26 +48,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ChurnTest {
 
-    private static final int CARDINALITY = 100;
-    private static final double P_BYZ = 0.3;
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private List<Router> communications = new ArrayList<>();
-    private List<Router> gateways = new ArrayList<>();
-    private Map<Digest, ControlledIdentifierMember> members;
-    private MetricRegistry node0Registry;
-    private MetricRegistry registry;
-    private List<View> views;
+    private static final int                                                         CARDINALITY    = 100;
+    private static final double                                                      P_BYZ          = 0.3;
+    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private              List<Router>                                                communications = new ArrayList<>();
+    private              List<Router>                                                gateways       = new ArrayList<>();
+    private              Map<Digest, ControlledIdentifierMember>                     members;
+    private              MetricRegistry                                              node0Registry;
+    private              MetricRegistry                                              registry;
+    private              List<View>                                                  views;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-                    return stereotomy.newIdentifier();
-                })
-                .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                        controlled -> controlled, (a, b) -> a, TreeMap::new));
+        identities = IntStream.range(0, CARDINALITY)
+                              .mapToObj(i -> {
+                                  return stereotomy.newIdentifier();
+                              })
+                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                        controlled -> controlled, (a, b) -> a, TreeMap::new));
     }
 
     @AfterEach
@@ -95,10 +96,10 @@ public class ChurnTest {
         System.out.println();
 
         var seeds = members.values()
-                .stream()
-                .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                .limit(25)
-                .toList();
+                           .stream()
+                           .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                           .limit(25)
+                           .toList();
 
         // Bootstrap the kernel
 
@@ -109,8 +110,8 @@ public class ChurnTest {
         long then = System.currentTimeMillis();
 
         views.get(0)
-                .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
+                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -120,20 +121,21 @@ public class ChurnTest {
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
         bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
         testViews.addAll(bootstrappers);
 
         var failed = testViews.stream()
-                .filter(e -> e.getContext().activeCount() != testViews.size())
-                .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
-                .toList();
+                              .filter(e -> e.getContext().activeCount() != testViews.size())
+                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                              .toList();
         assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
-        System.out.println("Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + testViews.size() + " members");
+        System.out.println(
+        "Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + testViews.size()
+        + " members");
 
         // Bring up the remaining members step wise
         for (int i = 0; i < 3; i++) {
@@ -148,52 +150,53 @@ public class ChurnTest {
             countdown.set(new CountDownLatch(toStart.size()));
 
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+                                               Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
             failed = testViews.stream()
-                    .filter(e -> e.getContext().activeCount() != testViews.size() ||
-                            e.getContext().totalCount() != testViews.size())
-                    .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                    .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                            v.getContext().activeCount()))
-                    .toList();
+                              .filter(e -> e.getContext().activeCount() != testViews.size()
+                              || e.getContext().totalCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
+                              .toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
-                        .map(v -> v.getContext())
-                        .filter(ctx -> ctx.totalCount() != testViews.size() ||
-                                ctx.activeCount() != testViews.size())
-                        .count() == 0;
+                                .map(v -> v.getContext())
+                                .filter(
+                                ctx -> ctx.totalCount() != testViews.size() || ctx.activeCount() != testViews.size())
+                                .count() == 0;
             });
             failed = testViews.stream()
-                    .filter(e -> e.getContext().activeCount() != testViews.size() ||
-                            e.getContext().totalCount() != testViews.size())
-                    .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                    .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                            v.getContext().activeCount()))
-                    .toList();
+                              .filter(e -> e.getContext().activeCount() != testViews.size()
+                              || e.getContext().totalCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
+                              .toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
-                        .map(v -> v.getContext())
-                        .filter(ctx -> ctx.totalCount() != testViews.size() ||
-                                ctx.activeCount() != testViews.size())
-                        .count() == 0;
+                                .map(v -> v.getContext())
+                                .filter(
+                                ctx -> ctx.totalCount() != testViews.size() || ctx.activeCount() != testViews.size())
+                                .count() == 0;
             });
             failed = testViews.stream()
-                    .filter(e -> e.getContext().activeCount() != testViews.size() ||
-                            e.getContext().totalCount() != testViews.size())
-                    .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                    .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                            v.getContext().activeCount()))
-                    .toList();
+                              .filter(e -> e.getContext().activeCount() != testViews.size()
+                              || e.getContext().totalCount() != testViews.size())
+                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
+                                                      v.getContext().activeCount()))
+                              .toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
-            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                    + testViews.size() + " members");
+            System.out.println(
+            "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + testViews.size()
+            + " members");
         }
         System.out.println();
         System.out.println("Stopping views");
@@ -217,20 +220,21 @@ public class ChurnTest {
             r = r.subList(0, r.size() - delta);
             g = g.subList(0, g.size() - delta);
             final var expected = c;
-//            System.out.println("** Removed: " + removed);
+            //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
             });
             failed = expected.stream()
-                    .filter(e -> e.getContext().activeCount() != testViews.size())
-                    .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                    .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
-                    .toList();
+                             .filter(e -> e.getContext().activeCount() != testViews.size())
+                             .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
+                             .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                             .toList();
             assertTrue(success, " expected: " + expected.size() + " failed: " + failed.size() + " views: " + failed);
 
-            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                    + c.size() + " members");
+            System.out.println(
+            "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + c.size()
+            + " members");
         }
 
         views.forEach(e -> e.stop());
@@ -248,10 +252,10 @@ public class ChurnTest {
 
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .build()
-                .report();
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private void initialize() {
@@ -260,32 +264,38 @@ public class ChurnTest {
         node0Registry = new MetricRegistry();
 
         members = identities.values()
-                .stream()
-                .map(identity -> new ControlledIdentifierMember(identity))
-                .collect(Collectors.toMap(m -> m.getId(), m -> m));
+                            .stream()
+                            .map(identity -> new ControlledIdentifierMember(identity))
+                            .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var executor = Executors.newVirtualThreadPerTaskExecutor();
-        final var commExec = executor;
-        final var gatewayExec = executor;
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
-                    frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalServer(prefix, node,
-                    commExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), commExec);
-            var gateway = new LocalServer(gatewayPrefix, node,
-                    gatewayExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), gatewayExec);
+                                                                frist.getAndSet(false) ? node0Registry : registry);
+            var comms = new LocalServer(prefix, node).router(ServerConnectionCache.newBuilder()
+                                                                                  .setTarget(200)
+                                                                                  .setMetrics(
+                                                                                  new ServerConnectionCacheMetricsImpl(
+                                                                                  frist.getAndSet(false) ? node0Registry
+                                                                                                         : registry)));
+            var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
+                                                                                           .setTarget(200)
+                                                                                           .setMetrics(
+                                                                                           new ServerConnectionCacheMetricsImpl(
+                                                                                           frist.getAndSet(false)
+                                                                                           ? node0Registry
+                                                                                           : registry)));
             comms.start();
             communications.add(comms);
 
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                    DigestAlgorithm.DEFAULT, metrics, executor);
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 }

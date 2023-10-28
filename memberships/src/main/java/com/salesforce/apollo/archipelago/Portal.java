@@ -13,6 +13,7 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocke
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -46,6 +47,7 @@ import io.netty.channel.unix.DomainSocketAddress;
  *
  */
 public class Portal<To extends Member> {
+    private static final Executor executor = Executors.newVirtualThreadPerTaskExecutor();
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
     private final String         agent;
@@ -55,7 +57,7 @@ public class Portal<To extends Member> {
     private final Demultiplexer  outbound;
 
     public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
-                  DomainSocketAddress bridge, Executor executor, Duration keepAlive,
+                  DomainSocketAddress bridge,  Duration keepAlive,
                   Function<String, DomainSocketAddress> router) {
         this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)

@@ -66,7 +66,6 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean> checkpointOccurred;
     private   Map<Digest, AtomicInteger> blocks;
     private   Map<Digest, CHOAM>         choams;
-    private   Executor                   exec = Executors.newVirtualThreadPerTaskExecutor();
     private   List<SigningMember>        members;
     private   MetricRegistry             registry;
     private   Map<Digest, Router>        routers;
@@ -119,10 +118,10 @@ public class TestCHOAM {
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m, exec).router(
+                         .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(
                          ServerConnectionCache.newBuilder()
                                               .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
-                                              .setTarget(CARDINALITY), exec)));
+                                              .setTarget(CARDINALITY))));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);

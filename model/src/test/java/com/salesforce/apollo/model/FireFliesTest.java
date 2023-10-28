@@ -43,7 +43,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,7 +61,6 @@ public class FireFliesTest {
 
     private final List<ProcessDomain>        domains = new ArrayList<>();
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
-    private       ExecutorService            exec    = Executors.newVirtualThreadPerTaskExecutor();
 
     @AfterEach
     public void after() {
@@ -95,21 +93,19 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                                                                          Executors.newSingleThreadScheduledExecutor(
-                                                                          Thread.ofVirtual().factory()));
+        TransactionConfiguration txnConfig = new TransactionConfiguration(
+        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(
-            ServerConnectionCache.newBuilder().setTarget(30), exec);
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
                                                           .setContext(context)
                                                           .setCommunications(localRouter), new InetSocketAddress(0),
                                          commsDirectory, ffParams, txnConfig, EventValidation.NONE,
-                                         IdentifierSpecification.newBuilder(), exec);
+                                         IdentifierSpecification.newBuilder());
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();

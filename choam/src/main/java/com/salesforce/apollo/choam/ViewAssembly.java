@@ -23,7 +23,10 @@ import org.slf4j.LoggerFactory;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -54,7 +57,7 @@ public class ViewAssembly {
     private final        ViewContext                 view;
 
     public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Reassemble> publisher,
-                        CommonCommunications<Terminal, ?> comms, Executor executor) {
+                        CommonCommunications<Terminal, ?> comms) {
         view = vc;
         this.nextViewId = nextViewId;
         this.publisher = publisher;
@@ -62,8 +65,7 @@ public class ViewAssembly {
                                 .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
-        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms,
-                                                executor);
+        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms);
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(new Recon(), Transitions.class,
                                                                     Reconfigure.AWAIT_ASSEMBLY, true);

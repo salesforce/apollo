@@ -139,7 +139,7 @@ public class Producer {
         @Override
         public void reconfigure() {
             log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
-            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms, executor) {
+            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
                 @Override
                 public void complete() {
                     super.complete();
@@ -172,7 +172,6 @@ public class Producer {
     private final CommonCommunications<Terminal, ?> comms;
     private final Ethereal                          controller;
     private final ChRbcGossip                       coordinator;
-    private final Executor executor;
     private final TxDataSource                      ds;
     private final int                               lastEpoch;
     private final Set<Member>                       nextAssembly       = new HashSet<>();
@@ -184,14 +183,13 @@ public class Producer {
     private final Transitions                       transitions;
     private final ViewContext                       view;
 
-    public Producer(Executor executor, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
+    public Producer(  ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms, ThreadPoolExecutor consumer) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.comms = comms;
         this.checkpoint.set(checkpoint);
-        this.executor = executor;
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
@@ -231,7 +229,7 @@ public class Producer {
                                   (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
                                   consumer);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
-                                      params().communications(), executor, producerMetrics);
+                                      params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 

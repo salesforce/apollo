@@ -57,7 +57,6 @@ public class DomainTest {
     "Give me food or give me slack or kill me".getBytes());
     private final        ArrayList<Domain> domains         = new ArrayList<>();
     private final        ArrayList<Router> routers         = new ArrayList<>();
-    private final        ExecutorService   exec            = Executors.newVirtualThreadPerTaskExecutor();
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -215,13 +214,13 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec, Executors.newScheduledThreadPool(1,
+        TransactionConfiguration txnConfig = new TransactionConfiguration(  Executors.newScheduledThreadPool(1,
                                                                                                                  Thread.ofVirtual()
                                                                                                                        .factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(
-            ServerConnectionCache.newBuilder().setTarget(30), exec);
+            var localRouter = new LocalServer(prefix, member).router(
+            ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
@@ -229,7 +228,7 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setCommunications(localRouter), new InetSocketAddress(0),
                                            commsDirectory, ffParams, txnConfig, EventValidation.NONE,
-                                           IdentifierSpecification.newBuilder(), exec);
+                                           IdentifierSpecification.newBuilder());
             domains.add(domain);
             localRouter.start();
         });

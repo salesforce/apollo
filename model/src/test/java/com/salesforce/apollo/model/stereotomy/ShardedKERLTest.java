@@ -53,12 +53,11 @@ public class ShardedKERLTest {
     public void delegated() throws Exception {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1000);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                DigestAlgorithm.DEFAULT, exec);
+                DigestAlgorithm.DEFAULT);
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
@@ -134,12 +133,11 @@ public class ShardedKERLTest {
     public void direct() throws Exception {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                DigestAlgorithm.DEFAULT, exec);
+                DigestAlgorithm.DEFAULT);
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 

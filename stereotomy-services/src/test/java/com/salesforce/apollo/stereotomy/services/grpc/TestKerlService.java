@@ -34,7 +34,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -44,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class TestKerlService {
     final StereotomyKeyStore ks = new MemKeyStore();
-    KERL kel;
+    KERL         kel;
     SecureRandom secureRandom;
     private Router clientRouter;
     private Router serverRouter;
@@ -64,7 +63,7 @@ public class TestKerlService {
     @BeforeEach
     public void before() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
-        secureRandom.setSeed(new byte[]{0});
+        secureRandom.setSeed(new byte[] { 0 });
         kel = new MemKERL(DigestAlgorithm.DEFAULT);
     }
 
@@ -81,7 +80,7 @@ public class TestKerlService {
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()));
         var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                CoordinatesSeal.construct(event));
+                            CoordinatesSeal.construct(event));
 
         i.rotate();
         i.seal(InteractionSpecification.newBuilder());
@@ -113,16 +112,15 @@ public class TestKerlService {
     private KERLService setup(Digest context) throws Exception {
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
-        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        serverRouter = new LocalServer(prefix, serverMember).router(builder);
+        clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();
@@ -130,11 +128,11 @@ public class TestKerlService {
         ProtoKERLService protoService = new ProtoKERLAdapter(kel);
 
         serverRouter.create(serverMember, context, protoService, protoService.getClass().getCanonicalName(),
-                r -> new KERLServer(r, null), null, null);
+                            r -> new KERLServer(r, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService,
-                protoService.getClass().getCanonicalName(), r -> new KERLServer(r, null),
-                KERLClient.getCreate(null), null);
+                                              protoService.getClass().getCanonicalName(), r -> new KERLServer(r, null),
+                                              KERLClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
         return client;

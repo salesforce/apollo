@@ -20,7 +20,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -74,21 +73,26 @@ public class SliceIteratorTest {
         context.activate(serverMember2);
 
         var serverBuilder = InProcessServerBuilder.forName(name);
-        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> InProcessChannelBuilder.forName(name).build());
+        var cacheBuilder = ServerConnectionCache.newBuilder()
+                                                .setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(), new ServiceImpl(local1, "A"), "A", ServerImpl::new, TestItClient::new, local1);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(),
+                                                                                      new ServiceImpl(local1, "A"), "A",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local1);
 
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(), new ServiceImpl(local2, "B"), "B", ServerImpl::new, TestItClient::new, local2);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(),
+                                                                                      new ServiceImpl(local2, "B"), "B",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local2);
 
         router.start();
-        var frequency = Duration.ofMillis(1);
-        var scheduler = Executors.newSingleThreadScheduledExecutor();
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var slice = new SliceIterator<TestItService>("Test Me", serverMember1, Arrays.asList(serverMember1, serverMember2), commsA, exec);
+        var slice = new SliceIterator<TestItService>("Test Me", serverMember1,
+                                                     Arrays.asList(serverMember1, serverMember2), commsA);
         var countdown = new CountDownLatch(1);
         slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true, () -> {
             countdown.countDown();
-        }, Executors.newSingleThreadScheduledExecutor(), Duration.ofMillis(1));
+        }, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), Duration.ofMillis(1));
         boolean finished = countdown.await(3, TimeUnit.SECONDS);
         assertTrue(finished, "completed: " + countdown.getCount());
         assertTrue(pinged1.get());

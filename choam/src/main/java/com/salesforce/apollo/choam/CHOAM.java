@@ -89,7 +89,6 @@ public class CHOAM {
     private final        Combine.Transitions                                   transitions;
     private final        TransSubmission                                       txnSubmission         = new TransSubmission();
     private final        AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
-    private final        Executor                                              executor              = Executors.newVirtualThreadPerTaskExecutor();
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
@@ -97,8 +96,7 @@ public class CHOAM {
         executions = Executors.newVirtualThreadPerTaskExecutor();
 
         nextView();
-        combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), executor,
-                                          params.communications(),
+        combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
                                           new MessageAdapter(any -> true,
                                                              (Function<Any, Digest>) any -> signatureHash(any),
@@ -698,8 +696,7 @@ public class CHOAM {
         log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
         cancelSynchronization();
         cancelBootstrap();
-        futureBootstrap.set(
-        new Bootstrapper(anchor, params, store, comm, executor).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -1199,7 +1196,7 @@ public class CHOAM {
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(executor, viewContext, head.get(), checkpoint.get(), comm, consumer);
+            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, consumer);
             producer.start();
         }
 

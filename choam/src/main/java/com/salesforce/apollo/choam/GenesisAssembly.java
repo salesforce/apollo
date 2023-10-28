@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -107,7 +106,6 @@ public class GenesisAssembly implements Genesis {
                                   (preblock, last) -> transitions.process(preblock, last),
                                   epoch -> transitions.nextEpoch(epoch), executor);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
-                                      Executors.newVirtualThreadPerTaskExecutor(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());

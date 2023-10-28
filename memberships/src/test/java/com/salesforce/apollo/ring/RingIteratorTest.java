@@ -73,17 +73,23 @@ public class RingIteratorTest {
         context.activate(serverMember2);
 
         var serverBuilder = InProcessServerBuilder.forName(name);
-        var cacheBuilder = ServerConnectionCache.newBuilder().setFactory(to -> InProcessChannelBuilder.forName(name).build());
+        var cacheBuilder = ServerConnectionCache.newBuilder()
+                                                .setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(), new ServiceImpl(local1, "A"), "A", ServerImpl::new, TestItClient::new, local1);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(),
+                                                                                      new ServiceImpl(local1, "A"), "A",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local1);
 
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(), new ServiceImpl(local2, "B"), "B", ServerImpl::new, TestItClient::new, local2);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(),
+                                                                                      new ServiceImpl(local2, "B"), "B",
+                                                                                      ServerImpl::new,
+                                                                                      TestItClient::new, local2);
 
         router.start();
         var frequency = Duration.ofMillis(1);
-        var scheduler = Executors.newSingleThreadScheduledExecutor();
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
-        var sync = new RingIterator<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA, exec);
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
+        var sync = new RingIterator<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA);
         var countdown = new CountDownLatch(3);
         sync.iterate(context.getId(), (link, round) -> link.ping(Any.getDefaultInstance()), (round, result, link) -> {
             countdown.countDown();

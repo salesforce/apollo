@@ -38,7 +38,10 @@ import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -83,8 +86,7 @@ public class ViewAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         members.forEach(m -> {
-            var com = new LocalServer(prefix, m, Executors.newSingleThreadExecutor()).router(
-            ServerConnectionCache.newBuilder(), Executors.newFixedThreadPool(2));
+            var com = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
             communications.put(m, com);
         });
         context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
@@ -161,18 +163,14 @@ public class ViewAssemblyTest {
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            ViewContext view = new ViewContext(context, params.build(RuntimeParameters.newBuilder()
-                                                                                      .setContext(context)
-                                                                                      .setMember(sm)
-                                                                                      .setCommunications(router)
-                                                                                      .build()),
+            ViewContext view = new ViewContext(context, params.build(
+            RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
                                                null);
             views.put(m, view);
             var ds = dataSources.get(m);
             var com = comms.get(m);
-            assemblies.put(m, new ViewAssembly(nextViewId, view, r -> ds.publish(r), com,
-                                               Executors.newVirtualThreadPerTaskExecutor()) {
+            assemblies.put(m, new ViewAssembly(nextViewId, view, r -> ds.publish(r), com) {
                 @Override
                 public void complete() {
                     super.complete();
@@ -198,8 +196,7 @@ public class ViewAssemblyTest {
                                           dataSources.get(member), blocker, ep -> {
             }, Ethereal.consumer(Integer.toString(i)));
 
-            var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member),
-                                           Executors.newFixedThreadPool(2), null);
+            var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member), null);
             gossipers.add(gossiper);
             controllers.add(controller);
         }
