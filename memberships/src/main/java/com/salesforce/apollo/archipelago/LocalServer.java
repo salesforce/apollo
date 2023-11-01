@@ -34,7 +34,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class LocalServer implements RouterSupplier {
-    private static final Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
+    private final static Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
     private static final Logger   log           = LoggerFactory.getLogger(LocalServer.class);
     private static final String   NAME_TEMPLATE = "%s-%s";
 
@@ -87,7 +87,8 @@ public class LocalServer implements RouterSupplier {
             public Digest getFrom() {
                 return Router.SERVER_CLIENT_ID_KEY.get();
             }
-        }, executor);
+        }, d -> {
+        });
     }
 
     private ManagedChannel connectTo(Member to) {

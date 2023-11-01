@@ -26,14 +26,13 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import org.junit.jupiter.api.BeforeEach;
+import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -45,25 +44,16 @@ import static org.mockito.Mockito.mock;
  */
 public class BootstrappingTest extends AbstractDhtTest {
 
-    private AtomicBoolean gate;
-
-    @BeforeEach
-    public void beforeIt() {
-        gate = new AtomicBoolean(false);
-    }
-
     @Test
     public void smokin() throws Exception {
         routers.values().forEach(r -> r.start());
-        dhts.values()
-            .forEach(dht -> dht.start(LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
+        dhts.values().forEach(dht -> dht.start(LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
         identities.entrySet()
                   .forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));
 
         gate.set(true);
-        @SuppressWarnings("unused")
-        final var gorgons = routers.values().stream().map(r -> {
+        var gorgoneions = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
             return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
                                   context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
@@ -81,8 +71,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         var client = new ControlledIdentifierMember(clientStereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2)
-                                                                        );
+        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
                                                        r -> new AdmissionsServer(
@@ -113,16 +102,17 @@ public class BootstrappingTest extends AbstractDhtTest {
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
-
-        Thread.sleep(3000);
         // Verify client KERL published
+        Utils.waitForCondition(30_000, 1000, () -> testKerl.getKeyEvent(client.getEvent().getCoordinates()) != null);
         var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());
+
         assertNotNull(keyS);
         admin.close();
     }
 
     @Override
     protected BiFunction<KerlDHT, KERL, KERL> wrap() {
-        return (t, k) -> gate.get() ? new Maat(context, k, t.asKERL()) : k;
+        // This allows us to have the core member keys trusted for this test, as we're testing the bootstrapping of the client, not the entire system
+        return (t, k) -> gate.get() ? new Maat(context, k, k) : k;
     }
 }

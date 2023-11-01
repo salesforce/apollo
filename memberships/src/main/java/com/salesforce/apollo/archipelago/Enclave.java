@@ -39,10 +39,9 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class Enclave implements RouterSupplier {
-    protected final static Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
-    private final static   Class<? extends io.netty.channel.Channel> channelType = getChannelType();
-    private static final   Logger                                    log         = LoggerFactory.getLogger(
-    Enclave.class);
+    private final static Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
     private final DomainSocketAddress bridge;
     private final Consumer<Digest>    contextRegistration;
@@ -103,7 +102,7 @@ public class Enclave implements RouterSupplier {
                                   public Digest getFrom() {
                                       return Router.SERVER_CLIENT_ID_KEY.get();
                                   }
-                              }, contextRegistration, executor);
+                              }, contextRegistration);
     }
 
     private ManagedChannel connectTo(Member to) {

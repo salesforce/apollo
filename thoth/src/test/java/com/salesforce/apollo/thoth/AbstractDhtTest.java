@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -57,6 +58,8 @@ public class AbstractDhtTest {
     protected static final double                                                             PBYZ        = 0.25;
     protected final        Map<SigningMember, KerlDHT>                                        dhts        = new HashMap<>();
     protected final        Map<SigningMember, Router>                                         routers     = new HashMap<>();
+    protected final        AtomicBoolean                                                      gate        = new AtomicBoolean(
+    false);
     protected              Context<Member>                                                    context;
     protected              Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected              MemKERL                                                            kerl;

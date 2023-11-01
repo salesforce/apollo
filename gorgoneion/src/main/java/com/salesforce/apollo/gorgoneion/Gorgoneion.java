@@ -35,6 +35,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -50,7 +51,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 
@@ -58,15 +62,16 @@ import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFacto
  * @author hal.hildebrand
  */
 public class Gorgoneion {
-    public static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
+    public static final Logger                                                log = LoggerFactory.getLogger(
+    Gorgoneion.class);
     @SuppressWarnings("unused")
-    private final CommonCommunications<?, AdmissionsService> admissionsComm;
-    private final Context<Member> context;
-    private final CommonCommunications<Endorsement, EndorsementService> endorsementComm;
-    private final ControlledIdentifierMember member;
-    private final ProtoEventObserver observer;
-    private final Parameters parameters;
-    private final ScheduledExecutorService scheduler;
+    private final       CommonCommunications<?, AdmissionsService>            admissionsComm;
+    private final       Context<Member>                                       context;
+    private final       CommonCommunications<Endorsement, EndorsementService> endorsementComm;
+    private final       ControlledIdentifierMember                            member;
+    private final       ProtoEventObserver                                    observer;
+    private final       Parameters                                            parameters;
+    private final       ScheduledExecutorService                              scheduler;
 
     public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
                       ProtoEventObserver observer, Router router, ScheduledExecutorService scheduler,
@@ -84,15 +89,15 @@ public class Gorgoneion {
         this.observer = observer;
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
-                r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
-                        r, metrics));
+                                                 r -> new AdmissionsServer(admissionsRouter.getClientIdentityProvider(),
+                                                                           r, metrics));
 
         final var service = new Endorse();
         endorsementComm = endorsementRouter.create(member, context.getId(), service, ":endorsement",
-                r -> new EndorsementServer(admissionsRouter.getClientIdentityProvider(),
-                        r, metrics),
-                EndorsementClient.getCreate(metrics),
-                Endorsement.getLocalLoopback(member, service));
+                                                   r -> new EndorsementServer(
+                                                   admissionsRouter.getClientIdentityProvider(), r, metrics),
+                                                   EndorsementClient.getCreate(metrics),
+                                                   Endorsement.getLocalLoopback(member, service));
     }
 
     private boolean completeEndorsement(Optional<MemberSignature> futureSailor, Member from,
@@ -105,8 +110,7 @@ public class Gorgoneion {
         return true;
     }
 
-    private boolean completeEnrollment(Optional<Empty> futureSailor, Member m,
-                                       HashSet<Member> completed) {
+    private boolean completeEnrollment(Optional<Empty> futureSailor, Member m, HashSet<Member> completed) {
         if (futureSailor.isEmpty()) {
             return true;
         }
@@ -127,9 +131,9 @@ public class Gorgoneion {
 
     private MemberSignature endorse(Nonce request) {
         return MemberSignature.newBuilder()
-                .setId(member.getId().toDigeste())
-                .setSignature(member.sign(request.toByteString()).toSig())
-                .build();
+                              .setId(member.getId().toDigeste())
+                              .setSignature(member.sign(request.toByteString()).toSig())
+                              .build();
     }
 
     private void enroll(Notarization request) {
@@ -145,39 +149,39 @@ public class Gorgoneion {
         var now = parameters.clock().instant();
         final var ident = identifier.toIdent();
         var nonce = Nonce.newBuilder()
-                .setMember(ident)
-                .setIssuer(member.getId().toDigeste())
-                .setNoise(parameters.digestAlgorithm().random().toDigeste())
-                .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
-                .build();
+                         .setMember(ident)
+                         .setIssuer(member.getId().toDigeste())
+                         .setNoise(parameters.digestAlgorithm().random().toDigeste())
+                         .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
+                         .build();
 
         var successors = context.totalCount() == 1 ? Collections.singletonList(member)
-                : Context.uniqueSuccessors(context,
-                digestOf(ident,
-                        parameters.digestAlgorithm()));
+                                                   : Context.uniqueSuccessors(context, digestOf(ident,
+                                                                                                parameters.digestAlgorithm()));
         final var majority = context.totalCount() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
         redirecting.iterate((link, m) -> {
             log.info("Request signing nonce for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
-                    member.getId());
+                     member.getId());
             return link.endorse(nonce, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeEndorsement(futureSailor, m, endorsements), () -> {
             if (endorsements.size() < majority) {
-                generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
+                generated.completeExceptionally(new StatusRuntimeException(
+                Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
             } else {
                 generated.complete(SignedNonce.newBuilder()
-                        .addSignatures(MemberSignature.newBuilder()
-                                .setId(member.getId().toDigeste())
-                                .setSignature(member.sign(nonce.toByteString())
-                                        .toSig())
-                                .build())
-                        .setNonce(nonce)
-                        .addAllSignatures(endorsements)
-                        .build());
+                                              .addSignatures(MemberSignature.newBuilder()
+                                                                            .setId(member.getId().toDigeste())
+                                                                            .setSignature(
+                                                                            member.sign(nonce.toByteString()).toSig())
+                                                                            .build())
+                                              .setNonce(nonce)
+                                              .addAllSignatures(endorsements)
+                                              .build());
                 log.info("Generated nonce for: {} signatures: {} on: {}", identifier, endorsements.size(),
-                        member.getId());
+                         member.getId());
             }
         }, scheduler, parameters.frequency());
         try {
@@ -192,7 +196,7 @@ public class Gorgoneion {
 
     private Identifier identifier(KERL_ kerl) {
         if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                .event() instanceof EstablishmentEvent establishment) {
+                                .event() instanceof EstablishmentEvent establishment) {
             return establishment.getIdentifier();
         }
         return null;
@@ -206,12 +210,12 @@ public class Gorgoneion {
         }
 
         var notarization = Notarization.newBuilder()
-                .setKerl(credentials.getAttestation().getAttestation().getKerl())
-                .setValidations(validations)
-                .build();
+                                       .setKerl(credentials.getAttestation().getAttestation().getKerl())
+                                       .setValidations(validations)
+                                       .build();
 
         var successors = Context.uniqueSuccessors(context,
-                digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
@@ -233,30 +237,34 @@ public class Gorgoneion {
             throw new IllegalArgumentException("No identifier");
         }
         log.debug("Validating credentials for: {} nonce signatures: {} on: {}", identifier,
-                request.getNonce().getSignaturesCount(), member.getId());
+                  request.getNonce().getSignaturesCount(), member.getId());
 
         var validated = new CompletableFuture<Validations>();
 
         var successors = Context.uniqueSuccessors(context,
-                digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.activeCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
             log.debug("Validating  credentials for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
-                    member.getId());
+                      member.getId());
             return link.validate(request, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeVerification(futureSailor, m, verifications), () -> {
             if (verifications.size() < majority) {
-                throw new StatusRuntimeException(Status.ABORTED.withDescription("Cannot gather required credential validations"));
+                throw new StatusRuntimeException(
+                Status.ABORTED.withDescription("Cannot gather required credential validations"));
             } else {
                 validated.complete(Validations.newBuilder()
-                        .setCoordinates(ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount()
-                                - 1)).event().getCoordinates().toEventCoords())
-                        .addAllValidations(verifications)
-                        .build());
+                                              .setCoordinates(
+                                              ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
+                                                                  .event()
+                                                                  .getCoordinates()
+                                                                  .toEventCoords())
+                                              .addAllValidations(verifications)
+                                              .build());
                 log.debug("Validated credentials for: {} verifications: {} on: {}", identifier, verifications.size(),
-                        member.getId());
+                          member.getId());
             }
         }, scheduler, parameters.frequency());
         try {
@@ -273,17 +281,14 @@ public class Gorgoneion {
     }
 
     private Validation_ validate(Credentials credentials) {
-        var event = (com.salesforce.apollo.stereotomy.event.InceptionEvent) ProtobufEventFactory.from(credentials.getAttestation()
-                        .getAttestation()
-                        .getKerl()
-                        .getEvents(0))
-                .event();
+        var event = (InceptionEvent) ProtobufEventFactory.from(
+        credentials.getAttestation().getAttestation().getKerl().getEvents(0)).event();
         log.info("Validating credentials for: {} on: {}", event.getIdentifier(), member.getId());
         Signer signer = member.getIdentifier().getSigner();
         return Validation_.newBuilder()
-                .setValidator(member.getIdentifier().getCoordinates().toEventCoords())
-                .setSignature(signer.sign(event.toKeyEvent_().toByteString()).toSig())
-                .build();
+                          .setValidator(member.getIdentifier().getCoordinates().toEventCoords())
+                          .setSignature(signer.sign(event.toKeyEvent_().toByteString()).toSig())
+                          .build();
     }
 
     private Validation_ verificationOf(Credentials credentials) {
@@ -300,12 +305,14 @@ public class Gorgoneion {
                           Timer.Context time) {
             if (!validate(request, from)) {
                 log.warn("Invalid application from: {} on: {}", from, member.getId());
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
+                responseObserver.onError(
+                new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
                 return;
             }
             SignedNonce sn = generateNonce(request);
             if (sn == null) {
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
+                responseObserver.onError(
+                new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
             } else {
                 responseObserver.onNext(sn);
                 responseObserver.onCompleted();
@@ -317,13 +324,15 @@ public class Gorgoneion {
                              Timer.Context timer) {
             if (!validate(request, from)) {
                 log.warn("Invalid credentials from: {} on: {}", from, member.getId());
-                responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
+                responseObserver.onError(
+                new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 return;
             }
             try {
-                Validations invite =Gorgoneion.this.register(request);
+                Validations invite = Gorgoneion.this.register(request);
                 if (invite == null) {
-                    responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
+                    responseObserver.onError(
+                    new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid credentials")));
                 } else {
                     responseObserver.onNext(invite);
                     responseObserver.onCompleted();
@@ -341,19 +350,19 @@ public class Gorgoneion {
                 return false;
             }
             if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                    .event() instanceof EstablishmentEvent establishment) {
+                                    .event() instanceof EstablishmentEvent establishment) {
 
                 final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
                 if (!verifier.verify(JohnHancock.from(signedAtt.getSignature()),
-                        signedAtt.getAttestation().toByteString())) {
+                                     signedAtt.getAttestation().toByteString())) {
                     log.warn("Invalid attestation, invalid signature from: {} on: {}", establishment.getIdentifier(),
-                            member.getId());
+                             member.getId());
                     return false;
                 }
                 if (!verifier.verify(JohnHancock.from(signedAtt.getAttestation().getNonce()),
-                        credentials.getNonce().toByteString())) {
+                                     credentials.getNonce().toByteString())) {
                     log.warn("Invalid attestation, invalid nonce signature from: {} on: {}",
-                            establishment.getIdentifier(), member.getId());
+                             establishment.getIdentifier(), member.getId());
                     return false;
                 }
                 return true;
@@ -380,7 +389,7 @@ public class Gorgoneion {
                 throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid endorsement nonce"));
             }
             log.info("Endorsing nonce for: {} from: {} on: {}", Identifier.from(request.getMember()), from,
-                    member.getId());
+                     member.getId());
             return Gorgoneion.this.endorse(request);
         }
 
@@ -424,7 +433,7 @@ public class Gorgoneion {
                 return false;
             }
             var nInstant = Instant.ofEpochSecond(request.getTimestamp().getSeconds(),
-                    request.getTimestamp().getNanos());
+                                                 request.getTimestamp().getNanos());
             final var now = Instant.now();
             if (now.isBefore(nInstant) || nInstant.plus(parameters.maxDuration()).isBefore(now)) {
                 log.warn("Invalid nonce, invalid timestamp: {} from: {} on: {}", nInstant, from, member.getId());
@@ -436,30 +445,28 @@ public class Gorgoneion {
 
         private boolean validate(Notarization request, Identifier identifier, KERL_ kerl, Digest from) {
             if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                    .event() instanceof EstablishmentEvent establishment) {
+                                    .event() instanceof EstablishmentEvent establishment) {
                 var count = 0;
                 for (var validation : request.getValidations().getValidationsList()) {
-                    if (new DefaultVerifier(parameters.kerl()
-                            .getKeyState(EventCoordinates.from(validation.getValidator()))
-                            .getKeys()).verify(JohnHancock.from(validation.getSignature()),
-                            establishment.toKeyEvent_()
-                                    .toByteString())) {
+                    if (new DefaultVerifier(
+                    parameters.kerl().getKeyState(EventCoordinates.from(validation.getValidator())).getKeys()).verify(
+                    JohnHancock.from(validation.getSignature()), establishment.toKeyEvent_().toByteString())) {
                         count++;
                     } else {
-                        log.warn("Invalid notarization, invalid validation for: {} from: {} on: {}", identifier,
-                                from, member.getId());
+                        log.warn("Invalid notarization, invalid validation for: {} from: {} on: {}", identifier, from,
+                                 member.getId());
                     }
                 }
                 // If there is only one active member in our context, it's us.
-                final var majority = count >= (context.activeCount() == 1 ? 1 :  context.majority());
+                final var majority = count >= (context.activeCount() == 1 ? 1 : context.majority());
                 if (!majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
-                            context.majority(), identifier, from, member.getId());
+                             context.majority(), identifier, from, member.getId());
                 }
                 return majority;
             } else {
                 log.warn("Invalid notarization, invalid kerl for: {} from: {} on: {}", identifier, from,
-                        member.getId());
+                         member.getId());
                 return false;
             }
         }
@@ -469,7 +476,7 @@ public class Gorgoneion {
             final var issuer = Digest.from(sn.getNonce().getIssuer());
             if (!context.isMember(issuer)) {
                 log.warn("Invalid credential nonce, non existent issuer: {} from: {} on: {}", issuer, from,
-                        member.getId());
+                         member.getId());
                 return false;
             }
             if (!from.equals(issuer)) {
@@ -481,11 +488,11 @@ public class Gorgoneion {
                 return false;
             }
             var nInstant = Instant.ofEpochSecond(sn.getNonce().getTimestamp().getSeconds(),
-                    sn.getNonce().getTimestamp().getNanos());
+                                                 sn.getNonce().getTimestamp().getNanos());
             final var now = Instant.now();
             if (now.isBefore(nInstant) || nInstant.plus(parameters.maxDuration()).isBefore(now)) {
                 log.warn("Invalid credential nonce, invalid timestamp: {} from: {} on: {}", nInstant, from,
-                        member.getId());
+                         member.getId());
                 return false;
             }
 
@@ -511,12 +518,12 @@ public class Gorgoneion {
 
             if (count < context.majority()) {
                 log.warn("Invalid credential nonce, no majority signature: {} required > {} from: {} on: {}", count,
-                        context.majority(), from, member.getId());
+                         context.majority(), from, member.getId());
                 return false;
             }
 
             log.info("Valid credential nonce for: {} from: {} on: {}", Identifier.from(sn.getNonce().getMember()), from,
-                    member.getId());
+                     member.getId());
 
             var sa = credentials.getAttestation();
             final var kerl = sa.getAttestation().getKerl();
@@ -528,34 +535,34 @@ public class Gorgoneion {
             var m = Identifier.from(sn.getNonce().getMember());
             if (!m.equals(identifier)) {
                 log.warn("Invalid credential attestation, identifier: {} not equal to nonce member: {} from: {} on: {}",
-                        identifier, m, from, member.getId());
+                         identifier, m, from, member.getId());
                 return false;
             }
             if (identifier instanceof SelfAddressingIdentifier sai) {
             } else {
                 log.warn("Invalid credential attestation, invalid identifier: {} from: {} on: {}", identifier, from,
-                        member.getId());
+                         member.getId());
                 return false;
             }
             var aInstant = Instant.ofEpochSecond(sa.getAttestation().getTimestamp().getSeconds(),
-                    sa.getAttestation().getTimestamp().getNanos());
-            if (now.isBefore(aInstant) || aInstant.plus(parameters.maxDuration()).isBefore(now) ||
-                    aInstant.isBefore(nInstant)) {
+                                                 sa.getAttestation().getTimestamp().getNanos());
+            if (now.isBefore(aInstant) || aInstant.plus(parameters.maxDuration()).isBefore(now) || aInstant.isBefore(
+            nInstant)) {
                 log.warn("Invalid credential attestation, invalid timestamp: {} for: {} from: {} on: {}", aInstant,
-                        identifier, from, member.getId());
+                         identifier, from, member.getId());
                 return false;
             }
             if (ProtobufEventFactory.from(kerl.getEvents(kerl.getEventsCount() - 1))
-                    .event() instanceof EstablishmentEvent establishment) {
+                                    .event() instanceof EstablishmentEvent establishment) {
                 final var verifier = new Verifier.DefaultVerifier(establishment.getKeys());
                 if (!verifier.verify(JohnHancock.from(sa.getAttestation().getNonce()), sn.toByteString())) {
                     log.warn("Invalid credential attestation, invalid nonce signature for: {} from: {} on: {}",
-                            identifier, from, member.getId());
+                             identifier, from, member.getId());
                     return false;
                 }
             } else {
                 log.warn("Invalid credential attestation, invalid kerl for: {} from: {} on: {}", identifier, from,
-                        member.getId());
+                         member.getId());
                 return false;
             }
             log.info("Valid credential attestation for: {} from: {} on: {}", identifier, from, member.getId());

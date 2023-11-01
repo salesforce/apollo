@@ -50,8 +50,7 @@ public class Maat extends DelegatedKERL {
 
     @Override
     public KeyState append(KeyEvent event) {
-        var l = append(Collections.singletonList(event),
-                Collections.emptyList());
+        var l = append(Collections.singletonList(event), Collections.emptyList());
         return l.isEmpty() ? null : l.get(0);
     }
 
@@ -63,13 +62,15 @@ public class Maat extends DelegatedKERL {
     @Override
     public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         final List<KeyEvent> filtered = events.stream().filter(e -> {
-            if (e instanceof EstablishmentEvent est &&
-                    est.getCoordinates().getSequenceNumber().equals(ULong.valueOf(0))) {
+            if (e instanceof EstablishmentEvent est && est.getCoordinates()
+                                                          .getSequenceNumber()
+                                                          .equals(ULong.valueOf(0))) {
                 return validate(est);
             }
             return true;
         }).toList();
-        return filtered.isEmpty() && attachments.isEmpty() ? Collections.emptyList() : super.append(filtered, attachments);
+        return filtered.isEmpty() && attachments.isEmpty() ? Collections.emptyList()
+                                                           : super.append(filtered, attachments);
     }
 
     public boolean validate(EstablishmentEvent event) {
@@ -81,9 +82,9 @@ public class Maat extends DelegatedKERL {
         }
         final Context<Member> ctx = context;
         var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
-                .stream()
-                .map(m -> m.getId())
-                .collect(Collectors.toSet());
+                                .stream()
+                                .map(m -> m.getId())
+                                .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {
         }
@@ -91,29 +92,26 @@ public class Maat extends DelegatedKERL {
         final var serialized = event.toKeyEvent_().toByteString();
 
         Map<EventCoordinates, JohnHancock> validations = delegate.getValidations(event.getCoordinates());
-
-        var futures = validations.entrySet().stream().map(e -> {
+        validations.entrySet().forEach(e -> {
             KeyEvent ev = validators.getKeyEvent(e.getKey());
             if (ev == null) {
-                return null;
+                return;
             }
             var signer = (EstablishmentEvent) ev;
             if ((signer.getIdentifier() instanceof SelfAddressingIdentifier sai)) {
                 if (!successors.contains(sai.getDigest())) {
-                    log.warn("Signature: {} not successor of: {} ", signer.getCoordinates(),
-                            event.getCoordinates());
+                    log.warn("Signature: {} not successor of: {} ", signer.getCoordinates(), event.getCoordinates());
                 }
                 mapped.add(new validator(signer, e.getValue()));
                 log.trace("Signature: {} valid for: {}", signer.getCoordinates(), event.getCoordinates());
             } else {
                 log.warn("Signature not SAI: {} for: {}", signer.getCoordinates(), event.getCoordinates(),
-                        event.getCoordinates());
+                         event.getCoordinates());
             }
-            return event;
-        }).toList();
+        });
 
-        log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(),
-                validations.size(), mapped.size());
+        log.trace("Evaluating validation of: {} validations: {} mapped: {}", event.getCoordinates(), validations.size(),
+                  mapped.size());
         if (mapped.size() == 0) {
             log.warn("No validations of: {} ", event.getCoordinates());
             return false;
@@ -126,13 +124,13 @@ public class Maat extends DelegatedKERL {
                 verified++;
             } else {
                 log.trace("Cannot verify sig: {} of: {} by: {}", r.signature, event.getCoordinates(),
-                        r.validating.getIdentifier());
+                          r.validating.getIdentifier());
             }
         }
         var validated = verified >= context.majority();
 
-        log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified,
-                mapped.size(), ctx.majority(), event.getCoordinates());
+        log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified, mapped.size(),
+                  ctx.majority(), event.getCoordinates());
         return validated;
     }
 }
