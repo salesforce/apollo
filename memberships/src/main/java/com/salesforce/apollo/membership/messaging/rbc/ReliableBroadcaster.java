@@ -127,7 +127,7 @@ public class ReliableBroadcaster {
     }
 
     public void clearBuffer() {
-        log.warn("Clearing message buffer on: {}", member);
+        log.warn("Clearing message buffer on: {}", member.getId());
         buffer.clear();
     }
 
@@ -147,7 +147,6 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return;
         }
-        log.debug("publishing message on: {}", member.getId());
         AgedMessage m = buffer.send(Any.pack(message), member);
         if (notifyLocal) {
             deliver(Collections.singletonList(
@@ -201,7 +200,7 @@ public class ReliableBroadcaster {
         if (newMsgs.isEmpty()) {
             return;
         }
-        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), context.getId(), member.getId());
+        log.debug("delivering: {} on: {}", newMsgs.size(), member.getId());
         channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(context.getId(), newMsgs);
@@ -428,7 +427,7 @@ public class ReliableBroadcaster {
             if (messages.size() == 0) {
                 return;
             }
-            log.trace("receiving: {} msgs on: {}", messages.size(), member);
+            log.trace("receiving: {} msgs on: {}", messages.size(), member.getId());
             deliver(messages.stream()
                             .limit(params.maxMessages)
                             .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
@@ -451,7 +450,7 @@ public class ReliableBroadcaster {
                  .forEach(s -> mailBox.add(s.msg));
             List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
             if (!reconciled.isEmpty()) {
-                log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member);
+                log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member.getId());
             }
             return reconciled;
         }
@@ -465,7 +464,7 @@ public class ReliableBroadcaster {
             var hash = adapter.hasher.apply(message.getContent());
             state s = new state(hash, message);
             state.put(hash, s);
-            log.trace("Send message:{} on: {}", hash, member);
+            log.trace("Send message:{} on: {}", hash, member.getId());
             return s.msg.build();
         }
 
@@ -477,21 +476,24 @@ public class ReliableBroadcaster {
             round.incrementAndGet();
             if (!tickGate.tryAcquire()) {
                 log.trace("Unable to acquire tick gate for: {} tick already in progress on: {}", context.getId(),
-                          member);
+                          member.getId());
                 return;
             }
             try {
                 var trav = state.entrySet().iterator();
+                int gcd = 0;
                 while (trav.hasNext()) {
                     var next = trav.next().getValue();
                     int age = next.msg.getAge();
                     if (age >= maxAge) {
                         trav.remove();
-                        log.trace("GC'ing: {} age: {} > {} on: {}", next.hash, age + 1, maxAge, member.getId());
+                        gcd++;
                     } else {
                         next.msg.setAge(age + 1);
                     }
                 }
+                if (gcd != 0)
+                    log.trace("GC'ing: {} on: {}", gcd, member.getId());
             } finally {
                 tickGate.release();
             }
@@ -511,7 +513,7 @@ public class ReliableBroadcaster {
                 } else if (previous.msg.getAge() != nextAge) {
                     previous.msg().setAge(nextAge);
                 }
-                log.trace("duplicate event: {} on: {}", s.hash, member.getId());
+                //                log.trace("duplicate event: {} on: {}", s.hash, member.getId());
                 return true;
             }
             return delivered.contains(s.hash);
@@ -530,7 +532,7 @@ public class ReliableBroadcaster {
                 purgeTheAged();
                 if (buffer.size() > params.bufferSize) {
                     log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", buffer.size(), params.bufferSize,
-                             context.getId(), member);
+                             context.getId(), member.getId());
                 }
                 int freed = startSize - state.size();
                 if (freed > 0) {
@@ -542,7 +544,6 @@ public class ReliableBroadcaster {
         }
 
         private void purgeTheAged() {
-            log.debug("Purging the aged of: {} buffer size: {}   on: {}", context.getId(), size(), member.getId());
             Queue<state> candidates = new PriorityQueue<>(
             Collections.reverseOrder((a, b) -> Integer.compare(a.msg.getAge(), b.msg.getAge())));
             candidates.addAll(state.values());
@@ -551,7 +552,6 @@ public class ReliableBroadcaster {
                 var m = processing.next();
                 if (m.msg.getAge() > maxAge) {
                     state.remove(m.hash);
-                    log.trace("GC'ing: {} age: {} > {} on: {}", m.hash, m.msg.getAge() + 1, maxAge, member.getId());
                 } else {
                     break;
                 }
