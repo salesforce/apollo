@@ -108,10 +108,8 @@ public class RbcTest {
         }
         int rounds = Boolean.getBoolean("large_tests") ? 100 : 10;
         for (int r = 0; r < rounds; r++) {
-            CountDownLatch round = new CountDownLatch(messengers.size());
-            for (Receiver receiver : receivers.values()) {
-                receiver.setRound(round);
-            }
+            CountDownLatch latch = new CountDownLatch(messengers.size());
+            round.set(latch);
             var rnd = r;
             messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
@@ -122,8 +120,8 @@ public class RbcTest {
                 buf.flip();
                 view.publish(ByteMessage.newBuilder().setContents(ByteString.copyFrom(buf)).build(), true);
             });
-            boolean success = round.await(60, TimeUnit.SECONDS);
-            assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
+            boolean success = latch.await(60, TimeUnit.SECONDS);
+            assertTrue(success, "Did not complete round: " + r + " waiting for: " + latch.getCount());
 
             current.incrementAndGet();
             for (Receiver receiver : receivers.values()) {
@@ -140,12 +138,12 @@ public class RbcTest {
                 .build()
                 .report();
     }
+    final AtomicReference<CountDownLatch> round = new AtomicReference<>();
 
     class Receiver implements MessageHandler {
         final Set<Digest> counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger current;
         final Digest memberId;
-        final AtomicReference<CountDownLatch> round = new AtomicReference<>();
 
         Receiver(Digest memberId, int cardinality, AtomicInteger current) {
             this.current = current;
@@ -179,10 +177,6 @@ public class RbcTest {
                     }
                 }
             });
-        }
-
-        public void setRound(CountDownLatch round) {
-            this.round.set(round);
         }
 
         void reset() {

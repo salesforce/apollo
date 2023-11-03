@@ -200,7 +200,7 @@ public class ReliableBroadcaster {
         if (newMsgs.isEmpty()) {
             return;
         }
-        log.debug("delivering: {} on: {}", newMsgs.size(), member.getId());
+        log.trace("delivering: {} on: {}", newMsgs.size(), member.getId());
         channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(context.getId(), newMsgs);
@@ -229,14 +229,11 @@ public class ReliableBroadcaster {
     private void handle(Optional<Reconcile> result,
                         RingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
+        if (result.isEmpty()) {
+            return;
+        }
         try {
-            Reconcile gossip;
-            try {
-                gossip = result.get();
-            } catch (NoSuchElementException e) {
-                log.debug("null gossiping with {} on: {}", destination.member().getId(), member.getId(), e.getCause());
-                return;
-            }
+            Reconcile gossip = result.get();
             buffer.receive(gossip.getUpdatesList());
             destination.link()
                        .update(ReconcileContext.newBuilder()

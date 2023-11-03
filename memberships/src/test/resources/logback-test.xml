@@ -18,7 +18,7 @@
 	<logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger>
-	<logger name="com.salesforce.apollo.membership.messaging.rbc" level="trace" additivity="false">
+	<logger name="com.salesforce.apollo.membership.messaging.rbc" level="warn" additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger>
 	<logger name="com.salesforce.apollo.membership.messaging.rbc.comms" level="warn" additivity="false">
