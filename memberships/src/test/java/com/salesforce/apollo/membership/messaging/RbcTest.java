@@ -111,6 +111,7 @@ public class RbcTest {
             CountDownLatch latch = new CountDownLatch(messengers.size());
             round.set(latch);
             var rnd = r;
+            System.out.print("\nround: %s ".formatted(r));
             messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
                 Entropy.nextSecureBytes(rand);
@@ -167,9 +168,6 @@ public class RbcTest {
                         int totalCount = totalReceived.incrementAndGet();
                         if (totalCount % 1_000 == 0) {
                             System.out.print(".");
-                        }
-                        if (totalCount % 80_000 == 0) {
-                            System.out.println();
                         }
                         if (counted.size() == messengers.size() - 1) {
                             round.get().countDown();
