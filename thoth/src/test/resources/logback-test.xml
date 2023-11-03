@@ -35,10 +35,6 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy.db.UniKERL" level="trace" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
     <logger name="com.salesforce.apollo.membership" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
