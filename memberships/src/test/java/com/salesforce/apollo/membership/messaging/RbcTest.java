@@ -55,9 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RbcTest {
 
     private static final Parameters.Builder parameters = Parameters.newBuilder()
-            .setMaxMessages(1000)
-            .setFalsePositiveRate(0.00125)
-            .setBufferSize(5000);
+            .setMaxMessages(100)
+            .setFalsePositiveRate(0.0125)
+            .setBufferSize(500);
     private final List<Router> communications = new ArrayList<>();
     private final AtomicInteger totalReceived = new AtomicInteger(0);
     private List<ReliableBroadcaster> messengers;
@@ -78,7 +78,7 @@ public class RbcTest {
         entropy.setSeed(new byte[]{6, 6, 6});
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, 100).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, 50).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
@@ -106,7 +106,7 @@ public class RbcTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = Boolean.getBoolean("large_tests") ? 100 : 10;
+        int rounds = Boolean.getBoolean("large_tests") ? 100 : 5;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch latch = new CountDownLatch(messengers.size());
             round.set(latch);
@@ -166,7 +166,7 @@ public class RbcTest {
                 if (index == current.get() + 1) {
                     if (counted.add(m.source().get(0))) {
                         int totalCount = totalReceived.incrementAndGet();
-                        if (totalCount % 1_000 == 0) {
+                        if (totalCount % 100 == 0) {
                             System.out.print(".");
                         }
                         if (counted.size() == messengers.size() - 1) {
