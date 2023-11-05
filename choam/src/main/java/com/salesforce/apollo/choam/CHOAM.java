@@ -1013,6 +1013,7 @@ public class CHOAM {
                 return;
             }
             roundScheduler.schedule(AWAIT_SYNC, () -> {
+                log.trace("Synchronization failed on: {}", params.member().getId());
                 synchronizationFailed();
             }, params.synchronizationCycles());
         }
@@ -1244,6 +1245,7 @@ public class CHOAM {
                 assembly = new GenesisAssembly(vc, comm, next.get().member, consumer);
                 nextViewId.set(params.genesisViewId());
             } else {
+                log.trace("No formation on: {}", params.member().getId());
                 assembly = null;
             }
         }

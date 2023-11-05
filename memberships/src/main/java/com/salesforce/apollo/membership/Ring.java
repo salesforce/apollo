@@ -223,7 +223,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     public T insert(T m) {
-        LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m, index);
+        LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m.getId(), index);
         return ring.put(hash(m), m);
     }
 

@@ -182,7 +182,7 @@ public class ReliableBroadcaster {
         var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
+        var scheduler = Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay, TimeUnit.MILLISECONDS);
     }
 
@@ -190,7 +190,7 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Stopping Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
+        log.info("Stopping Reliable Broadcaster[{}] on: {}", context.getId(), member.getId());
         buffer.clear();
         gossiper.reset();
         comm.deregister(context.getId());
@@ -214,14 +214,14 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return null;
         }
-        log.trace("rbc gossiping[{}] from {} with {} on {}", buffer.round(), member.getId(), link.getMember().getId(),
-                  ring);
+        log.trace("rbc gossiping[{}] with: {} ring: {} on: {}", buffer.round(), member.getId(), link.getMember().getId(),
+                  ring, member.getId());
         try {
             return link.gossip(
             MessageBff.newBuilder().setRing(ring).setDigests(buffer.forReconcilliation().toBff()).build());
         } catch (Throwable e) {
-            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member.getId(),
-                      link.getMember().getId(), ring, e);
+            log.trace("rbc gossiping[{}] failed with: {} ring: {} on: {}", buffer.round(), link.getMember().getId(),
+                      ring, member.getId(), e);
             return null;
         }
     }
@@ -229,10 +229,10 @@ public class ReliableBroadcaster {
     private void handle(Optional<Reconcile> result,
                         RingCommunications.Destination<Member, ReliableBroadcast> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
-        if (result.isEmpty()) {
-            return;
-        }
         try {
+            if (result.isEmpty()) {
+                return;
+            }
             Reconcile gossip = result.get();
             buffer.receive(gossip.getUpdatesList());
             destination.link()

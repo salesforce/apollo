@@ -93,7 +93,7 @@ public class Ethereal {
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     public static ThreadPoolExecutor consumer(String label) {
-        return new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(),
+        return new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS, new PriorityBlockingQueue<>(),
                                       Thread.ofVirtual().name("Ethereal Consumer[" + label + "]").factory(),
                                       (r, t) -> log.trace("Shutdown, cannot consume unit", t));
     }

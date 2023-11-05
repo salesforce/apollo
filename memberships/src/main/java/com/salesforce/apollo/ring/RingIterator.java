@@ -140,7 +140,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             Q result = null;
             try {
                 result = round.apply(link, next.ring());
-            } catch (StatusRuntimeException e) {
+            } catch (Throwable e) {
                 log.trace("Exception in round for: {} on: {} iteration: {} from: {} on: {}", digest, context.getId(),
                           iteration(), link.getMember() == null ? null : link.getMember().getId(), member.getId());
             }

@@ -154,7 +154,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             Q result = null;
             try {
                 result = round.apply(destination.link, destination.ring);
-            } catch (StatusRuntimeException e) {
+            } catch (Throwable e) {
                 log.trace("error applying round to: %s", destination.member.getId(), e);
             }
             handler.handle(Optional.ofNullable(result), destination);
