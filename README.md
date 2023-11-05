@@ -27,7 +27,7 @@ Apollo isn't designed for coins, rather as essentially a distributed multitenant
 * Google Zanzibar functionality providing Relation Based Access Control hosted on SQL state machines.
 
 ## Requirements
-Apollo requires JDK 19+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+Apollo requires JDK 21+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ### Install Maven
 See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
