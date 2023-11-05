@@ -94,7 +94,7 @@ public class FireFliesTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         TransactionConfiguration txnConfig = new TransactionConfiguration(
-        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()));
+        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);

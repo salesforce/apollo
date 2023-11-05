@@ -33,7 +33,7 @@ public class StoredProceduresTest {
     @Test
     public void membership() throws Exception {
         var entropy = new Random(0x1638);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(100);
         Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();

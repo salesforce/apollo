@@ -51,7 +51,7 @@ public class ShardedKERLTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1000);
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
@@ -131,7 +131,7 @@ public class ShardedKERLTest {
 
     @Test
     public void direct() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());

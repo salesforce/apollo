@@ -61,6 +61,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
@@ -72,9 +73,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author hal.hildebrand
  */
 public class DemesneTest {
-    private final static Class<? extends io.netty.channel.Channel> clientChannelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
-    private final TestItService local = new TestItService() {
+    private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
+    private final        TestItService                              local             = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -90,7 +92,7 @@ public class DemesneTest {
             return null;
         }
     };
-    private EventLoopGroup eventLoopGroup;
+    private              EventLoopGroup                             eventLoopGroup;
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -132,33 +134,35 @@ public class DemesneTest {
 
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
-        final var portalEndpoint = new DomainSocketAddress(Path.of("target")
-                .resolve(UUID.randomUUID().toString())
-                .toFile());
+        final var portalEndpoint = new DomainSocketAddress(
+        Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         final var routes = new HashMap<String, DomainSocketAddress>();
-        final var portal = new Portal<>(serverMember1.getId(),
-                NettyServerBuilder.forAddress(portalEndpoint)
-                        .protocolNegotiator(new DomainSocketNegotiator())
-                        .channelType(getServerDomainSocketChannelClass())
-                        .workerEventLoopGroup(getEventLoopGroup())
-                        .bossEventLoopGroup(getEventLoopGroup())
-                        .intercept(new DomainSocketServerInterceptor()),
-                s -> handler(portalEndpoint), bridge, Duration.ofMillis(1),
-                s -> routes.get(s));
+        final var portal = new Portal<>(serverMember1.getId(), NettyServerBuilder.forAddress(portalEndpoint)
+                                                                                 .protocolNegotiator(
+                                                                                 new DomainSocketNegotiator())
+                                                                                 .channelType(
+                                                                                 getServerDomainSocketChannelClass())
+                                                                                 .workerEventLoopGroup(
+                                                                                 getEventLoopGroup())
+                                                                                 .bossEventLoopGroup(
+                                                                                 getEventLoopGroup())
+                                                                                 .intercept(
+                                                                                 new DomainSocketServerInterceptor()),
+                                        s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave1 = new Enclave(serverMember1, endpoint1, bridge, d -> routes.put(qb64(d), endpoint1));
         var router1 = enclave1.router();
         CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
-                r -> new Server(r),
-                c -> new TestItClient(c), local);
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         var enclave2 = new Enclave(serverMember2, endpoint2, bridge, d -> routes.put(qb64(d), endpoint2));
         var router2 = enclave2.router();
         CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "B",
-                r -> new Server(r),
-                c -> new TestItClient(c), local);
+                                                                            r -> new Server(r),
+                                                                            c -> new TestItClient(c), local);
 
         portal.start();
         router1.start();
@@ -193,15 +197,16 @@ public class DemesneTest {
         Member serverMember = new ControlledIdentifierMember(identifier);
         final var portalAddress = UUID.randomUUID().toString();
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
-        final var router = new RouterImpl(serverMember,
-                NettyServerBuilder.forAddress(portalEndpoint)
-                        .protocolNegotiator(new DomainSocketNegotiator())
-                        .channelType(serverChannelType)
-                        .workerEventLoopGroup(eventLoopGroup)
-                        .bossEventLoopGroup(eventLoopGroup)
-                        .intercept(new DomainSocketServerInterceptor()),
-                ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
-                null);
+        final var router = new RouterImpl(serverMember, NettyServerBuilder.forAddress(portalEndpoint)
+                                                                          .protocolNegotiator(
+                                                                          new DomainSocketNegotiator())
+                                                                          .channelType(serverChannelType)
+                                                                          .workerEventLoopGroup(eventLoopGroup)
+                                                                          .bossEventLoopGroup(eventLoopGroup)
+                                                                          .intercept(
+                                                                          new DomainSocketServerInterceptor()),
+                                          ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
+                                          null);
         router.start();
 
         final var registered = new TreeSet<Digest>();
@@ -224,30 +229,30 @@ public class DemesneTest {
         final var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
         final var outerService = new OuterContextServer(service, null);
         final var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
-                .protocolNegotiator(new DomainSocketNegotiator())
-                .channelType(getServerDomainSocketChannelClass())
-                .addService(kerlServer)
-                .addService(outerService)
-                .workerEventLoopGroup(getEventLoopGroup())
-                .bossEventLoopGroup(getEventLoopGroup())
-                .intercept(new DomainSocketServerInterceptor())
-                .build();
+                                                          .protocolNegotiator(new DomainSocketNegotiator())
+                                                          .channelType(getServerDomainSocketChannelClass())
+                                                          .addService(kerlServer)
+                                                          .addService(outerService)
+                                                          .workerEventLoopGroup(getEventLoopGroup())
+                                                          .bossEventLoopGroup(getEventLoopGroup())
+                                                          .intercept(new DomainSocketServerInterceptor())
+                                                          .build();
         outerContextService.start();
 
         final var parameters = DemesneParameters.newBuilder()
-                .setContext(context.toDigeste())
-                .setPortal(portalAddress)
-                .setParent(parentAddress)
-                .setCommDirectory(commDirectory.toString())
-                .setMaxTransfer(100)
-                .setFalsePositiveRate(.125)
-                .build();
+                                                .setContext(context.toDigeste())
+                                                .setPortal(portalAddress)
+                                                .setParent(parentAddress)
+                                                .setCommDirectory(commDirectory.toString())
+                                                .setMaxTransfer(100)
+                                                .setFalsePositiveRate(.125)
+                                                .build();
         final var demesne = new DemesneImpl(parameters);
         Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();
         final var incp = demesne.inception(identifier.getIdentifier().toIdent(), specification);
 
         final var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(controller.digestAlgorithm()),
-                incp.getSequenceNumber().longValue());
+                                                  incp.getSequenceNumber().longValue());
 
         final var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
 
@@ -268,17 +273,19 @@ public class DemesneTest {
         assertEquals(1, attached.seals().size());
         final var extracted = attached.seals().get(0);
         assertTrue(extracted instanceof Seal.DigestSeal);
-//        assertEquals(1, attached.endorsements().size());
+        //        assertEquals(1, attached.endorsements().size());
     }
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
-                .eventLoopGroup(eventLoopGroup)
-                .channelType(clientChannelType)
-                .keepAliveTime(1, TimeUnit.SECONDS)
-                .usePlaintext()
-                .build();
+                                  .executor(executor)
+                                  .eventLoopGroup(eventLoopGroup)
+                                  .channelType(clientChannelType)
+                                  .keepAliveTime(1, TimeUnit.SECONDS)
+                                  .usePlaintext()
+                                  .build();
     }
+
     public static interface TestIt {
         void ping(Any request, StreamObserver<Any> responseObserver);
     }
@@ -301,7 +308,7 @@ public class DemesneTest {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub client;
+        private final TestItBlockingStub   client;
         private final ManagedServerChannel connection;
 
         public TestItClient(ManagedServerChannel c) {
@@ -328,9 +335,8 @@ public class DemesneTest {
     public class ServerA implements TestIt {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server A"))
-                    .build()));
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server A")).build()));
             responseObserver.onCompleted();
         }
     }
@@ -338,9 +344,8 @@ public class DemesneTest {
     public class ServerB implements TestIt {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server B"))
-                    .build()));
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server B")).build()));
             responseObserver.onCompleted();
         }
     }

@@ -105,7 +105,7 @@ public class LifoBlockingLimiterTest {
         List<Optional<Limiter.Listener>> listeners = acquireN(blockingLimiter, 4);
 
         // Schedule one to release in 250 msec
-        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory())
+        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
                  .schedule(() -> listeners.get(0).get().onSuccess(), 250, TimeUnit.MILLISECONDS);
 
         // Next acquire will block for 1 second

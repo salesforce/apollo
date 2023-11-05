@@ -26,7 +26,7 @@ public class ShardedOracleTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
         Emulator emmy = new Emulator();
 

@@ -53,6 +53,7 @@ import java.sql.Connection;
 import java.sql.JDBCType;
 import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
@@ -61,22 +62,23 @@ import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFI
 import static java.nio.file.Path.of;
 
 /**
- * An abstract sharded domain, top level, or sub domain. A domain minimally
- * consists of a managed KERL, ReBAC Oracle and the defined membership
+ * An abstract sharded domain, top level, or sub domain. A domain minimally consists of a managed KERL, ReBAC Oracle and
+ * the defined membership
  *
  * @author hal.hildebrand
  */
 abstract public class Domain {
+    protected static final Executor                   executor = Executors.newVirtualThreadPerTaskExecutor();
+    private static final   Logger                     log      = LoggerFactory.getLogger(Domain.class);
+    protected final        CHOAM                      choam;
+    protected final        KERL                       commonKERL;
+    protected final        ControlledIdentifierMember member;
+    protected final        Mutator                    mutator;
+    protected final        Oracle                     oracle;
+    protected final        Parameters                 params;
+    protected final        SqlStateMachine            sqlStateMachine;
+    protected final        Connection                 stateConnection;
 
-    private static final Logger log = LoggerFactory.getLogger(Domain.class);
-    protected final CHOAM choam;
-    protected final KERL commonKERL;
-    protected final ControlledIdentifierMember member;
-    protected final Mutator mutator;
-    protected final Oracle oracle;
-    protected final Parameters params;
-    protected final SqlStateMachine sqlStateMachine;
-    protected final Connection stateConnection;
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
                   RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         var paramsClone = params.clone();
@@ -96,30 +98,30 @@ abstract public class Domain {
 
         paramsClone.getProducer().ethereal().setSigner(member);
         this.params = paramsClone.build(runtimeClone.setCheckpointer(sqlStateMachine.getCheckpointer())
-                .setProcessor(sqlStateMachine.getExecutor())
-                .setMember(member)
-                .setRestorer(sqlStateMachine.getBootstrapper())
-                .setKerl(() -> kerl())
-                .setGenesisData(members -> genesisOf(members))
-                .build());
+                                                    .setProcessor(sqlStateMachine.getExecutor())
+                                                    .setMember(member)
+                                                    .setRestorer(sqlStateMachine.getBootstrapper())
+                                                    .setKerl(() -> kerl())
+                                                    .setGenesisData(members -> genesisOf(members))
+                                                    .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
-        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout() );
+        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout());
         this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
-                params.getDigestAlgorithm() );
+                                          params.getDigestAlgorithm());
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
-                member.getId(), dbURL, checkpointBaseDir);
+                 member.getId(), dbURL, checkpointBaseDir);
     }
 
     public static void addMembers(Connection connection, List<byte[]> members, String state) {
         var context = DSL.using(connection, SQLDialect.H2);
         for (var m : members) {
             var id = context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX)
-                    .values(m)
-                    .onDuplicateKeyIgnore()
-                    .returning(IDENTIFIER.ID)
-                    .fetchOne();
+                            .values(m)
+                            .onDuplicateKeyIgnore()
+                            .returning(IDENTIFIER.ID)
+                            .fetchOne();
             if (id != null) {
                 context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
             }
@@ -138,19 +140,18 @@ abstract public class Domain {
         resources.put(of("/model/model.xml"), res("/model/model.xml"));
 
         return Txn.newBuilder()
-                .setMigration(Migration.newBuilder()
-                        .setUpdate(Mutator.changeLog(resources, "/initialize.xml"))
-                        .build())
-                .build();
+                  .setMigration(
+                  Migration.newBuilder().setUpdate(Mutator.changeLog(resources, "/initialize.xml")).build())
+                  .build();
     }
 
     public static boolean isMember(DSLContext context, SelfAddressingIdentifier id) {
         final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
         return context.fetchExists(context.select(MEMBER.IDENTIFIER)
-                .from(MEMBER)
-                .join(idTable)
-                .on(idTable.ID.eq(MEMBER.IDENTIFIER))
-                .and(idTable.PREFIX.eq(id.getDigest().getBytes())));
+                                          .from(MEMBER)
+                                          .join(idTable)
+                                          .on(idTable.ID.eq(MEMBER.IDENTIFIER))
+                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes())));
     }
 
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
@@ -171,12 +172,12 @@ abstract public class Domain {
     public boolean activate(Member m) {
         if (!active()) {
             return params.runtime()
-                    .foundation()
-                    .getFoundation()
-                    .getMembershipList()
-                    .stream()
-                    .map(d -> Digest.from(d))
-                    .anyMatch(d -> m.getId().equals(d));
+                         .foundation()
+                         .getFoundation()
+                         .getMembershipList()
+                         .stream()
+                         .map(d -> Digest.from(d))
+                         .anyMatch(d -> m.getId().equals(d));
         }
         final var context = DSL.using(stateConnection, SQLDialect.H2);
         final var activeMember = isMember(context, new SelfAddressingIdentifier(m.getId()));
@@ -207,8 +208,7 @@ abstract public class Domain {
     }
 
     /**
-     * @return the adapter that provides raw Protobuf access to the underlying KERI
-     * resolution
+     * @return the adapter that provides raw Protobuf access to the underlying KERI resolution
      */
     public ProtoKERLAdapter getKERLService() {
         return new ProtoKERLAdapter(commonKERL);
@@ -244,27 +244,22 @@ abstract public class Domain {
         // Schemas
         transactions.add(transactionOf(boostrapMigration()));
         sorted.stream()
-                .map(e -> manifest(members.get(e)))
-                .filter(t -> t != null)
-                .flatMap(l -> l.stream())
-                .forEach(t -> transactions.add(t));
-        transactions.add(initalMembership(params.runtime()
-                .foundation()
-                .getFoundation()
-                .getMembershipList()
-                .stream()
-                .map(d -> Digest.from(d))
-                .toList()));
+              .map(e -> manifest(members.get(e)))
+              .filter(t -> t != null)
+              .flatMap(l -> l.stream())
+              .forEach(t -> transactions.add(t));
+        transactions.add(initalMembership(
+        params.runtime().foundation().getFoundation().getMembershipList().stream().map(d -> Digest.from(d)).toList()));
         return transactions;
     }
 
     private Transaction initalMembership(List<Digest> digests) {
-        var call = mutator.call("{ call apollo_kernel.add_members(?, ?) }",
-                digests.stream()
-                        .map(d -> new SelfAddressingIdentifier(d))
-                        .map(id -> id.toIdent().toByteArray())
-                        .toList(),
-                "active");
+        var call = mutator.call("{ call apollo_kernel.add_members(?, ?) }", digests.stream()
+                                                                                   .map(
+                                                                                   d -> new SelfAddressingIdentifier(d))
+                                                                                   .map(
+                                                                                   id -> id.toIdent().toByteArray())
+                                                                                   .toList(), "active");
         return transactionOf(Txn.newBuilder().setCall(call).build());
     }
 
@@ -295,16 +290,17 @@ abstract public class Domain {
             default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
         };
         var batch = mutator.batch();
-        batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
-                Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
-                DigestAlgorithm.DEFAULT.digestCode()));
+        batch.execute(
+        mutator.call("{ ? = call stereotomy.append(?, ?, ?) }", Collections.singletonList(JDBCType.BINARY),
+                     event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode()));
         if (!ke.getAttachment().equals(Attachment.getDefaultInstance())) {
             var attach = AttachmentEvent.newBuilder()
-                    .setCoordinates(event.getCoordinates().toEventCoords())
-                    .setAttachment(ke.getAttachment())
-                    .build();
-            batch.execute(mutator.call("{ ? = call stereotomy.appendAttachment(?) }",
-                    Collections.singletonList(JDBCType.BINARY), attach.toByteArray()));
+                                        .setCoordinates(event.getCoordinates().toEventCoords())
+                                        .setAttachment(ke.getAttachment())
+                                        .build();
+            batch.execute(
+            mutator.call("{ ? = call stereotomy.appendAttachment(?) }", Collections.singletonList(JDBCType.BINARY),
+                         attach.toByteArray()));
         }
         return transactionOf(Txn.newBuilder().setBatched(batch.build()).build());
     }
@@ -316,14 +312,14 @@ abstract public class Domain {
         var signer = new Signer.MockSigner(params.viewSigAlgorithm());
         var digeste = params.digestAlgorithm().getOrigin().toDigeste();
         var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
-                message.toByteString().asReadOnlyByteBuffer());
+                              message.toByteString().asReadOnlyByteBuffer());
         return Transaction.newBuilder()
-                .setSource(digeste)
-                .setContent(message.toByteString())
-                .setSignature(sig.toSig())
-                .build();
+                          .setSource(digeste)
+                          .setContent(message.toByteString())
+                          .setSignature(sig.toSig())
+                          .build();
     }
 
-    public record TransactionConfiguration( ScheduledExecutorService scheduler) {
+    public record TransactionConfiguration(ScheduledExecutorService scheduler) {
     }
 }

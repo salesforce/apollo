@@ -55,6 +55,8 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
@@ -65,9 +67,10 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
  */
 public class DemesneSmoke {
 
-    private final static Class<? extends io.netty.channel.Channel> clientChannelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
-    private EventLoopGroup eventLoopGroup;
+    private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
+    private              EventLoopGroup                             eventLoopGroup;
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -118,15 +121,16 @@ public class DemesneSmoke {
         Member serverMember = new ControlledIdentifierMember(identifier);
         final var portalAddress = UUID.randomUUID().toString();
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
-        final var router = new RouterImpl(serverMember,
-                NettyServerBuilder.forAddress(portalEndpoint)
-                        .protocolNegotiator(new DomainSocketNegotiator())
-                        .channelType(serverChannelType)
-                        .workerEventLoopGroup(eventLoopGroup)
-                        .bossEventLoopGroup(eventLoopGroup)
-                        .intercept(new DomainSocketServerInterceptor()),
-                ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
-                null);
+        final var router = new RouterImpl(serverMember, NettyServerBuilder.forAddress(portalEndpoint)
+                                                                          .protocolNegotiator(
+                                                                          new DomainSocketNegotiator())
+                                                                          .channelType(serverChannelType)
+                                                                          .workerEventLoopGroup(eventLoopGroup)
+                                                                          .bossEventLoopGroup(eventLoopGroup)
+                                                                          .intercept(
+                                                                          new DomainSocketServerInterceptor()),
+                                          ServerConnectionCache.newBuilder().setFactory(to -> handler(portalEndpoint)),
+                                          null);
         router.start();
 
         final var registered = new TreeSet<Digest>();
@@ -149,30 +153,30 @@ public class DemesneSmoke {
         final var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
         final var outerService = new OuterContextServer(service, null);
         final var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
-                .protocolNegotiator(new DomainSocketNegotiator())
-                .channelType(getServerDomainSocketChannelClass())
-                .addService(kerlServer)
-                .addService(outerService)
-                .workerEventLoopGroup(getEventLoopGroup())
-                .bossEventLoopGroup(getEventLoopGroup())
-                .intercept(new DomainSocketServerInterceptor())
-                .build();
+                                                          .protocolNegotiator(new DomainSocketNegotiator())
+                                                          .channelType(getServerDomainSocketChannelClass())
+                                                          .addService(kerlServer)
+                                                          .addService(outerService)
+                                                          .workerEventLoopGroup(getEventLoopGroup())
+                                                          .bossEventLoopGroup(getEventLoopGroup())
+                                                          .intercept(new DomainSocketServerInterceptor())
+                                                          .build();
         outerContextService.start();
 
         final var parameters = DemesneParameters.newBuilder()
-                .setContext(context.toDigeste())
-                .setPortal(portalAddress)
-                .setParent(parentAddress)
-                .setCommDirectory(commDirectory.toString())
-                .setMaxTransfer(100)
-                .setFalsePositiveRate(.125)
-                .build();
+                                                .setContext(context.toDigeste())
+                                                .setPortal(portalAddress)
+                                                .setParent(parentAddress)
+                                                .setCommDirectory(commDirectory.toString())
+                                                .setMaxTransfer(100)
+                                                .setFalsePositiveRate(.125)
+                                                .build();
         final var demesne = new DemesneImpl(parameters);
         Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();
         final var incp = demesne.inception(identifier.getIdentifier().toIdent(), specification);
 
         final var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(controller.digestAlgorithm()),
-                incp.getSequenceNumber().longValue());
+                                                  incp.getSequenceNumber().longValue());
 
         final var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
 
@@ -186,11 +190,12 @@ public class DemesneSmoke {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
-                .eventLoopGroup(eventLoopGroup)
-                .channelType(clientChannelType)
-                .keepAliveTime(1, TimeUnit.SECONDS)
-                .usePlaintext()
-                .build();
+                                  .executor(executor)
+                                  .eventLoopGroup(eventLoopGroup)
+                                  .channelType(clientChannelType)
+                                  .keepAliveTime(1, TimeUnit.SECONDS)
+                                  .usePlaintext()
+                                  .build();
     }
 
     public static interface TestIt {
@@ -215,7 +220,7 @@ public class DemesneSmoke {
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub client;
+        private final TestItBlockingStub   client;
         private final ManagedServerChannel connection;
 
         public TestItClient(ManagedServerChannel c) {
@@ -242,9 +247,8 @@ public class DemesneSmoke {
     public class ServerA implements TestIt {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server A"))
-                    .build()));
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server A")).build()));
             responseObserver.onCompleted();
         }
     }
@@ -252,9 +256,8 @@ public class DemesneSmoke {
     public class ServerB implements TestIt {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                    .setContents(ByteString.copyFromUtf8("Hello Server B"))
-                    .build()));
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server B")).build()));
             responseObserver.onCompleted();
         }
     }

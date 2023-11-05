@@ -6,9 +6,17 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.membership.Member;
+import io.grpc.*;
+import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.unix.DomainSocketAddress;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -17,37 +25,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.QualifiedBase64;
-import com.salesforce.apollo.membership.Member;
-
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.ServerBuilder;
-import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
-import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.NettyServerBuilder;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.unix.DomainSocketAddress;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
 
 /**
- * Local "service mesh" for in process Isolate Enclaves. The Portal provides the
- * externally visible GRPC endpoint that all enclaves are multiplexed through.
- * The Portal also serves as the exit point from the process that all Isolate
+ * Local "service mesh" for in process Isolate Enclaves. The Portal provides the externally visible GRPC endpoint that
+ * all enclaves are multiplexed through. The Portal also serves as the exit point from the process that all Isolate
  * Enclaves use to talk to each other and Enclaves in other processes
  *
  * @author hal.hildebrand
- *
  */
 public class Portal<To extends Member> {
-    private static final Executor executor = Executors.newVirtualThreadPerTaskExecutor();
+    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
 
     private final String         agent;
@@ -57,8 +45,7 @@ public class Portal<To extends Member> {
     private final Demultiplexer  outbound;
 
     public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
-                  DomainSocketAddress bridge,  Duration keepAlive,
-                  Function<String, DomainSocketAddress> router) {
+                  DomainSocketAddress bridge, Duration keepAlive, Function<String, DomainSocketAddress> router) {
         this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
                                                             .executor(executor)
@@ -98,6 +85,7 @@ public class Portal<To extends Member> {
             }
         };
         return NettyChannelBuilder.forAddress(address)
+                                  .executor(executor)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)

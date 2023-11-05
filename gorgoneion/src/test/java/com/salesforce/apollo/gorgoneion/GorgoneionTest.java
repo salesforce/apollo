@@ -61,7 +61,7 @@ public class GorgoneionTest {
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
                                     gorgonRouter,
-                                    Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), null);
+                                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());

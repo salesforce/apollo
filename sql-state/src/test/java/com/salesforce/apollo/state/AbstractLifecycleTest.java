@@ -298,7 +298,7 @@ abstract public class AbstractLifecycleTest {
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
         transactioneers.add(
         new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor, countdown,
-                           Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory())));
+                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
         System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());

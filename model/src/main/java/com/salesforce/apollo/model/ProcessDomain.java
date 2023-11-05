@@ -54,10 +54,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
@@ -100,7 +97,7 @@ public class ProcessDomain extends Domain {
                          InetSocketAddress endpoint, Path commDirectory,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
                          EventValidation eventValidation,
-                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification ) {
+                         IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification) {
         super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
@@ -113,8 +110,7 @@ public class ProcessDomain extends Domain {
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), Duration.ofSeconds(1), 0.00125,
-                          null);
+                          params.digestAlgorithm(), params.communications(), Duration.ofSeconds(1), 0.00125, null);
         listener = foundation.register(listener());
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(
@@ -125,8 +121,7 @@ public class ProcessDomain extends Domain {
                                                                       .workerEventLoopGroup(portalEventLoopGroup)
                                                                       .bossEventLoopGroup(portalEventLoopGroup)
                                                                       .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, Duration.ofMillis(1),
-                                    s -> routes.get(s));
+                                    s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
@@ -234,6 +229,7 @@ public class ProcessDomain extends Domain {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .executor(executor)
                                   .eventLoopGroup(clientEventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)

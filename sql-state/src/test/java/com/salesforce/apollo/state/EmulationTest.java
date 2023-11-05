@@ -24,7 +24,7 @@ public class EmulationTest {
     @Test
     public void functional() throws Exception {
         // Resources to manage
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
         // How long to wait until timing out ;)
         Duration timeout = Duration.ofSeconds(3);

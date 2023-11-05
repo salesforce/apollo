@@ -57,6 +57,7 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -77,6 +78,7 @@ public class DemesneImpl implements Demesne {
     private static final int                      DEFAULT_VIRTUAL_THREADS = 5;
     private static final EventLoopGroup           eventLoopGroup          = getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
+    private final static Executor                 executor                = Executors.newVirtualThreadPerTaskExecutor();
     private final        KERL                     kerl;
     private final        OuterContextClient       outer;
     private final        DemesneParameters        parameters;
@@ -196,11 +198,11 @@ public class DemesneImpl implements Demesne {
         Digest kerlContext = context.getId();
         final var serverAddress = new DomainSocketAddress(address);
         log.info("Kerl context: {} address: {}", kerlContext, serverAddress);
-        NettyChannelBuilder.forAddress(serverAddress);
         return new CachingKERL(f -> {
             ManagedChannel channel = null;
             try {
                 channel = NettyChannelBuilder.forAddress(serverAddress)
+                                             .executor(executor)
                                              .intercept(clientInterceptor(kerlContext))
                                              .eventLoopGroup(eventLoopGroup)
                                              .channelType(channelType)
@@ -221,6 +223,7 @@ public class DemesneImpl implements Demesne {
 
     private OuterContextClient outerFrom(File address) {
         return new OuterContextClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(address))
+                                                         .executor(executor)
                                                          .intercept(clientInterceptor(context.getId()))
                                                          .eventLoopGroup(eventLoopGroup)
                                                          .channelType(channelType)

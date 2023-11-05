@@ -122,10 +122,10 @@ public class Enclave implements RouterSupplier {
             }
         };
         final var builder = NettyChannelBuilder.forAddress(bridge)
+                                               .executor(executor)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)
                                                .usePlaintext()
-                                               .executor(executor)
                                                .intercept(clientInterceptor);
         return builder.build();
     }

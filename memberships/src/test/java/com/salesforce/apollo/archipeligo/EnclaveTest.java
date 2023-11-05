@@ -6,44 +6,19 @@
  */
 package com.salesforce.apollo.archipeligo;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.archipelago.Enclave;
-import com.salesforce.apollo.archipelago.Link;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.Portal;
-import com.salesforce.apollo.archipelago.RoutableService;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
-
 import io.grpc.ManagedChannel;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
@@ -51,97 +26,48 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+
+import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EnclaveTest {
-    public static class Server extends TestItImplBase {
-        private final RoutableService<TestIt> router;
-
-        public Server(RoutableService<TestIt> router) {
-            this.router = router;
-        }
-
-        @Override
-        public void ping(Any request, StreamObserver<Any> responseObserver) {
-            router.evaluate(responseObserver, t -> t.ping(request, responseObserver));
-        }
-    }
-
-    public class ServerA implements TestIt {
-        @Override
-        public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Hello Server A"))
-                                                        .build()));
-            responseObserver.onCompleted();
-        }
-    }
-
-    public class ServerB implements TestIt {
-        @Override
-        public void ping(Any request, StreamObserver<Any> responseObserver) {
-            responseObserver.onNext(Any.pack(ByteMessage.newBuilder()
-                                                        .setContents(ByteString.copyFromUtf8("Hello Server B"))
-                                                        .build()));
-            responseObserver.onCompleted();
-        }
-    }
-
-    public static interface TestIt {
-        void ping(Any request, StreamObserver<Any> responseObserver);
-    }
-
-    public static class TestItClient implements TestItService {
-        private final TestItBlockingStub   client;
-        private final ManagedServerChannel connection;
-
-        public TestItClient(ManagedServerChannel c) {
-            this.connection = c;
-            client = TestItGrpc.newBlockingStub(c);
-        }
+    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+    private final        TestItService                             local       = new TestItService() {
 
         @Override
         public void close() throws IOException {
-            connection.release();
         }
 
         @Override
         public Member getMember() {
-            return connection.getMember();
+            return null;
         }
 
         @Override
         public Any ping(Any request) {
-            return client.ping(request);
+            return null;
         }
-    }
-
-    public static interface TestItService extends Link {
-        Any ping(Any request);
-    }
-
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
-
-    private EventLoopGroup      eventLoopGroup;
-    private final TestItService local = new TestItService() {
-
-                                          @Override
-                                          public void close() throws IOException {
-                                          }
-
-                                          @Override
-                                          public Member getMember() {
-                                              return null;
-                                          }
-
-                                          @Override
-                                          public Any ping(Any request) {
-                                              return null;
-                                          }
-                                      };
+    };
+    private              EventLoopGroup                            eventLoopGroup;
 
     @AfterEach
     public void after() throws Exception {
@@ -168,33 +94,31 @@ public class EnclaveTest {
         final var routes = new HashMap<String, DomainSocketAddress>();
         final Function<String, DomainSocketAddress> router = s -> routes.get(s);
 
-        final var portalEndpoint = new DomainSocketAddress(Path.of("target")
-                                                               .resolve(UUID.randomUUID().toString())
-                                                               .toFile());
+        final var portalEndpoint = new DomainSocketAddress(
+        Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         final var agent = DigestAlgorithm.DEFAULT.getLast();
-        final var portal = new Portal<>(agent,
-                                        NettyServerBuilder.forAddress(portalEndpoint)
-                                                          .protocolNegotiator(new DomainSocketNegotiator())
-                                                          .channelType(getServerDomainSocketChannelClass())
-                                                          .workerEventLoopGroup(getEventLoopGroup())
-                                                          .bossEventLoopGroup(getEventLoopGroup())
-                                                          .intercept(new DomainSocketServerInterceptor()),
-                                        s -> handler(portalEndpoint), bridge,  Duration.ofMillis(1), router);
+        final var portal = new Portal<>(agent, NettyServerBuilder.forAddress(portalEndpoint)
+                                                                 .protocolNegotiator(new DomainSocketNegotiator())
+                                                                 .channelType(getServerDomainSocketChannelClass())
+                                                                 .workerEventLoopGroup(getEventLoopGroup())
+                                                                 .bossEventLoopGroup(getEventLoopGroup())
+                                                                 .intercept(new DomainSocketServerInterceptor()),
+                                        s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), router);
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave1 = new Enclave(serverMember1, endpoint1,  bridge, d -> {
+        var enclave1 = new Enclave(serverMember1, endpoint1, bridge, d -> {
             routes.put(qb64(d), endpoint1);
         });
-        var router1 = enclave1.router( );
+        var router1 = enclave1.router();
         CommonCommunications<TestItService, TestIt> commsA = router1.create(serverMember1, ctxA, new ServerA(), "A",
                                                                             r -> new Server(r),
                                                                             c -> new TestItClient(c), local);
 
         final var endpoint2 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
-        var enclave2 = new Enclave(serverMember2, endpoint2,   bridge, d -> {
+        var enclave2 = new Enclave(serverMember2, endpoint2, bridge, d -> {
             routes.put(qb64(d), endpoint2);
         });
-        var router2 = enclave2.router( );
+        var router2 = enclave2.router();
         CommonCommunications<TestItService, TestIt> commsB = router2.create(serverMember2, ctxB, new ServerB(), "A",
                                                                             r -> new Server(r),
                                                                             c -> new TestItClient(c), local);
@@ -223,10 +147,75 @@ public class EnclaveTest {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .executor(executor)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)
                                   .usePlaintext()
                                   .build();
+    }
+
+    public static interface TestIt {
+        void ping(Any request, StreamObserver<Any> responseObserver);
+    }
+
+    public static interface TestItService extends Link {
+        Any ping(Any request);
+    }
+
+    public static class Server extends TestItImplBase {
+        private final RoutableService<TestIt> router;
+
+        public Server(RoutableService<TestIt> router) {
+            this.router = router;
+        }
+
+        @Override
+        public void ping(Any request, StreamObserver<Any> responseObserver) {
+            router.evaluate(responseObserver, t -> t.ping(request, responseObserver));
+        }
+    }
+
+    public static class TestItClient implements TestItService {
+        private final TestItBlockingStub   client;
+        private final ManagedServerChannel connection;
+
+        public TestItClient(ManagedServerChannel c) {
+            this.connection = c;
+            client = TestItGrpc.newBlockingStub(c);
+        }
+
+        @Override
+        public void close() throws IOException {
+            connection.release();
+        }
+
+        @Override
+        public Member getMember() {
+            return connection.getMember();
+        }
+
+        @Override
+        public Any ping(Any request) {
+            return client.ping(request);
+        }
+    }
+
+    public class ServerA implements TestIt {
+        @Override
+        public void ping(Any request, StreamObserver<Any> responseObserver) {
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server A")).build()));
+            responseObserver.onCompleted();
+        }
+    }
+
+    public class ServerB implements TestIt {
+        @Override
+        public void ping(Any request, StreamObserver<Any> responseObserver) {
+            responseObserver.onNext(
+            Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8("Hello Server B")).build()));
+            responseObserver.onCompleted();
+        }
     }
 }
