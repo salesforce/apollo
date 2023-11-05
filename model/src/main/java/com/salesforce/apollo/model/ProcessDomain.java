@@ -6,45 +6,16 @@
  */
 package com.salesforce.apollo.model;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.h2.jdbcx.JdbcConnectionPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.*;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
@@ -65,7 +36,6 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.thoth.KerlDHT;
-
 import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
@@ -74,20 +44,31 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import org.h2.jdbcx.JdbcConnectionPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 /**
- * The logical domain of the current "Process" - OS and Simulation defined,
- * 'natch.
+ * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
  * <p>
- * The ProcessDomain represents a member node in the top level domain and
- * represents the top level container model for the distributed system. This top
- * level domain contains every sub domain as decendents. The membership of this
- * domain is the entirety of all process members in the system. The Context of
- * this domain is also the foundational fireflies membership domain of the
- * entire system.
- * 
- * @author hal.hildebrand
+ * The ProcessDomain represents a member node in the top level domain and represents the top level container model for
+ * the distributed system. This top level domain contains every sub domain as decendents. The membership of this domain
+ * is the entirety of all process members in the system. The Context of this domain is also the foundational fireflies
+ * membership domain of the entire system.
  *
+ * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
 
@@ -124,28 +105,25 @@ public class ProcessDomain extends Domain {
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
         this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
-                                   DigestAlgorithm.DEFAULT, null, params.exec());
+                                   DigestAlgorithm.DEFAULT, null);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), params.exec(), Duration.ofSeconds(1),
-                          params.runtime().scheduler(), 0.00125, null);
+                          params.digestAlgorithm(), params.communications(), Duration.ofSeconds(1), 0.00125, null);
         listener = foundation.register(listener());
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        portalEndpoint = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString())
-                                                                        .toFile());
-        portal = new Portal<Member>(member.getId(),
-                                    NettyServerBuilder.forAddress(portalEndpoint)
-                                                      .protocolNegotiator(new DomainSocketNegotiator())
-                                                      .channelType(getServerDomainSocketChannelClass())
-                                                      .workerEventLoopGroup(portalEventLoopGroup)
-                                                      .bossEventLoopGroup(portalEventLoopGroup)
-                                                      .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, runtime.getExec(), Duration.ofMillis(1),
-                                    s -> routes.get(s));
-        outerContextEndpoint = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString())
-                                                                              .toFile());
+        portalEndpoint = new DomainSocketAddress(
+        communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
+        portal = new Portal<Member>(member.getId(), NettyServerBuilder.forAddress(portalEndpoint)
+                                                                      .protocolNegotiator(new DomainSocketNegotiator())
+                                                                      .channelType(getServerDomainSocketChannelClass())
+                                                                      .workerEventLoopGroup(portalEventLoopGroup)
+                                                                      .bossEventLoopGroup(portalEventLoopGroup)
+                                                                      .intercept(new DomainSocketServerInterceptor()),
+                                    s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
+        outerContextEndpoint = new DomainSocketAddress(
+        communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
                                                 .protocolNegotiator(new DomainSocketNegotiator())
                                                 .channelType(getServerDomainSocketChannelClass())
@@ -161,12 +139,11 @@ public class ProcessDomain extends Domain {
         return foundation;
     }
 
-    public CompletableFuture<CertificateWithPrivateKey> provision(Duration duration,
-                                                                  SignatureAlgorithm signatureAlgorithm) {
+    public CertificateWithPrivateKey provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {
         return member.getIdentifier().provision(Instant.now(), duration, signatureAlgorithm);
     }
 
-    public CompletableFuture<SelfAddressingIdentifier> spawn(DemesneParameters.Builder prototype) {
+    public SelfAddressingIdentifier spawn(DemesneParameters.Builder prototype) {
         final var witness = member.getIdentifier().newEphemeral().get();
         final var cloned = prototype.clone();
         var parameters = cloned.setCommDirectory(communicationsDirectory.toString())
@@ -193,18 +170,16 @@ public class ProcessDomain extends Domain {
             var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(dht.digestAlgorithm()),
                                                 incp.getSequenceNumber().longValue());
             var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
-            return dht.append(AttachmentEvent.newBuilder()
-                                             .setCoordinates(incp.getCoordinates().toEventCoords())
-                                             .setAttachment(attached.toAttachemente())
-                                             .build())
-                      .thenCompose(ks -> member.getIdentifier().seal(builder))
-                      .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
-                      .thenAccept(v -> demesne.start())
-                      .thenApply(v -> (SelfAddressingIdentifier) incp.getIdentifier());
+            KeyState_ ks = dht.append(AttachmentEvent.newBuilder()
+                                                     .setCoordinates(incp.getCoordinates().toEventCoords())
+                                                     .setAttachment(attached.toAttachemente())
+                                                     .build());
+            var coords = member.getIdentifier().seal(builder);
+            demesne.commit(coords.toEventCoords());
+            demesne.start();
+            return (SelfAddressingIdentifier) incp.getIdentifier();
         }
-        var returned = new CompletableFuture<SelfAddressingIdentifier>();
-        returned.complete(computed.getId());
-        return returned;
+        return computed.getId();
     }
 
     @Override
@@ -254,6 +229,7 @@ public class ProcessDomain extends Domain {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .executor(executor)
                                   .eventLoopGroup(clientEventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)
@@ -302,24 +278,25 @@ public class ProcessDomain extends Domain {
 
             @Override
             public void register(SubContext context) {
-//                routes.put("",qb64(Digest.from(context)));
+                //                routes.put("",qb64(Digest.from(context)));
             }
         }, null);
     }
 
     private void startServices() {
-        dht.start(params.scheduler(), Duration.ofMillis(10)); // TODO parameterize gossip frequency
+        dht.start(Duration.ofMillis(10)); // TODO parameterize gossip frequency
         try {
             portal.start();
         } catch (IOException e) {
-            throw new IllegalStateException("Unable to start portal, local address: " + bridge.path() + " on: "
-            + params.member().getId());
+            throw new IllegalStateException(
+            "Unable to start portal, local address: " + bridge.path() + " on: " + params.member().getId());
         }
         try {
             outerContextService.start();
         } catch (IOException e) {
-            throw new IllegalStateException("Unable to start outer context service, local address: "
-            + outerContextEndpoint.path() + " on: " + params.member().getId());
+            throw new IllegalStateException(
+            "Unable to start outer context service, local address: " + outerContextEndpoint.path() + " on: "
+            + params.member().getId());
         }
     }
 

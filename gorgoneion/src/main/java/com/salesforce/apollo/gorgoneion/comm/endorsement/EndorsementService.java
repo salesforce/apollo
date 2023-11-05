@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
-import java.util.concurrent.CompletableFuture;
-
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.MemberSignature;
 import com.salesfoce.apollo.gorgoneion.proto.Nonce;
@@ -18,13 +15,12 @@ import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface EndorsementService {
 
-    CompletableFuture<MemberSignature> endorse(Nonce request, Digest from);
+    MemberSignature endorse(Nonce request, Digest from);
 
-    CompletableFuture<Empty> enroll(Notarization request, Digest from);
+    void enroll(Notarization request, Digest from);
 
-    CompletableFuture<Validation_> validate(Credentials credentials, Digest id);
+    Validation_ validate(Credentials credentials, Digest id);
 }

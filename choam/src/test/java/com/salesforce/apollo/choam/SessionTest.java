@@ -6,24 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -45,12 +27,20 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-
 import io.grpc.StatusRuntimeException;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class SessionTest {
     static {
@@ -61,17 +51,17 @@ public class SessionTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService exec = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
-                                                              .setMember(new ControlledIdentifierMember(new StereotomyImpl(new MemKeyStore(),
-                                                                                                                           new MemKERL(DigestAlgorithm.DEFAULT),
-                                                                                                                           entropy).newIdentifier()
-                                                                                                                                   .get()))
+                                                              .setMember(new ControlledIdentifierMember(
+                                                              new StereotomyImpl(new MemKeyStore(),
+                                                                                 new MemKERL(DigestAlgorithm.DEFAULT),
+                                                                                 entropy).newIdentifier()))
                                                               .build());
         var gate = new CountDownLatch(1);
         @SuppressWarnings("unchecked")
@@ -103,8 +93,8 @@ public class SessionTest {
 
     @Test
     public void scalingTest() throws Exception {
-        var exec = Executors.newFixedThreadPool(2);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -112,8 +102,8 @@ public class SessionTest {
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
-                                                              .setMember(new ControlledIdentifierMember(stereotomy.newIdentifier()
-                                                                                                                  .get()))
+                                                              .setMember(new ControlledIdentifierMember(
+                                                              stereotomy.newIdentifier()))
                                                               .build());
 
         @SuppressWarnings("unchecked")

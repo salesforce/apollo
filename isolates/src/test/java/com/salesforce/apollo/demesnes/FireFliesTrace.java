@@ -6,26 +6,6 @@
  */
 package com.salesforce.apollo.demesnes;
 
-import java.net.InetSocketAddress;
-import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -56,13 +36,28 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class FireFliesTrace {
-    private static final int    CARDINALITY     = 5;
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final int                        CARDINALITY     = 5;
+    private static final Digest                     GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    "Give me food or give me slack or kill me".getBytes());
+    private final        List<ProcessDomain>        domains         = new ArrayList<>();
+    private final        Map<ProcessDomain, Router> routers         = new HashMap<>();
 
     public static void main(String[] argv) throws Exception {
         var t = new FireFliesTrace();
@@ -116,8 +111,7 @@ public class FireFliesTrace {
                                 oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
                                 oracle.map(abcTechMembers, technicianMembers),
                                 oracle.map(flaggedTechnicianMembers, technicianMembers),
-                                oracle.map(jale, abcTechMembers))
-                         .get();
+                                oracle.map(jale, abcTechMembers)).get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -177,11 +171,6 @@ public class FireFliesTrace {
         oracle.delete(flaggedTechnicianMembers).get();
     }
 
-    private final List<ProcessDomain> domains = new ArrayList<>();
-    private ExecutorService           exec    = Executors.newVirtualThreadPerTaskExecutor();
-
-    private final Map<ProcessDomain, Router> routers = new HashMap<>();
-
     public void after() {
         domains.forEach(n -> n.stop());
         domains.clear();
@@ -204,37 +193,26 @@ public class FireFliesTrace {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
+            return stereotomy.newIdentifier();
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                                                                          Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual()
-                                                                                                                           .factory()));
+        TransactionConfiguration txnConfig = new TransactionConfiguration(
+        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
-                                                                                                .setTarget(30),
-                                                                           exec);
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                                         Thread.ofVirtual()
-                                                                                                               .factory()))
                                                           .setContext(context)
-                                                          .setExec(exec)
-                                                          .setCommunications(localRouter),
-                                         new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
-                                         EventValidation.NONE, IdentifierSpecification.newBuilder());
+                                                          .setCommunications(localRouter), new InetSocketAddress(0),
+                                         commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                         IdentifierSpecification.newBuilder());
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();
@@ -245,8 +223,8 @@ public class FireFliesTrace {
         final var gossipDuration = Duration.ofMillis(10);
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
-        final var seeds = Collections.singletonList(new Seed(domains.get(0).getMember().getEvent().getCoordinates(),
-                                                             new InetSocketAddress(0)));
+        final var seeds = Collections.singletonList(
+        new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
@@ -260,12 +238,14 @@ public class FireFliesTrace {
                 public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
                                        List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
-                        System.out.println(String.format("Full view: %s members: %s on: %s", viewId,
-                                                         context.totalCount(), d.getMember().getId()));
+                        System.out.println(
+                        String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
+                                      d.getMember().getId()));
                         countdown.countDown();
                     } else {
-                        System.out.println(String.format("Members joining: %s members: %s on: %s", viewId,
-                                                         context.totalCount(), d.getMember().getId()));
+                        System.out.println(
+                        String.format("Members joining: %s members: %s on: %s", viewId, context.totalCount(),
+                                      d.getMember().getId()));
                     }
                 }
             };
@@ -296,22 +276,23 @@ public class FireFliesTrace {
         }
 
         Utils.waitForCondition(60_000, 1_000, () -> {
-            return domains.stream()
-                          .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())
-                          .count() == 0;
+            return domains.stream().filter(d -> d.getFoundation().getContext().activeCount() != domains.size()).count()
+            == 0;
         });
         System.out.println();
         System.out.println("******");
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-        + domains.size() + " members");
+        System.out.println(
+        "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + domains.size()
+        + " members");
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
         Utils.waitForCondition(60_000, 1_000, () -> domains.stream().filter(c -> !c.active()).count() == 0);
         System.out.println();
         System.out.println("******");
-        System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
-        + domains.size() + " members");
+        System.out.println(
+        "Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all " + domains.size()
+        + " members");
         System.out.println("******");
         System.out.println();
         var oracle = domains.get(0).getDelphi();

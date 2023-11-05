@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
-import java.util.concurrent.CompletableFuture;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
@@ -18,17 +16,15 @@ import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EventObserverServer extends EventObserverImplBase {
 
-    private final ClientIdentity                 identity;
-    private final StereotomyMetrics              metrics;
+    private final ClientIdentity identity;
+    private final StereotomyMetrics metrics;
     private final RoutableService<EventObserver> routing;
 
     public EventObserverServer(RoutableService<EventObserver> router, ClientIdentity identity,
@@ -52,18 +48,9 @@ public class EventObserverServer extends EventObserverImplBase {
 
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.publish(request.getKerl(), request.getValidationsList(), from);
-            result.whenComplete((e, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
+            s.publish(request.getKerl(), request.getValidationsList(), from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 
@@ -81,18 +68,9 @@ public class EventObserverServer extends EventObserverImplBase {
 
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<Void> result = s.publishAttachments(request.getAttachmentsList(), from);
-            result.whenComplete((ks, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
+            s.publishAttachments(request.getAttachmentsList(), from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 
@@ -110,18 +88,9 @@ public class EventObserverServer extends EventObserverImplBase {
 
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.publishEvents(request.getKeyEventList(), request.getValidationsList(), from);
-            result.whenComplete((e, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
+            s.publishEvents(request.getKeyEventList(), request.getValidationsList(), from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 }

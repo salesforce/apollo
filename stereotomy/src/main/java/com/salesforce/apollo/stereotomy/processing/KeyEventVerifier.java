@@ -6,13 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.processing;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
@@ -20,30 +13,26 @@ import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface KeyEventVerifier {
     static final Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
 
     default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
-        KeyEvent lookup;
-        try {
-            lookup = kel.getKeyEvent(state.getLastEstablishmentEvent()).get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (ExecutionException e) {
-            throw new InvalidKeyEventException(String.format("Error processing: " + event), e.getCause());
-        }
+        KeyEvent lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
         if (lookup == null) {
             throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
         }
         var kee = (EstablishmentEvent) lookup;
         var filtered = new DefaultVerifier(kee.getKeys()).filtered(kee.getSigningThreshold(), signatures,
-                                                                   event.getBytes());
+                event.getBytes());
         if (!filtered.verified()) {
             throw new UnmetSigningThresholdException(event);
         }

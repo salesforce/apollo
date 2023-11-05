@@ -33,7 +33,7 @@ public class AniTest extends AbstractDhtTest {
 
         routers.values().forEach(lr -> lr.start());
         dhts.values()
-            .forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()),
+            .forEach(e -> e.start(
                                   Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
@@ -51,7 +51,7 @@ public class AniTest extends AbstractDhtTest {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
-        dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
+        dht.append(Collections.singletonList(inception.toKeyEvent_())) ;
         assertTrue(ani.eventValidation(Duration.ofSeconds(10)).validate(inception));
     }
 

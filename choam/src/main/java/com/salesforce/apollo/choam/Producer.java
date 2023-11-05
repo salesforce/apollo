@@ -13,10 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -163,7 +160,7 @@ public class Producer {
         public void startProduction() {
             log.debug("Starting production for: {} on: {}", getViewId(), params().member().getId());
             controller.start();
-            coordinator.start(params().producer().gossipDuration(), params().scheduler());
+            coordinator.start(params().producer().gossipDuration());
         }
     }
 
@@ -186,7 +183,7 @@ public class Producer {
     private final Transitions                       transitions;
     private final ViewContext                       view;
 
-    public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
+    public Producer(  ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms, ThreadPoolExecutor consumer) {
         assert view != null;
         this.view = view;
@@ -232,7 +229,7 @@ public class Producer {
                                   (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
                                   consumer);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
-                                      params().communications(), params().exec(), producerMetrics);
+                                      params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 

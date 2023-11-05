@@ -20,9 +20,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validations;
  */
 public interface ProtoEventObserver {
 
-    CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations);
+    void publish(KERL_ kerl, List<Validations> validations);
 
-    CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments);
+    void publishAttachments(List<AttachmentEvent> attachments);
 
-    CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations);
+    void publishEvents(List<KeyEvent_> events, List<Validations> validations);
 }

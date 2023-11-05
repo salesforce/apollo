@@ -6,23 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.security.KeyPair;
-import java.security.SecureRandom;
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.Collections;
-import java.util.List;
-import java.util.Properties;
-
-import org.h2.jdbc.JdbcConnection;
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -36,14 +19,28 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import org.h2.jdbc.JdbcConnection;
+import org.junit.jupiter.api.Test;
+
+import java.security.KeyPair;
+import java.security.SecureRandom;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestUniKERL {
     private static final SecureRandom entropy = new SecureRandom();
@@ -57,7 +54,7 @@ public class TestUniKERL {
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
         try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
-                                                 database)) {
+                database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "", false);
@@ -108,10 +105,10 @@ public class TestUniKERL {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
         var appendKeyState = new KeyStateImpl(append(inception, connection));
 
-        var retrieved = uni.getKeyEvent(inception.getCoordinates()).get();
+        var retrieved = uni.getKeyEvent(inception.getCoordinates());
         assertNotNull(retrieved);
         assertEquals(inception, retrieved);
-        var current = uni.getKeyState(inception.getIdentifier()).get();
+        var current = uni.getKeyState(inception.getIdentifier());
         assertNotNull(current);
         assertEquals(inception.getCoordinates(), current.getCoordinates());
 
@@ -142,10 +139,10 @@ public class TestUniKERL {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
         uni.append(inception);
 
-        var retrieved = uni.getKeyEvent(inception.getCoordinates()).get();
+        var retrieved = uni.getKeyEvent(inception.getCoordinates());
         assertNotNull(retrieved);
         assertEquals(inception, retrieved);
-        var current = uni.getKeyState(inception.getIdentifier()).get();
+        var current = uni.getKeyState(inception.getIdentifier());
         assertNotNull(current);
         assertEquals(inception.getCoordinates(), current.getCoordinates());
 
@@ -169,10 +166,10 @@ public class TestUniKERL {
                                      KeyPair nextKeyPair) {
 
         specification.addKey(initialKeyPair.getPublic())
-                     .setSigningThreshold(unweighted(1))
-                     .setNextKeys(List.of(nextKeyPair.getPublic()))
-                     .setWitnesses(Collections.emptyList())
-                     .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
+                .setSigningThreshold(unweighted(1))
+                .setNextKeys(List.of(nextKeyPair.getPublic()))
+                .setWitnesses(Collections.emptyList())
+                .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
@@ -188,8 +185,8 @@ public class TestUniKERL {
 
         var retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
-        assertEquals(rotation, retrieved.get());
-        var current = uni.getKeyState(rotation.getIdentifier()).get();
+        assertEquals(rotation, retrieved);
+        var current = uni.getKeyState(rotation.getIdentifier());
         assertNotNull(current);
         assertEquals(rotation.getCoordinates(), current.getCoordinates());
         assertEquals(current, appendKeyState);
@@ -203,10 +200,10 @@ public class TestUniKERL {
         RotationEvent rotation = rotation(prevNext, digest, event, nextKeyPair, factory);
         uni.append(rotation);
 
-        var retrieved = uni.getKeyEvent(rotation.getCoordinates()).get();
+        var retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
         assertEquals(rotation, retrieved);
-        var current = uni.getKeyState(rotation.getIdentifier()).get();
+        var current = uni.getKeyState(rotation.getIdentifier());
         assertNotNull(current);
         assertEquals(rotation.getCoordinates(), current.getCoordinates());
         return rotation;
@@ -216,12 +213,12 @@ public class TestUniKERL {
                                    KeyPair nextKeyPair, ProtobufEventFactory factory) {
         var rotSpec = RotationSpecification.newBuilder();
         rotSpec.setIdentifier(prev.getIdentifier())
-               .setCurrentCoords(prev.getCoordinates())
-               .setCurrentDigest(prevDigest)
-               .setKey(prevNext.getPublic())
-               .setSigningThreshold(unweighted(1))
-               .setNextKeys(List.of(nextKeyPair.getPublic()))
-               .setSigner(new SignerImpl(prevNext.getPrivate()));
+                .setCurrentCoords(prev.getCoordinates())
+                .setCurrentDigest(prevDigest)
+                .setKey(prevNext.getPublic())
+                .setSigningThreshold(unweighted(1))
+                .setNextKeys(List.of(nextKeyPair.getPublic()))
+                .setSigner(new SignerImpl(prevNext.getPrivate()));
 
         RotationEvent rotation = factory.rotation(rotSpec.build(), false);
         return rotation;

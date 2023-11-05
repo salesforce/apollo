@@ -6,18 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.mem;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -31,15 +19,40 @@ import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class MemKERL implements KERL {
 
+    private final DigestAlgorithm digestAlgorithm;
+    // Order by <stateOrdering>
+    private final Map<String, KeyEvent> events = new ConcurrentHashMap<>();
+    private final Map<Digest, String> eventsByHash = new ConcurrentHashMap<>();
+    // Order by <stateOrdering>
+    private final Map<String, KeyState> keyState = new ConcurrentHashMap<>();
+    // Order by <identifier>
+    private final Map<String, String> keyStateByIdentifier = new ConcurrentHashMap<>();
+    private final Map<String, Digest> locationToHash = new ConcurrentHashMap<>();
+    private final KeyEventProcessor processor = new KeyEventProcessor(this);
+    // Order by <receiptOrdering>
+    private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
+    // Order by <coordinateOrdering>
+    private final Map<EventCoordinates, Map<EventCoordinates, JohnHancock>> validations = new ConcurrentHashMap<>();
+
+    public MemKERL(DigestAlgorithm digestAlgorithm) {
+        this.digestAlgorithm = digestAlgorithm;
+    }
+
     /**
      * Ordering by
-     * 
+     *
      * <pre>
      * <coords.identifier, coords.sequenceNumber, coords.digest>
      * </pre>
@@ -54,7 +67,7 @@ public class MemKERL implements KERL {
 
     /**
      * Ordering by
-     * 
+     *
      * <pre>
      * <event.identifier, signer.identifier, event.sequenceNumber, signer.sequenceNumber, event.digest, signer.digest>
      * </pre>
@@ -75,77 +88,38 @@ public class MemKERL implements KERL {
         return event.getSequenceNumber().toString() + ':' + signer.getSequenceNumber() + '.';
     }
 
-    private final DigestAlgorithm digestAlgorithm;
-    // Order by <stateOrdering>
-    private final Map<String, KeyEvent> events       = new ConcurrentHashMap<>();
-    private final Map<Digest, String>   eventsByHash = new ConcurrentHashMap<>();
-
-    // Order by <stateOrdering>
-    private final Map<String, KeyState> keyState = new ConcurrentHashMap<>();
-
-    // Order by <identifier>
-    private final Map<String, String> keyStateByIdentifier = new ConcurrentHashMap<>();
-
-    private final Map<String, Digest> locationToHash = new ConcurrentHashMap<>();
-
-    private final KeyEventProcessor processor = new KeyEventProcessor(this);
-
-    // Order by <receiptOrdering>
-    private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
-
-    // Order by <coordinateOrdering>
-    private final Map<EventCoordinates, Map<EventCoordinates, JohnHancock>> validations = new ConcurrentHashMap<>();
-
-    public MemKERL(DigestAlgorithm digestAlgorithm) {
-        this.digestAlgorithm = digestAlgorithm;
-    }
-
     @Override
-    public CompletableFuture<KeyState> append(KeyEvent event) {
+    public KeyState append(KeyEvent event) {
         final var newState = processor.process(event);
         append(event, newState);
-        var f = new CompletableFuture<KeyState>();
-        f.complete(newState);
-        return f;
+        return  newState;
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+    public Void append(List<AttachmentEvent> events) {
         events.forEach(event -> appendAttachments(event.coordinates(), event.attachments()));
-        var returned = new CompletableFuture<Void>();
-        returned.complete(null);
-        return returned;
+        return null;
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+    public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         var states = events.stream().map(event -> {
-            try {
-                return append(event).get();
-            } catch (InterruptedException | ExecutionException e) {
-                return null;
-            }
+                return append(event);
         }).toList();
         append(attachments);
-        var fs = new CompletableFuture<List<KeyState>>();
-        fs.complete(states);
-        return fs;
+        return states;
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> v) {
-        var fs = new CompletableFuture<Void>();
+    public Void appendValidations(EventCoordinates coordinates,
+                                  Map<EventCoordinates, JohnHancock> v) {
         validations.put(coordinates, v);
-        fs.complete(null);
-        return fs;
+        return null;
     }
 
     @Override
-    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
-        var fs = new CompletableFuture<Attachment>();
-        fs.complete(receipts.get(coordinateOrdering(coordinates)));
-        return fs;
+    public Attachment getAttachment(EventCoordinates coordinates) {
+        return  receipts.get(coordinateOrdering(coordinates));
     }
 
     @Override
@@ -154,33 +128,26 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        var fs = new CompletableFuture<KeyEvent>();
-        fs.complete(events.get(coordinateOrdering(coordinates)));
-        return fs;
+    public KeyEvent getKeyEvent(EventCoordinates coordinates) {
+        return events.get(coordinateOrdering(coordinates));
     }
 
     @Override
-    public CompletableFuture<KeyState> getKeyState(EventCoordinates coordinates) {
-        var fs = new CompletableFuture<KeyState>();
-        fs.complete(keyState.get(coordinateOrdering(coordinates)));
-        return fs;
+    public KeyState getKeyState(EventCoordinates coordinates) {
+        return keyState.get(coordinateOrdering(coordinates));
     }
 
     @Override
-    public CompletableFuture<KeyState> getKeyState(Identifier identifier) {
-        var fs = new CompletableFuture<KeyState>();
+    public KeyState getKeyState(Identifier identifier) {
+
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
-        fs.complete(stateHash == null ? null : keyState.get(stateHash));
-        return fs;
+        return stateHash == null ? null : keyState.get(stateHash);
     }
 
     @Override
-    public CompletableFuture<Map<EventCoordinates, JohnHancock>> getValidations(EventCoordinates coordinates) {
-        var fs = new CompletableFuture<Map<EventCoordinates, JohnHancock>>();
-        fs.complete(validations.computeIfAbsent(coordinates, k -> Collections.emptyMap()));
-        return fs;
+    public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
+        return validations.computeIfAbsent(coordinates, k -> Collections.emptyMap());
     }
 
     private void append(KeyEvent event, KeyState newState) {

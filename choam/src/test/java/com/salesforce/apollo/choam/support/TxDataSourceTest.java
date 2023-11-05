@@ -34,7 +34,7 @@ public class TxDataSourceTest {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier().get()), 100, null,
+        TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier()), 100, null,
                                            1024, Duration.ofMillis(100), 100,
                                            ExponentialBackoffPolicy.newBuilder().build());
         Transaction tx = Transaction.newBuilder()

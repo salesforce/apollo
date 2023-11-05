@@ -6,10 +6,14 @@
  */
 package com.salesforce.apollo.model;
 
-import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.state.Emulator;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
+import org.junit.jupiter.api.Test;
 
+import javax.xml.bind.DatatypeConverter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Random;
@@ -17,26 +21,19 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import javax.xml.bind.DatatypeConverter;
-
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
-import org.junit.jupiter.api.Test;
-
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.state.Emulator;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class StoredProceduresTest {
 
     @Test
     public void membership() throws Exception {
         var entropy = new Random(0x1638);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(100);
         Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
@@ -51,7 +48,7 @@ public class StoredProceduresTest {
                        .call("{call apollo_kernel.add_members(?, ?) }",
                              ids.stream().map(d -> d.getDigest().getBytes()).toList(), "active");
 
-        var result = emmy.getMutator().execute(exec, call, timeout, scheduler);
+        var result = emmy.getMutator().execute(call, timeout, scheduler);
         result.get();
 
         var connector = emmy.newConnector();

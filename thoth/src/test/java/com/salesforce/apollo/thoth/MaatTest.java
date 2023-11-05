@@ -40,7 +40,7 @@ public class MaatTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
         var context = Context.newBuilder().setCardinality(4).build();
         for (int i = 0; i < 4; i++) {
-            context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier().get()));
+            context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier() ));
         }
         var maat = new Maat(context, kerl_, kerl_);
 
@@ -58,12 +58,12 @@ public class MaatTest {
             validations.put(m.getEvent().getCoordinates(), m.sign(serialized));
         });
 
-        var inceptionState = maat.append(inception).get();
+        var inceptionState = maat.append(inception);
         assertNull(inceptionState, "Should not have succeeded appending of test event");
 
-        kerl_.appendValidations(inception.getCoordinates(), validations).get();
+        kerl_.appendValidations(inception.getCoordinates(), validations);
 
-        inceptionState = maat.append(inception).get();
+        inceptionState = maat.append(inception);
         assertNotNull(inceptionState, "Should have succeeded appending of test event");
     }
 }

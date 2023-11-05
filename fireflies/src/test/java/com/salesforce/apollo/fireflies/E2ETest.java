@@ -6,31 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.net.InetSocketAddress;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -50,37 +25,39 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.net.InetSocketAddress;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class E2ETest {
 
-    private static final int                                                   BIAS       = 2;
-    private static final int                                                   CARDINALITY;
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static boolean                                                     largeTests = Boolean.getBoolean("large_tests");
-    private static final double                                                P_BYZ      = 0.1;
+    private static final int                                                         BIAS       = 2;
+    private static final int                                                         CARDINALITY;
+    private static final double                                                      P_BYZ      = 0.1;
+    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static       boolean                                                     largeTests = Boolean.getBoolean(
+    "large_tests");
 
     static {
         CARDINALITY = largeTests ? 30 : 10;
-    }
-
-    @BeforeAll
-    public static void beforeClass() throws Exception {
-        var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
-        identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        })
-                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                        controlled -> controlled, (a, b) -> a, TreeMap::new));
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -89,6 +66,19 @@ public class E2ETest {
     private MetricRegistry                          node0Registry;
     private MetricRegistry                          registry;
     private List<View>                              views;
+
+    @BeforeAll
+    public static void beforeClass() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        identities = IntStream.range(0, CARDINALITY)
+                              .mapToObj(i -> {
+                                  return stereotomy.newIdentifier();
+                              })
+                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                        controlled -> controlled, (a, b) -> a, TreeMap::new));
+    }
 
     @AfterEach
     public void after() {
@@ -137,8 +127,8 @@ public class E2ETest {
         var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
-                                  .map(v -> String.format("%s : %s ", v.getNode().getId(),
-                                                          v.getContext().activeCount()))
+                                  .map(
+                                  v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
                                   .toList();
         assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
 
@@ -168,11 +158,13 @@ public class E2ETest {
                       .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
                                               v.getContext().totalCount()))
                       .toList();
-        assertTrue(success, "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size()
-        + " views: " + failed);
+        assertTrue(success,
+                   "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size() + " views: "
+                   + failed);
 
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-        + views.size() + " members");
+        System.out.println(
+        "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + views.size()
+        + " members");
 
         if (!largeTests) {
             validateConstraints();
@@ -197,25 +189,30 @@ public class E2ETest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        final var executor = exec;
-        final var commExec = exec;
-        final var gatewayExec = exec;
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var comms = new LocalServer(prefix, node,
-                                        commExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), commExec);
-            var gateway = new LocalServer(gatewayPrefix, node,
-                                          gatewayExec).router(ServerConnectionCache.newBuilder().setTarget(200).setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry)), gatewayExec);
+            var comms = new LocalServer(prefix, node).router(ServerConnectionCache.newBuilder()
+                                                                                  .setTarget(200)
+                                                                                  .setMetrics(
+                                                                                  new ServerConnectionCacheMetricsImpl(
+                                                                                  frist.getAndSet(false) ? node0Registry
+                                                                                                         : registry)));
+            var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
+                                                                                           .setTarget(200)
+                                                                                           .setMetrics(
+                                                                                           new ServerConnectionCacheMetricsImpl(
+                                                                                           frist.getAndSet(false)
+                                                                                           ? node0Registry
+                                                                                           : registry)));
             comms.start();
             communications.add(comms);
 
             gateway.start();
             gateways.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics, executor);
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 
@@ -240,8 +237,8 @@ public class E2ETest {
 
         List<String> failed = views.stream()
                                    .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                                   .map(v -> String.format("%s : %s ", v.getNode().getId(),
-                                                           v.getContext().activeCount()))
+                                   .map(
+                                   v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
                                    .toList();
         assertEquals(0, failed.size(),
                      " expected: " + views.size() + " failed: " + failed.size() + " views: " + failed);

@@ -6,41 +6,24 @@
  */
 package com.salesforce.apollo.thoth.grpc.dht;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
-
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DhtServer extends KerlDhtImplBase {
 
-    private final StereotomyMetrics                 metrics;
+    private final StereotomyMetrics metrics;
     private final RoutableService<ProtoKERLService> routing;
 
     public DhtServer(RoutableService<ProtoKERLService> router, StereotomyMetrics metrics) {
@@ -56,25 +39,15 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendEventsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<List<KeyState_>> result = s.append(request.getKeyEventList());
-            if (result == null) {
-                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+            var result = s.append(request.getKeyEventList());
+            if (timer != null) {
+                timer.stop();
+            }
+            if (result != null) {
+                responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(result).build());
+                responseObserver.onCompleted();
             } else {
-                result.whenComplete((ks, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        final var description = t.getClass().getSimpleName()
-                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
-                    } else if (ks != null) {
-                        responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(ks).build());
-                        responseObserver.onCompleted();
-                    } else {
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
-                    }
-                });
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             }
         });
 
@@ -88,25 +61,19 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<Empty> result = s.appendAttachments(request.getAttachmentsList());
+            var result = s.appendAttachments(request.getAttachmentsList());
             if (result == null) {
                 responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
-                result.whenComplete((e, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        final var description = t.getClass().getSimpleName()
-                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
-                    } else if (e != null) {
-                        responseObserver.onNext(e);
-                        responseObserver.onCompleted();
-                    } else {
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (result != null) {
+                    responseObserver.onNext(result);
+                    responseObserver.onCompleted();
+                } else {
+                    responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+                }
             }
         });
     }
@@ -119,25 +86,15 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendKERLRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<List<KeyState_>> result = s.append(request.getKerl());
+            var result = s.append(request.getKerl());
             if (result == null) {
                 responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
-                result.whenComplete((b, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        final var description = t.getClass().getSimpleName()
-                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
-                    } else if (b != null) {
-                        responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(b).build());
-                        responseObserver.onCompleted();
-                    } else {
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(result).build());
+                responseObserver.onCompleted();
             }
         });
     }
@@ -150,25 +107,19 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<Empty> result = s.appendValidations(request);
+            var result = s.appendValidations(request);
             if (result == null) {
                 responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
-                result.whenComplete((e, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        final var description = t.getClass().getSimpleName()
-                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
-                    } else if (e != null) {
-                        responseObserver.onNext(e);
-                        responseObserver.onCompleted();
-                    } else {
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (result != null) {
+                    responseObserver.onNext(result);
+                    responseObserver.onCompleted();
+                } else {
+                    responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+                }
             }
         });
     }
@@ -182,25 +133,19 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<List<KeyState_>> result = s.append(request.getEventsList(), request.getAttachmentsList());
+            var result = s.append(request.getEventsList(), request.getAttachmentsList());
             if (result == null) {
                 responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
-                result.whenComplete((ks, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        final var description = t.getClass().getSimpleName()
-                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
-                    } else if (ks != null) {
-                        responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(ks).build());
-                        responseObserver.onCompleted();
-                    } else {
-                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (result != null) {
+                    responseObserver.onNext(KeyStates.newBuilder().addAllKeyStates(result).build());
+                    responseObserver.onCompleted();
+                } else {
+                    responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+                }
             }
         });
 
@@ -215,7 +160,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetAttachmentRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<Attachment> response = s.getAttachment(request);
+            var response = s.getAttachment(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -223,23 +168,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(Attachment.getDefaultInstance());
                 responseObserver.onCompleted();
             } else {
-                response.whenComplete((attachment, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        attachment = attachment == null ? Attachment.getDefaultInstance() : attachment;
-                        responseObserver.onNext(attachment);
-                        responseObserver.onCompleted();
-                        if (metrics != null) {
-                            final var serializedSize = attachment.getSerializedSize();
-                            metrics.outboundBandwidth().mark(serializedSize);
-                            metrics.outboundGetAttachmentResponse().mark(serializedSize);
-                        }
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                var attachment = response == null ? Attachment.getDefaultInstance() : response;
+                responseObserver.onNext(attachment);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    final var serializedSize = attachment.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.outboundGetAttachmentResponse().mark(serializedSize);
+                }
             }
         });
     }
@@ -253,7 +192,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKERLRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KERL_> response = s.getKERL(request);
+            var response = s.getKERL(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -261,23 +200,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KERL_.getDefaultInstance());
                 responseObserver.onCompleted();
             } else {
-                response.whenComplete((kerl, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        kerl = kerl == null ? KERL_.getDefaultInstance() : kerl;
-                        responseObserver.onNext(kerl);
-                        responseObserver.onCompleted();
-                        if (metrics == null) {
-                            final var serializedSize = kerl.getSerializedSize();
-                            metrics.outboundBandwidth().mark(serializedSize);
-                            metrics.outboundGetKERLResponse().mark(serializedSize);
-                        }
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                var kerl = response == null ? KERL_.getDefaultInstance() : response;
+                responseObserver.onNext(kerl);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    final var serializedSize = kerl.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.outboundGetKERLResponse().mark(serializedSize);
+                }
             }
         });
     }
@@ -290,7 +223,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyEventCoordsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KeyEvent_> response = s.getKeyEvent(request);
+            var response = s.getKeyEvent(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -298,23 +231,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KeyEvent_.getDefaultInstance());
                 responseObserver.onCompleted();
             } else {
-                response.whenComplete((event, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        event = event == null ? KeyEvent_.getDefaultInstance() : event;
-                        responseObserver.onNext(event);
-                        responseObserver.onCompleted();
-                        if (metrics != null) {
-                            final var serializedSize = event.getSerializedSize();
-                            metrics.outboundBandwidth().mark(serializedSize);
-                            metrics.outboundGetKeyEventCoordsResponse().mark(serializedSize);
-                        }
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                var event = response == null ? KeyEvent_.getDefaultInstance() : response;
+                responseObserver.onNext(event);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    final var serializedSize = event.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.outboundGetKeyEventCoordsResponse().mark(serializedSize);
+                }
             }
         });
     }
@@ -328,7 +255,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KeyState_> response = s.getKeyState(request);
+            var response = s.getKeyState(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -336,22 +263,16 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KeyState_.getDefaultInstance());
                 responseObserver.onCompleted();
             } else {
-                response.whenComplete((state, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        state = state == null ? KeyState_.getDefaultInstance() : state;
-                        responseObserver.onNext(state);
-                        responseObserver.onCompleted();
-                        if (metrics == null) {
-                            metrics.outboundBandwidth().mark(state.getSerializedSize());
-                            metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
-                        }
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                var state = response == null ? KeyState_.getDefaultInstance() : response;
+                responseObserver.onNext(state);
+                responseObserver.onCompleted();
+                if (metrics == null) {
+                    metrics.outboundBandwidth().mark(state.getSerializedSize());
+                    metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
+                }
             }
         });
     }
@@ -365,7 +286,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KeyState_> response = s.getKeyState(request);
+            var response = s.getKeyState(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -373,23 +294,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KeyState_.getDefaultInstance());
                 responseObserver.onCompleted();
             }
-            response.whenComplete((state, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    state = state == null ? KeyState_.getDefaultInstance() : state;
-                    responseObserver.onNext(state);
-                    responseObserver.onCompleted();
-                    if (metrics != null) {
-                        final var serializedSize = state.getSerializedSize();
-                        metrics.outboundBandwidth().mark(serializedSize);
-                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
-                    }
-                }
-            });
+            if (timer != null) {
+                timer.stop();
+            }
+            var state = response == null ? KeyState_.getDefaultInstance() : response;
+            responseObserver.onNext(state);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                final var serializedSize = state.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
         });
     }
 
@@ -403,7 +318,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KeyStateWithAttachments_> response = s.getKeyStateWithAttachments(request);
+            var response = s.getKeyStateWithAttachments(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -411,23 +326,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KeyStateWithAttachments_.getDefaultInstance());
                 responseObserver.onCompleted();
             }
-            response.whenComplete((state, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
-                    responseObserver.onNext(state);
-                    responseObserver.onCompleted();
-                    if (metrics != null) {
-                        final var serializedSize = state.getSerializedSize();
-                        metrics.outboundBandwidth().mark(serializedSize);
-                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
-                    }
-                }
-            });
+            if (timer != null) {
+                timer.stop();
+            }
+            var state = response == null ? KeyStateWithAttachments_.getDefaultInstance() : response;
+            responseObserver.onNext(state);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                final var serializedSize = state.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
         });
     }
 
@@ -441,7 +350,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<KeyStateWithEndorsementsAndValidations_> response = s.getKeyStateWithEndorsementsAndValidations(request);
+            var response = s.getKeyStateWithEndorsementsAndValidations(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -449,23 +358,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
                 responseObserver.onCompleted();
             }
-            response.whenComplete((state, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    state = state == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance() : state;
-                    responseObserver.onNext(state);
-                    responseObserver.onCompleted();
-                    if (metrics != null) {
-                        final var serializedSize = state.getSerializedSize();
-                        metrics.outboundBandwidth().mark(serializedSize);
-                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
-                    }
-                }
-            });
+            if (timer != null) {
+                timer.stop();
+            }
+            var state = response == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance() : response;
+            responseObserver.onNext(state);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                final var serializedSize = state.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
         });
     }
 
@@ -478,7 +381,7 @@ public class DhtServer extends KerlDhtImplBase {
             metrics.inboundGetAttachmentRequest().mark(serializedSize);
         }
         routing.evaluate(responseObserver, s -> {
-            CompletableFuture<Validations> response = s.getValidations(request);
+            var response = s.getValidations(request);
             if (response == null) {
                 if (timer != null) {
                     timer.stop();
@@ -486,23 +389,17 @@ public class DhtServer extends KerlDhtImplBase {
                 responseObserver.onNext(Validations.getDefaultInstance());
                 responseObserver.onCompleted();
             } else {
-                response.whenComplete((attachment, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        attachment = attachment == null ? Validations.getDefaultInstance() : attachment;
-                        responseObserver.onNext(attachment);
-                        responseObserver.onCompleted();
-                        if (metrics != null) {
-                            final var serializedSize = attachment.getSerializedSize();
-                            metrics.outboundBandwidth().mark(serializedSize);
-                            metrics.outboundGetAttachmentResponse().mark(serializedSize);
-                        }
-                    }
-                });
+                if (timer != null) {
+                    timer.stop();
+                }
+                var attachment = response == null ? Validations.getDefaultInstance() : response;
+                responseObserver.onNext(attachment);
+                responseObserver.onCompleted();
+                if (metrics != null) {
+                    final var serializedSize = attachment.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.outboundGetAttachmentResponse().mark(serializedSize);
+                }
             }
         });
     }

@@ -6,10 +6,6 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import java.io.IOException;
-import java.time.Duration;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
@@ -17,9 +13,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
+import java.io.IOException;
+import java.time.Duration;
+
 /**
  * @author hal.hildebrand
- *
  */
 public interface Admissions extends Link {
 
@@ -27,7 +25,7 @@ public interface Admissions extends Link {
         return new Admissions() {
 
             @Override
-            public ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout) {
+            public SignedNonce apply(KERL_ application, Duration timeout) {
                 return null;
             }
 
@@ -41,13 +39,13 @@ public interface Admissions extends Link {
             }
 
             @Override
-            public ListenableFuture<Validations> register(Credentials credentials, Duration timeout) {
+            public Validations register(Credentials credentials, Duration timeout) {
                 return null;
             }
         };
     }
 
-    ListenableFuture<SignedNonce> apply(KERL_ application, Duration timeout);
+    SignedNonce apply(KERL_ application, Duration timeout);
 
-    ListenableFuture<Validations> register(Credentials credentials, Duration timeout);
+    Validations register(Credentials credentials, Duration timeout);
 }

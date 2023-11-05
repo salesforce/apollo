@@ -6,17 +6,14 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.concurrent.CompletableFuture;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface DigestKERL extends KERL {
 
-    CompletableFuture<KeyEvent> getKeyEvent(Digest digest);
+    KeyEvent getKeyEvent(Digest digest);
 
 }

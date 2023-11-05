@@ -6,28 +6,6 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.mock;
-
-import java.security.SecureRandom;
-import java.time.Clock;
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
@@ -43,67 +21,61 @@ import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import com.salesforce.apollo.thoth.KerlDHT.CompletionException;
+import com.salesforce.apollo.utils.Utils;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.concurrent.Executors;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class BootstrappingTest extends AbstractDhtTest {
 
-    private AtomicBoolean gate;
-
-    @BeforeEach
-    public void beforeIt() {
-        gate = new AtomicBoolean(false);
-    }
-
     @Test
     public void smokin() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
-                                                                              Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
-        dhts.values()
-            .forEach(dht -> dht.start(scheduler, LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
+        dhts.values().forEach(dht -> dht.start(LARGE_TESTS ? Duration.ofSeconds(100) : Duration.ofMillis(10)));
 
-        identities.entrySet().forEach(e -> {
-            try {
-                dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent().get()).get();
-            } catch (InterruptedException | ExecutionException e1) {
-                fail(e1.toString());
-            }
-        });
+        identities.entrySet()
+                  .forEach(e -> dhts.get(e.getKey()).asKERL().append(e.getValue().getLastEstablishingEvent()));
 
         gate.set(true);
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        @SuppressWarnings("unused")
-        final var gorgons = routers.values().stream().map(r -> {
+        var gorgoneions = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
             return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
                                   context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
-                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null, exec);
+                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null);
         }).toList();
 
-        final KERL testKerl = dhts.values().stream().findFirst().get().asKERL();
+        final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
+        final KERL testKerl = dht.asKERL();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 7, 7, 7 });
         var clientKerl = new MemKERL(DigestAlgorithm.DEFAULT);
         var clientStereotomy = new StereotomyImpl(new MemKeyStore(), clientKerl, entropy);
 
         // The registering client
-        var client = new ControlledIdentifierMember(clientStereotomy.newIdentifier().get());
+        var client = new ControlledIdentifierMember(clientStereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client, exec).router(ServerConnectionCache.newBuilder().setTarget(2),
-                                                                        exec);
+        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
-                                                       r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
-                                                                                 r, null),
+                                                       r -> new AdmissionsServer(
+                                                       clientRouter.getClientIdentityProvider(), r, null),
                                                        AdmissionsClient.getCreate(null),
                                                        Admissions.getLocalLoopback(client));
         clientRouter.start();
@@ -112,43 +84,35 @@ public class BootstrappingTest extends AbstractDhtTest {
         var admin = clientComminications.connect(dhts.keySet().stream().findFirst().get());
 
         assertNotNull(admin);
-        Function<SignedNonce, CompletableFuture<Any>> attester = sn -> {
-            var fs = new CompletableFuture<Any>();
-            fs.complete(Any.getDefaultInstance());
-            return fs;
+        Function<SignedNonce, Any> attester = sn -> {
+            return Any.getDefaultInstance();
         };
 
         // Verify client KERL not published
-        try {
-            testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
-        } catch (ExecutionException e) {
-            assertEquals(CompletionException.class, e.getCause().getClass());
-        }
+        testKerl.getKeyEvent(client.getEvent().getCoordinates());
 
         // Verify we can't publish without correct validation
-        try {
-            testKerl.append(client.getEvent()).get();
-        } catch (ExecutionException e) {
-            assertEquals(CompletionException.class, e.getCause().getClass());
-        }
+        KeyState ks = testKerl.append(client.getEvent());
+        assertNull(ks);
+        dht.clearCache();
 
         var gorgoneionClient = new GorgoneionClient(client, attester, Clock.systemUTC(), admin);
 
-        final var apply = gorgoneionClient.apply(Duration.ofSeconds(60));
-        var invitation = apply.get(3000, TimeUnit.SECONDS);
+        final var invitation = gorgoneionClient.apply(Duration.ofSeconds(120));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertTrue(invitation.getValidationsCount() >= context.majority());
-
-//        Thread.sleep(1000);
         // Verify client KERL published
-        var ks = testKerl.getKeyEvent(client.getEvent().getCoordinates()).get();
-        assertNotNull(ks);
+        Utils.waitForCondition(30_000, 1000, () -> testKerl.getKeyEvent(client.getEvent().getCoordinates()) != null);
+        var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());
+
+        assertNotNull(keyS);
         admin.close();
     }
 
     @Override
     protected BiFunction<KerlDHT, KERL, KERL> wrap() {
-        return (t, k) -> gate.get() ? new Maat(context, k, t.asKERL()) : k;
+        // This allows us to have the core member keys trusted for this test, as we're testing the bootstrapping of the client, not the entire system
+        return (t, k) -> gate.get() ? new Maat(context, k, k) : k;
     }
 }

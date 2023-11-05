@@ -61,7 +61,7 @@ public class ConcurrencyLimitClientInterceptorTest {
                                              .build();
 
         AtomicLong counter = new AtomicLong();
-        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
+        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
             System.out.println(" " + counter.getAndSet(0) + " : " + limiter.toString());
         }, 1, 1, TimeUnit.SECONDS);
 

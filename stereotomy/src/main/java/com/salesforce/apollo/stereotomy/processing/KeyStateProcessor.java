@@ -1,11 +1,5 @@
 package com.salesforce.apollo.stereotomy.processing;
 
-import static java.util.Objects.requireNonNull;
-
-import java.util.ArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.function.BiFunction;
-
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -13,6 +7,11 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
+
+import java.util.ArrayList;
+import java.util.function.BiFunction;
+
+import static java.util.Objects.requireNonNull;
 
 public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyState> {
 
@@ -34,15 +33,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
         } else if (event instanceof EstablishmentEvent) {
             lastEstablishmentEvent = (EstablishmentEvent) event;
         } else {
-            try {
-                lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent())
-                                                                    .get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return null;
-            } catch (ExecutionException e) {
-                throw new InvalidKeyEventException(String.format("Error processing: " + event), e.getCause());
-            }
+            lastEstablishmentEvent = (EstablishmentEvent) events.getKeyEvent(currentState.getLastEstablishmentEvent());
         }
 
         requireNonNull(currentState, "currentState is required");
@@ -65,11 +56,11 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
             witnesses.addAll(re.getWitnessesAddedList());
         }
         KeyState state = KeyStateImpl.newKeyState(event.getIdentifier(), signingThreshold, keys,
-                                                  nextKeyConfigugurationDigest.orElse(null), witnessThreshold,
-                                                  witnesses, currentState.configurationTraits(), event,
-                                                  lastEstablishmentEvent,
-                                                  currentState.getDelegatingIdentifier().orElse(null),
-                                                  events.getDigestAlgorithm().digest(event.getBytes()));
+                nextKeyConfigugurationDigest.orElse(null), witnessThreshold,
+                witnesses, currentState.configurationTraits(), event,
+                lastEstablishmentEvent,
+                currentState.getDelegatingIdentifier().orElse(null),
+                events.getDigestAlgorithm().digest(event.getBytes()));
         return state;
     }
 

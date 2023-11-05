@@ -6,20 +6,18 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KERL;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.util.function.Predicate;
+
 /**
  * @author hal.hildebrand
- *
  */
-public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>> verifier, Clock clock,
+public record Parameters(Predicate<SignedAttestation> verifier, Clock clock,
                          Duration registrationTimeout, Duration frequency, DigestAlgorithm digestAlgorithm,
                          Duration maxDuration, KERL kerl) {
 
@@ -28,21 +26,20 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
     }
 
     public static class Builder {
-        private final static CompletableFuture<Boolean> defaultVerifier;
+        private final static Predicate<SignedAttestation> defaultVerifier;
 
         static {
-            defaultVerifier = new CompletableFuture<>();
-            defaultVerifier.complete(true);
+            defaultVerifier = x -> true;
         }
 
-        private Clock           clock               = Clock.systemUTC();
-        private DigestAlgorithm digestAlgorithm     = DigestAlgorithm.DEFAULT;
-        private Duration        frequency           = Duration.ofMillis(5);
-        private KERL            kerl;
-        private Duration        maxDuration         = Duration.ofSeconds(30);
-        private Duration        registrationTimeout = Duration.ofSeconds(30);
+        private Clock clock = Clock.systemUTC();
+        private DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
+        private Duration frequency = Duration.ofMillis(5);
+        private KERL kerl;
+        private Duration maxDuration = Duration.ofSeconds(30);
+        private Duration registrationTimeout = Duration.ofSeconds(30);
 
-        private Function<SignedAttestation, CompletableFuture<Boolean>> verifier = sa -> defaultVerifier;
+        private Predicate<SignedAttestation> verifier = defaultVerifier;
 
         public Parameters build() {
             return new Parameters(verifier, clock, registrationTimeout, frequency, digestAlgorithm, maxDuration, kerl);
@@ -52,33 +49,13 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
             return clock;
         }
 
-        public DigestAlgorithm getDigestAlgorithm() {
-            return digestAlgorithm;
-        }
-
-        public Duration getFrequency() {
-            return frequency;
-        }
-
-        public KERL getKerl() {
-            return kerl;
-        }
-
-        public Duration getMaxDuration() {
-            return maxDuration;
-        }
-
-        public Duration getRegistrationTimeout() {
-            return registrationTimeout;
-        }
-
-        public Function<SignedAttestation, CompletableFuture<Boolean>> getVerifier() {
-            return verifier;
-        }
-
         public Builder setClock(Clock clock) {
             this.clock = clock;
             return this;
+        }
+
+        public DigestAlgorithm getDigestAlgorithm() {
+            return digestAlgorithm;
         }
 
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
@@ -86,9 +63,17 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
             return this;
         }
 
+        public Duration getFrequency() {
+            return frequency;
+        }
+
         public Builder setFrequency(Duration frequency) {
             this.frequency = frequency;
             return this;
+        }
+
+        public KERL getKerl() {
+            return kerl;
         }
 
         public Builder setKerl(KERL kerl) {
@@ -96,9 +81,17 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
             return this;
         }
 
+        public Duration getMaxDuration() {
+            return maxDuration;
+        }
+
         public Builder setMaxDuration(Duration maxDuration) {
             this.maxDuration = maxDuration;
             return this;
+        }
+
+        public Duration getRegistrationTimeout() {
+            return registrationTimeout;
         }
 
         public Builder setRegistrationTimeout(Duration registrationTimeout) {
@@ -106,7 +99,11 @@ public record Parameters(Function<SignedAttestation, CompletableFuture<Boolean>>
             return this;
         }
 
-        public Builder setVerifier(Function<SignedAttestation, CompletableFuture<Boolean>> verifier) {
+        public Predicate<SignedAttestation> getVerifier() {
+            return verifier;
+        }
+
+        public Builder setVerifier(Predicate<SignedAttestation> verifier) {
             this.verifier = verifier;
             return this;
         }

@@ -6,28 +6,6 @@
  */
 package com.salesforce.apollo.model;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.net.InetSocketAddress;
-import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -51,14 +29,34 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DomainTest {
-    private static final int    CARDINALITY     = 5;
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final int               CARDINALITY     = 5;
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    "Give me food or give me slack or kill me".getBytes());
+    private final        ArrayList<Domain> domains         = new ArrayList<>();
+    private final        ArrayList<Router> routers         = new ArrayList<>();
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -101,8 +99,7 @@ public class DomainTest {
                                 oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
                                 oracle.map(abcTechMembers, technicianMembers),
                                 oracle.map(flaggedTechnicianMembers, technicianMembers),
-                                oracle.map(jale, abcTechMembers))
-                         .get();
+                                oracle.map(jale, abcTechMembers)).get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -184,13 +181,9 @@ public class DomainTest {
         oracle.delete(flaggedTechnicianMembers).get();
     }
 
-    private final ArrayList<Domain> domains = new ArrayList<>();
-    private ExecutorService         exec    = Executors.newVirtualThreadPerTaskExecutor();
-    private final ArrayList<Router> routers = new ArrayList<>();
-
     @AfterEach
     public void after() {
-        domains.forEach(n -> n.stop());
+        domains.forEach(Domain::stop);
         domains.clear();
         routers.forEach(r -> r.close(Duration.ofSeconds(1)));
         routers.clear();
@@ -212,39 +205,30 @@ public class DomainTest {
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
-        var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
-        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .mapToObj(i -> stereotomy.newIdentifier())
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                                                                          Executors.newScheduledThreadPool(1,
-                                                                                                           Thread.ofVirtual()
-                                                                                                                 .factory()));
+        TransactionConfiguration txnConfig = new TransactionConfiguration(  Executors.newScheduledThreadPool(1,
+                                                                                                                 Thread.ofVirtual()
+                                                                                                                       .factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member, exec).router(ServerConnectionCache.newBuilder()
-                                                                                                .setTarget(30),
-                                                                           exec);
+            var localRouter = new LocalServer(prefix, member).router(
+            ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
             var domain = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(Executors.newScheduledThreadPool(5,
-                                                                                                           Thread.ofVirtual()
-                                                                                                                 .factory()))
                                                             .setContext(context)
-                                                            .setExec(exec)
-                                                            .setCommunications(localRouter),
-                                           new InetSocketAddress(0), commsDirectory, ffParams, txnConfig,
-                                           EventValidation.NONE, IdentifierSpecification.newBuilder());
+                                                            .setCommunications(localRouter), new InetSocketAddress(0),
+                                           commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                           IdentifierSpecification.newBuilder());
             domains.add(domain);
             localRouter.start();
         });
@@ -254,11 +238,13 @@ public class DomainTest {
 
     @Test
     public void smoke() throws Exception {
-        domains.forEach(n -> n.start());
+        domains.forEach(Domain::start);
         final var activated = Utils.waitForCondition(60_000, 1_000,
-                                                     () -> domains.stream().filter(d -> !d.active()).count() == 0);
-        assertTrue(activated, "Domains did not fully activate: "
-        + (domains.stream().filter(c -> !c.active()).map(d -> d.logState()).toList()));
+                                                     () -> domains.stream().allMatch(Domain::active));
+        assertTrue(activated, "Domains did not fully activate: " + (domains.stream()
+                                                                           .filter(c -> !c.active())
+                                                                           .map(Domain::logState)
+                                                                           .toList()));
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);

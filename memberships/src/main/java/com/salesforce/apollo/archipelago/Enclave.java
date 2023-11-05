@@ -6,19 +6,6 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
-import java.util.concurrent.Executor;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
@@ -27,40 +14,32 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.LimitsRegistry;
-
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.Context;
-import io.grpc.Contexts;
+import io.grpc.*;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.ServerBuilder;
-import io.grpc.ServerCall;
-import io.grpc.ServerCallHandler;
-import io.grpc.ServerInterceptor;
-import io.grpc.Status;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 /**
- * Enclave Server for routing from a process endpoint in the default Isolate
- * into individual Isolates.
+ * Enclave Server for routing from a process endpoint in the default Isolate into individual Isolates.
  *
  * @author hal.hildebrand
- *
  */
 public class Enclave implements RouterSupplier {
-    public interface RoutingClientIdentity extends ClientIdentity {
-        Digest getAgent();
-    }
-
+    private final static Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
     private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
@@ -68,14 +47,12 @@ public class Enclave implements RouterSupplier {
     private final Consumer<Digest>    contextRegistration;
     private final DomainSocketAddress endpoint;
     private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
-    private final Executor            executor;
     private final Member              from;
     private final String              fromString;
 
-    public Enclave(Member from, DomainSocketAddress endpoint, Executor executor, DomainSocketAddress bridge,
+    public Enclave(Member from, DomainSocketAddress endpoint, DomainSocketAddress bridge,
                    Consumer<Digest> contextRegistration) {
         this.bridge = bridge;
-        this.executor = executor;
         this.endpoint = endpoint;
         this.contextRegistration = contextRegistration;
         this.from = from;
@@ -87,7 +64,6 @@ public class Enclave implements RouterSupplier {
     }
 
     /**
-     * 
      * @return the DomainSocketAddress for this Enclave
      */
     public DomainSocketAddress getEndpoint() {
@@ -95,20 +71,24 @@ public class Enclave implements RouterSupplier {
     }
 
     @Override
-    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit, Executor executor,
+    public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = NettyServerBuilder.forAddress(endpoint)
+                                                           .executor(executor)
                                                            .protocolNegotiator(new DomainSocketNegotiator())
                                                            .channelType(getServerDomainSocketChannelClass())
                                                            .workerEventLoopGroup(getEventLoopGroup())
                                                            .bossEventLoopGroup(getEventLoopGroup())
                                                            .intercept(new DomainSocketServerInterceptor())
-                                                           .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
-                                                                                                       .statusSupplier(() -> Status.RESOURCE_EXHAUSTED.withDescription("Enclave server concurrency limit reached"))
+                                                           .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
+                                                                                                       limitsBuilder.build())
+                                                                                                       .statusSupplier(
+                                                                                                       () -> Status.RESOURCE_EXHAUSTED.withDescription(
+                                                                                                       "Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)),
@@ -122,7 +102,7 @@ public class Enclave implements RouterSupplier {
                                   public Digest getFrom() {
                                       return Router.SERVER_CLIENT_ID_KEY.get();
                                   }
-                              }, contextRegistration, executor);
+                              }, contextRegistration);
     }
 
     private ManagedChannel connectTo(Member to) {
@@ -142,10 +122,10 @@ public class Enclave implements RouterSupplier {
             }
         };
         final var builder = NettyChannelBuilder.forAddress(bridge)
+                                               .executor(executor)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)
                                                .usePlaintext()
-                                               .executor(executor)
                                                .intercept(clientInterceptor);
         return builder.build();
     }
@@ -172,5 +152,9 @@ public class Enclave implements RouterSupplier {
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };
+    }
+
+    public interface RoutingClientIdentity extends ClientIdentity {
+        Digest getAgent();
     }
 }

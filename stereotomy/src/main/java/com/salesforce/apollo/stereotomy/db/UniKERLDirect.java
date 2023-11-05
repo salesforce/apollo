@@ -6,24 +6,21 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
-import org.jooq.impl.DSL;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import org.jooq.impl.DSL;
+
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class UniKERLDirect extends UniKERL {
 
@@ -32,28 +29,24 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public CompletableFuture<KeyState> append(KeyEvent event) {
+    public KeyState append(KeyEvent event) {
         KeyState newState = processor.process(event);
         dsl.transaction(ctx -> {
             append(DSL.using(ctx), event, newState, digestAlgorithm);
         });
-        var f = new CompletableFuture<KeyState>();
-        f.complete(newState);
-        return f;
+        return newState;
     }
 
     @Override
-    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+    public Void append(List<AttachmentEvent> events) {
         dsl.transaction(ctx -> {
             events.forEach(event -> append(DSL.using(ctx), event));
         });
-        var result = new CompletableFuture<Void>();
-        result.complete(null);
-        return result;
+        return null;
     }
 
     @Override
-    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+    public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         List<KeyState> states = new ArrayList<>();
         dsl.transaction(ctx -> {
             var context = DSL.using(ctx);
@@ -64,25 +57,15 @@ public class UniKERLDirect extends UniKERL {
             });
             attachments.forEach(attach -> append(context, attach));
         });
-        var fs = new CompletableFuture<List<KeyState>>();
-        fs.complete(states);
-        return fs;
+        return states;
     }
 
     @Override
-    public CompletableFuture<Void> appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> validations) {
-        CompletableFuture<Void> complete = new CompletableFuture<>();
-
-        try {
-            dsl.transaction(ctx -> {
-                appendValidations(DSL.using(ctx), coordinates, validations);
-            });
-            complete.complete(null);
-        } catch (Exception e) {
-            complete.completeExceptionally(e);
-        }
-
-        return complete;
+    public Void appendValidations(EventCoordinates coordinates,
+                                  Map<EventCoordinates, JohnHancock> validations) {
+        dsl.transaction(ctx -> {
+            appendValidations(DSL.using(ctx), coordinates, validations);
+        });
+        return null;
     }
 }

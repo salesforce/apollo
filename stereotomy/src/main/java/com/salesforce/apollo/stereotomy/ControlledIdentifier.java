@@ -6,14 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.security.KeyPair;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
@@ -26,12 +18,18 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
+import java.security.KeyPair;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 /**
  * A controlled identifier, representing the current state of the identifier at
  * all times.
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public interface ControlledIdentifier<D extends Identifier> extends BoundIdentifier<D> {
     /**
@@ -41,32 +39,31 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
 
     /**
      * Commit the delegated rotation and commitment to the receiver's KERL
-     * 
+     *
      * @param delegation - the delegated rotation event
      * @param commitment - the event attachment that commits the delegation
      * @return the future commitment of the keystate
      */
-    CompletableFuture<Void> commit(DelegatedRotationEvent delegation, AttachmentEvent commitment);
+    Void commit(DelegatedRotationEvent delegation, AttachmentEvent commitment);
 
     /**
      * Construct a delegated rotation event
      *
      * @return the future DelegatedRotation event
      */
-    CompletableFuture<DelegatedRotationEvent> delegateRotate(RotationSpecification.Builder spec);
+    DelegatedRotationEvent delegateRotate(RotationSpecification.Builder spec);
 
     /**
      * @return the KERL of the receiver identifier
      */
-    CompletableFuture<List<EventWithAttachments>> getKerl();
+    List<EventWithAttachments> getKerl();
 
     /**
      * @return the Signer for the key state binding
      */
-    CompletableFuture<Signer> getSigner();
+    Signer getSigner();
 
     /**
-     * 
      * @return a new ephemeral BasicIdentifier
      */
     Optional<KeyPair> newEphemeral();
@@ -74,7 +71,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Create a new delegated identifier using the receiver as the base.
      */
-    <I extends Identifier> CompletableFuture<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
+    <I extends Identifier> ControlledIdentifier<I> newIdentifier(Builder<I> newBuilder);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -91,18 +88,17 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * <li>DC - The signature of the key state of the identifier in UID of the
      * generated public key that signs the certificate</li>
      * </ul>
-     * 
+     *
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
      * @param valid              - how long the certificate will be valid
      * @param extensions         - any extra stuff to put into ye pot
      * @param signatureAlgorithm - the sig algorithm to use
-     * 
      * @return a CertificateWithPrivateKey that is self signed by the public key of
-     *         the X509Certificate
+     * the X509Certificate
      */
-    CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
-                                                           List<CertExtension> extensions, SignatureAlgorithm algo);
+    CertificateWithPrivateKey provision(Instant validFrom, Duration valid,
+                                        List<CertExtension> extensions, SignatureAlgorithm algo);
 
     /**
      * Provision a certificate that encodes this identifier using a generated Basic
@@ -119,32 +115,31 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * <li>DC - The signature of the key state of the identifier in UID of the
      * generated public key that signs the certificate</li>
      * </ul>
-     * 
+     *
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
      * @param valid              - how long the certificate will be valid
      * @param signatureAlgorithm - the sig algorithm to use
-     * 
      * @return a CertificateWithPrivateKey that is self signed by the public key of
-     *         the X509Certificate
+     * the X509Certificate
      */
-    default CompletableFuture<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
-                                                                   SignatureAlgorithm algo) {
+    default CertificateWithPrivateKey provision(Instant validFrom, Duration valid,
+                                                SignatureAlgorithm algo) {
         return provision(validFrom, valid, Collections.emptyList(), algo);
     }
 
     /**
      * Rotate the current key state
      */
-    CompletableFuture<Void> rotate();
+    Void rotate();
 
     /**
      * Rotate the current key state using the supplied specification
      */
-    CompletableFuture<Void> rotate(RotationSpecification.Builder spec);
+    Void rotate(RotationSpecification.Builder spec);
 
     /**
      * Publish the SealingEvent using the supplied specification
      */
-    CompletableFuture<EventCoordinates> seal(InteractionSpecification.Builder spec);
+    EventCoordinates seal(InteractionSpecification.Builder spec);
 }

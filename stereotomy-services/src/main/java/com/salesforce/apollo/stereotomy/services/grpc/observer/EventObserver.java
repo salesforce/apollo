@@ -21,9 +21,9 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface EventObserver {
 
-    CompletableFuture<Void> publish(KERL_ kerl, List<Validations> validations, Digest from);
+   void publish(KERL_ kerl, List<Validations> validations, Digest from);
 
-    CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments, Digest from);
+    void publishAttachments(List<AttachmentEvent> attachments, Digest from);
 
-    CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from);
+   void publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from);
 }

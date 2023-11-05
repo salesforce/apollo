@@ -6,27 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.joou.ULong;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
@@ -44,23 +23,37 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
+import org.joou.ULong;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- * 
  */
 public class MembershipTests {
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
         });
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
     private Map<Digest, CHOAM>  choams;
@@ -76,8 +69,8 @@ public class MembershipTests {
     @Test
     public void genesisBootstrap() throws Exception {
         SigningMember testSubject = initialize(2000, 5);
-        System.out.println("Test subject: " + testSubject.getId() + " membership: "
-        + members.stream().map(e -> e.getId()).toList());
+        System.out.println(
+        "Test subject: " + testSubject.getId() + " membership: " + members.stream().map(e -> e.getId()).toList());
         routers.entrySet()
                .stream()
                .filter(e -> !e.getKey().equals(testSubject.getId()))
@@ -92,23 +85,22 @@ public class MembershipTests {
 
         System.out.println("Transactioneer: " + txneer.getId());
 
-        boolean active = Utils.waitForCondition(12_000, 1_000,
-                                                () -> choams.entrySet()
-                                                            .stream()
-                                                            .filter(e -> !testSubject.getId().equals(e.getKey()))
-                                                            .map(e -> e.getValue())
-                                                            .filter(c -> !c.active())
-                                                            .count() == 0);
+        boolean active = Utils.waitForCondition(12_000, 1_000, () -> choams.entrySet()
+                                                                           .stream()
+                                                                           .filter(
+                                                                           e -> !testSubject.getId().equals(e.getKey()))
+                                                                           .map(e -> e.getValue())
+                                                                           .filter(c -> !c.active())
+                                                                           .count() == 0);
         assertTrue(active,
                    "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
-                   + " inactive: "
-                   + choams.entrySet()
-                           .stream()
-                           .filter(e -> !testSubject.getId().equals(e.getKey()))
-                           .map(e -> e.getValue())
-                           .filter(c -> !c.active())
-                           .map(c -> c.logState())
-                           .toList());
+                   + " inactive: " + choams.entrySet()
+                                           .stream()
+                                           .filter(e -> !testSubject.getId().equals(e.getKey()))
+                                           .map(e -> e.getValue())
+                                           .filter(c -> !c.active())
+                                           .map(c -> c.logState())
+                                           .toList());
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1,
@@ -142,9 +134,8 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
-                               .setBootstrap(BootstrapParameters.newBuilder()
-                                                                .setGossipDuration(Duration.ofMillis(20))
-                                                                .build())
+                               .setBootstrap(
+                               BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(20)).build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
@@ -161,13 +152,8 @@ public class MembershipTests {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, cardinality).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e1) {
-                throw new IllegalStateException(e1);
-            }
-        })
+        members = IntStream.range(0, cardinality)
+                           .mapToObj(i -> stereotomy.newIdentifier())
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))
@@ -175,8 +161,7 @@ public class MembershipTests {
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalServer(prefix, m,
-                                       Executors.newSingleThreadExecutor()).router(ServerConnectionCache.newBuilder().setTarget(cardinality), Executors.newFixedThreadPool(2));
+            var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(cardinality));
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -201,10 +186,8 @@ public class MembershipTests {
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                            .setMember(m)
                                                            .setCommunications(routers.get(m.getId()))
-                                                           .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                            .setProcessor(processor)
                                                            .setContext(context)
-                                                           .setExec(Executors.newFixedThreadPool(2))
                                                            .build()));
         }));
         return testSubject;

@@ -6,23 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
-import org.h2.mvstore.MVStore;
-import org.h2.mvstore.OffHeapStore;
-import org.joou.ULong;
-
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
@@ -46,10 +29,23 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import org.h2.mvstore.MVStore;
+import org.h2.mvstore.OffHeapStore;
+import org.joou.ULong;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcaster.Parameters combine,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
@@ -60,8 +56,48 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
                          ExponentialBackoffPolicy.Builder drainPolicy) {
 
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
     public int majority() {
         return runtime.context.majority();
+    }
+
+    public SigningMember member() {
+        return runtime.member;
+    }
+
+    public Context<Member> context() {
+        return runtime.context;
+    }
+
+    public Router communications() {
+        return runtime.communications;
+    }
+
+    public ChoamMetrics metrics() {
+        return runtime.metrics;
+    }
+
+    public Function<ULong, File> checkpointer() {
+        return runtime.checkpointer;
+    }
+
+    public Function<Map<Member, Join>, List<Transaction>> genesisData() {
+        return runtime.genesisData;
+    }
+
+    public TransactionExecutor processor() {
+        return runtime.processor;
+    }
+
+    public BiConsumer<HashedBlock, CheckpointState> restorer() {
+        return runtime.restorer;
+    }
+
+    public Supplier<KERL_> kerl() {
+        return runtime.kerl;
     }
 
     public static class MvStoreBuilder implements Cloneable {
@@ -142,53 +178,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return autoCommitBufferSize;
         }
 
-        public int getAutoCompactFillRate() {
-            return autoCompactFillRate;
-        }
-
-        public int getCachConcurrency() {
-            return cachConcurrency;
-        }
-
-        public int getCachSize() {
-            return cachSize;
-        }
-
-        public File getFileName() {
-            return fileName;
-        }
-
-        public int getKeysPerPage() {
-            return keysPerPage;
-        }
-
-        public int getPageSplitSize() {
-            return pageSplitSize;
-        }
-
-        public boolean isCompress() {
-            return compress;
-        }
-
-        public boolean isCompressHigh() {
-            return compressHigh;
-        }
-
-        public boolean isOffHeap() {
-            return offHeap;
-        }
-
-        public boolean isReadOnly() {
-            return readOnly;
-        }
-
-        public boolean isRecoveryMode() {
-            return recoveryMode;
-        }
-
         public MvStoreBuilder setAutoCommitBufferSize(int autoCommitBufferSize) {
             this.autoCommitBufferSize = autoCommitBufferSize;
             return this;
+        }
+
+        public int getAutoCompactFillRate() {
+            return autoCompactFillRate;
         }
 
         public MvStoreBuilder setAutoCompactFillRate(int autoCompactFillRate) {
@@ -196,9 +192,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getCachConcurrency() {
+            return cachConcurrency;
+        }
+
         public MvStoreBuilder setCachConcurrency(int cachConcurrency) {
             this.cachConcurrency = cachConcurrency;
             return this;
+        }
+
+        public int getCachSize() {
+            return cachSize;
         }
 
         public MvStoreBuilder setCachSize(int cachSize) {
@@ -206,14 +210,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
-        public MvStoreBuilder setCompress(boolean compress) {
-            this.compress = compress;
-            return this;
-        }
-
-        public MvStoreBuilder setCompressHigh(boolean compressHigh) {
-            this.compressHigh = compressHigh;
-            return this;
+        public File getFileName() {
+            return fileName;
         }
 
         public MvStoreBuilder setFileName(File fileName) {
@@ -221,14 +219,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getKeysPerPage() {
+            return keysPerPage;
+        }
+
         public MvStoreBuilder setKeysPerPage(int keysPerPage) {
             this.keysPerPage = keysPerPage;
             return this;
         }
 
-        public MvStoreBuilder setOffHeap(boolean offHeap) {
-            this.offHeap = offHeap;
-            return this;
+        public int getPageSplitSize() {
+            return pageSplitSize;
         }
 
         public MvStoreBuilder setPageSplitSize(int pageSplitSize) {
@@ -236,9 +237,44 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public boolean isCompress() {
+            return compress;
+        }
+
+        public MvStoreBuilder setCompress(boolean compress) {
+            this.compress = compress;
+            return this;
+        }
+
+        public boolean isCompressHigh() {
+            return compressHigh;
+        }
+
+        public MvStoreBuilder setCompressHigh(boolean compressHigh) {
+            this.compressHigh = compressHigh;
+            return this;
+        }
+
+        public boolean isOffHeap() {
+            return offHeap;
+        }
+
+        public MvStoreBuilder setOffHeap(boolean offHeap) {
+            this.offHeap = offHeap;
+            return this;
+        }
+
+        public boolean isReadOnly() {
+            return readOnly;
+        }
+
         public MvStoreBuilder setReadOnly(boolean readOnly) {
             this.readOnly = readOnly;
             return this;
+        }
+
+        public boolean isRecoveryMode() {
+            return recoveryMode;
         }
 
         public MvStoreBuilder setRecoveryMode(boolean recoveryMode) {
@@ -248,13 +284,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     }
 
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
-                                    ScheduledExecutorService scheduler,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
-                                    Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
-                                    Supplier<KERL_> kerl, FoundationSeal foundation) {
+                                    Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
+                                    FoundationSeal foundation) {
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+
         public static class Builder implements Cloneable {
             private final static Function<ULong, File> NULL_CHECKPOINTER;
+
             static {
                 NULL_CHECKPOINTER = h -> {
                     File cp;
@@ -270,24 +310,23 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                     return cp;
                 };
             }
+
             private Function<ULong, File>                          checkpointer = NULL_CHECKPOINTER;
             private Router                                         communications;
             private Context<Member>                                context;
-            private Executor                                       exec         = r -> r.run();
             private FoundationSeal                                 foundation   = FoundationSeal.getDefaultInstance();
             private Function<Map<Member, Join>, List<Transaction>> genesisData  = view -> new ArrayList<>();
             private Supplier<KERL_>                                kerl         = () -> KERL_.getDefaultInstance();
             private SigningMember                                  member;
             private ChoamMetrics                                   metrics;
             private TransactionExecutor                            processor    = (i, h, t, f, exec) -> {
-                                                                                };
+            };
             private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
-                                                                                };
-            private ScheduledExecutorService                       scheduler;
+            };
 
             public RuntimeParameters build() {
-                return new RuntimeParameters(context, communications, member, scheduler, genesisData, processor,
-                                             restorer, checkpointer, metrics, exec, kerl, foundation);
+                return new RuntimeParameters(context, communications, member, genesisData, processor, restorer,
+                                             checkpointer, metrics, kerl, foundation);
             }
 
             @Override
@@ -305,58 +344,22 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return checkpointer;
             }
 
-            public Router getCommunications() {
-                return communications;
-            }
-
-            public Context<Member> getContext() {
-                return context;
-            }
-
-            public Executor getExec() {
-                return exec;
-            }
-
-            public FoundationSeal getFoundation() {
-                return foundation;
-            }
-
-            public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
-                return genesisData;
-            }
-
-            public Supplier<KERL_> getKerl() {
-                return kerl;
-            }
-
-            public SigningMember getMember() {
-                return member;
-            }
-
-            public ChoamMetrics getMetrics() {
-                return metrics;
-            }
-
-            public TransactionExecutor getProcessor() {
-                return processor;
-            }
-
-            public BiConsumer<HashedBlock, CheckpointState> getRestorer() {
-                return restorer;
-            }
-
-            public ScheduledExecutorService getScheduler() {
-                return scheduler;
-            }
-
             public Builder setCheckpointer(Function<ULong, File> checkpointer) {
                 this.checkpointer = checkpointer;
                 return this;
             }
 
+            public Router getCommunications() {
+                return communications;
+            }
+
             public Builder setCommunications(Router communications) {
                 this.communications = communications;
                 return this;
+            }
+
+            public Context<Member> getContext() {
+                return context;
             }
 
             @SuppressWarnings("unchecked")
@@ -365,9 +368,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
-            public Builder setExec(Executor exec) {
-                this.exec = exec;
-                return this;
+            public FoundationSeal getFoundation() {
+                return foundation;
             }
 
             public Builder setFoundation(FoundationSeal foundation) {
@@ -375,9 +377,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
+            public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
+                return genesisData;
+            }
+
             public Builder setGenesisData(Function<Map<Member, Join>, List<Transaction>> genesisData) {
                 this.genesisData = genesisData;
                 return this;
+            }
+
+            public Supplier<KERL_> getKerl() {
+                return kerl;
             }
 
             public Builder setKerl(Supplier<KERL_> kerl) {
@@ -385,9 +395,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
+            public SigningMember getMember() {
+                return member;
+            }
+
             public Builder setMember(SigningMember member) {
                 this.member = member;
                 return this;
+            }
+
+            public ChoamMetrics getMetrics() {
+                return metrics;
             }
 
             public Builder setMetrics(ChoamMetrics metrics) {
@@ -395,24 +413,23 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
+            public TransactionExecutor getProcessor() {
+                return processor;
+            }
+
             public Builder setProcessor(TransactionExecutor processor) {
                 this.processor = processor;
                 return this;
+            }
+
+            public BiConsumer<HashedBlock, CheckpointState> getRestorer() {
+                return restorer;
             }
 
             public Builder setRestorer(BiConsumer<HashedBlock, CheckpointState> biConsumer) {
                 this.restorer = biConsumer;
                 return this;
             }
-
-            public Builder setScheduler(ScheduledExecutorService scheduler) {
-                this.scheduler = scheduler;
-                return this;
-            }
-        }
-
-        public static Builder newBuilder() {
-            return new Builder();
         }
     }
 
@@ -421,6 +438,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         public static Builder newBuilder() {
             return new Builder();
         }
+
         public static class Builder {
             private Duration gossipDuration = Duration.ofSeconds(1);
             private int      maxSyncBlocks  = 100;
@@ -434,22 +452,22 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return gossipDuration;
             }
 
-            public int getMaxSyncBlocks() {
-                return maxSyncBlocks;
-            }
-
-            public int getMaxViewBlocks() {
-                return maxViewBlocks;
-            }
-
             public Builder setGossipDuration(Duration gossipDuration) {
                 this.gossipDuration = gossipDuration;
                 return this;
             }
 
+            public int getMaxSyncBlocks() {
+                return maxSyncBlocks;
+            }
+
             public Builder setMaxSyncBlocks(int maxSyncBlocks) {
                 this.maxSyncBlocks = maxSyncBlocks;
                 return this;
+            }
+
+            public int getMaxViewBlocks() {
+                return maxViewBlocks;
             }
 
             public Builder setMaxViewBlocks(int maxViewBlocks) {
@@ -483,29 +501,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return batchInterval;
             }
 
-            public Config.Builder getEthereal() {
-                return ethereal;
-            }
-
-            public Duration getGossipDuration() {
-                return gossipDuration;
-            }
-
-            public int getMaxBatchByteSize() {
-                return maxBatchByteSize;
-            }
-
-            public int getMaxBatchCount() {
-                return maxBatchCount;
-            }
-
-            public Duration getMaxGossipDelay() {
-                return maxGossipDelay;
-            }
-
             public Builder setBatchInterval(Duration batchInterval) {
                 this.batchInterval = batchInterval;
                 return this;
+            }
+
+            public Config.Builder getEthereal() {
+                return ethereal;
             }
 
             public Builder setEthereal(Config.Builder ethereal) {
@@ -513,9 +515,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
+            public Duration getGossipDuration() {
+                return gossipDuration;
+            }
+
             public Builder setGossipDuration(Duration gossipDuration) {
                 this.gossipDuration = gossipDuration;
                 return this;
+            }
+
+            public int getMaxBatchByteSize() {
+                return maxBatchByteSize;
             }
 
             public Builder setMaxBatchByteSize(int maxBatchByteSize) {
@@ -523,9 +533,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
+            public int getMaxBatchCount() {
+                return maxBatchCount;
+            }
+
             public Builder setMaxBatchCount(int maxBatchCount) {
                 this.maxBatchCount = maxBatchCount;
                 return this;
+            }
+
+            public Duration getMaxGossipDelay() {
+                return maxGossipDelay;
             }
 
             public Builder setMaxGossipDelay(Duration maxGossipDelay) {
@@ -533,10 +551,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
         }
-    }
-
-    public static Builder newBuilder() {
-        return new Builder();
     }
 
     public static class LimiterBuilder {
@@ -574,34 +588,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return backlogSize;
         }
 
-        public double getBackoffRatio() {
-            return backoffRatio;
-        }
-
-        public int getInitialLimit() {
-            return initialLimit;
-        }
-
-        public int getMaxLimit() {
-            return maxLimit;
-        }
-
-        public int getMinLimit() {
-            return minLimit;
-        }
-
-        public Duration getTimeout() {
-            return timeout;
-        }
-
-        public LimiterBuilder setBacklogDuration(Duration backlogDuration) {
-            this.backlogDuration = backlogDuration;
-            return this;
-        }
-
         public LimiterBuilder setBacklogSize(int backlogSize) {
             this.backlogSize = backlogSize;
             return this;
+        }
+
+        public double getBackoffRatio() {
+            return backoffRatio;
         }
 
         public LimiterBuilder setBackoffRatio(double backoffRatio) {
@@ -609,9 +602,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getInitialLimit() {
+            return initialLimit;
+        }
+
         public LimiterBuilder setInitialLimit(int initialLimit) {
             this.initialLimit = initialLimit;
             return this;
+        }
+
+        public int getMaxLimit() {
+            return maxLimit;
         }
 
         public LimiterBuilder setMaxLimit(int maxLimit) {
@@ -619,13 +620,26 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getMinLimit() {
+            return minLimit;
+        }
+
         public LimiterBuilder setMinLimit(int minLimit) {
             this.minLimit = minLimit;
             return this;
         }
 
+        public Duration getTimeout() {
+            return timeout;
+        }
+
         public LimiterBuilder setTimeout(Duration timeout) {
             this.timeout = timeout;
+            return this;
+        }
+
+        public LimiterBuilder setBacklogDuration(Duration backlogDuration) {
+            this.backlogDuration = backlogDuration;
             return this;
         }
     }
@@ -639,10 +653,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                                                                                        .build();
         private DigestAlgorithm                  digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder()
-                                                                                                 .setInitialBackoff(Duration.ofMillis(5))
+                                                                                                 .setInitialBackoff(
+                                                                                                 Duration.ofMillis(5))
                                                                                                  .setJitter(0.2)
                                                                                                  .setMultiplier(1.2)
-                                                                                                 .setMaxBackoff(Duration.ofMillis(500));
+                                                                                                 .setMaxBackoff(
+                                                                                                 Duration.ofMillis(
+                                                                                                 500));
         private Digest                           genesisViewId;
         private Duration                         gossipDuration        = Duration.ofSeconds(1);
         private int                              maxCheckpointSegments = 200;
@@ -650,10 +667,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private ProducerParameters               producer              = ProducerParameters.newBuilder().build();
         private int                              regenerationCycles    = 20;
         private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder()
-                                                                                                 .setInitialBackoff(Duration.ofMillis(10))
+                                                                                                 .setInitialBackoff(
+                                                                                                 Duration.ofMillis(10))
                                                                                                  .setJitter(0.2)
                                                                                                  .setMultiplier(1.6)
-                                                                                                 .setMaxBackoff(Duration.ofMillis(500));
+                                                                                                 .setMaxBackoff(
+                                                                                                 Duration.ofMillis(
+                                                                                                 500));
         private Duration                         submitTimeout         = Duration.ofSeconds(30);
         private int                              synchronizationCycles = 10;
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
@@ -679,73 +699,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return bootstrap;
         }
 
-        public int getCheckpointBlockDelta() {
-            return checkpointBlockDelta;
-        }
-
-        public int getCheckpointSegmentSize() {
-            return checkpointSegmentSize;
-        }
-
-        public ReliableBroadcaster.Parameters getCombine() {
-            return combine;
-        }
-
-        public DigestAlgorithm getDigestAlgorithm() {
-            return digestAlgorithm;
-        }
-
-        public ExponentialBackoffPolicy.Builder getDrainPolicy() {
-            return drainPolicy;
-        }
-
-        public Digest getGenesisViewId() {
-            return genesisViewId;
-        }
-
-        public Duration getGossipDuration() {
-            return gossipDuration;
-        }
-
-        public int getMaxCheckpointSegments() {
-            return maxCheckpointSegments;
-        }
-
-        public MvStoreBuilder getMvBuilder() {
-            return mvBuilder;
-        }
-
-        public ProducerParameters getProducer() {
-            return producer;
-        }
-
-        public int getRegenerationCycles() {
-            return regenerationCycles;
-        }
-
-        public ExponentialBackoffPolicy.Builder getSubmitPolicy() {
-            return submitPolicy;
-        }
-
-        public Duration getSubmitTimeout() {
-            return submitTimeout;
-        }
-
-        public int getSynchronizationCycles() {
-            return synchronizationCycles;
-        }
-
-        public LimiterBuilder getTxnLimiterBuilder() {
-            return txnLimiterBuilder;
-        }
-
-        public SignatureAlgorithm getViewSigAlgorithm() {
-            return viewSigAlgorithm;
-        }
-
         public Builder setBootstrap(BootstrapParameters bootstrap) {
             this.bootstrap = bootstrap;
             return this;
+        }
+
+        public int getCheckpointBlockDelta() {
+            return checkpointBlockDelta;
         }
 
         public Builder setCheckpointBlockDelta(int checkpointBlockDelta) {
@@ -753,9 +713,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getCheckpointSegmentSize() {
+            return checkpointSegmentSize;
+        }
+
         public Builder setCheckpointSegmentSize(int checkpointSegmentSize) {
             this.checkpointSegmentSize = checkpointSegmentSize;
             return this;
+        }
+
+        public ReliableBroadcaster.Parameters getCombine() {
+            return combine;
         }
 
         public Builder setCombine(ReliableBroadcaster.Parameters combine) {
@@ -763,9 +731,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public DigestAlgorithm getDigestAlgorithm() {
+            return digestAlgorithm;
+        }
+
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
             return this;
+        }
+
+        public ExponentialBackoffPolicy.Builder getDrainPolicy() {
+            return drainPolicy;
         }
 
         public Builder setDrainPolicy(ExponentialBackoffPolicy.Builder drainPolicy) {
@@ -773,9 +749,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public Digest getGenesisViewId() {
+            return genesisViewId;
+        }
+
         public Builder setGenesisViewId(Digest genesisViewId) {
             this.genesisViewId = genesisViewId;
             return this;
+        }
+
+        public Duration getGossipDuration() {
+            return gossipDuration;
         }
 
         public Parameters.Builder setGossipDuration(Duration gossipDuration) {
@@ -783,9 +767,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getMaxCheckpointSegments() {
+            return maxCheckpointSegments;
+        }
+
         public Builder setMaxCheckpointSegments(int maxCheckpointSegments) {
             this.maxCheckpointSegments = maxCheckpointSegments;
             return this;
+        }
+
+        public MvStoreBuilder getMvBuilder() {
+            return mvBuilder;
         }
 
         public Builder setMvBuilder(MvStoreBuilder mvBuilder) {
@@ -793,9 +785,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public ProducerParameters getProducer() {
+            return producer;
+        }
+
         public Builder setProducer(ProducerParameters producer) {
             this.producer = producer;
             return this;
+        }
+
+        public int getRegenerationCycles() {
+            return regenerationCycles;
         }
 
         public Builder setRegenerationCycles(int regenerationCycles) {
@@ -803,9 +803,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public ExponentialBackoffPolicy.Builder getSubmitPolicy() {
+            return submitPolicy;
+        }
+
         public Builder setSubmitPolicy(ExponentialBackoffPolicy.Builder submitPolicy) {
             this.submitPolicy = submitPolicy;
             return this;
+        }
+
+        public Duration getSubmitTimeout() {
+            return submitTimeout;
         }
 
         public Builder setSubmitTimeout(Duration submitTimeout) {
@@ -813,9 +821,17 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public int getSynchronizationCycles() {
+            return synchronizationCycles;
+        }
+
         public Builder setSynchronizationCycles(int synchronizationCycles) {
             this.synchronizationCycles = synchronizationCycles;
             return this;
+        }
+
+        public LimiterBuilder getTxnLimiterBuilder() {
+            return txnLimiterBuilder;
         }
 
         public Builder setTxnLimiterBuilder(LimiterBuilder txnLimiterBuilder) {
@@ -823,54 +839,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public SignatureAlgorithm getViewSigAlgorithm() {
+            return viewSigAlgorithm;
+        }
+
         public Builder setViewSigAlgorithm(SignatureAlgorithm viewSigAlgorithm) {
             this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
-    }
-
-    public SigningMember member() {
-        return runtime.member;
-    }
-
-    public Context<Member> context() {
-        return runtime.context;
-    }
-
-    public Router communications() {
-        return runtime.communications;
-    }
-
-    public ChoamMetrics metrics() {
-        return runtime.metrics;
-    }
-
-    public ScheduledExecutorService scheduler() {
-        return runtime.scheduler;
-    }
-
-    public Function<ULong, File> checkpointer() {
-        return runtime.checkpointer;
-    }
-
-    public Function<Map<Member, Join>, List<Transaction>> genesisData() {
-        return runtime.genesisData;
-    }
-
-    public TransactionExecutor processor() {
-        return runtime.processor;
-    }
-
-    public BiConsumer<HashedBlock, CheckpointState> restorer() {
-        return runtime.restorer;
-    }
-
-    public Executor exec() {
-        return runtime.exec;
-    }
-
-    public Supplier<KERL_> kerl() {
-        return runtime.kerl;
     }
 
 }

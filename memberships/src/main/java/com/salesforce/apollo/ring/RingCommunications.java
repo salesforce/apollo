@@ -6,22 +6,6 @@
  */
 package com.salesforce.apollo.ring;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.TreeSet;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -31,88 +15,56 @@ import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.Ring.IterateResult;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.Utils;
+import io.grpc.StatusRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.TreeSet;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class RingCommunications<T extends Member, Comm extends Link> {
-    public enum Direction {
-        PREDECESSOR {
-            @Override
-            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
-                return ring.findPredecessor(hash, test);
-            }
+    private final static Logger                        log            = LoggerFactory.getLogger(
+    RingCommunications.class);
+    final                Context<T>                    context;
+    final                SigningMember                 member;
+    private final        CommonCommunications<Comm, ?> comm;
+    private final        Direction                     direction;
+    private final        boolean                       ignoreSelf;
+    private final        Lock                          lock           = new ReentrantLock();
+    private final        List<iteration<T>>            traversalOrder = new ArrayList<>();
+    protected            boolean                       noDuplicates   = false;
+    volatile             int                           currentIndex   = -1;
 
-            @Override
-            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
-                return ring.findPredecessor(member, test);
-            }
-        },
-        SUCCESSOR {
-            @Override
-            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
-                return ring.findSuccessor(hash, test);
-            }
-
-            @Override
-            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
-                return ring.findSuccessor(member, test);
-            }
-        };
-
-        public abstract <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test);
-
-        public abstract <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test);
-    }
-
-    public record Destination<M, Q>(M member, Q link, int ring) {}
-
-    private record iteration<T extends Member>(T m, int ring) {
-
-        @Override
-        public String toString() {
-            return String.format("[%s,%s]", m == null ? "<null>" : m.getId(), ring);
-        }
-
-    }
-
-    private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
-
-    protected boolean                           noDuplicates   = false;
-    final Context<T>                            context;
-    volatile int                                currentIndex   = -1;
-    final Executor                              exec;
-    final SigningMember                         member;
-    private final CommonCommunications<Comm, ?> comm;
-    private final Direction                     direction;
-    private final boolean                       ignoreSelf;
-    private final Lock                          lock           = new ReentrantLock();
-    private final List<iteration<T>>            traversalOrder = new ArrayList<>();
-
-    public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                              Executor exec) {
-        this(context, member, comm, exec, false);
+    public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
+        this(context, member, comm, false);
     }
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                              Executor exec, boolean ignoreSelf) {
-        this(Direction.SUCCESSOR, context, member, comm, exec, ignoreSelf);
+                              boolean ignoreSelf) {
+        this(Direction.SUCCESSOR, context, member, comm, ignoreSelf);
     }
 
     public RingCommunications(Direction direction, Context<T> context, SigningMember member,
-                              CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf) {
+                              CommonCommunications<Comm, ?> comm, boolean ignoreSelf) {
         assert direction != null && context != null && member != null && comm != null;
         this.direction = direction;
         this.context = context;
         this.member = member;
         this.comm = comm;
-        this.exec = exec;
         this.ignoreSelf = ignoreSelf;
     }
 
-    public <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<T, Q, Comm> handler) {
+    public <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler) {
         final var next = next(member.getId());
         if (next.member == null) {
             log.debug("No member for ring: {} on: {}", next.ring, member.getId());
@@ -173,7 +125,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return traversal;
     }
 
-    final Destination<T, Comm> next(Digest digest) {
+    final RingCommunications.Destination<T, Comm> next(Digest digest) {
         lock.lock();
         try {
             final var current = currentIndex;
@@ -194,23 +146,18 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         }
     }
 
-    private <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<T, Q, Comm> handler,
+    private <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler,
                              Destination<T, Comm> destination) {
         if (destination.link == null) {
             handler.handle(Optional.empty(), destination);
         } else {
-            ListenableFuture<Q> futureSailor = round.apply(destination.link, destination.ring);
-            if (futureSailor == null) {
-                handler.handle(Optional.empty(), destination);
-            } else {
-                try {
-                    futureSailor.addListener(Utils.wrapped(() -> {
-                        handler.handle(Optional.of(futureSailor), destination);
-                    }, log), exec);
-                } catch (RejectedExecutionException e) {
-                    // ignore
-                }
+            Q result = null;
+            try {
+                result = round.apply(destination.link, destination.ring);
+            } catch (Throwable e) {
+                log.trace("error applying round to: %s", destination.member.getId(), e);
             }
+            handler.handle(Optional.ofNullable(result), destination);
         }
     }
 
@@ -229,5 +176,45 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
             return new Destination<>(successor.m, null, successor.ring);
         }
+    }
+
+    public enum Direction {
+        PREDECESSOR {
+            @Override
+            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
+                return ring.findPredecessor(hash, test);
+            }
+
+            @Override
+            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
+                return ring.findPredecessor(member, test);
+            }
+        }, SUCCESSOR {
+            @Override
+            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
+                return ring.findSuccessor(hash, test);
+            }
+
+            @Override
+            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
+                return ring.findSuccessor(member, test);
+            }
+        };
+
+        public abstract <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test);
+
+        public abstract <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test);
+    }
+
+    public record Destination<M, Q>(M member, Q link, int ring) {
+    }
+
+    private record iteration<T extends Member>(T m, int ring) {
+
+        @Override
+        public String toString() {
+            return String.format("[%s,%s]", m == null ? "<null>" : m.getId(), ring);
+        }
+
     }
 }

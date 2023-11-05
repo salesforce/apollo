@@ -35,7 +35,7 @@ public interface ReliableBroadcast extends Link {
             }
 
             @Override
-            public ListenableFuture<Reconcile> gossip(MessageBff bff) {
+            public Reconcile gossip(MessageBff bff) {
                 return null;
             }
 
@@ -45,7 +45,7 @@ public interface ReliableBroadcast extends Link {
         };
     }
 
-    ListenableFuture<Reconcile> gossip(MessageBff bff);
+    Reconcile gossip(MessageBff bff);
 
     void update(ReconcileContext push);
 

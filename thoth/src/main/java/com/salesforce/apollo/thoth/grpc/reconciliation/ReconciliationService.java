@@ -20,8 +20,8 @@ import com.salesforce.apollo.archipelago.Link;
  */
 public interface ReconciliationService extends Link {
 
-    ListenableFuture<Update> reconcile(Intervals intervals);
+     Update reconcile(Intervals intervals);
 
-    ListenableFuture<Empty> update(Updating update);
+    Empty update(Updating update);
 
 }

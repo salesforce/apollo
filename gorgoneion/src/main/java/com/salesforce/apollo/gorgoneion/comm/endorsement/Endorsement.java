@@ -6,10 +6,6 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
-import java.io.IOException;
-import java.time.Duration;
-
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.gorgoneion.proto.Credentials;
@@ -20,9 +16,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 
+import java.io.IOException;
+import java.time.Duration;
+
 /**
  * @author hal.hildebrand
- *
  */
 public interface Endorsement extends Link {
     static Endorsement getLocalLoopback(Member member, EndorsementService service) {
@@ -33,29 +31,15 @@ public interface Endorsement extends Link {
             }
 
             @Override
-            public ListenableFuture<MemberSignature> endorse(Nonce nonce, Duration timer) {
+            public MemberSignature endorse(Nonce nonce, Duration timer) {
                 SettableFuture<MemberSignature> f = SettableFuture.create();
-                service.endorse(nonce, member.getId()).whenComplete((e, t) -> {
-                    if (t != null) {
-                        f.setException(t);
-                    } else {
-                        f.set(e);
-                    }
-                });
-                return f;
+                return service.endorse(nonce, member.getId());
             }
 
             @Override
-            public ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout) {
+            public void enroll(Notarization notarization, Duration timeout) {
                 SettableFuture<Empty> f = SettableFuture.create();
-                service.enroll(notarization, member.getId()).whenComplete((e, t) -> {
-                    if (t != null) {
-                        f.setException(t);
-                    } else {
-                        f.set(e);
-                    }
-                });
-                return f;
+                service.enroll(notarization, member.getId());
             }
 
             @Override
@@ -64,23 +48,16 @@ public interface Endorsement extends Link {
             }
 
             @Override
-            public ListenableFuture<Validation_> validate(Credentials credentials, Duration timeout) {
+            public Validation_ validate(Credentials credentials, Duration timeout) {
                 SettableFuture<Validation_> f = SettableFuture.create();
-                service.validate(credentials, member.getId()).whenComplete((e, t) -> {
-                    if (t != null) {
-                        f.setException(t);
-                    } else {
-                        f.set(e);
-                    }
-                });
-                return f;
+                return service.validate(credentials, member.getId());
             }
         };
     }
 
-    ListenableFuture<MemberSignature> endorse(Nonce nonce, Duration timer);
+    MemberSignature endorse(Nonce nonce, Duration timer);
 
-    ListenableFuture<Empty> enroll(Notarization notarization, Duration timeout);
+    void enroll(Notarization notarization, Duration timeout);
 
-    ListenableFuture<Validation_> validate(Credentials credentials, Duration timeout);
+    Validation_ validate(Credentials credentials, Duration timeout);
 }

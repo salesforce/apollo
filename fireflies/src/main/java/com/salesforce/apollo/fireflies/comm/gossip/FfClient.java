@@ -6,12 +6,8 @@
  */
 package com.salesforce.apollo.fireflies.comm.gossip;
 
-import java.util.concurrent.ExecutionException;
-
 import com.codahale.metrics.Timer.Context;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
-import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -26,19 +22,19 @@ import com.salesforce.apollo.membership.Member;
  */
 public class FfClient implements Fireflies {
 
-    public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics) {
-        return (c) -> new FfClient(c, metrics);
-
-    }
-
     private final ManagedServerChannel channel;
-    private final FirefliesFutureStub  client;
-    private final FireflyMetrics       metrics;
+    private final FirefliesGrpc.FirefliesBlockingStub client;
+    private final FireflyMetrics metrics;
 
     public FfClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
-        this.client = FirefliesGrpc.newFutureStub(channel).withCompression("gzip");
+        this.client = FirefliesGrpc.newBlockingStub(channel).withCompression("gzip");
         this.metrics = metrics;
+    }
+
+    public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics) {
+        return (c) -> new FfClient(c, metrics);
+
     }
 
     @Override
@@ -52,24 +48,18 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gossip> gossip(SayWhat sw) {
-        ListenableFuture<Gossip> result = client.gossip(sw);
+    public Gossip gossip(SayWhat sw) {
         if (metrics != null) {
             var serializedSize = sw.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);
             metrics.outboundGossip().update(serializedSize);
         }
-        result.addListener(() -> {
-            if (metrics != null) {
-                try {
-                    var serializedSize = result.get().getSerializedSize();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.gossipResponse().update(serializedSize);
-                } catch (InterruptedException | ExecutionException e) {
-                    // nothing
-                }
-            }
-        }, r -> r.run());
+        var result = client.gossip(sw);
+        if (metrics != null) {
+            var serializedSize = result.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.gossipResponse().update(serializedSize);
+        }
         return result;
     }
 

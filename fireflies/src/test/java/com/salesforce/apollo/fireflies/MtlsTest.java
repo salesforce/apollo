@@ -6,44 +6,9 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.security.Provider;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipelago.EndpointProvider;
-import com.salesforce.apollo.archipelago.MtlsServer;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
-import com.salesforce.apollo.archipelago.StandardEpProvider;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
@@ -64,51 +29,68 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
-
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.security.Provider;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class MtlsTest {
-    private static final int                                                   CARDINALITY;
-    private static final Map<Digest, CertificateWithPrivateKey>                certs       = new HashMap<>();
-    private static final Map<Digest, InetSocketAddress>                        endpoints   = new HashMap<>();
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static final boolean                                               LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final int                                                         CARDINALITY;
+    private static final Map<Digest, CertificateWithPrivateKey>                      certs       = new HashMap<>();
+    private static final Map<Digest, InetSocketAddress>                              endpoints   = new HashMap<>();
+    private static final boolean                                                     LARGE_TESTS = Boolean.getBoolean(
+    "large_tests");
+    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+
     static {
         CARDINALITY = LARGE_TESTS ? 100 : 10;
     }
+
+    private List<Router> communications = new ArrayList<>();
+    private List<View>   views;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        String localhost = InetAddress.getLocalHost().getHostName();
+        String localhost = InetAddress.getLoopbackAddress().getHostName();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            try {
-                return stereotomy.newIdentifier().get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new IllegalStateException(e);
-            }
+            return stereotomy.newIdentifier();
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
         identities.entrySet().forEach(e -> {
             InetSocketAddress endpoint = new InetSocketAddress(localhost, Utils.allocatePort());
-            try {
-                certs.put(e.getKey(),
-                          e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT).get());
-            } catch (InterruptedException | ExecutionException e1) {
-                throw new IllegalStateException(e1);
-            }
+            certs.put(e.getKey(),
+                      e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT));
             endpoints.put(e.getKey(), endpoint);
         });
     }
-
-    private List<Router> communications = new ArrayList<>();
-    private List<View>   views;
 
     @AfterEach
     public void after() {
@@ -150,16 +132,11 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
-                                          Executors.newFixedThreadPool(2, Thread.ofVirtual().factory())).router(
-                                                                                                                builder,
-                                                                                                                Executors.newFixedThreadPool(2,
-                                                                                                                                             Thread.ofVirtual()
-                                                                                                                                                   .factory()));
+            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(
+            builder);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics,
-                            Executors.newFixedThreadPool(2, Thread.ofVirtual().factory()));
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();
@@ -192,10 +169,12 @@ public class MtlsTest {
                         .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
-        }), "view did not stabilize: "
-        + views.stream().map(view -> view.getContext().activeCount()).collect(Collectors.toList()));
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-        + views.size() + " members");
+        }), "view did not stabilize: " + views.stream()
+                                              .map(view -> view.getContext().activeCount())
+                                              .collect(Collectors.toList()));
+        System.out.println(
+        "View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + views.size()
+        + " members");
 
         System.out.println("Checking views for consistency");
         var failed = views.stream()

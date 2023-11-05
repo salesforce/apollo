@@ -23,20 +23,20 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validations;
  *
  */
 public interface ProtoKERLProvider {
-    CompletableFuture<Attachment> getAttachment(EventCoords coordinates);
+    Attachment getAttachment(EventCoords coordinates);
 
-    CompletableFuture<KERL_> getKERL(Ident identifier);
+    KERL_ getKERL(Ident identifier);
 
-    CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates);
+    KeyEvent_ getKeyEvent(EventCoords coordinates);
 
-    CompletableFuture<KeyState_> getKeyState(EventCoords coordinates);
+    KeyState_ getKeyState(EventCoords coordinates);
 
-    CompletableFuture<KeyState_> getKeyState(Ident identifier);
+    KeyState_ getKeyState(Ident identifier);
 
-    CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords);
+    KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coords);
 
-    CompletableFuture<KeyStateWithEndorsementsAndValidations_> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
+    KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
 
-    CompletableFuture<Validations> getValidations(EventCoords coords);
+    Validations getValidations(EventCoords coords);
 
 }

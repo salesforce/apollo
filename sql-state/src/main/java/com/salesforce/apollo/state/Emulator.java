@@ -6,22 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.sql.Connection;
-import java.util.Arrays;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantLock;
-
-import org.joou.ULong;
-
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -41,24 +25,37 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
+import org.joou.ULong;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.sql.Connection;
+import java.util.Arrays;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Single node emulation of the SQL State Machine for testing, development, etc.
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class Emulator {
 
     private final AtomicReference<Digest> hash;
-    private final AtomicLong              height   = new AtomicLong(0);
-    private final ReentrantLock           lock     = new ReentrantLock();
-    private final Mutator                 mutator;
-    private final Parameters              params;
-    private final SqlStateMachine         ssm;
-    private final AtomicBoolean           started  = new AtomicBoolean();
-    private final TransactionExecutor     txnExec;
-    private final AtomicInteger           txnIndex = new AtomicInteger(0);
+    private final AtomicLong height = new AtomicLong(0);
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Mutator mutator;
+    private final Parameters params;
+    private final SqlStateMachine ssm;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final TransactionExecutor txnExec;
+    private final AtomicInteger txnIndex = new AtomicInteger(0);
 
     public Emulator() throws IOException {
         this(DigestAlgorithm.DEFAULT.getOrigin().prefix(Entropy.nextBitsStreamLong()));
@@ -66,8 +63,8 @@ public class Emulator {
 
     public Emulator(Digest base) throws IOException {
         this(new SqlStateMachine(String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
-                                 new Properties(), Files.createTempDirectory("emulation").toFile()),
-             base);
+                        new Properties(), Files.createTempDirectory("emulation").toFile()),
+                base);
     }
 
     public Emulator(SqlStateMachine ssm, Digest base) {
@@ -80,29 +77,22 @@ public class Emulator {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[]{6, 6, 6});
         ControlledIdentifier<SelfAddressingIdentifier> identifier;
-        try {
-            identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            entropy).newIdentifier().get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+        identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
+                entropy).newIdentifier();
         params = Parameters.newBuilder()
-                           .build(RuntimeParameters.newBuilder()
-                                                   .setMember(new ControlledIdentifierMember(identifier))
-                                                   .setContext(new ContextImpl<>(base, 5, 0.01, 3))
-                                                   .build());
+                .build(RuntimeParameters.newBuilder()
+                        .setMember(new ControlledIdentifierMember(identifier))
+                        .setContext(new ContextImpl<>(base, 5, 0.01, 3))
+                        .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {
             lock.lock();
             try {
                 Transaction txn = st.transaction();
                 txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion(),
-                                r -> r.run());
+                        r -> r.run());
                 return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
             } finally {
                 lock.unlock();

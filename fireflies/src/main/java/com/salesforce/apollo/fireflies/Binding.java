@@ -6,36 +6,11 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer;
 import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Note;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
-import com.salesfoce.apollo.fireflies.proto.Registration;
-import com.salesfoce.apollo.fireflies.proto.SignedNote;
+import com.salesfoce.apollo.fireflies.proto.*;
 import com.salesfoce.apollo.utils.proto.HexBloome;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -52,36 +27,39 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
-
 import io.grpc.StatusRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 /**
  * Embodiment of the client side join protocol
  *
  * @author hal.hildebrand
- * 
- *
  */
 class Binding {
-    record Bound(HexBloom view, List<NoteWrapper> successors) {}
-
-    private final static Logger log = LoggerFactory.getLogger(Binding.class);
-
-    private final CommonCommunications<Entrance, Service> approaches;
-    private final Context<Participant>                    context;
-    private final DigestAlgorithm                         digestAlgo;
-    private final Duration                                duration;
-    private final Executor                                exec;
-    private final FireflyMetrics                          metrics;
-    private final Node                                    node;
-    private final Parameters                              params;
-    private final ScheduledExecutorService                scheduler;
-    private final List<Seed>                              seeds;
-    private final View                                    view;
+    private final static Logger                                  log = LoggerFactory.getLogger(Binding.class);
+    private final        CommonCommunications<Entrance, Service> approaches;
+    private final        Context<Participant>                    context;
+    private final        DigestAlgorithm                         digestAlgo;
+    private final        Duration                                duration;
+    private final        FireflyMetrics                          metrics;
+    private final        Node                                    node;
+    private final        Parameters                              params;
+    private final        ScheduledExecutorService                scheduler;
+    private final        List<Seed>                              seeds;
+    private final        View                                    view;
 
     public Binding(View view, List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler,
                    Context<Participant> context, CommonCommunications<Entrance, Service> approaches, Node node,
-                   Parameters params, FireflyMetrics metrics, Executor exec, DigestAlgorithm digestAlgo) {
+                   Parameters params, FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
         this.view = view;
         this.duration = duration;
         this.seeds = new ArrayList<>(seeds);
@@ -90,7 +68,6 @@ class Binding {
         this.node = node;
         this.params = params;
         this.metrics = metrics;
-        this.exec = exec;
         this.approaches = approaches;
         this.digestAlgo = digestAlgo;
     }
@@ -108,14 +85,11 @@ class Binding {
         var timer = metrics == null ? null : metrics.seedDuration().time();
         seeding.whenComplete(join(duration, scheduler, timer));
 
-        var seedlings = new SliceIterator<>("Seedlings", node,
-                                            seeds.stream()
-                                                 .map(s -> seedFor(s))
-                                                 .map(nw -> view.new Participant(
-                                                                                 nw))
-                                                 .filter(p -> !node.getId().equals(p.getId()))
-                                                 .collect(Collectors.toList()),
-                                            approaches, exec);
+        var seedlings = new SliceIterator<>("Seedlings", node, seeds.stream()
+                                                                    .map(s -> seedFor(s))
+                                                                    .map(nw -> view.new Participant(nw))
+                                                                    .filter(p -> !node.getId().equals(p.getId()))
+                                                                    .collect(Collectors.toList()), approaches);
         AtomicReference<Runnable> reseed = new AtomicReference<>();
         reseed.set(() -> {
             final var registration = registration();
@@ -124,7 +98,7 @@ class Binding {
                 return link.seed(registration);
             }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                 if (!seeding.isDone()) {
-                    scheduler.schedule(exec(() -> reseed.get().run()), params.retryDelay().toNanos(),
+                    scheduler.schedule(Utils.wrapped(() -> reseed.get().run(), log), params.retryDelay().toNanos(),
                                        TimeUnit.NANOSECONDS);
                 }
             }, scheduler, params.retryDelay());
@@ -199,7 +173,7 @@ class Binding {
                               node.getId());
                     view.resetBootstrapView();
                     node.reset();
-                    exec.execute(() -> seeding());
+                    Thread.ofVirtual().factory().newThread(Utils.wrapped(() -> seeding(), log)).start();
                     return false;
                 case DEADLINE_EXCEEDED:
                     log.trace("Join timeout for view: {} with: {} : {} on: {}", v, member.getId(), sre.getStatus(),
@@ -258,7 +232,7 @@ class Binding {
     }
 
     private Runnable exec(Runnable action) {
-        return () -> exec.execute(Utils.wrapped(action, log));
+        return () -> Thread.ofVirtual().factory().newThread(Utils.wrapped(action, log)).start();
     }
 
     private Join join(Digest v) {
@@ -295,8 +269,7 @@ class Binding {
         var successors = redirect.getSuccessorsList()
                                  .stream()
                                  .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
-                                 .map(nw -> view.new Participant(
-                                                                 nw))
+                                 .map(nw -> view.new Participant(nw))
                                  .collect(Collectors.toList());
         log.info("Redirecting to: {} context: {} successors: {} on: {}", v, this.context.getId(), successors.size(),
                  node.getId());
@@ -317,7 +290,7 @@ class Binding {
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
-        final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches, exec);
+        final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
         regate.set(() -> {
@@ -325,22 +298,19 @@ class Binding {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
                 return link.join(join, params.seedingTimeout());
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, diadems,
-                                                          initialSeedSet, v, majority),
-                                () -> {
-                                    if (retries.get() < params.joinRetries()) {
-                                        log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v,
-                                                  retries.incrementAndGet(), params.joinRetries(), node.getId());
-                                        diadems.clear();
-                                        initialSeedSet.clear();
-                                        scheduler.schedule(exec(() -> regate.get().run()),
-                                                           Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
-                                                           TimeUnit.NANOSECONDS);
-                                    } else {
-                                        log.error("Failed to join view: {} cannot obtain majority on: {}", view,
-                                                  node.getId());
-                                        view.stop();
-                                    }
-                                }, scheduler, params.retryDelay());
+                                                          initialSeedSet, v, majority), () -> {
+                if (retries.get() < params.joinRetries()) {
+                    log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
+                              params.joinRetries(), node.getId());
+                    diadems.clear();
+                    initialSeedSet.clear();
+                    scheduler.schedule(exec(() -> regate.get().run()),
+                                       Entropy.nextBitsStreamLong(params.retryDelay().toNanos()), TimeUnit.NANOSECONDS);
+                } else {
+                    log.error("Failed to join view: {} cannot obtain majority on: {}", view, node.getId());
+                    view.stop();
+                }
+            }, scheduler, params.retryDelay());
         });
         regate.get().run();
     }
@@ -359,8 +329,8 @@ class Binding {
                                                      .setPort(seed.endpoint().getPort())
                                                      .setCoordinates(seed.coordinates().toEventCoords())
                                                      .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context)
-                                                                                      .toByteArray())))
+                                                     .setMask(ByteString.copyFrom(
+                                                     Node.createInitialMask(context).toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
         return new NoteWrapper(seedNote, digestAlgo);
@@ -376,8 +346,8 @@ class Binding {
         var hex = max.orElse(null);
         if (hex != null) {
             final var hexBloom = new HexBloom(hex);
-            if (gateway.complete(new Bound(hexBloom,
-                                           successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
+            if (gateway.complete(
+            new Bound(hexBloom, successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
                 log.info("Gateway acquired: {} context: {} on: {}", hexBloom.compact(), this.context.getId(),
                          node.getId());
             }
@@ -386,5 +356,8 @@ class Binding {
         log.info("Gateway: {} majority not achieved: {} context: {} on: {}", v, majority, this.context.getId(),
                  node.getId());
         return false;
+    }
+
+    record Bound(HexBloom view, List<NoteWrapper> successors) {
     }
 }

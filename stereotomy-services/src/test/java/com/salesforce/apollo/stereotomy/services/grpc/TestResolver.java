@@ -6,17 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.archipelago.LocalServer;
@@ -30,10 +19,18 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestResolver {
 
@@ -60,13 +57,12 @@ public class TestResolver {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
-        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3, Thread.ofVirtual().factory());
-        serverRouter = new LocalServer(prefix, serverMember, exec).router(builder, exec);
-        clientRouter = new LocalServer(prefix, clientMember, exec).router(builder, exec);
+        serverRouter = new LocalServer(prefix, serverMember).router(builder);
+        clientRouter = new LocalServer(prefix, clientMember).router(builder);
 
         serverRouter.start();
         clientRouter.start();

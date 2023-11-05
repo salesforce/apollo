@@ -7,15 +7,13 @@
 package com.salesforce.apollo.ring;
 
 import java.util.Optional;
-
-import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.ring.RingCommunications.Destination;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author hal.hildebrand
  *
  */
 @FunctionalInterface
-public interface Handler<M, T, Comm> {
-    void handle(Optional<ListenableFuture<T>> futureSailor, Destination<M, Comm> destination);
+public interface ResultConsumer<M, T, Comm> {
+    boolean handle(AtomicInteger tally, Optional<T> result, RingCommunications.Destination<M, Comm> destination);
 }

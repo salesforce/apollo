@@ -6,46 +6,49 @@
  */
 package com.salesforce.apollo.thoth;
 
-import static java.util.concurrent.CompletableFuture.allOf;
-
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DirectPublisher implements ProtoEventObserver {
+    private final static Logger log = LoggerFactory.getLogger(DirectPublisher.class);
+
     private final ProtoKERLAdapter kerl;
 
     public DirectPublisher(ProtoKERLAdapter kerl) {
-        super();
         this.kerl = kerl;
     }
 
     @Override
-    public CompletableFuture<Void> publish(KERL_ kerl_, List<Validations> validations) {
-        var valids = validations.stream().map(v -> kerl.appendValidations(v)).toList();
-        return allOf(valids.toArray(new CompletableFuture[valids.size()])).thenCompose(v -> kerl.append(kerl_)
-                                                                                                .thenApply(ks -> null));
+    public void publish(KERL_ kerl_, List<Validations> validations) {
+        log.info("publishing KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
+        validations.stream().forEach(v -> kerl.appendValidations(v));
+        log.info("published KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
+        kerl.append(kerl_);
     }
 
     @Override
-    public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
-        return kerl.appendAttachments(attachments).thenApply(e -> null);
+    public void publishAttachments(List<AttachmentEvent> attachments) {
+        log.info("Publishing attachments[{}]", attachments.size());
+        kerl.appendAttachments(attachments);
+        log.info("Published attachments[{}]", attachments.size());
     }
 
     @Override
-    public CompletableFuture<Void> publishEvents(List<KeyEvent_> events, List<Validations> validations) {
-        var valids = validations.stream().map(v -> kerl.appendValidations(v)).toList();
-        return allOf(valids.toArray(new CompletableFuture[valids.size()])).thenCompose(v -> kerl.append(events)
-                                                                                                .thenApply(ks -> null));
+    public void publishEvents(List<KeyEvent_> events, List<Validations> validations) {
+        log.info("Publishing events[{}], validations[{}]", events.size(), validations.size());
+        validations.forEach(v -> kerl.appendValidations(v));
+        kerl.append(events);
+        log.info("Published events[{}], validations[{}]", events.size(), validations.size());
     }
 }

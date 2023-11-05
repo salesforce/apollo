@@ -1,14 +1,14 @@
 package com.netflix.concurrency.limits.grpc.server.example;
 
+import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
+import com.netflix.concurrency.limits.limit.Gradient2Limit;
+import com.netflix.concurrency.limits.limit.WindowedLimit;
+
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
-import com.netflix.concurrency.limits.limit.Gradient2Limit;
-import com.netflix.concurrency.limits.limit.WindowedLimit;
 
 public class Example {
     public static void main(String[] args) throws IOException {
@@ -41,14 +41,13 @@ public class Example {
         // Report progress
         final AtomicInteger counter = new AtomicInteger(0);
         System.out.println("iteration, limit, success, drop, latency, shortRtt, longRtt");
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
             try {
-                System.out.println(MessageFormat.format("{0,number,#}, {1,number,#}, {2,number,#}, {3,number,#}, {4,number,#}, {5,number,#}, {6,number,#}",
-                                                        counter.incrementAndGet(), limit.getLimit(),
-                                                        driver.getAndResetSuccessCount(), driver.getAndResetDropCount(),
-                                                        TimeUnit.NANOSECONDS.toMillis(latency.getAndReset()),
-                                                        limit.getLastRtt(TimeUnit.MILLISECONDS),
-                                                        limit.getRttNoLoad(TimeUnit.MILLISECONDS)));
+                System.out.println(MessageFormat.format(
+                "{0,number,#}, {1,number,#}, {2,number,#}, {3,number,#}, {4,number,#}, {5,number,#}, {6,number,#}",
+                counter.incrementAndGet(), limit.getLimit(), driver.getAndResetSuccessCount(),
+                driver.getAndResetDropCount(), TimeUnit.NANOSECONDS.toMillis(latency.getAndReset()),
+                limit.getLastRtt(TimeUnit.MILLISECONDS), limit.getRttNoLoad(TimeUnit.MILLISECONDS)));
             } catch (Exception e) {
                 e.printStackTrace();
             }
