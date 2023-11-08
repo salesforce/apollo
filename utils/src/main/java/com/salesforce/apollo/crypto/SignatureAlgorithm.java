@@ -7,14 +7,19 @@
 package com.salesforce.apollo.crypto;
 
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.interfaces.EdECPrivateKey;
 import java.security.interfaces.EdECPublicKey;
 import java.security.spec.NamedParameterSpec;
+import java.security.spec.XECPrivateKeySpec;
+import java.security.spec.XECPublicKeySpec;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
@@ -103,6 +108,40 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public PrivateKey toEncryption(PrivateKey edPrivateKey) {
+            try {
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance(XDH);
+                NamedParameterSpec paramSpec = new NamedParameterSpec(X25519);
+                kpg.initialize(paramSpec);
+                final var edECPrivateKey = (EdECPrivateKey) edPrivateKey;
+                var preHash = DigestAlgorithm.SHA2_256.digest(edECPrivateKey.getBytes().get());
+                var kf = KeyFactory.getInstance(XDH);
+                var privSpec = new XECPrivateKeySpec(paramSpec, preHash.getBytes());
+                return kf.generatePrivate(privSpec);
+            } catch (Exception e) {
+                throw new IllegalStateException("Unable to convert", e);
+            }
+        }
+
+        @Override
+        public PublicKey toEncryption(PublicKey edPublicKey) {
+            try {
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance(XDH);
+                NamedParameterSpec paramSpec = new NamedParameterSpec(X25519);
+                kpg.initialize(paramSpec);
+                var point = ((EdECPublicKey) edPublicKey).getPoint();
+                var y = point.getY();
+                var one = BigInteger.valueOf(1);
+                var u = one.add(y).divide(one.subtract(y));
+                var kf = KeyFactory.getInstance(XDH);
+                var pubSpec = new XECPublicKeySpec(paramSpec, u);
+                return kf.generatePublic(pubSpec);
+            } catch (Exception e) {
+                throw new IllegalStateException("Unable to convert", e);
+            }
+        }
+
+        @Override
         public String toString() {
             return ops.toString();
         }
@@ -113,7 +152,6 @@ public enum SignatureAlgorithm {
         }
 
     },
-
     ED_448 {
         private final EdDSAOperations ops = new EdDSAOperations(this);
 
@@ -185,6 +223,16 @@ public enum SignatureAlgorithm {
         @Override
         public int signatureLength() {
             return 114;
+        }
+
+        @Override
+        public PrivateKey toEncryption(PrivateKey edPrivateKey) {
+            throw new UnsupportedOperationException("Not yet implemented");
+        }
+
+        @Override
+        public PublicKey toEncryption(PublicKey edPublicKey) {
+            throw new UnsupportedOperationException("Not yet implemented");
         }
 
         @Override
@@ -266,20 +314,31 @@ public enum SignatureAlgorithm {
         }
 
         @Override
+        public PrivateKey toEncryption(PrivateKey edPrivateKey) {
+            throw new UnsupportedOperationException("Not valid for NULL signature algorithm");
+        }
+
+        @Override
+        public PublicKey toEncryption(PublicKey edPublicKey) {
+            throw new UnsupportedOperationException("Not valid for NULL signature algorithm");
+        }
+
+        @Override
         protected boolean verify(PublicKey publicKey, byte[] signature, InputStream message) {
             return false;
         }
 
         @Override
         JohnHancock sign(PrivateKey[] privateKeys, InputStream message) {
-            return new JohnHancock(NULL_SIGNATURE, new byte[64]);
+            throw new UnsupportedOperationException("Not valid for NULL signature algorithm");
         }
 
     };
 
-    public static final SignatureAlgorithm DEFAULT = ED_25519;
-
-    private static final String EDDSA_ALGORITHM_NAME = "EdDSA";
+    public static final SignatureAlgorithm DEFAULT              = ED_25519;
+    private static final String            EDDSA_ALGORITHM_NAME = "EdDSA";
+    private static final String            X25519               = "X25519";
+    private static final String            XDH                  = "XDH";
 
     public static SignatureAlgorithm fromSignatureCode(int i) {
         return switch (i) {
@@ -364,6 +423,23 @@ public enum SignatureAlgorithm {
     abstract public String signatureInstanceName();
 
     abstract public int signatureLength();
+
+    /**
+     * Convert the Ed* public/private signature keys into the equivalent X*
+     * public/private encryption key. See
+     * <a href="https://eprint.iacr.org/2021/509.pdf">On using the same key pair for
+     * Ed25519 and an X25519 based KEM</a>.
+     *
+     * @param edKeyPair
+     * @return
+     */
+    public KeyPair toEncryption(KeyPair edKeyPair) {
+        return new KeyPair(toEncryption(edKeyPair.getPublic()), toEncryption(edKeyPair.getPrivate()));
+    }
+
+    abstract public PrivateKey toEncryption(PrivateKey edPrivateKey);
+
+    abstract public PublicKey toEncryption(PublicKey edPublicKey);
 
     final public boolean verify(PublicKey publicKey, JohnHancock signature, byte[]... message) {
         return verify(publicKey, signature, BbBackedInputStream.aggregate(message));
