@@ -14,7 +14,6 @@ import com.salesforce.apollo.protocols.EndpointMetrics;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ChoamMetrics extends EndpointMetrics {
 
@@ -44,4 +43,17 @@ public interface ChoamMetrics extends EndpointMetrics {
 
     void transactionTimeout();
 
+    void transactionSubmittedInvalidCommittee();
+
+    void transactionSubmittedUnavailable();
+
+    void transactionSubmissionError();
+
+    void transactionSubmittedInvalidResult();
+
+    void transactionSubmitRetriesExhausted();
+
+    void transactionSubmitRateLimited();
+
+    void transactionCancelled();
 }

@@ -47,7 +47,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Session" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

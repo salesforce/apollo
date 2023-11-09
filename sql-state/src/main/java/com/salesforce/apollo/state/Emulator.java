@@ -6,15 +6,15 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.*;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
@@ -48,14 +48,14 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Emulator {
 
     private final AtomicReference<Digest> hash;
-    private final AtomicLong height = new AtomicLong(0);
-    private final ReentrantLock lock = new ReentrantLock();
-    private final Mutator mutator;
-    private final Parameters params;
-    private final SqlStateMachine ssm;
-    private final AtomicBoolean started = new AtomicBoolean();
-    private final TransactionExecutor txnExec;
-    private final AtomicInteger txnIndex = new AtomicInteger(0);
+    private final AtomicLong              height   = new AtomicLong(0);
+    private final ReentrantLock           lock     = new ReentrantLock();
+    private final Mutator                 mutator;
+    private final Parameters              params;
+    private final SqlStateMachine         ssm;
+    private final AtomicBoolean           started  = new AtomicBoolean();
+    private final TransactionExecutor     txnExec;
+    private final AtomicInteger           txnIndex = new AtomicInteger(0);
 
     public Emulator() throws IOException {
         this(DigestAlgorithm.DEFAULT.getOrigin().prefix(Entropy.nextBitsStreamLong()));
@@ -63,8 +63,7 @@ public class Emulator {
 
     public Emulator(Digest base) throws IOException {
         this(new SqlStateMachine(String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
-                        new Properties(), Files.createTempDirectory("emulation").toFile()),
-                base);
+                                 new Properties(), Files.createTempDirectory("emulation").toFile()), base);
     }
 
     public Emulator(SqlStateMachine ssm, Digest base) {
@@ -77,27 +76,34 @@ public class Emulator {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         ControlledIdentifier<SelfAddressingIdentifier> identifier;
         identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                entropy).newIdentifier();
+                                        entropy).newIdentifier();
         params = Parameters.newBuilder()
-                .build(RuntimeParameters.newBuilder()
-                        .setMember(new ControlledIdentifierMember(identifier))
-                        .setContext(new ContextImpl<>(base, 5, 0.01, 3))
-                        .build());
+                           .build(RuntimeParameters.newBuilder()
+                                                   .setMember(new ControlledIdentifierMember(identifier))
+                                                   .setContext(new ContextImpl<>(base, 5, 0.01, 3))
+                                                   .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {
             lock.lock();
             try {
                 Transaction txn = st.transaction();
                 txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion(),
-                        r -> r.run());
+                                r -> r.run());
                 return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
             } finally {
                 lock.unlock();
             }
         });
+        session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
+                                                                                        .setBlock(Block.newBuilder()
+                                                                                                       .setHeader(
+                                                                                                       Header.newBuilder()
+                                                                                                             .setHeight(
+                                                                                                             100)))
+                                                                                        .build()));
         mutator = ssm.getMutator(session);
     }
 

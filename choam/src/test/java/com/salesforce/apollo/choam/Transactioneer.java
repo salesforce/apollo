@@ -6,25 +6,20 @@
  */
 package com.salesforce.apollo.choam;
 
-import java.time.Duration;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 class Transactioneer {
     private final static Random entropy = new Random();
@@ -38,9 +33,11 @@ class Transactioneer {
     private final Session                    session;
     private final Duration                   timeout;
     private final ByteMessage                tx        = ByteMessage.newBuilder()
-                                                                    .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                    .setContents(ByteString.copyFromUtf8(
+                                                                    "Give me food or give me slack or kill me"))
                                                                     .build();
     private final Executor                   txnExecutor;
+    private final AtomicBoolean              finished  = new AtomicBoolean();
 
     Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
                    CountDownLatch countdown, Executor txnScheduler) {
@@ -74,7 +71,7 @@ class Transactioneer {
                 }
             } else {
                 if (completed.incrementAndGet() >= max) {
-                    if (inFlight.size() == 0) {
+                    if (finished.compareAndSet(false, true)) {
                         countdown.countDown();
                     }
                 } else {

@@ -13,10 +13,14 @@ import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -82,6 +86,13 @@ public class SessionTest {
             return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         };
         Session session = new Session(params, service);
+        session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
+                                                                                        .setBlock(Block.newBuilder()
+                                                                                                       .setHeader(
+                                                                                                       Header.newBuilder()
+                                                                                                             .setHeight(
+                                                                                                             100)))
+                                                                                        .build()));
         final String content = "Give me food or give me slack or kill me";
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
         var result = session.submit(tx, null, exec);
@@ -127,6 +138,13 @@ public class SessionTest {
         Timer latency = reg.timer("Transaction latency");
 
         Session session = new Session(params, service);
+        session.setView(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, CertifiedBlock.newBuilder()
+                                                                                        .setBlock(Block.newBuilder()
+                                                                                                       .setHeader(
+                                                                                                       Header.newBuilder()
+                                                                                                             .setHeight(
+                                                                                                             100)))
+                                                                                        .build()));
         List<CompletableFuture<?>> futures = new ArrayList<>();
         IntStream.range(0, 10000).forEach(i -> {
             final var time = latency.time();

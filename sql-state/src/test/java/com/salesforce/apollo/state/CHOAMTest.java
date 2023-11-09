@@ -71,7 +71,7 @@ public class CHOAMTest {
         var txns = MigrationTest.initializeBookSchema();
         txns.add(initialInsert());
         GENESIS_DATA = CHOAM.toGenesisData(txns);
-        CARDINALITY = LARGE_TESTS ? 10 : 5;
+        CARDINALITY = LARGE_TESTS ? 20 : 5;
     }
 
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
@@ -134,7 +134,7 @@ public class CHOAMTest {
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(15))
-                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
+                                                              .setMaxBatchByteSize(100 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(2);
@@ -160,7 +160,7 @@ public class CHOAMTest {
     public void submitMultiplTxn() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(12);
+        final Duration timeout = Duration.ofSeconds(30);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;

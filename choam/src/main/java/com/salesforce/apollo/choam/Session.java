@@ -6,44 +6,56 @@
  */
 package com.salesforce.apollo.choam;
 
-import java.nio.ByteBuffer;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.protobuf.Message;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
-import com.salesforce.apollo.choam.support.TransactionCancelled;
 import com.salesforce.apollo.choam.support.TransactionFailed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class Session {
 
-    private final static Logger log = LoggerFactory.getLogger(Session.class);
+    private final static Logger                                       log       = LoggerFactory.getLogger(
+    Session.class);
+    private final        Limiter<Void>                                limiter;
+    private final        Parameters                                   params;
+    private final        Function<SubmittedTransaction, SubmitResult> service;
+    private final        Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
+    private final        AtomicReference<HashedCertifiedBlock>        view      = new AtomicReference<>();
+    private              AtomicInteger                                nonce     = new AtomicInteger();
+
+    public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
+        this.params = params;
+        this.service = service;
+        final var metrics = params.metrics();
+        this.limiter = params.txnLimiterBuilder()
+                             .build(params.member().getId().shortString(),
+                                    metrics == null ? EmptyMetricRegistry.INSTANCE : metrics.getMetricRegistry(
+                                    params.context().getId().shortString() + ".txnLimiter"));
+    }
 
     public static Transaction transactionOf(Digest source, int nonce, Message message, Signer signer) {
         ByteBuffer buff = ByteBuffer.allocate(4);
@@ -69,45 +81,28 @@ public class Session {
                                transaction.getContent().asReadOnlyByteBuffer());
     }
 
-    private final Limiter<Void>                                limiter;
-    private AtomicInteger                                      nonce     = new AtomicInteger();
-    private final Parameters                                   params;
-    private final Function<SubmittedTransaction, SubmitResult> service;
-    private final Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
-
-    public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
-        this.params = params;
-        this.service = service;
-        final var metrics = params.metrics();
-        this.limiter = params.txnLimiterBuilder()
-                             .build(params.member().getId().shortString(),
-                                    metrics == null ? EmptyMetricRegistry.INSTANCE
-                                                    : metrics.getMetricRegistry(params.context().getId().shortString()
-                                                    + ".txnLimiter"));
-    }
-
     /**
      * Cancel all pending transactions
      */
     public void cancelAll() {
-        submitted.values()
-                 .forEach(stx -> stx.onCompletion()
-                                    .completeExceptionally(new TransactionCancelled("Transaction cancelled")));
+        submitted.values().forEach(stx -> stx.onCompletion().cancel(true));
     }
 
     /**
      * Submit a transaction.
-     * 
+     *
      * @param transaction - the Message to submit as a transaction
-     * @param timeout     - non null timeout of the transaction
+     * @param timeout     - non-null timeout of the transaction
      * @param scheduler
-     * 
      * @return onCompletion - the future result of the submitted transaction
-     * @throws InvalidTransaction - if the submitted transaction is invalid in any
-     *                            way
+     * @throws InvalidTransaction - if the submitted transaction is invalid in any way
      */
-    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout,
-                                           ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout, ScheduledExecutorService scheduler)
+    throws InvalidTransaction {
+        final var txnView = view.get();
+        if (txnView == null) {
+            throw new InvalidTransaction("No view available");
+        }
         final int n = nonce.getAndIncrement();
 
         final var txn = transactionOf(params.member().getId(), n, transaction, params.member());
@@ -117,64 +112,148 @@ public class Session {
         var hash = CHOAM.hashOf(txn, params.digestAlgorithm());
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
 
-        var result = new CompletableFuture<T>();
+        var result = new CompletableFuture<T>().whenComplete((r, t) -> {
+            if (params.metrics() != null) {
+                if (t instanceof CancellationException) {
+                    params.metrics().transactionCancelled();
+                }
+            }
+        });
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
 
-        var stxn = new SubmittedTransaction(hash, txn, result, timer);
+        var stxn = new SubmittedTransaction(txnView.height(), hash, txn, result, timer);
         submitted.put(stxn.hash(), stxn);
 
         var backoff = params.submitPolicy().build();
         boolean submitted = false;
         var target = Instant.now().plus(timeout);
         int i = 0;
-        while (Instant.now().isBefore(target)) {
-            log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
-            if (submit(stxn)) {
-                submitted = true;
+
+        while (!result.isDone() && Instant.now().isBefore(target)) {
+            if (i > 0) {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmitRetry();
+                }
+            }
+            log.trace("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
+            var submit = submit(stxn);
+            switch (submit.result.getResult()) {
+            case PUBLISHED -> {
+                submit.limiter.get().onSuccess();
+                log.trace("Transaction submitted: {} on: {}", stxn.hash(), params.member().getId());
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedSuccess();
+                }
+                var futureTimeout = scheduler.schedule(() -> {
+                    if (result.isDone()) {
+                        return;
+                    }
+                    log.debug("Timeout of txn: {} on: {}", hash, params.member().getId());
+                    final var to = new TimeoutException("Transaction timeout");
+                    result.completeExceptionally(to);
+                    if (params.metrics() != null) {
+                        params.metrics().transactionComplete(to);
+                    }
+                }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+
+                return result.whenComplete((r, t) -> {
+                    futureTimeout.cancel(true);
+                    complete(hash, timer, t);
+                });
+            }
+            case RATE_LIMITED -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmitRateLimited();
+                }
                 break;
+            }
+            case BUFFER_FULL -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedBufferFull();
+                }
+                submit.limiter.get().onDropped();
+                break;
+            }
+            case INACTIVE, NO_COMMITTEE -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedInvalidCommittee();
+                }
+                submit.limiter.get().onDropped();
+                break;
+            }
+            case UNAVAILABLE -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedUnavailable();
+                }
+                submit.limiter.get().onIgnore();
+                break;
+            }
+            case INVALID_SUBMIT, ERROR_SUBMITTING -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmissionError();
+                }
+                result.completeExceptionally(
+                new TransactionFailed("Invalid submission: " + submit.result.getErrorMsg()));
+                submit.limiter.get().onIgnore();
+                break;
+            }
+            case UNRECOGNIZED, INVALID_RESULT -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedInvalidResult();
+                }
+                var ex = new TransactionFailed("Unrecognized or invalid result: " + submit.result.getErrorMsg());
+                result.completeExceptionally(ex);
+                submit.limiter.get().onIgnore();
+                return result;
+            }
+            default -> {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedInvalidResult();
+                }
+                var ex = new TransactionFailed("Illegal result: " + submit.result.getErrorMsg());
+                result.completeExceptionally(ex);
+                submit.limiter.get().onIgnore();
+                return result;
+            }
             }
             try {
                 final var delay = backoff.nextBackoff();
-                log.debug("Failed submitting: {} retry: {} delay: {}ms on: {}", stxn.hash(), i, delay.toMillis(),
-                          params.member().getId());
+                log.debug("Failed submitting: {} result: {} retry: {} delay: {}ms on: {}", stxn.hash(), submit.result,
+                          i, delay.toMillis(), params.member().getId());
                 Thread.sleep(delay.toMillis());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            }
-            if (params.metrics() != null) {
-                params.metrics().transactionSubmitRetry();
+                return null;
             }
             i++;
         }
-        if (!submitted) {
-            if (params.metrics() != null) {
-                params.metrics().transactionSubmittedBufferFull();
-            }
-            result.completeExceptionally(new TransactionFailed("Buffer Full"));
+        if (result.isDone()) {
             return result;
         }
-        var futureTimeout = scheduler.schedule(() -> {
-            if (result.isDone()) {
-                return;
-            }
-            log.debug("Timeout of txn: {} on: {}", hash, params.member().getId());
-            final var to = new TimeoutException("Transaction timeout");
-            result.completeExceptionally(to);
-            if (params.metrics() != null) {
-                params.metrics().transactionComplete(to);
-            }
-        }, timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        return result.whenComplete((r, t) -> {
-            futureTimeout.cancel(true);
-            complete(hash, timer, t);
-        });
+        if (params.metrics() != null) {
+            params.metrics().transactionSubmitRetriesExhausted();
+        }
+        result.completeExceptionally(new TransactionFailed("Submission retries exhausted"));
+        return result;
     }
 
     public int submitted() {
         return submitted.size();
+    }
+
+    public void setView(HashedCertifiedBlock v) {
+        view.set(v);
+        var currentHeight = v.height();
+        for (var it = submitted.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            if (e.getValue().view().compareTo(currentHeight) < 0) {
+                e.getValue().onCompletion().cancel(true);
+                it.remove();
+            }
+        }
     }
 
     SubmittedTransaction complete(Digest hash) {
@@ -194,28 +273,20 @@ public class Session {
         }
     }
 
-    private boolean submit(SubmittedTransaction stx) {
+    private Submission submit(SubmittedTransaction stx) {
         var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
             log.debug("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedFail();
             }
-            stx.onCompletion().completeExceptionally(new TransactionFailed("Transaction submission rejected"));
-            return false;
+            stx.onCompletion().completeExceptionally(new TransactionFailed("Transaction rate limited"));
+            return new Submission(SubmitResult.newBuilder().setResult(SubmitResult.Result.RATE_LIMITED).build(),
+                                  listener);
         }
-        var result = service.apply(stx);
+        return new Submission(service.apply(stx), listener);
+    }
 
-        if (result.getResult() == Result.PUBLISHED) {
-            listener.get().onSuccess();
-            log.trace("Transaction submitted: {} on: {}", stx.hash(), params.member().getId());
-            if (params.metrics() != null) {
-                params.metrics().transactionSubmittedSuccess();
-            }
-        } else {
-            listener.get().onDropped();
-            return false;
-        }
-        return true;
+    private record Submission(SubmitResult result, Optional<Limiter.Listener> limiter) {
     }
 }

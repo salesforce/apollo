@@ -33,6 +33,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
@@ -107,7 +108,7 @@ public class CHOAM {
         Thread.ofVirtual().name("Linear " + params.member().getId()).factory());
         combine.registerHandler((ctx, messages) -> {
             try {
-                linear.execute(() -> combine(messages));
+                linear.execute(Utils.wrapped(() -> combine(messages), log));
             } catch (RejectedExecutionException e) {
                 // ignore
             }
@@ -683,6 +684,7 @@ public class CHOAM {
         } else {
             current.set(new Client(validators, getViewId()));
         }
+        session.setView(h);
         log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
                  validators.entrySet()
                            .stream()
