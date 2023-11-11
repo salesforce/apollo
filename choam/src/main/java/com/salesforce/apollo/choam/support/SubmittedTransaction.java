@@ -6,16 +6,17 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.util.concurrent.CompletableFuture;
-
 import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.crypto.Digest;
+import org.joou.ULong;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * @author hal.hildebrand
- *
  */
 @SuppressWarnings("rawtypes")
-public record SubmittedTransaction(Digest hash, Transaction transaction, CompletableFuture onCompletion,
-                                   Timer.Context timer) {}
+public record SubmittedTransaction(ULong view, Digest hash, Transaction transaction, CompletableFuture onCompletion,
+                                   Timer.Context timer) {
+}

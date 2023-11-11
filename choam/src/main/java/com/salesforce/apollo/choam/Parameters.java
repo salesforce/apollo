@@ -556,11 +556,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     public static class LimiterBuilder {
         private Duration backlogDuration = Duration.ofSeconds(1);
         private int      backlogSize     = 1_000;
-        private double   backoffRatio    = 0.9;
+        private double   backoffRatio    = 0.5;
         private int      initialLimit    = 1_000;
-        private int      maxLimit        = 5_000;
-        private int      minLimit        = 1_000;
-        private Duration timeout         = Duration.ofMillis(100);
+        private int      maxLimit        = 10_000;
+        private int      minLimit        = 1_00;
+        private Duration timeout         = Duration.ofSeconds(1);
 
         public Limiter<Void> build(String name, MetricRegistry metrics) {
             final SimpleLimiter<Void> limiter = SimpleLimiter.newBuilder()
@@ -668,12 +668,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private int                              regenerationCycles    = 20;
         private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder()
                                                                                                  .setInitialBackoff(
-                                                                                                 Duration.ofMillis(10))
+                                                                                                 Duration.ofMillis(500))
                                                                                                  .setJitter(0.2)
                                                                                                  .setMultiplier(1.6)
                                                                                                  .setMaxBackoff(
-                                                                                                 Duration.ofMillis(
-                                                                                                 500));
+                                                                                                 Duration.ofSeconds(5));
         private Duration                         submitTimeout         = Duration.ofSeconds(30);
         private int                              synchronizationCycles = 10;
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();

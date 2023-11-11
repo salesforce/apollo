@@ -6,15 +6,7 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
-import java.util.concurrent.TimeoutException;
-
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.codahale.metrics.*;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
@@ -23,13 +15,18 @@ import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
 import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 import com.salesforce.apollo.protocols.LimitsRegistry;
 
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeoutException;
+
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetrics {
 
     private final RbcMetrics      combineMetrics;
+    private final Meter           cancelledTransactions;
     private final Meter           completedTransactions;
     private final Counter         droppedReassemblies;
     private final Counter         droppedTransactions;
@@ -47,7 +44,14 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final Meter           transactionSubmitRetry;
     private final Meter           transactionSubmitSuccess;
     private final Meter           transactionSubmittedBufferFull;
+    private final Meter           transactionSubmittedInvalidCommittee;
     private final Meter           transactionTimeout;
+    private final Meter           transactionSubmittedUnavailable;
+    private final Meter           transactionSubmissionError;
+    private final Meter           transactionSubmittedInvalidResult;
+    private final Meter           transactionSubmitRetriesExhausted;
+    private final  Meter transactionSubmitRateLimited;
+    private final Meter transactionCancelled;
 
     public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -59,6 +63,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         droppedTransactions = registry.counter(name(context.shortString(), "transactions.dropped"));
         droppedReassemblies = registry.counter(name(context.shortString(), "reassemblies.dropped"));
         droppedValidations = registry.counter(name(context.shortString(), "validations.dropped"));
+
+        cancelledTransactions = registry.meter(name(context.shortString(), "transactions.cancelled"));
         publishedTransactions = registry.meter(name(context.shortString(), "transactions.published"));
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
         publishedReassemblies = registry.meter(name(context.shortString(), "reassemblies.published"));
@@ -71,6 +77,18 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         completedTransactions = registry.meter(name(context.shortString(), "transactions.completed"));
         failedTransactions = registry.meter(name(context.shortString(), "transactions.failed"));
         transactionSubmittedBufferFull = registry.meter(name(context.shortString(), "transaction.submit.buffer.full"));
+        transactionSubmittedInvalidCommittee = registry.meter(
+        name(context.shortString(), "transaction.submit.invalid.committee"));
+        transactionSubmittedUnavailable = registry.meter(name(context.shortString(), "transaction.submit.unavailable"));
+        transactionSubmissionError = registry.meter(name(context.shortString(), "transaction.submit.error"));
+        transactionSubmittedInvalidResult = registry.meter(
+        name(context.shortString(), "transaction.submit.invalid.result"));
+        transactionSubmitRetriesExhausted = registry.meter(
+        name(context.shortString(), "transaction.submit.retries.exhausted"));
+        transactionSubmitRateLimited  = registry.meter(
+        name(context.shortString(), "transaction.submit.rate.limited"));
+        transactionCancelled = registry.meter(
+        name(context.shortString(), "transaction.submit.cancelled"));
     }
 
     @Override
@@ -113,9 +131,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         if (t != null) {
             if (t instanceof TimeoutException) {
                 transactionTimeout.mark();
-
-            } else if (t instanceof TransactionCancelled) {
-                // ignore
+            } else if (t instanceof CancellationException) {
+                cancelledTransactions.mark();
             } else {
                 failedTransactions.mark();
             }
@@ -152,5 +169,40 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     @Override
     public void transactionTimeout() {
         transactionTimeout.mark();
+    }
+
+    @Override
+    public void transactionSubmittedInvalidCommittee() {
+        transactionSubmittedInvalidCommittee.mark();
+    }
+
+    @Override
+    public void transactionSubmittedUnavailable() {
+        transactionSubmittedUnavailable.mark();
+    }
+
+    @Override
+    public void transactionSubmissionError() {
+        transactionSubmissionError.mark();
+    }
+
+    @Override
+    public void transactionSubmittedInvalidResult() {
+        transactionSubmittedInvalidResult.mark();
+    }
+
+    @Override
+    public void transactionSubmitRetriesExhausted() {
+        transactionSubmitRetriesExhausted.mark();
+    }
+
+    @Override
+    public void transactionSubmitRateLimited() {
+        transactionSubmitRateLimited.mark();
+    }
+
+    @Override
+    public void transactionCancelled() {
+        transactionCancelled.mark();
     }
 }

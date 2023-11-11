@@ -34,6 +34,7 @@ message SubmitResult {
         UNAVAILABLE = 6;
         INVALID_SUBMIT = 7;
         ERROR_SUBMITTING = 8;
+        RATE_LIMITED = 9;
     }
     Result result = 1;
     string errorMsg = 2;
