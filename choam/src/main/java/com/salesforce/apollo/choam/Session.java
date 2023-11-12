@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * @author hal.hildebrand
@@ -45,7 +46,10 @@ public class Session {
     private final        Function<SubmittedTransaction, SubmitResult> service;
     private final        Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
     private final        AtomicReference<HashedCertifiedBlock>        view      = new AtomicReference<>();
-    private              AtomicInteger                                nonce     = new AtomicInteger();
+    private final        ScheduledExecutorService                     scheduler = Executors.newScheduledThreadPool(1,
+                                                                                                                   Thread.ofVirtual()
+                                                                                                                         .factory());
+    private final        AtomicInteger                                nonce     = new AtomicInteger();
 
     public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
         this.params = params;
@@ -81,6 +85,16 @@ public class Session {
                                transaction.getContent().asReadOnlyByteBuffer());
     }
 
+    public static <T> CompletableFuture<T> retryNesting(Supplier<CompletableFuture<T>> supplier, int maxRetries) {
+        CompletableFuture<T> cf = supplier.get();
+        for (int i = 0; i < maxRetries; i++) {
+            cf = cf.thenApply(CompletableFuture::completedFuture)
+                   .exceptionally(__ -> supplier.get())
+                   .thenCompose(java.util.function.Function.identity());
+        }
+        return cf;
+    }
+
     /**
      * Cancel all pending transactions
      */
@@ -92,13 +106,31 @@ public class Session {
      * Submit a transaction.
      *
      * @param transaction - the Message to submit as a transaction
+     * @param retries     - the number of retries for Cancelled transaction submissions
      * @param timeout     - non-null timeout of the transaction
-     * @param scheduler
      * @return onCompletion - the future result of the submitted transaction
      * @throws InvalidTransaction - if the submitted transaction is invalid in any way
      */
-    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout, ScheduledExecutorService scheduler)
+    public <T> CompletableFuture<T> submit(Message transaction, int retries, Duration timeout)
     throws InvalidTransaction {
+        return retryNesting(() -> {
+            try {
+                return submit(transaction, timeout);
+            } catch (InvalidTransaction e) {
+                throw new IllegalStateException("Invalid txn", e);
+            }
+        }, retries);
+    }
+
+    /**
+     * Submit a transaction.
+     *
+     * @param transaction - the Message to submit as a transaction
+     * @param timeout     - non-null timeout of the transaction
+     * @return onCompletion - the future result of the submitted transaction
+     * @throws InvalidTransaction - if the submitted transaction is invalid in any way
+     */
+    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout) throws InvalidTransaction {
         final var txnView = view.get();
         if (txnView == null) {
             throw new InvalidTransaction("No view available");
@@ -127,7 +159,6 @@ public class Session {
         submitted.put(stxn.hash(), stxn);
 
         var backoff = params.submitPolicy().build();
-        boolean submitted = false;
         var target = Instant.now().plus(timeout);
         int i = 0;
 
@@ -167,28 +198,24 @@ public class Session {
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmitRateLimited();
                 }
-                break;
             }
             case BUFFER_FULL -> {
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmittedBufferFull();
                 }
                 submit.limiter.get().onDropped();
-                break;
             }
             case INACTIVE, NO_COMMITTEE -> {
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmittedInvalidCommittee();
                 }
                 submit.limiter.get().onDropped();
-                break;
             }
             case UNAVAILABLE -> {
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmittedUnavailable();
                 }
                 submit.limiter.get().onIgnore();
-                break;
             }
             case INVALID_SUBMIT, ERROR_SUBMITTING -> {
                 if (params.metrics() != null) {
@@ -197,7 +224,6 @@ public class Session {
                 result.completeExceptionally(
                 new TransactionFailed("Invalid submission: " + submit.result.getErrorMsg()));
                 submit.limiter.get().onIgnore();
-                break;
             }
             case UNRECOGNIZED, INVALID_RESULT -> {
                 if (params.metrics() != null) {

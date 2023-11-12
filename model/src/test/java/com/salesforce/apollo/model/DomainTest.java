@@ -21,7 +21,6 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -40,13 +39,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.salesforce.apollo.choam.Session.retryNesting;
+import static java.util.concurrent.CompletableFuture.allOf;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -58,16 +56,6 @@ public class DomainTest {
     "Give me food or give me slack or kill me".getBytes());
     private final        ArrayList<Domain> domains         = new ArrayList<>();
     private final        ArrayList<Router> routers         = new ArrayList<>();
-
-    static <T> CompletableFuture<T> retryNesting(Supplier<CompletableFuture<T>> supplier, int maxRetries) {
-        CompletableFuture<T> cf = supplier.get();
-        for (int i = 0; i < maxRetries; i++) {
-            cf = cf.thenApply(CompletableFuture::completedFuture)
-                   .exceptionally(__ -> supplier.get())
-                   .thenCompose(Function.identity());
-        }
-        return cf;
-    }
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -101,23 +89,23 @@ public class DomainTest {
         var burcu = ns.subject("Burcu");
 
         // Map direct edges. Transitive edges added as a side effect
-        retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).get();
-        retryNesting(() -> oracle.map(ali, adminMembers), 3).get();
-        retryNesting(() -> oracle.map(ali, userMembers), 3).get();
-        retryNesting(() -> oracle.map(burcu, userMembers), 3).get();
-        retryNesting(() -> oracle.map(can, userMembers), 3).get();
-        retryNesting(() -> oracle.map(managerMembers, userMembers), 3).get();
-        retryNesting(() -> oracle.map(technicianMembers, userMembers), 3).get();
-        retryNesting(() -> oracle.map(demet, helpDeskMembers), 3).get();
-        retryNesting(() -> oracle.map(egin, helpDeskMembers), 3).get();
-        retryNesting(() -> oracle.map(egin, userMembers), 3).get();
-        retryNesting(() -> oracle.map(fuat, managerMembers), 3).get();
-        retryNesting(() -> oracle.map(gl, managerMembers), 3).get();
-        retryNesting(() -> oracle.map(hakan, technicianMembers), 3).get();
-        retryNesting(() -> oracle.map(irmak, technicianMembers), 3).get();
-        retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3).get();
-        retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3).get();
-        retryNesting(() -> oracle.map(jale, abcTechMembers), 3).get();
+
+        allOf(retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3),
+              retryNesting(() -> oracle.map(ali, adminMembers), 3), retryNesting(() -> oracle.map(ali, userMembers), 3),
+              retryNesting(() -> oracle.map(burcu, userMembers), 3),
+              retryNesting(() -> oracle.map(can, userMembers), 3),
+              retryNesting(() -> oracle.map(managerMembers, userMembers), 3),
+              retryNesting(() -> oracle.map(technicianMembers, userMembers), 3),
+              retryNesting(() -> oracle.map(demet, helpDeskMembers), 3),
+              retryNesting(() -> oracle.map(egin, helpDeskMembers), 3),
+              retryNesting(() -> oracle.map(egin, userMembers), 3),
+              retryNesting(() -> oracle.map(fuat, managerMembers), 3),
+              retryNesting(() -> oracle.map(gl, managerMembers), 3),
+              retryNesting(() -> oracle.map(hakan, technicianMembers), 3),
+              retryNesting(() -> oracle.map(irmak, technicianMembers), 3),
+              retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3),
+              retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3),
+              retryNesting(() -> oracle.map(jale, abcTechMembers), 3)).get(60, TimeUnit.SECONDS);
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -232,8 +220,6 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(
-        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
@@ -243,7 +229,7 @@ public class DomainTest {
                                                             .setFoundation(sealed)
                                                             .setContext(context)
                                                             .setCommunications(localRouter), new InetSocketAddress(0),
-                                           commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                           commsDirectory, ffParams, EventValidation.NONE,
                                            IdentifierSpecification.newBuilder());
             domains.add(domain);
             localRouter.start();

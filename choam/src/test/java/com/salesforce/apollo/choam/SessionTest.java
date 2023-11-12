@@ -55,7 +55,6 @@ public class SessionTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService exec = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -95,7 +94,7 @@ public class SessionTest {
                                                                                         .build()));
         final String content = "Give me food or give me slack or kill me";
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
-        var result = session.submit(tx, null, exec);
+        var result = session.submit(tx, null);
         assertEquals(1, session.submitted());
         gate.countDown();
         assertEquals(content, result.get(1, TimeUnit.SECONDS));
@@ -152,7 +151,7 @@ public class SessionTest {
             Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
             CompletableFuture<Object> result;
             try {
-                result = session.submit(tx, null, scheduler).whenComplete((r, t) -> {
+                result = session.submit(tx, null).whenComplete((r, t) -> {
                     if (t != null) {
                         if (t instanceof CompletionException ce) {
                             reg.counter(t.getCause().getClass().getSimpleName()).inc();

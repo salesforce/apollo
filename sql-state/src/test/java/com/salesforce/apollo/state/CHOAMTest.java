@@ -158,7 +158,6 @@ public class CHOAMTest {
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(30);
         var transactioneers = new ArrayList<Transactioneer>();
@@ -184,8 +183,7 @@ public class CHOAMTest {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(
-                new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec, countdown,
-                                   Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory())));
+                new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown));
             }
         });
         System.out.println("Starting txns");

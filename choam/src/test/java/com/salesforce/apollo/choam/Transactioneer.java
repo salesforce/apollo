@@ -22,31 +22,28 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 class Transactioneer {
-    private final static Random entropy = new Random();
-    private final static Logger log     = LoggerFactory.getLogger(Transactioneer.class);
+    private final static Random                     entropy   = new Random();
+    private final static Logger                     log       = LoggerFactory.getLogger(Transactioneer.class);
+    private final static Executor                   executor  = Executors.newVirtualThreadPerTaskExecutor();
+    private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual()
+                                                                                                          .factory());
+    private final        AtomicInteger              completed = new AtomicInteger();
+    private final        CountDownLatch             countdown;
+    private final        List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();
+    private final        int                        max;
+    private final        Session                    session;
+    private final        Duration                   timeout;
+    private final        ByteMessage                tx        = ByteMessage.newBuilder()
+                                                                           .setContents(ByteString.copyFromUtf8(
+                                                                           "Give me food or give me slack or kill me"))
+                                                                           .build();
+    private final        AtomicBoolean              finished  = new AtomicBoolean();
 
-    private final AtomicInteger              completed = new AtomicInteger();
-    private final CountDownLatch             countdown;
-    private final List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();
-    private final int                        max;
-    private final ScheduledExecutorService   scheduler;
-    private final Session                    session;
-    private final Duration                   timeout;
-    private final ByteMessage                tx        = ByteMessage.newBuilder()
-                                                                    .setContents(ByteString.copyFromUtf8(
-                                                                    "Give me food or give me slack or kill me"))
-                                                                    .build();
-    private final Executor                   txnExecutor;
-    private final AtomicBoolean              finished  = new AtomicBoolean();
-
-    Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
-                   CountDownLatch countdown, Executor txnScheduler) {
+    Transactioneer(Session session, Duration timeout, int max, CountDownLatch countdown) {
         this.session = session;
         this.timeout = timeout;
         this.max = max;
-        this.scheduler = scheduler;
         this.countdown = countdown;
-        this.txnExecutor = txnScheduler;
     }
 
     public int getCompleted() {
@@ -59,15 +56,13 @@ class Transactioneer {
             inFlight.remove(futureSailor.get());
             if (t != null) {
                 if (completed.get() < max) {
-                    scheduler.schedule(() -> {
-                        txnExecutor.execute(Utils.wrapped(() -> {
-                            try {
-                                decorate(session.submit(tx, timeout, scheduler));
-                            } catch (InvalidTransaction e) {
-                                throw new IllegalStateException(e);
-                            }
-                        }, log));
-                    }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                    scheduler.schedule(() -> executor.execute(Utils.wrapped(() -> {
+                        try {
+                            decorate(session.submit(tx, timeout));
+                        } catch (InvalidTransaction e) {
+                            throw new IllegalStateException(e);
+                        }
+                    }, log)), entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
                 if (completed.incrementAndGet() >= max) {
@@ -75,28 +70,26 @@ class Transactioneer {
                         countdown.countDown();
                     }
                 } else {
-                    txnExecutor.execute(Utils.wrapped(() -> {
+                    executor.execute(Utils.wrapped(() -> {
                         try {
-                            decorate(session.submit(tx, timeout, scheduler));
+                            decorate(session.submit(tx, timeout));
                         } catch (InvalidTransaction e) {
                             throw new IllegalStateException(e);
                         }
                     }, log));
                 }
             }
-        }, txnExecutor));
+        }, executor));
         inFlight.add(futureSailor.get());
     }
 
     void start() {
-        scheduler.schedule(() -> {
-            txnExecutor.execute(Utils.wrapped(() -> {
-                try {
-                    decorate(session.submit(tx, timeout, scheduler));
-                } catch (InvalidTransaction e) {
-                    throw new IllegalStateException(e);
-                }
-            }, log));
-        }, 2, TimeUnit.SECONDS);
+        scheduler.schedule(() -> executor.execute(Utils.wrapped(() -> {
+            try {
+                decorate(session.submit(tx, timeout));
+            } catch (InvalidTransaction e) {
+                throw new IllegalStateException(e);
+            }
+        }, log)), 2, TimeUnit.SECONDS);
     }
 }

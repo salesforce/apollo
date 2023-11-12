@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -51,13 +50,12 @@ public class ShardedKERLTest {
 
     @Test
     public void delegated() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1000);
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
-        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                DigestAlgorithm.DEFAULT);
+        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout,
+                                           DigestAlgorithm.DEFAULT);
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
@@ -131,13 +129,12 @@ public class ShardedKERLTest {
 
     @Test
     public void direct() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
-        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                DigestAlgorithm.DEFAULT);
+        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout,
+                                           DigestAlgorithm.DEFAULT);
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 

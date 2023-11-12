@@ -22,7 +22,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
-import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.SubDomain;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextClient;
 import com.salesforce.apollo.stereotomy.*;
@@ -75,7 +74,6 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
 public class DemesneImpl implements Demesne {
     private static final Class<? extends Channel> channelType             = getChannelType();
     private static final Duration                 DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
-    private static final int                      DEFAULT_VIRTUAL_THREADS = 5;
     private static final EventLoopGroup           eventLoopGroup          = getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
     private final static Executor                 executor                = Executors.newVirtualThreadPerTaskExecutor();
@@ -83,10 +81,9 @@ public class DemesneImpl implements Demesne {
     private final        OuterContextClient       outer;
     private final        DemesneParameters        parameters;
     private final        AtomicBoolean            started                 = new AtomicBoolean();
-    private final        Stereotomy               stereotomy;
     private final        Thoth                    thoth;
     private final        EventValidation          validation;
-    private volatile     Context<Member>          context;
+    private final        Context<Member>          context;
     private volatile     SubDomain                domain;
     private volatile     Enclave                  enclave;
 
@@ -110,7 +107,7 @@ public class DemesneImpl implements Demesne {
         kerl = kerlFrom(outerContextAddress);
         validation = new Ani(context.getId(), kerl).eventValidation(
         Duration.ofSeconds(parameters.getTimeout().getSeconds(), parameters.getTimeout().getNanos()));
-        stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
+        Stereotomy stereotomy = new StereotomyImpl(new JksKeyStore(keystore, passwordProvider), kerl, entropy);
 
         thoth = new Thoth(stereotomy);
     }
@@ -118,7 +115,7 @@ public class DemesneImpl implements Demesne {
     @Override
     public boolean active() {
         final var current = domain;
-        return current == null ? false : current.active();
+        return current != null && current.active();
     }
 
     @Override
@@ -134,7 +131,7 @@ public class DemesneImpl implements Demesne {
 
         enclave = new Enclave(thoth.member(), new DomainSocketAddress(outerContextAddress),
                               new DomainSocketAddress(commDirectory.resolve(parameters.getPortal()).toFile()),
-                              ctxId -> registerContext(ctxId));
+                              this::registerContext);
         domain = subdomainFrom(parameters, commDirectory, outerContextAddress, thoth.member(), context);
     }
 
@@ -239,9 +236,11 @@ public class DemesneImpl implements Demesne {
     private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
                                                         Context<Member> context) {
         final var current = enclave;
-        return RuntimeParameters.newBuilder().setCommunications(current.router()).setKerl(() -> {
-            return member.kerl();
-        }).setContext(context).setFoundation(parameters.getFoundation());
+        return RuntimeParameters.newBuilder()
+                                .setCommunications(current.router())
+                                .setKerl(member::kerl)
+                                .setContext(context)
+                                .setFoundation(parameters.getFoundation());
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, final Path commDirectory, final File address,
@@ -250,8 +249,6 @@ public class DemesneImpl implements Demesne {
         final var interval = gossipInterval.getSeconds() != 0 || gossipInterval.getNanos() != 0 ? Duration.ofSeconds(
         gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;
         return new SubDomain(member, Parameters.newBuilder(), runtimeParameters(parameters, member, context),
-                             new TransactionConfiguration(
-                             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())),
                              parameters.getMaxTransfer(), interval, parameters.getFalsePositiveRate());
     }
 

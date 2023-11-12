@@ -30,22 +30,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * @author hal.hildebrand
  */
 public class ShardedKERL extends UniKERL {
 
-    private final Mutator                  mutator;
-    private final ScheduledExecutorService scheduler;
-    private final Duration                 timeout;
+    private final Mutator  mutator;
+    private final Duration timeout;
 
-    public ShardedKERL(Connection connection, Mutator mutator, ScheduledExecutorService scheduler, Duration timeout,
-                       DigestAlgorithm digestAlgorithm) {
+    public ShardedKERL(Connection connection, Mutator mutator, Duration timeout, DigestAlgorithm digestAlgorithm) {
         super(connection, digestAlgorithm);
         this.mutator = mutator;
-        this.scheduler = scheduler;
         this.timeout = timeout;
     }
 
@@ -55,7 +51,7 @@ public class ShardedKERL extends UniKERL {
                                 event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode());
         CompletableFuture<CallResult> submitted;
         try {
-            submitted = mutator.execute(call, timeout, scheduler);
+            submitted = mutator.execute(call, timeout);
         } catch (InvalidTransaction e) {
             throw new IllegalStateException(e);
         }
@@ -80,7 +76,7 @@ public class ShardedKERL extends UniKERL {
                                 events.stream().map(ae -> ae.getBytes()).toList());
         CompletableFuture<CallResult> submitted;
         try {
-            submitted = mutator.execute(call, timeout, scheduler);
+            submitted = mutator.execute(call, timeout);
         } catch (InvalidTransaction e) {
             throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
         }
@@ -96,7 +92,7 @@ public class ShardedKERL extends UniKERL {
                          event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode()));
         }
         try {
-            return batch.submit( timeout, scheduler)
+            return batch.submit(timeout)
                         .thenApply(results -> results.stream()
                                                      .map(result -> (CallResult) result)
                                                      .map(cr -> cr.get(0))

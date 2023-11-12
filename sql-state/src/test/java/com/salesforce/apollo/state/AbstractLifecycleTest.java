@@ -58,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 abstract public class AbstractLifecycleTest {
     protected static final int               CARDINALITY = 5;
     protected static final Random            entropy     = new Random();
-    protected static final Executor          txExecutor  = Executors.newVirtualThreadPerTaskExecutor();
     private static final   List<Transaction> GENESIS_DATA;
 
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
@@ -296,9 +295,7 @@ abstract public class AbstractLifecycleTest {
                                                                        .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
-        transactioneers.add(
-        new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor, countdown,
-                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown));
         System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());

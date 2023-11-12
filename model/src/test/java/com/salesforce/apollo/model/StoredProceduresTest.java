@@ -33,9 +33,7 @@ public class StoredProceduresTest {
     @Test
     public void membership() throws Exception {
         var entropy = new Random(0x1638);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(100);
-        Executor exec = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
@@ -48,7 +46,7 @@ public class StoredProceduresTest {
                        .call("{call apollo_kernel.add_members(?, ?) }",
                              ids.stream().map(d -> d.getDigest().getBytes()).toList(), "active");
 
-        var result = emmy.getMutator().execute(call, timeout, scheduler);
+        var result = emmy.getMutator().execute(call, timeout);
         result.get();
 
         var connector = emmy.newConnector();
@@ -57,7 +55,6 @@ public class StoredProceduresTest {
         var members = context.selectFrom(MEMBER).fetch();
         assertEquals(ids.size(), members.size());
 
-        DatatypeConverter.class.toGenericString();
         for (var digest : ids) {
             assertTrue(Domain.isMember(context, digest), "Not an active member: " + digest);
         }

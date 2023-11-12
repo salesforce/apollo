@@ -13,7 +13,8 @@ import com.salesforce.apollo.state.Mutator;
 import java.sql.Connection;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
+
+import static com.salesforce.apollo.choam.Session.retryNesting;
 
 /**
  * Oracle where write ops are JDBC stored procedure calls
@@ -22,14 +23,12 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public class ShardedOracle extends AbstractOracle {
 
-    private final Mutator                  mutator;
-    private final ScheduledExecutorService scheduler;
-    private final Duration                 timeout;
+    private final Mutator  mutator;
+    private final Duration timeout;
 
-    public ShardedOracle(Connection connection, Mutator mutator, ScheduledExecutorService scheduler, Duration timeout) {
+    public ShardedOracle(Connection connection, Mutator mutator, Duration timeout) {
         super(connection);
         this.mutator = mutator;
-        this.scheduler = scheduler;
         this.timeout = timeout;
     }
 
@@ -42,7 +41,7 @@ public class ShardedOracle extends AbstractOracle {
                                 assertion.object().name(), assertion.object().relation().namespace().name(),
                                 assertion.object().relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -54,7 +53,7 @@ public class ShardedOracle extends AbstractOracle {
     public CompletableFuture<Void> add(Namespace namespace) {
         var call = mutator.call("call delphinius.addNamespace(?) ", namespace.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -67,7 +66,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.addObject(?, ?, ?, ?) ", object.namespace().name(), object.name(),
                                 object.relation().namespace().name(), object.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -79,7 +78,7 @@ public class ShardedOracle extends AbstractOracle {
     public CompletableFuture<Void> add(Relation relation) {
         var call = mutator.call("call delphinius.addRelation(?, ?) ", relation.namespace().name(), relation.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -92,7 +91,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.addSubject(?, ?, ?, ?) ", subject.namespace().name(), subject.name(),
                                 subject.relation().namespace().name(), subject.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -109,7 +108,7 @@ public class ShardedOracle extends AbstractOracle {
                                 assertion.object().name(), assertion.object().relation().namespace().name(),
                                 assertion.object().relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -121,7 +120,7 @@ public class ShardedOracle extends AbstractOracle {
     public CompletableFuture<Void> delete(Namespace namespace) {
         var call = mutator.call("call delphinius.deleteNamespace(?) ", namespace.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -134,7 +133,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.deleteObject(?, ?, ?, ?) ", object.namespace().name(), object.name(),
                                 object.relation().namespace().name(), object.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -146,7 +145,7 @@ public class ShardedOracle extends AbstractOracle {
     public CompletableFuture<Void> delete(Relation relation) {
         var call = mutator.call("call delphinius.deleteRelation(?, ?) ", relation.namespace().name(), relation.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -159,7 +158,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.deleteSubject(?, ?, ?, ?) ", subject.namespace().name(),
                                 subject.name(), subject.relation().namespace().name(), subject.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -174,7 +173,7 @@ public class ShardedOracle extends AbstractOracle {
                                 child.namespace().name(), child.name(), child.relation().namespace().name(),
                                 child.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -187,7 +186,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.mapRelation(?, ?, ?, ?)", parent.namespace().name(), parent.name(),
                                 child.namespace().name(), child.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -202,7 +201,7 @@ public class ShardedOracle extends AbstractOracle {
                                 parent.relation().name(), child.namespace().name(), child.name(),
                                 child.relation().namespace().name(), child.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -217,7 +216,7 @@ public class ShardedOracle extends AbstractOracle {
                                 parent.relation().name(), child.namespace().name(), child.name(),
                                 child.relation().namespace().name(), child.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -230,7 +229,7 @@ public class ShardedOracle extends AbstractOracle {
         var call = mutator.call("call delphinius.removeRelation(?, ?, ?, ?) ", parent.namespace().name(), parent.name(),
                                 child.namespace().name(), child.name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
@@ -245,12 +244,76 @@ public class ShardedOracle extends AbstractOracle {
                                 parent.relation().name(), child.namespace().name(), child.name(),
                                 child.relation().namespace().name(), child.relation().name());
         try {
-            return mutator.execute(call, timeout, scheduler).thenApply(r -> null);
+            return mutator.execute(call, timeout).thenApply(r -> null);
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<Void>();
             f.completeExceptionally(e);
             return f;
         }
+    }
+
+    public CompletableFuture<Void> add(Assertion assertion, int retries) {
+        return retryNesting(() -> add(assertion), retries);
+    }
+
+    public CompletableFuture<Void> add(Namespace namespace, int retries) {
+        return retryNesting(() -> add(namespace), retries);
+    }
+
+    public CompletableFuture<Void> add(Object object, int retries) {
+        return retryNesting(() -> add(object), retries);
+    }
+
+    public CompletableFuture<Void> add(Relation relation, int retries) {
+        return retryNesting(() -> add(relation), retries);
+    }
+
+    public CompletableFuture<Void> add(Subject subject, int retries) {
+        return retryNesting(() -> add(subject), retries);
+    }
+
+    public CompletableFuture<Void> delete(Assertion assertion, int retries) {
+        return retryNesting(() -> delete(assertion), retries);
+    }
+
+    public CompletableFuture<Void> delete(Namespace namespace, int retries) {
+        return retryNesting(() -> delete(namespace), retries);
+    }
+
+    public CompletableFuture<Void> delete(Object object, int retries) {
+        return retryNesting(() -> delete(object), retries);
+    }
+
+    public CompletableFuture<Void> delete(Relation relation, int retries) {
+        return retryNesting(() -> delete(relation), retries);
+    }
+
+    public CompletableFuture<Void> delete(Subject subject, int retries) {
+        return retryNesting(() -> delete(subject), retries);
+    }
+
+    public CompletableFuture<Void> map(Object parent, Object child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> map(Relation parent, Relation child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> map(Subject parent, Subject child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> remove(Object parent, Object child, int retries) {
+        return retryNesting(() -> remove(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> remove(Relation parent, Relation child, int retries) {
+        return retryNesting(() -> remove(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> remove(Subject parent, Subject child, int retries) {
+        return retryNesting(() -> remove(parent, child), retries);
     }
 
 }

@@ -33,7 +33,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -103,10 +106,7 @@ public class MembershipTests {
                                            .toList());
 
         final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1,
-                                                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
-                                                countdown,
-                                                Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
+        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, countdown);
 
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
