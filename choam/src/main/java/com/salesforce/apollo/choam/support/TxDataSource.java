@@ -23,7 +23,6 @@ import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.BatchingQueue;
 
 /**
  * 

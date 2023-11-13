@@ -20,7 +20,7 @@
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>utils</artifactId>
+            <artifactId>cryptography</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jooq</groupId>

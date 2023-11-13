@@ -24,8 +24,8 @@ import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

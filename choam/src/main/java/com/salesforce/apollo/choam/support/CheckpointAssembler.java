@@ -19,7 +19,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVMap;
 import org.joou.ULong;
 import org.slf4j.Logger;

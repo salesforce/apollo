@@ -20,8 +20,8 @@ import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.ULongBloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import org.joou.ULong;
 import org.joou.Unsigned;
 import org.slf4j.Logger;
@@ -279,7 +279,7 @@ public class Bootstrapper {
             for (HashedCertifiedBlock cb : tally) {
                 int count = tally.count(cb);
                 if (count >= threshold) {
-                    if (winner == null || count > winner.b) {
+                    if (winner == null || count > winner.b()) {
                         winner = new Pair<>(cb, count);
                     }
                 }
@@ -291,7 +291,7 @@ public class Bootstrapper {
                 return;
             }
 
-            genesis = winner.a;
+            genesis = winner.a();
             log.info("Winner: {} on: {}", genesis.hash, params.member().getId());
         }
 

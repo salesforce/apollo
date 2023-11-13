@@ -1,12 +1,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.salesforce.apollo</groupId>
     <artifactId>apollo.app</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Apollo Umbrella App</name>
+
     <modules>
         <module>fireflies</module>
         <module>protocols</module>
@@ -14,7 +15,6 @@
         <module>memberships</module>
         <module>tron</module>
         <module>stereotomy</module>
-        <module>utils</module>
         <module>ethereal</module>
         <module>choam</module>
         <module>model</module>
@@ -22,14 +22,14 @@
         <module>schemas</module>
         <module>demo</module>
         <module>stereotomy-services</module>
-        <!--
-        <module>comm-simulation</module> -->
         <module>thoth</module>
         <module>liquibase-deterministic</module>
         <module>grpc</module>
         <module>gorgoneion</module>
         <module>gorgoneion-client</module>
+        <module>cryptography</module>
     </modules>
+
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
         <jackson.version>2.15.2</jackson.version>
@@ -171,11 +171,6 @@
             </dependency>
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
-                <artifactId>utils</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
                 <artifactId>choam</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -257,6 +252,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>demesnes</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>cryptography</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -629,7 +629,7 @@
                                 <requireMavenVersion>
                                     <version>[3.8.1,)</version>
                                 </requireMavenVersion>
-                                <dependencyConvergence />
+                                <dependencyConvergence/>
                                 <requireJavaVersion>
                                     <version>[19,)</version>
                                 </requireJavaVersion>
@@ -649,7 +649,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-antrun-plugin</artifactId>
-        			<version>3.1.0</version>
+                    <version>3.1.0</version>
                     <executions>
                         <execution>
                             <id>satisfy-liquibase</id>
@@ -657,9 +657,9 @@
                             <configuration>
                                 <target>
                                     <mkdir
-                                        dir="${project.build.directory}/test-classes" />
+                                            dir="${project.build.directory}/test-classes"/>
                                     <mkdir
-                                        dir="${project.build.directory}/classes" />
+                                            dir="${project.build.directory}/classes"/>
                                 </target>
                             </configuration>
                             <goals>
@@ -746,11 +746,14 @@
                                 <sources>
                                     <source>${project.basedir}/src/main/proto</source>
                                     <source>
-                                        ${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
+                                        ${project.basedir}/target/generated-sources/protobuf/grpc-java
+                                    </source>
                                     <source>
-                                        ${project.basedir}/target/generated-sources/protobuf/java</source>
+                                        ${project.basedir}/target/generated-sources/protobuf/java
+                                    </source>
                                     <source>
-                                        ${project.basedir}/target/generated-sources/jooq</source>
+                                        ${project.basedir}/target/generated-sources/jooq
+                                    </source>
                                 </sources>
                             </configuration>
                         </execution>
@@ -764,11 +767,14 @@
                                 <sources>
                                     <source>${project.basedir}/src/test/proto</source>
                                     <source>
-                                        ${project.basedir}/target/generated-test-sources/protobuf/grpc-java</source>
+                                        ${project.basedir}/target/generated-test-sources/protobuf/grpc-java
+                                    </source>
                                     <source>
-                                        ${project.basedir}/target/generated-test-sources/protobuf/java</source>
+                                        ${project.basedir}/target/generated-test-sources/protobuf/java
+                                    </source>
                                     <source>
-                                        ${project.basedir}/target/generated-test-sources/jooq</source>
+                                        ${project.basedir}/target/generated-test-sources/jooq
+                                    </source>
                                 </sources>
                             </configuration>
                         </execution>
@@ -780,10 +786,12 @@
                     <version>0.6.1</version>
                     <configuration>
                         <protocArtifact>
-                            com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+                            com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}
+                        </protocArtifact>
                         <pluginId>grpc-java</pluginId>
                         <pluginArtifact>
-                            io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
+                            io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}
+                        </pluginArtifact>
                     </configuration>
                     <executions>
                         <execution>
