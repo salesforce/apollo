@@ -12,7 +12,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;

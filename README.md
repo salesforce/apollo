@@ -13,13 +13,13 @@ Apollo isn't designed for coins, rather as essentially a distributed multitenant
 
 ## Some Features
 * Multitenant isolation enclaves using GraalVM Isolates
-* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
+* Self contained cryptography module - Self describing Digests, Signatures and Identifiers, solid Bloomfilters.
 * Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity boostrapping and secrets provisioning
 * MTLS network communication - KERI for MTLS certificate authentication.  Local communication simulation for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * Byzantine intrusion tolerant secure membership and communications overlay providing virtually synchronous, stable membership views.
-* Efficient and easy to reuse utility patterns for Fireflies ring style gossiping on membership contexts
+* Efficient and easy to reuse communication patterns for Fireflies ring style gossiping on membership contexts
 * Reliable Broadcast - garbage collected, context routed reliable broadcast
 * Efficient atomic broadcast in asynchronous networks with byzantine nodes
 * Dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines
@@ -85,7 +85,7 @@ Apollo is reasonably modularized mostly for the purpose of subsystem isolation a
 * [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
 * [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing KERI decentralized identity
 * [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
-* [Utils](utils/README.md) - Base cryptography primitives and model. Bloom filters (of several varieties).  Some general utility stuff.
+* [Cryptography](cryptography/README.md) - Base cryptography primitives. Bloom filters (of several varieties).  Some general utility stuff.
 
 
 ## Protobuf and GRPC

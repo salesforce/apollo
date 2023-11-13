@@ -6,10 +6,16 @@
  */
 package com.salesforce.apollo.state;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,18 +23,13 @@ import java.sql.Statement;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.Test;
-
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.Utils;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ScriptTest {
 
@@ -41,9 +42,15 @@ public class ScriptTest {
         createAndInsert(connection);
         connection.commit();
         Txn txn = Txn.newBuilder()
-                     .setScript(new Mutator(null,
-                                            machine.getSession()).callScript("test.DbAccess", "call",
-                                                                             Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
+                     .setScript(new Mutator(null, machine.getSession()).callScript("test.DbAccess", "call",
+                                                                                   new BufferedReader(
+                                                                                   new InputStreamReader(
+                                                                                   getClass().getResourceAsStream(
+                                                                                   "/scripts/dbaccess.java"),
+                                                                                   StandardCharsets.UTF_8)).lines()
+                                                                                                           .collect(
+                                                                                                           Collectors.joining(
+                                                                                                           "\n"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
         machine.getExecutor()

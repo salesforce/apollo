@@ -47,7 +47,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;

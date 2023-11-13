@@ -38,7 +38,7 @@ import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2

@@ -25,7 +25,7 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;

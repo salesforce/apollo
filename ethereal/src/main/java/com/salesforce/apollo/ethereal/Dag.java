@@ -31,8 +31,8 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand

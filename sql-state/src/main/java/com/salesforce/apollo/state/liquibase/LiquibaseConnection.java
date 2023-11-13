@@ -9,7 +9,7 @@ package com.salesforce.apollo.state.liquibase;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-import com.salesforce.apollo.utils.DelegatingJdbcConnector;
+import com.salesforce.apollo.state.DelegatingJdbcConnector;
 
 /**
  * @author hal.hildebrand
