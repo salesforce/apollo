@@ -55,9 +55,7 @@ import io.netty.channel.EventLoopGroup;
  *
  */
 public class DemesneIsolate {
-    private static final Class<? extends Channel>     channelType    = getChannelType();
     private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
-    private static final EventLoopGroup               eventLoopGroup = getEventLoopGroup();
     private static final Lock                         lock           = new ReentrantLock();
     private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
     static {
@@ -207,13 +205,7 @@ public class DemesneIsolate {
         try {
             launch(jniEnv, parametersBuff, clazz);
             return true;
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Cannot launch demesne", e);
-            return false;
-        } catch (GeneralSecurityException e) {
-            log.error("Cannot launch demesne", e);
-            return false;
-        } catch (IOException e) {
+        } catch (GeneralSecurityException | IOException e) {
             log.error("Cannot launch demesne", e);
             return false;
         }
@@ -285,8 +277,8 @@ public class DemesneIsolate {
             return false;
         }
         current.viewChange(Digest.from(viewChange.getView()),
-                           viewChange.getJoiningList().stream().map(j -> EventCoordinates.from(j)).toList(),
-                           viewChange.getLeavingList().stream().map(d -> Digest.from(d)).toList());
+                           viewChange.getJoiningList().stream().map(EventCoordinates::from).toList(),
+                           viewChange.getLeavingList().stream().map(Digest::from).toList());
         return true;
     }
 }

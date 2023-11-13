@@ -23,26 +23,25 @@ import java.util.function.Supplier;
 class Transactioneer {
     private final static Random                             entropy   = new Random();
     private final static Logger                             log       = LoggerFactory.getLogger(Transactioneer.class);
+    private static final Executor                           executor  = Executors.newVirtualThreadPerTaskExecutor();
+    private final static ScheduledExecutorService           scheduler = Executors.newScheduledThreadPool(1,
+                                                                                                         Thread.ofVirtual()
+                                                                                                               .factory());
     private final        AtomicInteger                      completed = new AtomicInteger();
     private final        CountDownLatch                     countdown;
-    private final        Executor                           executor;
     private final        AtomicReference<CompletableFuture> inFlight  = new AtomicReference<>();
     private final        int                                max;
     private final        Mutator                            mutator;
-    private final        ScheduledExecutorService           scheduler;
     private final        Duration                           timeout;
     private final        Supplier<Txn>                      update;
     private final        AtomicBoolean                      finished  = new AtomicBoolean();
 
-    public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, Executor executor,
-                          CountDownLatch countdown, ScheduledExecutorService txScheduler) {
+    public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, CountDownLatch countdown) {
         this.update = update;
         this.timeout = timeout;
         this.max = max;
         this.countdown = countdown;
-        this.scheduler = txScheduler;
         this.mutator = mutator;
-        this.executor = executor;
     }
 
     public int completed() {
@@ -59,31 +58,26 @@ class Transactioneer {
             inFlight.set(null);
             if (t != null) {
                 if (completed.get() < max) {
-                    scheduler.schedule(() -> {
-                        executor.execute(Utils.wrapped(() -> {
-                            try {
-                                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, log));
-                    }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                    scheduler.schedule(() -> executor.execute(Utils.wrapped(() -> {
+                        try {
+                            decorate(mutator.getSession().submit(update.get(), timeout));
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
+                    }, log)), entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
                 final var complete = completed.incrementAndGet();
-                final var finish = finished;
 
                 if (complete < max) {
-                    scheduler.schedule(() -> {
-                        executor.execute(Utils.wrapped(() -> {
-                            try {
-                                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, log));
-                    }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                } else if (finish.compareAndSet(false, true)) {
+                    scheduler.schedule(() -> executor.execute(Utils.wrapped(() -> {
+                        try {
+                            decorate(mutator.getSession().submit(update.get(), timeout));
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
+                    }, log)), entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                } else if (finished.compareAndSet(false, true)) {
                     countdown.countDown();
                 }
             }
@@ -94,7 +88,7 @@ class Transactioneer {
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
+                decorate(mutator.getSession().submit(update.get(), timeout));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

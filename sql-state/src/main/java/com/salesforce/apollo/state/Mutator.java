@@ -20,6 +20,7 @@ import liquibase.LabelExpression;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.Serial;
 import java.net.URL;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
@@ -32,7 +33,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -54,16 +54,13 @@ public class Mutator {
     public static BatchedTransaction batch(Message... messages) {
         BatchedTransaction.Builder builder = BatchedTransaction.newBuilder();
         for (Message message : messages) {
-            if (message instanceof Call) {
-                builder.addTransactions(Txn.newBuilder().setCall((Call) message));
-            } else if (message instanceof Batch) {
-                builder.addTransactions(Txn.newBuilder().setBatch((Batch) message));
-            } else if (message instanceof BatchUpdate) {
-                builder.addTransactions(Txn.newBuilder().setBatchUpdate((BatchUpdate) message));
-            } else if (message instanceof Statement) {
-                builder.addTransactions(Txn.newBuilder().setStatement((Statement) message));
-            } else {
-                throw new IllegalArgumentException("Unknown transaction batch element type: " + message.getClass());
+            switch (message) {
+            case Call call -> builder.addTransactions(Txn.newBuilder().setCall(call));
+            case Batch batch -> builder.addTransactions(Txn.newBuilder().setBatch(batch));
+            case BatchUpdate batchUpdate -> builder.addTransactions(Txn.newBuilder().setBatchUpdate(batchUpdate));
+            case Statement statement -> builder.addTransactions(Txn.newBuilder().setStatement(statement));
+            case null, default -> throw new IllegalArgumentException(
+            "Unknown transaction batch element type: " + (message == null ? "null" : message.getClass()));
             }
         }
         return builder.build();
@@ -133,16 +130,16 @@ public class Mutator {
     public static ByteString resourcesFrom(Map<Path, URL> resources) {
         final var baos = new ByteArrayOutputStream();
         try (ZipOutputStream zs = new ZipOutputStream(baos)) {
-            resources.entrySet().forEach(entry -> {
-                ZipEntry zipEntry = new ZipEntry(entry.getKey().toString());
+            resources.forEach((key, value) -> {
+                ZipEntry zipEntry = new ZipEntry(key.toString());
                 try {
                     zs.putNextEntry(zipEntry);
-                    try (var is = entry.getValue().openStream()) {
+                    try (var is = value.openStream()) {
                         is.transferTo(zs);
                     }
                     zs.closeEntry();
                 } catch (IOException e) {
-                    throw new IllegalStateException("error creating entry: " + entry.getKey(), e);
+                    throw new IllegalStateException("error creating entry: " + key, e);
                 }
             });
         } catch (IOException e) {
@@ -190,7 +187,7 @@ public class Mutator {
 
     public BatchUpdate batchOf(String sql, List<List<Object>> batch) {
         return batch(sql, batch.stream()
-                               .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
+                               .map(args -> args.stream().map(this::convert).collect(Collectors.toList()))
                                .collect(Collectors.toList()));
     }
 
@@ -206,7 +203,7 @@ public class Mutator {
         StreamTransfer tfr = new StreamTransfer(h2Session);
         return Call.newBuilder()
                    .setExecution(execution)
-                   .addAllOutParameters(outParameters.stream().map(t -> t.getVendorTypeNumber()).toList())
+                   .addAllOutParameters(outParameters.stream().map(SQLType::getVendorTypeNumber).toList())
                    .setSql(sql)
                    .setArgs(Arguments.newBuilder()
                                      .setVersion(tfr.getVersion())
@@ -216,7 +213,7 @@ public class Mutator {
     }
 
     public Call call(String sql) {
-        return call(EXECUTION.EXECUTE, sql, null);
+        return call(EXECUTION.EXECUTE, sql, Collections.emptyList());
     }
 
     public Call call(String sql, List<SQLType> outParameters, Object... arguments) {
@@ -242,34 +239,55 @@ public class Mutator {
         return ValueToObjectConverter.objectToValue(h2Session, x, Value.UNKNOWN);
     }
 
-    public CompletableFuture<int[]> execute(Batch batch, Duration timeout, ScheduledExecutorService scheduler)
+    public CompletableFuture<int[]> execute(Batch batch, Duration timeout) throws InvalidTransaction {
+        return execute(batch, 1, timeout);
+    }
+
+    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, Duration timeout) throws InvalidTransaction {
+        return execute(batchUpdate, 1, timeout);
+    }
+
+    public CompletableFuture<CallResult> execute(Call call, Duration timeout) throws InvalidTransaction {
+        return execute(call, 1, timeout);
+    }
+
+    public CompletableFuture<Boolean> execute(Migration migration, Duration timeout) throws InvalidTransaction {
+        return execute(migration, 1, timeout);
+    }
+
+    public <T> CompletableFuture<T> execute(Script script, Duration timeout) throws InvalidTransaction {
+        return execute(script, 1, timeout);
+    }
+
+    public CompletableFuture<List<ResultSet>> execute(Statement statement, Duration timeout) throws InvalidTransaction {
+        return execute(statement, 1, timeout);
+    }
+
+    public CompletableFuture<int[]> execute(Batch batch, int retries, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setBatch(batch).build(), retries, timeout);
+    }
+
+    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, int retries, Duration timeout)
     throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setBatch(batch).build(), timeout, scheduler);
+        return session.submit(Txn.newBuilder().setBatchUpdate(batchUpdate).build(), retries, timeout);
     }
 
-    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, Duration timeout,
-                                            ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setBatchUpdate(batchUpdate).build(), timeout, scheduler);
+    public CompletableFuture<CallResult> execute(Call call, int retries, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setCall(call).build(), retries, timeout);
     }
 
-    public CompletableFuture<CallResult> execute(Call call, Duration timeout, ScheduledExecutorService scheduler)
+    public CompletableFuture<Boolean> execute(Migration migration, int retries, Duration timeout)
     throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setCall(call).build(), timeout, scheduler);
+        return session.submit(Txn.newBuilder().setMigration(migration).build(), retries, timeout);
     }
 
-    public CompletableFuture<Boolean> execute(Migration migration, Duration timeout, ScheduledExecutorService scheduler)
+    public <T> CompletableFuture<T> execute(Script script, int retries, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setScript(script).build(), retries, timeout);
+    }
+
+    public CompletableFuture<List<ResultSet>> execute(Statement statement, int retries, Duration timeout)
     throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setMigration(migration).build(), timeout, scheduler);
-    }
-
-    public <T> CompletableFuture<T> execute(Script script, Duration timeout, ScheduledExecutorService scheduler)
-    throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setScript(script).build(), timeout, scheduler);
-    }
-
-    public CompletableFuture<List<ResultSet>> execute(Statement statement, Duration timeout,
-                                                      ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setStatement(statement).build(), timeout, scheduler);
+        return session.submit(Txn.newBuilder().setStatement(statement).build(), retries, timeout);
     }
 
     public Session getSession() {
@@ -341,16 +359,15 @@ public class Mutator {
         }
 
         @SuppressWarnings("unchecked")
-        public CompletableFuture<List<?>> submit(Duration timeout, ScheduledExecutorService scheduler)
-        throws InvalidTransaction {
-            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout,
-                                                         scheduler);
+        public CompletableFuture<List<?>> submit(Duration timeout) throws InvalidTransaction {
+            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout);
             return (CompletableFuture<List<?>>) submit;
         }
     }
 
     public static class BatchedTransactionException extends Exception {
 
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final int index;

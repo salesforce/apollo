@@ -25,7 +25,6 @@ import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.model.ProcessDomain;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -200,8 +199,6 @@ public class FireFliesTrace {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(
-        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
@@ -211,7 +208,7 @@ public class FireFliesTrace {
                                                           .setFoundation(sealed)
                                                           .setContext(context)
                                                           .setCommunications(localRouter), new InetSocketAddress(0),
-                                         commsDirectory, ffParams, txnConfig, EventValidation.NONE,
+                                         commsDirectory, ffParams, EventValidation.NONE,
                                          IdentifierSpecification.newBuilder());
             domains.add(node);
             routers.put(node, localRouter);

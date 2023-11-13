@@ -26,13 +26,12 @@ public class ShardedOracleTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
         Emulator emmy = new Emulator();
 
         emmy.start(Domain.boostrapMigration());
 
-        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout);
+        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), timeout);
         smoke(oracle);
     }
 

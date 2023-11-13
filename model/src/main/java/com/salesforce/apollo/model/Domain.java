@@ -54,7 +54,6 @@ import java.sql.JDBCType;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
@@ -62,7 +61,7 @@ import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFI
 import static java.nio.file.Path.of;
 
 /**
- * An abstract sharded domain, top level, or sub domain. A domain minimally consists of a managed KERL, ReBAC Oracle and
+ * An abstract sharded domain, top level, or subdomain. A domain minimally consists of a managed KERL, ReBAC Oracle and
  * the defined membership
  *
  * @author hal.hildebrand
@@ -80,7 +79,7 @@ abstract public class Domain {
     protected final        Connection                 stateConnection;
 
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
-                  RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+                  RuntimeParameters.Builder runtime) {
         var paramsClone = params.clone();
         var runtimeClone = runtime.clone();
         this.member = member;
@@ -107,8 +106,8 @@ abstract public class Domain {
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
-        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout());
-        this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
+        this.oracle = new ShardedOracle(stateConnection, mutator, params.getSubmitTimeout());
+        this.commonKERL = new ShardedKERL(stateConnection, mutator, params.getSubmitTimeout(),
                                           params.getDigestAlgorithm());
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
                  member.getId(), dbURL, checkpointBaseDir);
@@ -245,9 +244,9 @@ abstract public class Domain {
         transactions.add(transactionOf(boostrapMigration()));
         sorted.stream()
               .map(e -> manifest(members.get(e)))
-              .filter(t -> t != null)
-              .flatMap(l -> l.stream())
-              .forEach(t -> transactions.add(t));
+              .filter(Objects::nonNull)
+              .flatMap(Collection::stream)
+              .forEach(transactions::add);
         transactions.add(initalMembership(
         params.runtime().foundation().getFoundation().getMembershipList().stream().map(d -> Digest.from(d)).toList()));
         return transactions;
@@ -278,7 +277,7 @@ abstract public class Domain {
     // Manifest the transactions that instantiate the KERL for this Join. The Join
     // is validated as a side effect and if invalid, NULL is returned.
     private List<Transaction> manifest(Join join) {
-        return join.getKerl().getEventsList().stream().map(ke -> transactionOf(ke)).toList();
+        return join.getKerl().getEventsList().stream().map(this::transactionOf).toList();
     }
 
     private Transaction transactionOf(KeyEventWithAttachments ke) {
@@ -287,7 +286,6 @@ abstract public class Domain {
             case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
             case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
             case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-            default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
         };
         var batch = mutator.batch();
         batch.execute(
@@ -318,8 +316,5 @@ abstract public class Domain {
                           .setContent(message.toByteString())
                           .setSignature(sig.toSig())
                           .build();
-    }
-
-    public record TransactionConfiguration(ScheduledExecutorService scheduler) {
     }
 }

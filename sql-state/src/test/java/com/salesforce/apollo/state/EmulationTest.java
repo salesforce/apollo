@@ -23,8 +23,6 @@ public class EmulationTest {
 
     @Test
     public void functional() throws Exception {
-        // Resources to manage
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
         // How long to wait until timing out ;)
         Duration timeout = Duration.ofSeconds(3);
@@ -41,7 +39,7 @@ public class EmulationTest {
 
         // Establish the book schema via a Liquibase migration transaction
         var results = mutator.execute(
-        update(changeLog(MigrationTest.BOOK_RESOURCE_PATH, MigrationTest.BOOK_SCHEMA_ROOT)), timeout, scheduler);
+        update(changeLog(MigrationTest.BOOK_RESOURCE_PATH, MigrationTest.BOOK_SCHEMA_ROOT)), timeout);
 
         // Should have gotten something...
         assertNotNull(results);
@@ -57,8 +55,7 @@ public class EmulationTest {
               "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
               "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
               "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"), timeout,
-        scheduler);
+              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"), timeout);
         assertNotNull(insertResults);
         var inserted = insertResults.get();
         assertNotNull(inserted);

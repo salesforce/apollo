@@ -54,7 +54,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
@@ -95,10 +97,9 @@ public class ProcessDomain extends Domain {
     public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                          InetSocketAddress endpoint, Path commDirectory,
-                         com.salesforce.apollo.fireflies.Parameters.Builder ff, TransactionConfiguration txnConfig,
-                         EventValidation eventValidation,
+                         com.salesforce.apollo.fireflies.Parameters.Builder ff, EventValidation eventValidation,
                          IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification) {
-        super(member, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
+        super(member, builder, dbURL, checkpointBaseDir, runtime);
         communicationsDirectory = commDirectory;
         var base = Context.<Participant>newBuilder()
                           .setId(group)
@@ -115,13 +116,13 @@ public class ProcessDomain extends Domain {
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
-        portal = new Portal<Member>(member.getId(), NettyServerBuilder.forAddress(portalEndpoint)
-                                                                      .protocolNegotiator(new DomainSocketNegotiator())
-                                                                      .channelType(getServerDomainSocketChannelClass())
-                                                                      .workerEventLoopGroup(portalEventLoopGroup)
-                                                                      .bossEventLoopGroup(portalEventLoopGroup)
-                                                                      .intercept(new DomainSocketServerInterceptor()),
-                                    s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
+        portal = new Portal<>(member.getId(), NettyServerBuilder.forAddress(portalEndpoint)
+                                                                .protocolNegotiator(new DomainSocketNegotiator())
+                                                                .channelType(getServerDomainSocketChannelClass())
+                                                                .workerEventLoopGroup(portalEventLoopGroup)
+                                                                .bossEventLoopGroup(portalEventLoopGroup)
+                                                                .intercept(new DomainSocketServerInterceptor()),
+                              s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
@@ -223,7 +224,6 @@ public class ProcessDomain extends Domain {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return;
         }
     }
 

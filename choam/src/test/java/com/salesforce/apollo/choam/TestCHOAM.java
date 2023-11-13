@@ -166,14 +166,9 @@ public class TestCHOAM {
         final var clientCount = LARGE_TESTS ? 1_500 : 50;
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
-
-        var txExec = Executors.newVirtualThreadPerTaskExecutor();
         choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(), timeout, max, Executors.newScheduledThreadPool(5,
-                                                                                                                      Thread.ofVirtual()
-                                                                                                                            .factory()),
-                                                       countdown, txExec));
+                transactioneers.add(new Transactioneer(c.getSession(), timeout, max, countdown));
             }
         });
 
