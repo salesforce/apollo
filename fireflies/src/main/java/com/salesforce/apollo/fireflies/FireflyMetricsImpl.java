@@ -51,14 +51,14 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
 
     public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
-        inboundGateway = registry.histogram(name(context.shortString(), "ff.gateway.inbound"));
-        inboundJoin = registry.histogram(name(context.shortString(), "ff.join.inbound"));
+        inboundGateway = registry.histogram(name(context.shortString(), "ff.gateway.inbound.bytes"));
+        inboundJoin = registry.histogram(name(context.shortString(), "ff.join.inbound.bytes"));
         inboundJoinDuration = registry.timer(name(context.shortString(), "ff.join.inbound.duration"));
         inboundSeedDuration = registry.timer(name(context.shortString(), "ff.seed.inbound.duration"));
-        outboundJoin = registry.histogram(name(context.shortString(), "ff.join.outbound"));
+        outboundJoin = registry.histogram(name(context.shortString(), "ff.join.outbound.bytes"));
         joinDuration = registry.timer(name(context.shortString(), "ff.join.duration"));
-        outboundGateway = registry.histogram(name(context.shortString(), "ff.gateway.outbound"));
-        outboundRedirect = registry.histogram(name(context.shortString(), "ff.redirect.outbound"));
+        outboundGateway = registry.histogram(name(context.shortString(), "ff.gateway.outbound.bytes"));
+        outboundRedirect = registry.histogram(name(context.shortString(), "ff.redirect.outbound.bytes"));
         outboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.outbound.duration"));
         inboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.inbound.duration"));
         outboundUpdate = registry.histogram(name(context.shortString(), "ff.update.outbound.bytes"));
@@ -74,11 +74,11 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         joining = registry.meter(name(context.shortString(), "ff.joining"));
         leaving = registry.meter(name(context.shortString(), "ff.leaving"));
         filteredNotes = registry.meter(name(context.shortString(), "ff.gossip.notes.filtered"));
-        inboundRedirect = registry.histogram(name(context.shortString(), "ff.redirect.inbound"));
-        outboundSeed = registry.histogram(name(context.shortString(), "ff.seed.outbound"));
+        inboundRedirect = registry.histogram(name(context.shortString(), "ff.redirect.inbound.bytes"));
+        outboundSeed = registry.histogram(name(context.shortString(), "ff.seed.outbound.bytes"));
         seedDuration = registry.timer(name(context.shortString(), "ff.seed.duration"));
         shunnedGossip = registry.meter(name(context.shortString(), "ff.gossip.shunned"));
-        inboundSeed = registry.histogram(name(context.shortString(), "ff.seed.inbound"));
+        inboundSeed = registry.histogram(name(context.shortString(), "ff.seed.inbound.bytes"));
         viewChanges = registry.meter(name(context.shortString(), "ff.view.change"));
     }
 
