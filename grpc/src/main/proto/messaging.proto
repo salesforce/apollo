@@ -36,13 +36,13 @@ message ReconcileContext {
 
 message AgedMessage {
     int32 age = 1;
-    google.protobuf.Any content = 3;
+    bytes content = 3;
 }
 
 message DefaultMessage {
     utils.Digeste source = 1;
     int32 nonce = 2;
-    google.protobuf.Any content = 3;
+    bytes content = 3;
 }
 
 message SignedDefaultMessage {
