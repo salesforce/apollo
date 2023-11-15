@@ -40,7 +40,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -54,13 +53,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class RbcTest {
 
-    private static final Parameters.Builder parameters = Parameters.newBuilder()
-            .setMaxMessages(100)
-            .setFalsePositiveRate(0.0125)
-            .setBufferSize(500);
-    private final List<Router> communications = new ArrayList<>();
-    private final AtomicInteger totalReceived = new AtomicInteger(0);
-    private List<ReliableBroadcaster> messengers;
+    private static final Parameters.Builder        parameters     = Parameters.newBuilder()
+                                                                              .setMaxMessages(100)
+                                                                              .setFalsePositiveRate(0.0125)
+                                                                              .setBufferSize(500);
+    final AtomicReference<CountDownLatch> round = new AtomicReference<>();
+    private final        List<Router>              communications = new ArrayList<>();
+    private final        AtomicInteger             totalReceived  = new AtomicInteger(0);
+    private              List<ReliableBroadcaster> messengers;
 
     @AfterEach
     public void after() {
@@ -75,10 +75,14 @@ public class RbcTest {
         MetricRegistry registry = new MetricRegistry();
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, 50).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        List<SigningMember> members = IntStream.range(0, 50)
+                                               .mapToObj(i -> stereotomy.newIdentifier())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
+                                               .toList();
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
@@ -87,10 +91,11 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         final var authentication = ReliableBroadcaster.defaultMessageAdapter(context, DigestAlgorithm.DEFAULT);
         messengers = members.stream().map(node -> {
-            var comms = new LocalServer(prefix, node).router(
-                    ServerConnectionCache.newBuilder()
-                            .setTarget(30)
-                            .setMetrics(new ServerConnectionCacheMetricsImpl(registry)));
+            var comms = new LocalServer(prefix, node).router(ServerConnectionCache.newBuilder()
+                                                                                  .setTarget(30)
+                                                                                  .setMetrics(
+                                                                                  new ServerConnectionCacheMetricsImpl(
+                                                                                  registry)));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(context, node, parameters.build(), comms, metrics, authentication);
@@ -134,17 +139,16 @@ public class RbcTest {
         System.out.println();
 
         ConsoleReporter.forRegistry(registry)
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .build()
-                .report();
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
-    final AtomicReference<CountDownLatch> round = new AtomicReference<>();
 
     class Receiver implements MessageHandler {
-        final Set<Digest> counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<Digest>   counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final AtomicInteger current;
-        final Digest memberId;
+        final Digest        memberId;
 
         Receiver(Digest memberId, int cardinality, AtomicInteger current) {
             this.current = current;
@@ -157,7 +161,7 @@ public class RbcTest {
                 assert m.source() != null : "null member";
                 ByteBuffer buf;
                 try {
-                    buf = m.content().unpack(ByteMessage.class).getContents().asReadOnlyByteBuffer();
+                    buf = ByteMessage.parseFrom(m.content()).getContents().asReadOnlyByteBuffer();
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalStateException(e);
                 }

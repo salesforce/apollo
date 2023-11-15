@@ -14,6 +14,8 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.*;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -24,8 +26,6 @@ import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,10 +77,10 @@ public class ReliableBroadcaster {
     }
 
     public static MessageAdapter defaultMessageAdapter(Context<Member> context, DigestAlgorithm algo) {
-        final Predicate<Any> verifier = any -> {
+        final Predicate<ByteString> verifier = any -> {
             SignedDefaultMessage sdm;
             try {
-                sdm = any.unpack(SignedDefaultMessage.class);
+                sdm = SignedDefaultMessage.parseFrom(any);
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
@@ -91,34 +91,37 @@ public class ReliableBroadcaster {
             }
             return member.verify(JohnHancock.from(sdm.getSignature()), dm.toByteString());
         };
-        final Function<Any, Digest> hasher = any -> {
+        final Function<ByteString, Digest> hasher = any -> {
             try {
-                return JohnHancock.from(any.unpack(SignedDefaultMessage.class).getSignature()).toDigest(algo);
+                return JohnHancock.from(SignedDefaultMessage.parseFrom(any).getSignature()).toDigest(algo);
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
         };
-        Function<Any, List<Digest>> source = any -> {
+        Function<ByteString, List<Digest>> source = any -> {
             try {
                 return Collections.singletonList(
-                Digest.from(any.unpack(SignedDefaultMessage.class).getContent().getSource()));
+                Digest.from(SignedDefaultMessage.parseFrom(any).getContent().getSource()));
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
         };
         var sn = new AtomicInteger();
-        BiFunction<SigningMember, Any, Any> wrapper = (m, any) -> {
+        BiFunction<SigningMember, ByteString, ByteString> wrapper = (m, any) -> {
             final var dm = DefaultMessage.newBuilder()
                                          .setNonce(sn.incrementAndGet())
                                          .setSource(m.getId().toDigeste())
                                          .setContent(any)
                                          .build();
-            return Any.pack(
-            SignedDefaultMessage.newBuilder().setContent(dm).setSignature(m.sign(dm.toByteString()).toSig()).build());
+            return SignedDefaultMessage.newBuilder()
+                                       .setContent(dm)
+                                       .setSignature(m.sign(dm.toByteString()).toSig())
+                                       .build()
+                                       .toByteString();
         };
-        Function<AgedMessageOrBuilder, Any> extractor = am -> {
+        Function<AgedMessageOrBuilder, ByteString> extractor = am -> {
             try {
-                return am.getContent().unpack(SignedDefaultMessage.class).getContent().getContent();
+                return SignedDefaultMessage.parseFrom(am.getContent()).getContent().getContent();
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException("Cannot unwrap", e);
             }
@@ -147,7 +150,7 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return;
         }
-        AgedMessage m = buffer.send(Any.pack(message), member);
+        AgedMessage m = buffer.send(message.toByteString(), member);
         if (notifyLocal) {
             deliver(Collections.singletonList(
             new Msg(Collections.singletonList(member.getId()), adapter.extractor.apply(m),
@@ -214,8 +217,8 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return null;
         }
-        log.trace("rbc gossiping[{}] with: {} ring: {} on: {}", buffer.round(), member.getId(), link.getMember().getId(),
-                  ring, member.getId());
+        log.trace("rbc gossiping[{}] with: {} ring: {} on: {}", buffer.round(), member.getId(),
+                  link.getMember().getId(), ring, member.getId());
         try {
             return link.gossip(
             MessageBff.newBuilder().setRing(ring).setDigests(buffer.forReconcilliation().toBff()).build());
@@ -282,12 +285,13 @@ public class ReliableBroadcaster {
     public record HashedContent(Digest hash, ByteString content) {
     }
 
-    public record MessageAdapter(Predicate<Any> verifier, Function<Any, Digest> hasher,
-                                 Function<Any, List<Digest>> source, BiFunction<SigningMember, Any, Any> wrapper,
-                                 Function<AgedMessageOrBuilder, Any> extractor) {
+    public record MessageAdapter(Predicate<ByteString> verifier, Function<ByteString, Digest> hasher,
+                                 Function<ByteString, List<Digest>> source,
+                                 BiFunction<SigningMember, ByteString, ByteString> wrapper,
+                                 Function<AgedMessageOrBuilder, ByteString> extractor) {
     }
 
-    public record Msg(List<Digest> source, Any content, Digest hash) {
+    public record Msg(List<Digest> source, ByteString content, Digest hash) {
     }
 
     public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
@@ -456,7 +460,7 @@ public class ReliableBroadcaster {
             return round.get();
         }
 
-        public AgedMessage send(Any msg, SigningMember member) {
+        public AgedMessage send(ByteString msg, SigningMember member) {
             AgedMessage.Builder message = AgedMessage.newBuilder().setContent(adapter.wrapper.apply(member, msg));
             var hash = adapter.hasher.apply(message.getContent());
             state s = new state(hash, message);

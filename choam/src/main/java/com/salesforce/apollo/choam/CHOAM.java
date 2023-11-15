@@ -100,10 +100,10 @@ public class CHOAM {
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
                                           new MessageAdapter(any -> true,
-                                                             (Function<Any, Digest>) any -> signatureHash(any),
-                                                             (Function<Any, List<Digest>>) any -> Collections.emptyList(),
+                                                             (Function<ByteString, Digest>) any -> signatureHash(any),
+                                                             (Function<ByteString, List<Digest>>) any -> Collections.emptyList(),
                                                              (m, any) -> any,
-                                                             (Function<AgedMessageOrBuilder, Any>) am -> am.getContent()));
+                                                             (Function<AgedMessageOrBuilder, ByteString>) am -> am.getContent()));
         linear = Executors.newSingleThreadExecutor(
         Thread.ofVirtual().name("Linear " + params.member().getId()).factory());
         combine.registerHandler((ctx, messages) -> {
@@ -449,7 +449,7 @@ public class CHOAM {
     private void combine(Msg m) {
         CertifiedBlock block;
         try {
-            block = m.content().unpack(CertifiedBlock.class);
+            block = CertifiedBlock.parseFrom(m.content());
         } catch (InvalidProtocolBufferException e) {
             log.debug("unable to parse block content from {} on: {}", m.source(), params.member().getId());
             return;
@@ -768,10 +768,10 @@ public class CHOAM {
         };
     }
 
-    private Digest signatureHash(Any any) {
+    private Digest signatureHash(ByteString any) {
         CertifiedBlock cb;
         try {
-            cb = any.unpack(CertifiedBlock.class);
+            cb =  CertifiedBlock.parseFrom(any);
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException(e);
         }
