@@ -6,20 +6,41 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import com.chiralbehaviors.tron.Entry;
+import com.chiralbehaviors.tron.FsmExecutor;
+import com.google.protobuf.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.chiralbehaviors.tron.Entry;
-import com.chiralbehaviors.tron.FsmExecutor;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
+import java.util.List;
 
 /**
  * Leaf action interface for the Producer FSM
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public interface Driven {
+    public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
+    public static String SYNC                 = "SYNC";
+
+    void assembled();
+
+    void checkAssembly();
+
+    void checkpoint();
+
+    void complete();
+
+    void create(List<ByteString> preblock, boolean last);
+
+    void fail();
+
+    void produceAssemble();
+
+    void reconfigure();
+
+    void startProduction();
+
     enum Earner implements Driven.Transitions {
         AWAIT_VIEW {
             @Override
@@ -34,7 +55,7 @@ public interface Driven {
             }
 
             @Override
-            public Transitions create(PreBlock preblock, boolean last) {
+            public Transitions create(List<ByteString> preblock, boolean last) {
                 context().checkAssembly();
                 return super.create(preblock, last);
             }
@@ -49,9 +70,7 @@ public interface Driven {
                 context().assembled();
                 return null;
             }
-        },
-        CHECKPOINTING {
-
+        }, CHECKPOINTING {
             @Entry
             public void check() {
                 context().checkpoint();
@@ -61,10 +80,8 @@ public interface Driven {
             public Transitions checkpointed() {
                 return SPICE;
             }
-        },
-        COMPLETE {
-        },
-        INITIAL {
+        }, COMPLETE {
+        }, INITIAL {
             @Override
             public Transitions checkpoint() {
                 return CHECKPOINTING;
@@ -74,8 +91,7 @@ public interface Driven {
             public Transitions start() {
                 return SPICE;
             }
-        },
-        PROTOCOL_FAILURE {
+        }, PROTOCOL_FAILURE {
             @Override
             public Transitions assembled() {
                 return null;
@@ -111,8 +127,7 @@ public interface Driven {
                 log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
                 context().fail();
             }
-        },
-        SPICE {
+        }, SPICE {
             @Override
             public Transitions assembled() {
                 context().reconfigure();
@@ -160,7 +175,7 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions create(PreBlock preblock, boolean last) {
+        default Transitions create(List<ByteString> preblock, boolean last) {
             context().create(preblock, last);
             return null;
         }
@@ -189,25 +204,4 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
     }
-
-    public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
-    public static String SYNC                 = "SYNC";
-
-    void assembled();
-
-    void checkAssembly();
-
-    void checkpoint();
-
-    void complete();
-
-    void create(PreBlock preblock, boolean last);
-
-    void fail();
-
-    void produceAssemble();
-
-    void reconfigure();
-
-    void startProduction();
 }

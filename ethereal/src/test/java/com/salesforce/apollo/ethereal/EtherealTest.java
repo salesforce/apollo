@@ -16,7 +16,6 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Context;
@@ -117,7 +116,7 @@ public class EtherealTest {
                             .setEpochLength(EPOCH_LENGTH)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
 
-        List<List<PreBlock>> produced = new ArrayList<>();
+        List<List<List<ByteString>>> produced = new ArrayList<>();
         for (int i = 0; i < (short) NPROC; i++) {
             produced.add(new CopyOnWriteArrayList<>());
         }
@@ -129,7 +128,7 @@ public class EtherealTest {
             var level = new AtomicInteger();
             var ds = new SimpleDataSource();
             final short pid = i;
-            List<PreBlock> output = produced.get(pid);
+            List<List<ByteString>> output = produced.get(pid);
             final var member = members.get(i);
             var com = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder());
             comms.add(com);
@@ -185,11 +184,11 @@ public class EtherealTest {
                                                                                                             .map(
                                                                                                             l -> l.size())
                                                                                                             .toList());
-        List<PreBlock> preblocks = first.get();
+        List<List<ByteString>> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
         Set<Short> failed = new HashSet<>();
         for (short i = 0; i < NPROC; i++) {
-            final List<PreBlock> output = produced.get(i);
+            final List<List<ByteString>> output = produced.get(i);
             if (output.size() != expected) {
                 System.out.println(
                 "Iteration: " + iteration + ", did not get all expected blocks on: " + i + " blocks received: "
@@ -198,21 +197,21 @@ public class EtherealTest {
                 for (int j = 0; j < preblocks.size(); j++) {
                     var a = preblocks.get(j);
                     var b = output.get(j);
-                    if (a.data().size() != b.data().size()) {
+                    if (a.size() != b.size()) {
                         failed.add(i);
                         System.out.println(
                         "Iteration: " + iteration + ", mismatch at block: " + j + " process: " + i + " data size: "
-                        + a.data().size() + " != " + b.data().size());
+                        + a.size() + " != " + b.size());
                     } else {
-                        for (int k = 0; k < a.data().size(); k++) {
-                            if (!a.data().get(k).equals(b.data().get(k))) {
+                        for (int k = 0; k < a.size(); k++) {
+                            if (!a.get(k).equals(b.get(k))) {
                                 failed.add(i);
                                 System.out.println(
                                 "Iteration: " + iteration + ", mismatch at block: " + j + " unit: " + k + " process: "
-                                + i + " expected: " + a.data().get(k) + " received: " + b.data().get(k));
+                                + i + " expected: " + a.get(k) + " received: " + b.get(k));
                             }
                             outputOrder.add(
-                            new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
+                            new String(ByteMessage.parseFrom(a.get(k)).getContents().toByteArray()));
                         }
                     }
                 }

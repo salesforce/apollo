@@ -6,22 +6,6 @@
  */
 package com.salesforce.apollo.domain;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import org.junit.jupiter.api.Test;
-
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -47,7 +31,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-
 import io.grpc.ManagedChannel;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
@@ -55,10 +38,24 @@ import io.grpc.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.channel.unix.ServerDomainSocketChannel;
+import org.junit.jupiter.api.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DemesneIsolateTest {
     private static final Class<? extends ServerDomainSocketChannel> channelType       = getServerDomainSocketChannelClass();
@@ -73,7 +70,7 @@ public class DemesneIsolateTest {
         Files.createDirectories(commDirectory);
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, SecureRandom.getInstanceStrong());
-        var identifier = controller.newIdentifier().get();
+        var identifier = controller.newIdentifier();
         Member serverMember = new ControlledIdentifierMember(identifier);
         var portalAddress = UUID.randomUUID().toString();
         var parentAddress = UUID.randomUUID().toString();
@@ -137,10 +134,8 @@ public class DemesneIsolateTest {
         var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
 
         // Commit
-        identifier.seal(builder)
-                  .thenAccept(coords -> demesne.commit(coords.toEventCoords()))
-                  .thenAccept(v -> demesne.start())
-                  .get();
+        demesne.commit(identifier.seal(builder).toEventCoords());
+        demesne.start();
         Thread.sleep(Duration.ofSeconds(2));
         demesne.stop();
         assertEquals(1, registered.size());
