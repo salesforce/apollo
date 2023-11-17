@@ -23,7 +23,6 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
@@ -128,8 +127,8 @@ public class GenesisAssembly implements Genesis {
     }
 
     @Override
-    public void certify(PreBlock preblock, boolean last) {
-        preblock.data().stream().map(bs -> {
+    public void certify(List<ByteString> preblock, boolean last) {
+        preblock.stream().map(bs -> {
             try {
                 return Validate.parseFrom(bs);
             } catch (InvalidProtocolBufferException e) {
@@ -157,8 +156,8 @@ public class GenesisAssembly implements Genesis {
     }
 
     @Override
-    public void gather(PreBlock preblock, boolean last) {
-        preblock.data().stream().map(bs -> {
+    public void gather(List<ByteString> preblock, boolean last) {
+        preblock.stream().map(bs -> {
             try {
                 return Join.parseFrom(bs);
             } catch (InvalidProtocolBufferException e) {
@@ -180,9 +179,8 @@ public class GenesisAssembly implements Genesis {
     }
 
     @Override
-    public void nominations(PreBlock preblock, boolean last) {
-        preblock.data()
-                .stream()
+    public void nominations(List<ByteString> preblock, boolean last) {
+        preblock.stream()
                 .map(bs -> {
                     try {
                         return Validations.parseFrom(bs);

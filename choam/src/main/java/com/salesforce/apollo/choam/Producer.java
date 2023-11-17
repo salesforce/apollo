@@ -17,6 +17,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.google.protobuf.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
 
@@ -122,7 +122,7 @@ public class Producer {
         }
 
         @Override
-        public void create(PreBlock preblock, boolean last) {
+        public void create(List<ByteString> preblock, boolean last) {
             Producer.this.create(preblock, last);
         }
 
@@ -283,9 +283,9 @@ public class Producer {
         ds.offer(r);
     }
 
-    private void create(PreBlock preblock, boolean last) {
+    private void create(List<ByteString> preblock, boolean last) {
         log.debug("preblock produced, last: {} on: {}", last, params().member().getId());
-        var aggregate = preblock.data().stream().map(e -> {
+        var aggregate = preblock.stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
             } catch (InvalidProtocolBufferException ex) {

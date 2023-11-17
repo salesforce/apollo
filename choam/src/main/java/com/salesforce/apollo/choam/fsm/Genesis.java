@@ -8,7 +8,9 @@ package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
+import com.google.protobuf.ByteString;
+
+import java.util.List;
 
 /**
  * @author hal.hildebrand
@@ -24,7 +26,7 @@ public interface Genesis {
             }
 
             @Override
-            public Transitions process(PreBlock preblock, boolean last) {
+            public Transitions process(List<ByteString> preblock, boolean last) {
                 context().certify(preblock, last);
                 return last ? PUBLISH : null;
             }
@@ -44,7 +46,7 @@ public interface Genesis {
             }
 
             @Override
-            public Transitions process(PreBlock preblock, boolean last) {
+            public Transitions process(List<ByteString> preblock, boolean last) {
                 context().gather(preblock, last);
                 return null;
             }
@@ -61,7 +63,7 @@ public interface Genesis {
             }
 
             @Override
-            public Transitions process(PreBlock preblock, boolean last) {
+            public Transitions process(List<ByteString> preblock, boolean last) {
                 context().nominations(preblock, last);
                 return null;
             }
@@ -81,22 +83,22 @@ public interface Genesis {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions process(PreBlock preblock, boolean last) {
+        default Transitions process(List<ByteString> preblock, boolean last) {
             throw fsm().invalidTransitionOn();
         }
     }
 
     public void certify();
 
-    public void certify(PreBlock preblock, boolean last);
+    public void certify(List<ByteString> preblock, boolean last);
 
     public void gather();
 
-    public void gather(PreBlock preblock, boolean last);
+    public void gather(List<ByteString> preblock, boolean last);
 
     public void nominate();
 
-    public void nominations(PreBlock preblock, boolean last);
+    public void nominations(List<ByteString> preblock, boolean last);
 
     public void publish();
 }

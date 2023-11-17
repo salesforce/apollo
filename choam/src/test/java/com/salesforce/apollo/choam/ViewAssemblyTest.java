@@ -18,7 +18,6 @@ import com.salesforce.apollo.crypto.*;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
@@ -189,7 +188,7 @@ public class ViewAssemblyTest {
             final short pid = i;
             final var member = members.get(i);
             ViewAssembly assembly = assemblies.get(member);
-            BiConsumer<PreBlock, Boolean> blocker = (pb, last) -> {
+            BiConsumer<List<ByteString>, Boolean> blocker = (pb, last) -> {
                 assembly.inbound().accept(process(pb, last));
             };
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
@@ -202,8 +201,8 @@ public class ViewAssemblyTest {
         }
     }
 
-    private List<Reassemble> process(PreBlock preblock, Boolean last) {
-        return preblock.data().stream().map(bs -> {
+    private List<Reassemble> process(List<ByteString> preblock, Boolean last) {
+        return preblock.stream().map(bs -> {
             try {
                 return Reassemble.parseFrom(bs);
             } catch (InvalidProtocolBufferException e) {

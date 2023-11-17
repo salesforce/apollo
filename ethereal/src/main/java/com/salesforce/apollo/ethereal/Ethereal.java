@@ -45,8 +45,6 @@ import com.salesforce.apollo.ethereal.linear.TimingRound;
  */
 public class Ethereal {
 
-    public record PreBlock(List<ByteString> data) {}
-
     record epoch(int id, Dag dag, Adder adder, AtomicBoolean more) {
 
         public void close() {
@@ -103,21 +101,21 @@ public class Ethereal {
      * that the timing unit is the last unit in the slice, and that random source
      * data of the timing unit starts with random bytes from the previous level.
      */
-    public static PreBlock toPreBlock(List<Unit> round) {
+    public static List<ByteString> toList(List<Unit> round) {
         var data = new ArrayList<ByteString>();
         for (Unit u : round) {
             if (!u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
                 data.add(u.data());
             }
         }
-        return data.isEmpty() ? null : new PreBlock(data);
+        return data.isEmpty() ? null : data;
     }
 
-    private static Consumer<List<Unit>> blocker(BiConsumer<PreBlock, Boolean> blocker, Config config) {
+    private static Consumer<List<Unit>> blocker(BiConsumer<List<ByteString>, Boolean> blocker, Config config) {
         return units -> {
             var print = log.isTraceEnabled() ? units.stream().map(e -> e.shortString()).toList() : null;
             log.trace("Make pre block: {} on: {}", print, config.logLabel());
-            PreBlock preBlock = toPreBlock(units);
+            List<ByteString> preBlock = toList(units);
             var timingUnit = units.get(units.size() - 1);
             var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
@@ -149,7 +147,7 @@ public class Ethereal {
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
 
-    public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+    public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<List<ByteString>, Boolean> blocker,
                     Consumer<Integer> newEpochAction, ThreadPoolExecutor consumer) {
         this(config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction, consumer);
     }
