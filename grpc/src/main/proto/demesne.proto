@@ -10,7 +10,7 @@ import "google/protobuf/duration.proto";
 
 import "choam.proto";
 import "stereotomy.proto";
-import "util.proto";
+import "crypto.proto";
 
 package apollo.demesne;
 
@@ -18,7 +18,7 @@ message DemesneParameters {
     string commDirectory = 1;
     string portal = 2; 
     string parent = 3;
-    utils.Digeste context = 4;
+    crypto.Digeste context = 4;
     google.protobuf.Duration keepAlive = 5;
     apollo.choam.FoundationSeal foundation = 6;
     google.protobuf.Duration timeout = 7;
@@ -30,39 +30,39 @@ message DemesneParameters {
 }
 
 message ViewChange {
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     repeated stereotomy.EventCoords joining = 2;
-    repeated utils.Digeste leaving = 3;
+    repeated crypto.Digeste leaving = 3;
 }
 
 service OuterContext {
     rpc register (SubContext) returns(google.protobuf.Empty) {}
-    rpc deregister (utils.Digeste) returns(google.protobuf.Empty) {}
+    rpc deregister (crypto.Digeste) returns(google.protobuf.Empty) {}
 }
 
 message SubContext {
-    utils.Digeste enclave = 1;
-    utils.Digeste context = 2;
+    crypto.Digeste enclave = 1;
+    crypto.Digeste context = 2;
 }
 
 message DelegationUpdate {
     int32 ring = 1;
-    utils.Biff have = 2;
+    crypto.Biff have = 2;
     repeated SignedDelegate update = 3;
 }
 
 message Delegate {
-    utils.Digeste context = 1;
-    utils.Digeste delegator = 2;
-    utils.Digeste delegate = 3;
+    crypto.Digeste context = 1;
+    crypto.Digeste delegator = 2;
+    crypto.Digeste delegate = 3;
 }
 
 message SignedDelegate {
     Delegate delegate = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 service Delegation {
-    rpc gossip( utils.Biff ) returns (DelegationUpdate) {}
+    rpc gossip( crypto.Biff ) returns (DelegationUpdate) {}
     rpc update( DelegationUpdate ) returns (google.protobuf.Empty) {}
 }

@@ -15,7 +15,7 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.*;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.*;
 import com.salesforce.apollo.choam.fsm.Combine;

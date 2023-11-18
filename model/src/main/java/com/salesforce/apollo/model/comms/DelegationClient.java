@@ -9,7 +9,7 @@ package com.salesforce.apollo.model.comms;
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.demesne.proto.DelegationGrpc;
 import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.membership.Member;
 

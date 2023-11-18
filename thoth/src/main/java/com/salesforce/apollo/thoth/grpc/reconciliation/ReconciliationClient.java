@@ -17,7 +17,7 @@ import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationFutureStub;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
-import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;

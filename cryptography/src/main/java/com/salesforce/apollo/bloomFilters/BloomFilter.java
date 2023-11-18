@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 
 /**

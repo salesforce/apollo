@@ -4,16 +4,16 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
 option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
-import "util.proto";
+import "crypto.proto";
 
 package stereotomy;
 
 // The KERI Identifier
 message Ident {
     oneof type {
-        utils.PubKey basic = 1; 
-        utils.Digeste selfAddressing = 2;
-        utils.Sig selfSigning = 3;
+        crypto.PubKey basic = 1;
+        crypto.Digeste selfAddressing = 2;
+        crypto.Sig selfSigning = 3;
         bool NONE = 5;
     }
 }
@@ -23,14 +23,14 @@ message EventCoords {
     Ident identifier = 1;
     uint64 sequenceNumber = 2;
     string ilk = 3;
-    utils.Digeste digest = 4;
+    crypto.Digeste digest = 4;
 }
 
 // Location of an event
 message EventLoc {
     Ident identifier = 1;
     uint64 sequenceNumber = 2;
-    utils.Digeste digest = 3;
+    crypto.Digeste digest = 3;
 }
 
 // Coordinates of a key
@@ -43,7 +43,7 @@ message KeyCoords {
 message Sealed { 
     oneof type {
         EventCoords eventCoordinates = 1;
-        utils.Digeste digest = 2;
+        crypto.Digeste digest = 2;
         EventLoc event = 3;
         bytes bits = 4;
     }
@@ -53,16 +53,16 @@ message Sealed {
 message Header {
     uint64 sequenceNumber = 1;
     Ident identifier = 2;
-    utils.Digeste priorEventDigest = 3;
+    crypto.Digeste priorEventDigest = 3;
     Version version = 4;
     string ilk = 5;
 }
 
 // Common configuration, signature authentication and coordinates of the previous event
 message EventCommon {
-    utils.Digeste configuration = 2;
+    crypto.Digeste configuration = 2;
     EventCoords previous = 3;
-    utils.Sig authentication = 4;
+    crypto.Sig authentication = 4;
 }
 
 // Specification of an interaction
@@ -74,8 +74,8 @@ message InteractionSpec {
 // The establishment criteria and record of a key
 message Establishment {
     SigningThreshold signingThreshold = 1;
-    repeated utils.PubKey keys = 2;
-    utils.Digeste nextKeysDigest = 3;
+    repeated crypto.PubKey keys = 2;
+    crypto.Digeste nextKeysDigest = 3;
     int32 witnessThreshold = 4;
 }
 
@@ -92,7 +92,7 @@ message RotationSpec {
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated utils.PubKey witnesses = 3;
+    repeated crypto.PubKey witnesses = 3;
     repeated string configuration = 4;
 }
 
@@ -141,18 +141,18 @@ message KeyEvent_ {
 }
 
 message Attachment {
-    map<int32, utils.Sig> endorsements = 1;
+    map<int32, crypto.Sig> endorsements = 1;
     repeated Sealed seals = 2;
 }
 
 message Validation_ {
     stereotomy.EventCoords validator = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 message KeyStateWithEndorsementsAndValidations_ {
     stereotomy.KeyState_ state = 1;
-    map<int32, utils.Sig> endorsements = 2;
+    map<int32, crypto.Sig> endorsements = 2;
     repeated stereotomy.Validation_ validations = 3;
 }
 
@@ -193,14 +193,14 @@ message Version {
 // KeyState represents the materialized state of an identifier
 // and corresponding public/private keys in the corresponding KEL/KERL
 message KeyState_ {
-    utils.Digeste digest = 1;
+    crypto.Digeste digest = 1;
     EventCoords coordinates = 2;
     EventCoords lastEvent = 3;
     EventCoords lastEstablishmentEvent = 4;
     Ident delegatingIdentifier = 5;
     repeated string configurationTraits = 6;
-    utils.Digeste nextKeyConfigurationDigest = 7;
-    repeated utils.PubKey keys = 8;
+    crypto.Digeste nextKeyConfigurationDigest = 7;
+    repeated crypto.PubKey keys = 8;
     SigningThreshold signingThreshold = 9;
     repeated Ident witnesses = 10;
     int32 witnessThreshold = 11; 
@@ -221,5 +221,5 @@ message Bound {
 // A signed bound value
 message Binding {
     Bound value = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }

@@ -7,7 +7,7 @@ option objc_class_prefix = "Ff";
 
 import "google/protobuf/empty.proto";
 
-import "util.proto";
+import "crypto.proto";
 import "stereotomy.proto";
 
 package fireflies;
@@ -18,14 +18,14 @@ service Fireflies {
 }
 
 message SayWhat { 
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     SignedNote note = 2;
     int32 ring = 3;
     Digests gossip = 4;
 }
 
 message State { 
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     int32 ring = 2;
     Update update = 3;
 }
@@ -33,19 +33,19 @@ message State {
 message Accusation {
     int64 epoch = 1;
     int32 ringNumber = 2;
-    utils.Digeste accuser = 3;
-    utils.Digeste accused = 4;
-    utils.Digeste currentView = 5;
+    crypto.Digeste accuser = 3;
+    crypto.Digeste accused = 4;
+    crypto.Digeste currentView = 5;
 }
 
 message SignedAccusation {
     Accusation accusation = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 message Note {
     int64 epoch = 1;
-    utils.Digeste currentView = 2;
+    crypto.Digeste currentView = 2;
     stereotomy.EventCoords coordinates = 3;
     bytes mask = 4;
     string host = 5;
@@ -53,49 +53,49 @@ message Note {
 }
 
 message ViewChange {
-    utils.Digeste observer = 1;
-    utils.Digeste current = 2;
+    crypto.Digeste observer = 1;
+    crypto.Digeste current = 2;
     int32 attempt = 3;
-    repeated utils.Digeste joins = 4;
-    repeated utils.Digeste leaves = 5;
+    repeated crypto.Digeste joins = 4;
+    repeated crypto.Digeste leaves = 5;
 }
 
 message SignedViewChange {
     ViewChange change = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 message SignedNote {
     Note note = 1; 
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 message AccusationGossip {
-    utils.Biff bff = 1;
+    crypto.Biff bff = 1;
     repeated SignedAccusation updates = 2;
 }
 
 message NoteGossip {
-    utils.Biff bff = 1;
+    crypto.Biff bff = 1;
     repeated SignedNote updates = 2;
 }
 
 message JoinGossip {
-    utils.Biff bff = 1;
+    crypto.Biff bff = 1;
     repeated SignedNote updates = 2;
 }
 
 message ViewChangeGossip {
-    utils.Biff bff = 1;
+    crypto.Biff bff = 1;
     repeated SignedViewChange updates = 2;
 }
 
 message Digests { 
-    utils.Biff identityBff = 1;
-    utils.Biff noteBff = 2;
-    utils.Biff accusationBff = 3;
-    utils.Biff observationBff = 4;
-    utils.Biff joinBiff = 5;
+    crypto.Biff identityBff = 1;
+    crypto.Biff noteBff = 2;
+    crypto.Biff accusationBff = 3;
+    crypto.Biff observationBff = 4;
+    crypto.Biff joinBiff = 5;
 }
 
 message Gossip {
@@ -120,12 +120,12 @@ service Entrance {
 }
 
 message Registration { 
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     SignedNote note = 2;
 }
 
 message Redirect {
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     int32 cardinality = 2;
     int32 rings = 3;
     bool bootstrap = 4;
@@ -138,11 +138,11 @@ message Seed_ {
 }
 
 message Join { 
-    utils.Digeste view = 1;
+    crypto.Digeste view = 1;
     SignedNote note = 2;
 }
 
 message Gateway { 
-    utils.HexBloome diadem = 1;
+    crypto.HexBloome diadem = 1;
     repeated SignedNote initialSeedSet = 2;
 }

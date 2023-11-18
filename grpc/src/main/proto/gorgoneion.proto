@@ -10,7 +10,7 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 import "stereotomy.proto";
-import "util.proto";
+import "crypto.proto";
 
 package gorgoneion;
 
@@ -26,8 +26,8 @@ service Endorsement {
 }
 
 message MemberSignature {
-    utils.Digeste id = 1;
-    utils.Sig signature = 2;
+    crypto.Digeste id = 1;
+    crypto.Sig signature = 2;
 }
 
 message SignedNonce {
@@ -37,8 +37,8 @@ message SignedNonce {
 
 message Nonce {
     stereotomy.Ident member = 1;
-    utils.Digeste issuer = 2;
-    utils.Digeste noise = 3;
+    crypto.Digeste issuer = 2;
+    crypto.Digeste noise = 3;
     google.protobuf.Timestamp timestamp = 4;
 }
 
@@ -49,14 +49,14 @@ message Credentials {
 
 message Attestation {
     stereotomy.KERL_ kerl = 1;
-    utils.Sig nonce = 2;
+    crypto.Sig nonce = 2;
     google.protobuf.Timestamp timestamp = 3;
     google.protobuf.Any attestation = 4;
 }
 
 message SignedAttestation {
     Attestation attestation = 1;
-    utils.Sig signature = 2;
+    crypto.Sig signature = 2;
 }
 
 message Notarization {

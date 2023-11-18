@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

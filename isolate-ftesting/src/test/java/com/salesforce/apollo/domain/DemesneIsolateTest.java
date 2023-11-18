@@ -8,7 +8,7 @@ package com.salesforce.apollo.domain;
 
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.choam;
 
 import com.salesfoce.apollo.choam.proto.*;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

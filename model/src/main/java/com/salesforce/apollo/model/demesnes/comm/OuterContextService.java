@@ -7,7 +7,7 @@
 package com.salesforce.apollo.model.demesnes.comm;
 
 import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 
 /**
  * @author hal.hildebrand

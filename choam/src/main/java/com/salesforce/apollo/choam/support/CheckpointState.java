@@ -6,29 +6,22 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.SequenceInputStream;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.choam.proto.Checkpoint;
+import com.salesfoce.apollo.choam.proto.Slice;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.Utils;
+import org.h2.mvstore.MVMap;
+
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.zip.GZIPInputStream;
 
-import org.h2.mvstore.MVMap;
-
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.Checkpoint;
-import com.salesfoce.apollo.choam.proto.Slice;
-import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class CheckpointState {
     public final Checkpoint             checkpoint;
@@ -43,7 +36,6 @@ public class CheckpointState {
         try (FileOutputStream fos = new FileOutputStream(file);
              GZIPInputStream gis = new GZIPInputStream(assembled())) {
             Utils.copy(gis, fos);
-            gis.close();
         }
     }
 

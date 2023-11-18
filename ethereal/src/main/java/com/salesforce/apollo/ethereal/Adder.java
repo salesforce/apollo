@@ -30,7 +30,7 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.PreVote;
 import com.salesfoce.apollo.ethereal.proto.SignedCommit;
 import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;

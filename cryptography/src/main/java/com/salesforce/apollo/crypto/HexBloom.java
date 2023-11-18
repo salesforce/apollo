@@ -15,7 +15,7 @@ import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import com.salesfoce.apollo.utils.proto.HexBloome;
+import com.salesfoce.apollo.cryptography.proto.HexBloome;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.Primes;
 

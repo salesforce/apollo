@@ -8,7 +8,7 @@ package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.salesfoce.apollo.choam.proto.*;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;

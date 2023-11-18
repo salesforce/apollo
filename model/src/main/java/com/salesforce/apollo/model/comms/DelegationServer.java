@@ -10,7 +10,7 @@ import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.demesne.proto.DelegationGrpc.DelegationImplBase;
 import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.archipelago.Enclave.RoutingClientIdentity;
 import com.salesforce.apollo.archipelago.RoutableService;
 

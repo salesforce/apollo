@@ -9,7 +9,7 @@ package com.salesforce.apollo.stereotomy.db;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;

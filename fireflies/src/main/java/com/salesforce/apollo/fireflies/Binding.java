@@ -11,7 +11,7 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.*;
-import com.salesfoce.apollo.utils.proto.HexBloome;
+import com.salesfoce.apollo.cryptography.proto.HexBloome;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
