@@ -136,15 +136,8 @@ public class CHOAM {
     }
 
     public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initialCrown) {
-        Digest stateHash = algo.getOrigin();
         long length = 0;
         if (state != null) {
-            try (FileInputStream fis = new FileInputStream(state)) {
-                stateHash = algo.digest(fis);
-            } catch (IOException e) {
-                log.error("Invalid checkpoint!", e);
-                return null;
-            }
             length = state.length();
         }
         Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(segmentSize);
@@ -160,12 +153,13 @@ public class CHOAM {
                 return null;
             }
         }
-        log.info("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
-                 builder.getSegmentsCount(), stateHash);
 
-        return builder.setCrown(
-        HexBloom.construct(builder.getSegmentsCount(), builder.getSegmentsList().stream().map(d -> Digest.from(d)),
-                           initialCrown, 2).toHexBloome()).build();
+        var crown = HexBloom.construct(builder.getSegmentsCount(),
+                                       builder.getSegmentsList().stream().map(d -> Digest.from(d)), initialCrown, 2)
+                            .compactWrapped();
+        log.info("Checkpoint length: {} segment size: {} count: {} crown: {}", length, segmentSize,
+                 builder.getSegmentsCount(), crown);
+        return builder.setCrown(crown.toDigeste()).build();
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,

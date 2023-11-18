@@ -10,18 +10,19 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.TreeMultiset;
 import com.salesfoce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.HexBloom;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import org.joou.ULong;
 import org.joou.Unsigned;
 import org.slf4j.Logger;
@@ -134,6 +135,7 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration()).whenComplete((cps, t) -> {
+            validate(cps);
             log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member().getId());
             checkpointState = cps;
         });
@@ -146,6 +148,22 @@ public class Bootstrapper {
                       store.put(reconfigure);
                   });
         scheduleViewChainCompletion(new AtomicReference<>(checkpointView.height()), ULong.valueOf(0));
+    }
+
+    private void validate(CheckpointState cps) {
+        var crown = HexBloom.construct(cps.checkpoint.getSegmentsCount(),
+                                       cps.checkpoint.getSegmentsList().stream().map(d -> Digest.from(d)),
+                                       Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()),
+                                       params.crowns());
+        var have = crown.compactWrapped();
+        var expected = Digest.from(cps.checkpoint.getCrown());
+        if (!have.equals(expected)) {
+            log.error("Invalid crown for checkpointed state have: {} expected: {} on: {}", have, expected,
+                      params.member());
+            throw new IllegalStateException(
+            "Invalid crown for checkpointed state have: %s expected: %s on: %s".formatted(have, expected,
+                                                                                          params.member()));
+        }
     }
 
     private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,

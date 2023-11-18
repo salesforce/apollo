@@ -367,7 +367,7 @@ public class HexBloom {
 
     @Override
     public String toString() {
-        return crowns().toString();
+        return "HexBloom%s".formatted(crowns().toString());
     }
 
     /**

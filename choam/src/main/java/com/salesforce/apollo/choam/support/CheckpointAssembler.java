@@ -10,6 +10,7 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.crypto.Digest;
@@ -19,7 +20,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVMap;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -71,8 +71,8 @@ public class CheckpointAssembler {
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
         if (checkpoint.getSegmentsCount() == 0) {
-            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                     member.getId());
+            log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getSegmentsCount(),
+                     Digest.from(checkpoint.getCrown()), member.getId());
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
             gossip(scheduler, duration);
@@ -98,8 +98,8 @@ public class CheckpointAssembler {
         }
         if (process(futureSailor.get())) {
             CheckpointState cs = new CheckpointState(checkpoint, state);
-            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                     member.getId());
+            log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getSegmentsCount(),
+                     Digest.from(checkpoint.getCrown()), member.getId());
             assembled.complete(cs);
             return false;
         }
@@ -110,8 +110,8 @@ public class CheckpointAssembler {
         if (assembled.isDone()) {
             return;
         }
-        log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                 member.getId());
+        log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getSegmentsCount(),
+                 Digest.from(checkpoint.getCrown()), member.getId());
         var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, result, destination) -> gossip(result),
