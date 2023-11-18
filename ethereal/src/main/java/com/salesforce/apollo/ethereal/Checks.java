@@ -16,18 +16,6 @@ import java.util.function.BiFunction;
  */
 public interface Checks {
 
-    static final List<BiFunction<Unit, Dag, Correctness>> ConsensusChecks                 = Arrays.asList(basicCorrectness(),
-                                                                                                          parentConsistency(),
-                                                                                                          noSelfForkingEvidence(),
-                                                                                                          forkerMuting());
-    static final int                                      MaxDtaBytesPerUnit              = (int) 2e6;
-    static final int                                      MaxRandomSourceDataBytesPerUnit = (int) 1e6;
-    static final int                                      MaxUnitsInChunk                 = (int) 1e6;
-    static final List<BiFunction<Unit, Dag, Correctness>> SetupChecks                     = Arrays.asList(basicCorrectness(),
-                                                                                                          parentConsistency(),
-                                                                                                          noLevelSkipping(),
-                                                                                                          noForks());
-
     static BiFunction<Unit, Dag, Correctness> basicCorrectness() {
         return (u, dag) -> {
             var parents = u.parents();

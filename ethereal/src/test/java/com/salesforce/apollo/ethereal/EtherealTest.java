@@ -33,7 +33,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -113,7 +115,6 @@ public class EtherealTest {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
-        List<ExecutorService> executors = new ArrayList<>();
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
         for (short i = 0; i < (short) NPROC; i++) {
@@ -160,13 +161,6 @@ public class EtherealTest {
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
             comms.forEach(e -> e.close(Duration.ofSeconds(1)));
-            executors.forEach(executor -> {
-                executor.shutdown();
-                try {
-                    executor.awaitTermination(1, TimeUnit.SECONDS);
-                } catch (InterruptedException e1) {
-                }
-            });
         }
 
         final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);
