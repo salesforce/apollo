@@ -70,7 +70,6 @@ public class CHOAM {
     private final        AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final        ReliableBroadcaster                                   combine;
     private final        CommonCommunications<Terminal, Concierge>             comm;
-    private final        ThreadPoolExecutor                                    consumer;
     private final        AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final        ExecutorService                                       executions;
     private final        AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -136,7 +135,6 @@ public class CHOAM {
                                             params.context().timeToLive());
         combine.register(i -> roundScheduler.tick());
         session = new Session(params, service());
-        consumer = Ethereal.consumer("CHOAM" + params.member().getId() + params.context().getId());
     }
 
     public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize) {
@@ -1199,7 +1197,7 @@ public class CHOAM {
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, consumer);
+            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, getLabel());
             producer.start();
         }
 
@@ -1244,7 +1242,7 @@ public class CHOAM {
                           params.member().getId());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                assembly = new GenesisAssembly(vc, comm, next.get().member, consumer);
+                assembly = new GenesisAssembly(vc, comm, next.get().member, getLabel());
                 nextViewId.set(params.genesisViewId());
             } else {
                 log.trace("No formation on: {}", params.member().getId());
@@ -1313,6 +1311,10 @@ public class CHOAM {
             }
             return validateRegeneration(hb);
         }
+    }
+
+    private String getLabel() {
+        return "CHOAM" + params.member().getId() + params.context().getId();
     }
 
     /** a synchronizer of the current committee */

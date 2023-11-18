@@ -59,11 +59,7 @@ public class EtherealTest {
 
     @Test
     public void context() throws Exception {
-        var consumers = new ArrayList<ThreadPoolExecutor>();
-        for (var i = 0; i < NPROC; i++) {
-            consumers.add(Ethereal.consumer(Integer.toString(i)));
-        }
-        one(0, consumers);
+        one(0);
     }
 
     @Test
@@ -71,18 +67,14 @@ public class EtherealTest {
         if (!LARGE_TESTS) {
             return;
         }
-        var consumers = new ArrayList<ThreadPoolExecutor>();
-        for (var i = 0; i < NPROC; i++) {
-            consumers.add(Ethereal.consumer(Integer.toString(i)));
-        }
         for (int i = 0; i < 10; i++) {
             System.out.println("Iteration: " + i);
-            one(i, consumers);
+            one(i);
             System.out.println();
         }
     }
 
-    private void one(int iteration, List<ThreadPoolExecutor> consumers)
+    private void one(int iteration)
     throws NoSuchAlgorithmException, InterruptedException, InvalidProtocolBufferException {
         final var gossipPeriod = Duration.ofMillis(5);
 
@@ -143,7 +135,7 @@ public class EtherealTest {
                 if (pid == 0) {
                     System.out.println("new epoch: " + ep);
                 }
-            }, consumers.get(i));
+            }, "Test: " + i);
 
             var gossiper = new ChRbcGossip(context, member, controller.processor(), com, metrics);
             gossipers.add(gossiper);
@@ -210,8 +202,7 @@ public class EtherealTest {
                                 "Iteration: " + iteration + ", mismatch at block: " + j + " unit: " + k + " process: "
                                 + i + " expected: " + a.get(k) + " received: " + b.get(k));
                             }
-                            outputOrder.add(
-                            new String(ByteMessage.parseFrom(a.get(k)).getContents().toByteArray()));
+                            outputOrder.add(new String(ByteMessage.parseFrom(a.get(k)).getContents().toByteArray()));
                         }
                     }
                 }

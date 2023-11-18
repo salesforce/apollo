@@ -66,7 +66,7 @@ public class GenesisAssembly implements Genesis {
     private volatile     HashedBlock           reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
-                           ThreadPoolExecutor executor) {
+                           String label) {
         view = vc;
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
@@ -103,7 +103,7 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch), executor);
+                                  epoch -> transitions.nextEpoch(epoch), label);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),

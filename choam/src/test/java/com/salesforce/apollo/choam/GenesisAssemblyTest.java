@@ -22,7 +22,6 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -42,7 +41,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -67,19 +65,23 @@ public class GenesisAssemblyTest {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (Member) e).toList();
+        List<Member> members = IntStream.range(0, cardinality)
+                                        .mapToObj(i -> stereotomy.newIdentifier())
+                                        .map(cpk -> new ControlledIdentifierMember(cpk))
+                                        .map(e -> (Member) e)
+                                        .toList();
         Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
-                .setProducer(ProducerParameters.newBuilder()
-                        .setGossipDuration(Duration.ofMillis(100))
-                        .build())
-                .setGossipDuration(Duration.ofMillis(10));
+                                              .setProducer(ProducerParameters.newBuilder()
+                                                                             .setGossipDuration(Duration.ofMillis(100))
+                                                                             .build())
+                                              .setGossipDuration(Duration.ofMillis(10));
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
 
@@ -92,10 +94,10 @@ public class GenesisAssemblyTest {
                     KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
                     final PubKey consensus = bs(keyPair.getPublic());
                     return ViewMember.newBuilder()
-                            .setId(m.getId().toDigeste())
-                            .setConsensusKey(consensus)
-                            .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
-                            .build();
+                                     .setId(m.getId().toDigeste())
+                                     .setConsensusKey(consensus)
+                                     .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
+                                     .build();
 
                 }
             });
@@ -108,27 +110,25 @@ public class GenesisAssemblyTest {
         }));
         CountDownLatch complete = new CountDownLatch(committee.activeCount());
         var comms = members.stream()
-                .collect(Collectors.toMap(m -> m,
-                        m -> communications.get(m)
-                                .create(m, base.getId(), servers.get(m),
-                                        servers.get(m)
-                                                .getClass()
-                                                .getCanonicalName(),
-                                        r -> new TerminalServer(communications.get(m)
-                                                .getClientIdentityProvider(),
-                                                null, r),
-                                        TerminalClient.getCreate(null),
-                                        Terminal.getLocalLoopback((SigningMember) m,
-                                                servers.get(m)))));
+                           .collect(Collectors.toMap(m -> m, m -> communications.get(m)
+                                                                                .create(m, base.getId(), servers.get(m),
+                                                                                        servers.get(m)
+                                                                                               .getClass()
+                                                                                               .getCanonicalName(),
+                                                                                        r -> new TerminalServer(
+                                                                                        communications.get(m)
+                                                                                                      .getClientIdentityProvider(),
+                                                                                        null, r),
+                                                                                        TerminalClient.getCreate(null),
+                                                                                        Terminal.getLocalLoopback(
+                                                                                        (SigningMember) m,
+                                                                                        servers.get(m)))));
         committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
-            var built = params.build(RuntimeParameters.newBuilder()
-                    .setContext(base)
-                    .setMember(sm)
-                    .setCommunications(router)
-                    .build());
+            var built = params.build(
+            RuntimeParameters.newBuilder().setContext(base).setMember(sm).setCommunications(router).build());
             BlockProducer reconfigure = new BlockProducer() {
 
                 @Override
@@ -139,7 +139,7 @@ public class GenesisAssemblyTest {
                 @Override
                 public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
                     return CHOAM.genesis(viewId, joining, previous, committee, previous, built, previous,
-                            Collections.emptyList());
+                                         Collections.emptyList());
                 }
 
                 @Override
@@ -168,11 +168,11 @@ public class GenesisAssemblyTest {
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());
             var vm = ViewMember.newBuilder()
-                    .setId(m.getId().toDigeste())
-                    .setConsensusKey(consensus)
-                    .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
-                    .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, Ethereal.consumer(m.getId().toString())));
+                               .setId(m.getId().toDigeste())
+                               .setConsensusKey(consensus)
+                               .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
+                               .build();
+            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, m.getId().toString()));
         });
 
         try {
