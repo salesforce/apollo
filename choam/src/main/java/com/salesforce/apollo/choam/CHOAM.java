@@ -8,15 +8,15 @@ package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.*;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesfoce.apollo.cryptography.proto.PubKey;
+import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.*;
 import com.salesforce.apollo.choam.fsm.Combine;
 import com.salesforce.apollo.choam.fsm.Combine.Merchantile;
@@ -25,16 +25,14 @@ import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.crypto.*;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.RoundScheduler;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
-import com.salesforce.apollo.membership.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
 import org.joou.ULong;
@@ -137,7 +135,7 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize) {
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initialCrown) {
         Digest stateHash = algo.getOrigin();
         long length = 0;
         if (state != null) {
@@ -149,10 +147,7 @@ public class CHOAM {
             }
             length = state.length();
         }
-        Checkpoint.Builder builder = Checkpoint.newBuilder()
-                                               .setByteSize(length)
-                                               .setSegmentSize(segmentSize)
-                                               .setStateHash(stateHash.toDigeste());
+        Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(segmentSize);
         if (state != null) {
             byte[] buff = new byte[segmentSize];
             try (FileInputStream fis = new FileInputStream(state)) {
@@ -167,7 +162,10 @@ public class CHOAM {
         }
         log.info("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
                  builder.getSegmentsCount(), stateHash);
-        return builder.build();
+
+        return builder.setCrown(
+        HexBloom.construct(builder.getSegmentsCount(), builder.getSegmentsList().stream().map(d -> Digest.from(d)),
+                           initialCrown, 2).toHexBloome()).build();
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
@@ -382,14 +380,14 @@ public class CHOAM {
             transitions.fail();
             return null;
         }
-        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize());
+        final HashedBlock c = checkpoint.get();
+        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize(), c.hash);
         if (cp == null) {
             transitions.fail();
             return null;
         }
 
         final HashedCertifiedBlock v = view.get();
-        final HashedBlock c = checkpoint.get();
         final Block block = Block.newBuilder()
                                  .setHeader(
                                  buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height().add(1), c.height(),
@@ -769,7 +767,7 @@ public class CHOAM {
     private Digest signatureHash(ByteString any) {
         CertifiedBlock cb;
         try {
-            cb =  CertifiedBlock.parseFrom(any);
+            cb = CertifiedBlock.parseFrom(any);
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException(e);
         }
@@ -932,6 +930,10 @@ public class CHOAM {
             }
         }
         pending.add(hcb);
+    }
+
+    private String getLabel() {
+        return "CHOAM" + params.member().getId() + params.context().getId();
     }
 
     public interface BlockProducer {
@@ -1311,10 +1313,6 @@ public class CHOAM {
             }
             return validateRegeneration(hb);
         }
-    }
-
-    private String getLabel() {
-        return "CHOAM" + params.member().getId() + params.context().getId();
     }
 
     /** a synchronizer of the current committee */
