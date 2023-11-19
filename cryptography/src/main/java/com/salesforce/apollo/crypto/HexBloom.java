@@ -26,11 +26,11 @@ import java.util.stream.Stream;
  * @author hal.hildebrand
  */
 public class HexBloom {
-
     public static final  double                   DEFAULT_FPR      = 0.0001;
     public static final  long                     DEFAULT_SEED     = Primes.PRIMES[666];
     private static final Function<Digest, Digest> IDENTITY         = d -> d;
     private static       int                      MINIMUM_BFF_CARD = 100;
+
     private final int                 cardinality;
     private final Digest[]            crowns;
     private       BloomFilter<Digest> membership;
@@ -107,8 +107,6 @@ public class HexBloom {
      * @param added             - digests added that are not present in the currentMembership list
      * @param crowns            - the current crown state corresponding to the currentMembership
      * @param removed           - digests removed that are present in the currentMembership list
-     * @param hashes            - the list of functions for computing the hash of a digest for a given crown
-     * @param fpr               - desired false positive rate for membership bloomfilter
      * @return the HexBloom representing the new state
      */
     public static HexBloom construct(int currentCount, Stream<Digest> currentMembership, List<Digest> added,
@@ -488,5 +486,56 @@ public class HexBloom {
 
     public List<Digest> wrappedCrowns(List<Function<Digest, Digest>> wrapingHash) {
         return IntStream.range(0, crowns.length).mapToObj(i -> wrapingHash.get(i).apply(crowns[i])).toList();
+    }
+
+    public static class Accumulator {
+        private final List<AtomicReference<Digest>>  accumulators;
+        private final int                            cardinality;
+        private final BloomFilter<Digest>            membership;
+        private final List<Function<Digest, Digest>> hashes;
+        private       int                            currentCount = 0;
+
+        public Accumulator(int cardinality, int crowns, Digest initial, double fpr) {
+            this(cardinality, hashes(crowns), initial, fpr);
+        }
+
+        public Accumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial, double fpr) {
+            if (cardinality < 0) {
+                throw new IllegalArgumentException(("Cardinality must be >= 0"));
+            }
+            if (crownHashes == null || crownHashes.isEmpty()) {
+                throw new IllegalArgumentException("Crown hashes must not be null or empty");
+            }
+            if (fpr <= 0) {
+                throw new IllegalArgumentException("False positive rate must be > 0");
+            }
+            this.cardinality = cardinality;
+            this.hashes = crownHashes;
+            membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
+            accumulators = IntStream.range(0, hashes.size())
+                                    .mapToObj(i -> hashes.get(i).apply(initial))
+                                    .map(d -> new AtomicReference<>(d))
+                                    .toList();
+        }
+
+        public Accumulator(int cardinality, int crowns, Digest initial) {
+            this(cardinality, crowns, initial, DEFAULT_FPR);
+        }
+
+        public void add(Digest digest) {
+            if (currentCount == cardinality) {
+                throw new IllegalArgumentException("Current count already equal to cardinality: " + cardinality);
+            }
+            currentCount++;
+            for (int i = 0; i < accumulators.size(); i++) {
+                accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), (a, b) -> a.xor(b));
+            }
+            membership.add(digest);
+        }
+
+        public HexBloom build() {
+            assert currentCount == cardinality : "Did not add all members, missing: " + (cardinality - currentCount);
+            return new HexBloom(cardinality, accumulators.stream().map(ar -> ar.get()).toList(), membership);
+        }
     }
 }

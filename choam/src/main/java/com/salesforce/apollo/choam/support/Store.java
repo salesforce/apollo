@@ -6,45 +6,32 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static com.salesforce.apollo.choam.support.HashedBlock.height;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.TreeMap;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.StreamSupport;
-
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.choam.proto.*;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.choam.proto.Block;
-import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.Certifications;
-import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Checkpoint;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.StreamSupport;
+
+import static com.salesforce.apollo.choam.support.HashedBlock.height;
 
 /**
  * Kind of a DAO for "nosql" block storage with MVStore from H2
  *
  * @author hal.hildebrand
- *
  */
 public class Store {
 
@@ -85,7 +72,7 @@ public class Store {
     public Iterator<ULong> blocksFrom(ULong from, ULong to, int max) {
         return new Iterator<>() {
             ULong next;
-            int   remaining = max;
+            int remaining = max;
 
             {
                 next = from;
@@ -155,8 +142,8 @@ public class Store {
         return blocks.store.openMap(String.format(CHECKPOINT_TEMPLATE, blockHeight));
     }
 
-    public void fetchBlocks(BloomFilter<ULong> blocksBff, Blocks.Builder replication, int max, ULong from,
-                            ULong to) throws IllegalStateException {
+    public void fetchBlocks(BloomFilter<ULong> blocksBff, Blocks.Builder replication, int max, ULong from, ULong to)
+    throws IllegalStateException {
         StreamSupport.stream(((Iterable<ULong>) () -> blocksFrom(from, to, max)).spliterator(), false)
                      .filter(s -> !blocksBff.contains(s))
                      .map(height -> getCertifiedBlock(height))
@@ -291,8 +278,8 @@ public class Store {
                 } catch (IOException e) {
                     throw new IllegalStateException("Error storing checkpoint " + blockHeight, e);
                 }
-                assert cp.size() == checkpoint.getSegmentsCount() : "Invalid number of segments: " + cp.size()
-                + " should be: " + checkpoint.getSegmentsCount();
+                assert cp.size() == checkpoint.getCount() : "Invalid number of segments: " + cp.size() + " should be: "
+                + checkpoint.getCount();
                 checkpoints.put(blockHeight, cp);
                 return cp;
             });
@@ -321,8 +308,9 @@ public class Store {
                 } else {
                     Digest pointer = new Digest(current.block.getHeader().getPrevious());
                     if (!prevHash.get().equals(pointer)) {
-                        throw new IllegalStateException(String.format("Invalid chain (%s, %s) block: %s has invalid previous hash: %s, expected: %s",
-                                                                      from, to, l, pointer, prevHash.get()));
+                        throw new IllegalStateException(
+                        String.format("Invalid chain (%s, %s) block: %s has invalid previous hash: %s, expected: %s",
+                                      from, to, l, pointer, prevHash.get()));
                     } else {
                         prevHash.set(current.hash);
                     }
@@ -349,8 +337,9 @@ public class Store {
                 next = ULong.valueOf(current.block.getHeader().getLastReconfig());
                 current = getBlock(next);
             } else {
-                throw new IllegalStateException(String.format("Invalid view chain (%s, %s) invalid: %s expected: %s have: %s",
-                                                              from, 0, current.height(), pointer, current.hash));
+                throw new IllegalStateException(
+                String.format("Invalid view chain (%s, %s) invalid: %s expected: %s have: %s", from, 0,
+                              current.height(), pointer, current.hash));
             }
         }
     }
@@ -362,6 +351,7 @@ public class Store {
     public Iterator<ULong> viewChainFrom(ULong from, ULong to) {
         return new Iterator<>() {
             ULong next;
+
             {
                 next = viewChain.get(from);
                 if (!viewChain.containsKey(next)) {

@@ -9,8 +9,8 @@ package com.salesforce.apollo.choam;
 import com.salesfoce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.Store;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author hal.hildebrand
@@ -32,6 +32,7 @@ public class TestChain {
 
     public TestChain anchor() {
         anchor = lastBlock;
+        LoggerFactory.getLogger(TestChain.class).debug("Anchor: {}", lastBlock.hash);
         return this;
     }
 
@@ -126,11 +127,12 @@ public class TestChain {
                                                                                                    .setCheckpoint(
                                                                                                    CHOAM.checkpoint(
                                                                                                    DigestAlgorithm.DEFAULT,
-                                                                                                   null, 0,
-                                                                                                   DigestAlgorithm.DEFAULT.getOrigin()))
+                                                                                                   null, 1,
+                                                                                                   checkpoint.hash))
                                                                                                    .build())
                                                                                     .build());
         store.put(lastBlock);
+        LoggerFactory.getLogger(TestChain.class).debug("Checkpoint: {}", lastBlock.hash);
         return lastBlock;
     }
 
@@ -161,6 +163,7 @@ public class TestChain {
                                                                                                    .build())
                                                                                     .build());
         store.put(lastBlock);
+        LoggerFactory.getLogger(TestChain.class).debug("Reconfigure: {}", lastBlock.hash);
         return lastBlock;
     }
 
@@ -193,6 +196,7 @@ public class TestChain {
                                                                                                      .build());
         store.put(block);
         lastBlock = block;
+        LoggerFactory.getLogger(TestChain.class).debug("Executions: {}", lastBlock.hash);
         return lastBlock;
     }
 }

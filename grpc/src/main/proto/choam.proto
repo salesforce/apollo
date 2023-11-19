@@ -76,8 +76,8 @@ message Reconfigure {
 message Checkpoint {
   int64 byteSize = 1;
   int32 segmentSize = 2;
-  crypto.Digeste crown = 3;
-  repeated crypto.Digeste segments = 4;
+  int32 count = 3;
+  crypto.HexBloome crown = 4;
 }
 
 message Executions {

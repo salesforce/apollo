@@ -125,8 +125,9 @@ public class Bootstrapper {
         store.put(checkpointView);
         assert !checkpointView.height()
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
-        log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash,
-                 params.member().getId());
+        log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
+                 HexBloom.from(checkpoint.block.getCheckpoint().getCrown()),
+                 Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()), params.member().getId());
 
         CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
@@ -135,7 +136,6 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration()).whenComplete((cps, t) -> {
-            validate(cps);
             log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member().getId());
             checkpointState = cps;
         });
@@ -148,22 +148,6 @@ public class Bootstrapper {
                       store.put(reconfigure);
                   });
         scheduleViewChainCompletion(new AtomicReference<>(checkpointView.height()), ULong.valueOf(0));
-    }
-
-    private void validate(CheckpointState cps) {
-        var crown = HexBloom.construct(cps.checkpoint.getSegmentsCount(),
-                                       cps.checkpoint.getSegmentsList().stream().map(d -> Digest.from(d)),
-                                       Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()),
-                                       params.crowns());
-        var have = crown.compactWrapped();
-        var expected = Digest.from(cps.checkpoint.getCrown());
-        if (!have.equals(expected)) {
-            log.error("Invalid crown for checkpointed state have: {} expected: {} on: {}", have, expected,
-                      params.member());
-            throw new IllegalStateException(
-            "Invalid crown for checkpointed state have: %s expected: %s on: %s".formatted(have, expected,
-                                                                                          params.member()));
-        }
     }
 
     private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,

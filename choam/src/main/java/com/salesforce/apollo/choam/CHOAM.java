@@ -135,31 +135,38 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initialCrown) {
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initial) {
+        assert segmentSize > 0 : "segment size must be > 0 : " + segmentSize;
         long length = 0;
         if (state != null) {
             length = state.length();
         }
-        Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(segmentSize);
+        int count = (int) (length / segmentSize);
+        if (length != 0 && count * segmentSize < length) {
+            count++;
+        }
+        var accumulator = new HexBloom.Accumulator(count, 2, initial);
+        Checkpoint.Builder builder = Checkpoint.newBuilder()
+                                               .setCount(count)
+                                               .setByteSize(length)
+                                               .setSegmentSize(segmentSize);
+
         if (state != null) {
             byte[] buff = new byte[segmentSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
                     ByteString segment = ByteString.copyFrom(buff, 0, read);
-                    builder.addSegments(algo.digest(segment).toDigeste());
+                    accumulator.add(algo.digest(segment));
                 }
             } catch (IOException e) {
                 log.error("Invalid checkpoint!", e);
                 return null;
             }
         }
-
-        var crown = HexBloom.construct(builder.getSegmentsCount(),
-                                       builder.getSegmentsList().stream().map(d -> Digest.from(d)), initialCrown, 2)
-                            .compactWrapped();
-        log.info("Checkpoint length: {} segment size: {} count: {} crown: {}", length, segmentSize,
-                 builder.getSegmentsCount(), crown);
-        return builder.setCrown(crown.toDigeste()).build();
+        var crown = accumulator.build();
+        log.info("Checkpoint length: {} segment size: {} count: {} crown: {} initial: {}", length, segmentSize,
+                 builder.getCount(), crown, initial);
+        return builder.setCrown(crown.toHexBloome()).build();
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,

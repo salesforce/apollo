@@ -67,7 +67,7 @@ public class CheckpointState {
 
     public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments) {
         List<Slice> slices = new ArrayList<>();
-        for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
+        for (int i = 0; i < checkpoint.getCount(); i++) {
             if (!bff.contains(i)) {
                 slices.add(Slice.newBuilder().setIndex(i).setBlock(ByteString.copyFrom(state.get(i))).build());
                 if (slices.size() >= maxSegments) {
