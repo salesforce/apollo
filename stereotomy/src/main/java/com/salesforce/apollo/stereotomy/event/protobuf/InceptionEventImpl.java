@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;

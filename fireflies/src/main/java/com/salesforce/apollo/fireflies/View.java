@@ -15,7 +15,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.*;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.utils.proto.Biff;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;

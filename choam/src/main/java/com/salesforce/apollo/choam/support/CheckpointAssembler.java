@@ -10,24 +10,23 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.HexBloom;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVMap;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,10 +48,10 @@ public class CheckpointAssembler {
     private final DigestAlgorithm                           digestAlgorithm;
     private final double                                    fpr;
     private final Duration                                  frequency;
-    private final List<Digest>                              hashes    = new ArrayList<>();
     private final ULong                                     height;
     private final SigningMember                             member;
     private final MVMap<Integer, byte[]>                    state;
+    private final HexBloom                                  diadem;
 
     public CheckpointAssembler(Duration frequency, ULong height, Checkpoint checkpoint, SigningMember member,
                                Store store, CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
@@ -66,14 +65,12 @@ public class CheckpointAssembler {
         this.digestAlgorithm = digestAlgorithm;
         this.frequency = frequency;
         state = store.createCheckpoint(height);
-        checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
+        diadem = HexBloom.from(checkpoint.getCrown());
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
-        if (checkpoint.getSegmentsCount() == 0) {
-            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                     member.getId());
-            assembled.complete(new CheckpointState(checkpoint, state));
+        if (checkpoint.getCount() == 0) {
+            assembled(new CheckpointState(checkpoint, state));
         } else {
             gossip(scheduler, duration);
         }
@@ -82,8 +79,8 @@ public class CheckpointAssembler {
 
     private CheckpointReplication buildRequest() {
         long seed = Entropy.nextBitsStreamLong();
-        BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
-        IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
+        BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getCount(), fpr);
+        IntStream.range(0, checkpoint.getCount()).filter(i -> state.containsKey(i)).forEach(i -> {
             segmentsBff.add(i);
         });
         return CheckpointReplication.newBuilder()
@@ -98,19 +95,23 @@ public class CheckpointAssembler {
         }
         if (process(futureSailor.get())) {
             CheckpointState cs = new CheckpointState(checkpoint, state);
-            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
-                     member.getId());
-            assembled.complete(cs);
+            assembled(cs);
             return false;
         }
         return true;
+    }
+
+    private void assembled(CheckpointState cs) {
+        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
+                 member.getId());
+        assembled.complete(cs);
     }
 
     private void gossip(ScheduledExecutorService scheduler, Duration duration) {
         if (assembled.isDone()) {
             return;
         }
-        log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+        log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
                  member.getId());
         var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
@@ -132,13 +133,10 @@ public class CheckpointAssembler {
     private boolean process(CheckpointSegments segments) {
         segments.getSegmentsList().forEach(segment -> {
             Digest hash = digestAlgorithm.digest(segment.getBlock());
-            int index = segment.getIndex();
-            if (index >= 0 && index < hashes.size()) {
-                if (hash.equals(hashes.get(index))) {
-                    state.computeIfAbsent(index, i -> segment.getBlock().toByteArray());
-                }
+            if (diadem.contains(hash)) {
+                state.computeIfAbsent(segment.getIndex(), i -> segment.getBlock().toByteArray());
             }
         });
-        return state.size() == hashes.size();
+        return state.size() == checkpoint.getCount();
     }
 }

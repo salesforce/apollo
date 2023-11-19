@@ -184,7 +184,7 @@ public class Producer {
     private final ViewContext                       view;
 
     public Producer(  ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
-                    CommonCommunications<Terminal, ?> comms, ThreadPoolExecutor consumer) {
+                    CommonCommunications<Terminal, ?> comms, String label) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
@@ -227,7 +227,7 @@ public class Producer {
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
                                   (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
-                                  consumer);
+                                  label);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());

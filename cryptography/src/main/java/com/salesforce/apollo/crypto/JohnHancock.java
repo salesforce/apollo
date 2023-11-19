@@ -18,7 +18,7 @@ import java.util.Objects;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.crypto.Verifier.Filtered;
 import com.salesforce.apollo.utils.Hex;
 

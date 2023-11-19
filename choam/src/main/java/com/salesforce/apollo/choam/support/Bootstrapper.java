@@ -10,18 +10,19 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.TreeMultiset;
 import com.salesfoce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.HexBloom;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import org.joou.ULong;
 import org.joou.Unsigned;
 import org.slf4j.Logger;
@@ -124,8 +125,9 @@ public class Bootstrapper {
         store.put(checkpointView);
         assert !checkpointView.height()
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
-        log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash,
-                 params.member().getId());
+        var diadem = HexBloom.from(checkpoint.block.getCheckpoint().getCrown());
+        log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
+                 diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()), params.member().getId());
 
         CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
@@ -134,7 +136,10 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration()).whenComplete((cps, t) -> {
-            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member().getId());
+            if (!cps.validate(diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()))) {
+                throw new IllegalStateException("Cannot validate checkpoint: " + checkpoint.height());
+            }
+            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem, params.member().getId());
             checkpointState = cps;
         });
         // reconstruct chain to genesis
@@ -142,9 +147,7 @@ public class Bootstrapper {
                   .stream()
                   .filter(cb -> cb.getBlock().hasReconfigure())
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .forEach(reconfigure -> {
-                      store.put(reconfigure);
-                  });
+                  .forEach(reconfigure -> store.put(reconfigure));
         scheduleViewChainCompletion(new AtomicReference<>(checkpointView.height()), ULong.valueOf(0));
     }
 

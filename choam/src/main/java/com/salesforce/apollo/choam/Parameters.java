@@ -49,7 +49,7 @@ import java.util.function.Supplier;
  */
 public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcaster.Parameters combine,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
-                         Digest genesisViewId, int checkpointBlockDelta, DigestAlgorithm digestAlgorithm,
+                         Digest genesisViewId, int checkpointBlockDelta, int crowns, DigestAlgorithm digestAlgorithm,
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
@@ -677,12 +677,21 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private int                              synchronizationCycles = 10;
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private int                              crowns                = 2;
+
+        public int getCrowns() {
+            return crowns;
+        }
+
+        public void setCrowns(int crowns) {
+            this.crowns = crowns;
+        }
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
-                                  checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
-                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder, submitPolicy,
-                                  checkpointSegmentSize, drainPolicy);
+                                  checkpointBlockDelta, crowns, digestAlgorithm, viewSigAlgorithm,
+                                  synchronizationCycles, regenerationCycles, bootstrap, producer, mvBuilder,
+                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy);
         }
 
         @Override

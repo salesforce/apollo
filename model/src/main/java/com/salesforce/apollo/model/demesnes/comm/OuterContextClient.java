@@ -10,7 +10,7 @@ import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.demesne.proto.OuterContextGrpc;
 import com.salesfoce.apollo.demesne.proto.OuterContextGrpc.OuterContextBlockingStub;
 import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 
 import io.grpc.ManagedChannel;
 

@@ -33,7 +33,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -59,11 +61,7 @@ public class EtherealTest {
 
     @Test
     public void context() throws Exception {
-        var consumers = new ArrayList<ThreadPoolExecutor>();
-        for (var i = 0; i < NPROC; i++) {
-            consumers.add(Ethereal.consumer(Integer.toString(i)));
-        }
-        one(0, consumers);
+        one(0);
     }
 
     @Test
@@ -71,18 +69,14 @@ public class EtherealTest {
         if (!LARGE_TESTS) {
             return;
         }
-        var consumers = new ArrayList<ThreadPoolExecutor>();
-        for (var i = 0; i < NPROC; i++) {
-            consumers.add(Ethereal.consumer(Integer.toString(i)));
-        }
         for (int i = 0; i < 10; i++) {
             System.out.println("Iteration: " + i);
-            one(i, consumers);
+            one(i);
             System.out.println();
         }
     }
 
-    private void one(int iteration, List<ThreadPoolExecutor> consumers)
+    private void one(int iteration)
     throws NoSuchAlgorithmException, InterruptedException, InvalidProtocolBufferException {
         final var gossipPeriod = Duration.ofMillis(5);
 
@@ -121,7 +115,6 @@ public class EtherealTest {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
-        List<ExecutorService> executors = new ArrayList<>();
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
         for (short i = 0; i < (short) NPROC; i++) {
@@ -143,7 +136,7 @@ public class EtherealTest {
                 if (pid == 0) {
                     System.out.println("new epoch: " + ep);
                 }
-            }, consumers.get(i));
+            }, "Test: " + i);
 
             var gossiper = new ChRbcGossip(context, member, controller.processor(), com, metrics);
             gossipers.add(gossiper);
@@ -168,13 +161,6 @@ public class EtherealTest {
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
             comms.forEach(e -> e.close(Duration.ofSeconds(1)));
-            executors.forEach(executor -> {
-                executor.shutdown();
-                try {
-                    executor.awaitTermination(1, TimeUnit.SECONDS);
-                } catch (InterruptedException e1) {
-                }
-            });
         }
 
         final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);
@@ -210,8 +196,7 @@ public class EtherealTest {
                                 "Iteration: " + iteration + ", mismatch at block: " + j + " unit: " + k + " process: "
                                 + i + " expected: " + a.get(k) + " received: " + b.get(k));
                             }
-                            outputOrder.add(
-                            new String(ByteMessage.parseFrom(a.get(k)).getContents().toByteArray()));
+                            outputOrder.add(new String(ByteMessage.parseFrom(a.get(k)).getContents().toByteArray()));
                         }
                     }
                 }

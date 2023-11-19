@@ -17,9 +17,9 @@ import java.util.Arrays;
 import java.util.Base64;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.Sig;
 
 /**
  * Qualifieed Base 64 KERI conversion for core crypto interop

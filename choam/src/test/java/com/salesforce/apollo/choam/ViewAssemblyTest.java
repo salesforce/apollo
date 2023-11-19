@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -193,7 +193,7 @@ public class ViewAssemblyTest {
             };
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
                                           dataSources.get(member), blocker, ep -> {
-            }, Ethereal.consumer(Integer.toString(i)));
+            }, Integer.toString(i));
 
             var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member), null);
             gossipers.add(gossiper);

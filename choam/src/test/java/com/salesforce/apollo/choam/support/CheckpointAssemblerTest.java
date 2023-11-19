@@ -94,7 +94,7 @@ public class CheckpointAssemblerTest {
                                                .toList();
         members.forEach(m -> context.activate(m));
 
-        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
+        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE, DigestAlgorithm.DEFAULT.getOrigin());
 
         SigningMember bootstrapping = members.get(0);
 

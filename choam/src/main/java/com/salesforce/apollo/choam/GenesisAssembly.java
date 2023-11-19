@@ -10,7 +10,7 @@ import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.*;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Genesis;
@@ -66,7 +66,7 @@ public class GenesisAssembly implements Genesis {
     private volatile     HashedBlock           reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
-                           ThreadPoolExecutor executor) {
+                           String label) {
         view = vc;
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
@@ -103,7 +103,7 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch), executor);
+                                  epoch -> transitions.nextEpoch(epoch), label);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),

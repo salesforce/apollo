@@ -6,7 +6,7 @@ option java_outer_classname = "StereotomyServicesProto";
 option objc_class_prefix = "Stereo";
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/empty.proto";
-import "util.proto";
+import "crypto.proto";
 import "stereotomy.proto";
 
 package stereotomy.services; 
@@ -51,7 +51,7 @@ service KERLService {
     rpc appendValidations (stereotomy.Validations ) returns (google.protobuf.Empty) {}
 
     rpc getAttachment (stereotomy.EventCoords) returns(Attachment) {}
-    rpc getKeyEvent (utils.Digeste ) returns(KeyEvent_) {}
+    rpc getKeyEvent (crypto.Digeste ) returns(KeyEvent_) {}
     rpc getKeyEventCoords (stereotomy.EventCoords) returns(KeyEvent_) {}
     rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}

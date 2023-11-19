@@ -9,7 +9,7 @@ import "google/protobuf/empty.proto";
 
 import "stereotomy.proto";
 import "stereotomy-services.proto";
-import "util.proto";
+import "crypto.proto";
 
 package thoth;
 
@@ -43,7 +43,7 @@ service Reconciliation {
 message Update {
     repeated stereotomy.KeyEventWithAttachmentAndValidations_ events = 1;
     repeated Interval intervals = 2;
-    utils.Biff have = 3;
+    crypto.Biff have = 3;
 }
 
 message Updating {
@@ -54,18 +54,18 @@ message Updating {
 message Intervals { 
     int32 ring = 1;
     repeated Interval intervals = 2;
-    utils.Biff have = 3;
+    crypto.Biff have = 3;
 }
 
 message Interval {
-    utils.Digeste start = 1;
-    utils.Digeste end = 2;
+    crypto.Digeste start = 1;
+    crypto.Digeste end = 2;
 }
 
 message ViewState {
-    utils.Digeste crown = 1;
-    utils.Digeste previous = 2;
-    utils.Biff roots = 3;
+    crypto.Digeste crown = 1;
+    crypto.Digeste previous = 2;
+    crypto.Biff roots = 3;
     int32 threshold = 4;
     stereotomy.Validations validations = 5;
 }

@@ -5,7 +5,7 @@ option java_package = "com.salesfoce.apollo.ethereal.proto";
 option java_outer_classname = "EtherealProto";
 option objc_class_prefix = "Ep";
 import "google/protobuf/empty.proto";
-import "util.proto";
+import "crypto.proto";
 
 package ethereal;
 
@@ -16,15 +16,15 @@ service Gossiper {
 
 message Gossip {
     int32 ring = 1;
-    utils.Biff have = 2;
+    crypto.Biff have = 2;
     repeated Have haves = 3;
 }
 
 message Have {
     int32 epoch = 1;
-    utils.Biff haveUnits = 2;
-    utils.Biff havePreVotes = 3;
-    utils.Biff haveCommits = 4;
+    crypto.Biff haveUnits = 2;
+    crypto.Biff havePreVotes = 3;
+    crypto.Biff haveCommits = 4;
 }
 
 message Missing {
@@ -38,7 +38,7 @@ message Missing {
 message Update {
     repeated PreUnit_s missing = 1;
     repeated PreUnit_s waiting = 2;
-    utils.Biff have = 3;
+    crypto.Biff have = 3;
     repeated Missing missings = 4;
 }
 
@@ -49,35 +49,35 @@ message ContextUpdate {
 
 message PreVote {
     int64 unit = 1;
-    utils.Digeste hash = 2;
+    crypto.Digeste hash = 2;
     int32 source = 3;
 }
 
 message Commit {
     int64 unit = 1;
-    utils.Digeste hash = 2;
+    crypto.Digeste hash = 2;
     int32 source = 3;
 }
 
 message SignedPreVote {
-    utils.Sig signature = 1;
+    crypto.Sig signature = 1;
     PreVote vote = 2;
 }
 
 message SignedCommit {
-    utils.Sig signature = 1;
+    crypto.Sig signature = 1;
     Commit commit = 2;
 }
 
 message EpochProof {
     Proof msg = 1;
     int32 owner = 2;
-    utils.Sig signature = 3;
+    crypto.Sig signature = 3;
 }
 
 message Proof {
     int64 encodedId = 1;
-    utils.Digeste hash = 2;
+    crypto.Digeste hash = 2;
 }
 
 message PreUnit_s {
@@ -85,10 +85,10 @@ message PreUnit_s {
     Crown_s crown = 2;
     bytes data = 3; 
     bytes salt = 4;
-    utils.Sig signature = 5;
+    crypto.Sig signature = 5;
 }
 
 message Crown_s {
     repeated int32 heights = 1;
-    utils.Digeste controlHash = 2;
+    crypto.Digeste controlHash = 2;
 }

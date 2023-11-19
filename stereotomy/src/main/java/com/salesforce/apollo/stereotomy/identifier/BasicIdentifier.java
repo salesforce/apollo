@@ -15,7 +15,7 @@ import java.security.PublicKey;
 import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;

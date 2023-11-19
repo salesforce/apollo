@@ -9,8 +9,8 @@ package com.salesforce.apollo.crypto;
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
-import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesfoce.apollo.utils.proto.Digeste.Builder;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste.Builder;
 import com.salesforce.apollo.utils.BUZ;
 import com.salesforce.apollo.utils.Hex;
 import com.salesforce.apollo.bloomFilters.Hash;

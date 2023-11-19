@@ -36,7 +36,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
-import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
