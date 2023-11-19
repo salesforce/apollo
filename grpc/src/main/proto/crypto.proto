@@ -8,70 +8,70 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 package crypto;
- 
+
 message Biff {
-        int32 m = 1;
-        int32 k = 2;
-        int64 seed = 3;
-        int32 type = 4;
-        repeated uint64 bits = 5;
+  int32 m = 1;
+  int32 k = 2;
+  int64 seed = 3;
+  int32 type = 4;
+  repeated uint64 bits = 5;
 }
 
 message Digeste {
-    int32 type = 1;
-    repeated uint64 hash = 2;
+  int32 type = 1;
+  repeated uint64 hash = 2;
 }
 
 message Sig {
-    int32 code = 1;
-    repeated bytes signatures = 2;
+  int32 code = 1;
+  repeated bytes signatures = 2;
 }
 
 message PubKey {
-    int32 code = 1;
-    bytes encoded = 2;
+  int32 code = 1;
+  bytes encoded = 2;
 }
 
 message Clock {
-    uint64 prefix = 1;
-    bytes counts = 2;
+  uint64 prefix = 1;
+  bytes counts = 2;
 }
 
 
 message StampedClock {
-    oneof stamp {
-        google.protobuf.Timestamp timestamp = 1;
-        uint32 int = 2;
-        uint64 long = 3;
-    }
-    Clock clock = 5;
+  oneof stamp {
+    google.protobuf.Timestamp timestamp = 1;
+    uint32 int = 2;
+    uint64 long = 3;
+  }
+  Clock clock = 5;
 }
- 
+
 message BloomeClock {
-    uint64 prefix = 1; 
-    int32 k = 2;
-    bytes counts = 3;
+  uint64 prefix = 1;
+  int32 k = 2;
+  bytes counts = 3;
 }
 
 message StampedBloomeClock {
-    BloomeClock clock = 1;
-    google.protobuf.Timestamp stamp = 2;
+  BloomeClock clock = 1;
+  google.protobuf.Timestamp stamp = 2;
 }
 
 message IntStampedBloomeClock {
-    BloomeClock clock = 1;
-    int32 stamp = 2;
+  BloomeClock clock = 1;
+  int32 stamp = 2;
 }
 
 message CausalMessage {
-    Digeste source = 1;
-    StampedClock clock = 2;
-    google.protobuf.Any content = 3;
-    repeated Digeste parents = 4;
+  Digeste source = 1;
+  StampedClock clock = 2;
+  google.protobuf.Any content = 3;
+  repeated Digeste parents = 4;
 }
 
 message HexBloome {
-    repeated Digeste crowns = 1;
-    Biff membership = 2;
-    int32 cardinality = 3;
+  int32 cardinality = 1;
+  repeated Digeste crowns = 2;
+  Biff membership = 3;
 }

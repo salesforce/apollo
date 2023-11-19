@@ -125,9 +125,9 @@ public class Bootstrapper {
         store.put(checkpointView);
         assert !checkpointView.height()
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
+        var diadem = HexBloom.from(checkpoint.block.getCheckpoint().getCrown());
         log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
-                 HexBloom.from(checkpoint.block.getCheckpoint().getCrown()),
-                 Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()), params.member().getId());
+                 diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()), params.member().getId());
 
         CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
@@ -136,7 +136,10 @@ public class Bootstrapper {
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration()).whenComplete((cps, t) -> {
-            log.info("Restored checkpoint: {} on: {}", checkpoint.height(), params.member().getId());
+            if (!cps.validate(diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()))) {
+                throw new IllegalStateException("Cannot validate checkpoint: " + checkpoint.height());
+            }
+            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem, params.member().getId());
             checkpointState = cps;
         });
         // reconstruct chain to genesis
@@ -144,9 +147,7 @@ public class Bootstrapper {
                   .stream()
                   .filter(cb -> cb.getBlock().hasReconfigure())
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .forEach(reconfigure -> {
-                      store.put(reconfigure);
-                  });
+                  .forEach(reconfigure -> store.put(reconfigure));
         scheduleViewChainCompletion(new AtomicReference<>(checkpointView.height()), ULong.valueOf(0));
     }
 

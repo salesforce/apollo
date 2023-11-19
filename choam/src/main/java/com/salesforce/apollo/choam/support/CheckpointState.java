@@ -10,8 +10,11 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.HexBloom;
 import com.salesforce.apollo.utils.Utils;
 import org.h2.mvstore.MVMap;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -76,5 +79,24 @@ public class CheckpointState {
             }
         }
         return slices;
+    }
+
+    public boolean validate(HexBloom diadem, Digest initial) {
+        var crowns = diadem.crowns();
+        var algorithm = crowns.get(0).getAlgorithm();
+        var accumulator = new HexBloom.Accumulator(diadem.getCardinality(), crowns.size(), initial);
+        state.keyIterator(0).forEachRemaining(i -> {
+            byte[] buf = state.get(i);
+            accumulator.add(algorithm.digest(buf));
+        });
+        for (int i = 0; i < crowns.size(); i++) {
+            var candidates = accumulator.wrappedCrowns();
+            if (!crowns.get(i).equals(candidates.get(i))) {
+                LoggerFactory.getLogger(CheckpointState.class)
+                             .warn("Crown[{}] expected: {} found: {}", i, crowns.get(i), candidates.get(i));
+                return false;
+            }
+        }
+        return true;
     }
 }

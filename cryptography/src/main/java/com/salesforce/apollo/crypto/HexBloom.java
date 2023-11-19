@@ -489,11 +489,10 @@ public class HexBloom {
     }
 
     public static class Accumulator {
-        private final List<AtomicReference<Digest>>  accumulators;
-        private final int                            cardinality;
-        private final BloomFilter<Digest>            membership;
-        private final List<Function<Digest, Digest>> hashes;
-        private       int                            currentCount = 0;
+        protected final List<AtomicReference<Digest>>  accumulators;
+        protected final int                            cardinality;
+        protected final List<Function<Digest, Digest>> hashes;
+        protected       int                            currentCount = 0;
 
         public Accumulator(int cardinality, int crowns, Digest initial, double fpr) {
             this(cardinality, hashes(crowns), initial, fpr);
@@ -511,7 +510,6 @@ public class HexBloom {
             }
             this.cardinality = cardinality;
             this.hashes = crownHashes;
-            membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
             accumulators = IntStream.range(0, hashes.size())
                                     .mapToObj(i -> hashes.get(i).apply(initial))
                                     .map(d -> new AtomicReference<>(d))
@@ -522,6 +520,16 @@ public class HexBloom {
             this(cardinality, crowns, initial, DEFAULT_FPR);
         }
 
+        public List<Digest> wrappedCrowns() {
+            return wrappedCrowns(hashWraps(accumulators.size()));
+        }
+
+        public List<Digest> wrappedCrowns(List<Function<Digest, Digest>> wrapingHash) {
+            return IntStream.range(0, accumulators.size())
+                            .mapToObj(i -> wrapingHash.get(i).apply(accumulators.get(i).get()))
+                            .toList();
+        }
+
         public void add(Digest digest) {
             if (currentCount == cardinality) {
                 throw new IllegalArgumentException("Current count already equal to cardinality: " + cardinality);
@@ -530,6 +538,36 @@ public class HexBloom {
             for (int i = 0; i < accumulators.size(); i++) {
                 accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), (a, b) -> a.xor(b));
             }
+        }
+
+        public List<Digest> crowns() {
+            return accumulators.stream().map(ar -> ar.get()).toList();
+        }
+
+        public List<Digest> wrapped() {
+            return accumulators.stream().map(ar -> ar.get()).toList();
+        }
+    }
+
+    public static class HexAccumulator extends Accumulator {
+        private final BloomFilter<Digest> membership;
+
+        public HexAccumulator(int cardinality, int crowns, Digest initial, double fpr) {
+            this(cardinality, hashes(crowns), initial, fpr);
+        }
+
+        public HexAccumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial, double fpr) {
+            super(cardinality, crownHashes, initial, fpr);
+            membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
+        }
+
+        public HexAccumulator(int cardinality, int crowns, Digest initial) {
+            this(cardinality, crowns, initial, DEFAULT_FPR);
+        }
+
+        @Override
+        public void add(Digest digest) {
+            super.add(digest);
             membership.add(digest);
         }
 

@@ -24,7 +24,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

@@ -70,9 +70,7 @@ public class CheckpointAssembler {
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
         if (checkpoint.getCount() == 0) {
-            log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
-                     member.getId());
-            assembled.complete(new CheckpointState(checkpoint, state));
+            assembled(new CheckpointState(checkpoint, state));
         } else {
             gossip(scheduler, duration);
         }
@@ -97,12 +95,16 @@ public class CheckpointAssembler {
         }
         if (process(futureSailor.get())) {
             CheckpointState cs = new CheckpointState(checkpoint, state);
-            log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
-                     member.getId());
-            assembled.complete(cs);
+            assembled(cs);
             return false;
         }
         return true;
+    }
+
+    private void assembled(CheckpointState cs) {
+        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
+                 member.getId());
+        assembled.complete(cs);
     }
 
     private void gossip(ScheduledExecutorService scheduler, Duration duration) {

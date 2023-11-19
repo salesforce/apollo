@@ -145,7 +145,7 @@ public class CHOAM {
         if (length != 0 && count * segmentSize < length) {
             count++;
         }
-        var accumulator = new HexBloom.Accumulator(count, 2, initial);
+        var accumulator = new HexBloom.HexAccumulator(count, 2, initial);
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setCount(count)
                                                .setByteSize(length)
@@ -166,7 +166,11 @@ public class CHOAM {
         var crown = accumulator.build();
         log.info("Checkpoint length: {} segment size: {} count: {} crown: {} initial: {}", length, segmentSize,
                  builder.getCount(), crown, initial);
-        return builder.setCrown(crown.toHexBloome()).build();
+        var cp = builder.setCrown(crown.toHexBloome()).build();
+
+        var deserialized = HexBloom.from(cp.getCrown());
+        log.info("Deserialized checkpoint crown: {} initial: {}", deserialized, initial);
+        return cp;
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
