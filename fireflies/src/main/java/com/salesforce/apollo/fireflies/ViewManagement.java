@@ -45,22 +45,24 @@ import java.util.stream.Collectors;
  * @author hal.hildebrand
  */
 public class ViewManagement {
-    private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
-    private final AtomicInteger                                 attempt      = new AtomicInteger();
-    private final Digest                                        bootstrapView;
-    private final Context<Participant>                          context;
-    private final DigestAlgorithm                               digestAlgo;
-    private final ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
-    private final FireflyMetrics                                metrics;
-    private final Node                                          node;
-    private final Parameters                                    params;
-    private final Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
-    private final View                                          view;
-    private final AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
-    private       boolean                                       bootstrap;
-    private       AtomicReference<Digest>                       currentView  = new AtomicReference<>();
-    private       AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
-    private       CompletableFuture<Void>                       onJoined;
+    private static final Logger                                        log          = LoggerFactory.getLogger(
+    ViewManagement.class);
+    private final        AtomicInteger                                 attempt      = new AtomicInteger();
+    private final        Digest                                        bootstrapView;
+    private final        Context<Participant>                          context;
+    private final        DigestAlgorithm                               digestAlgo;
+    private final        ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
+    private final        FireflyMetrics                                metrics;
+    private final        Node                                          node;
+    private final        Parameters                                    params;
+    private final        Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
+    private final        View                                          view;
+    private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
+    private              boolean                                       bootstrap;
+    private              AtomicReference<Digest>                       currentView  = new AtomicReference<>();
+    private              AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
+    private              CompletableFuture<Void>                       onJoined;
+
     ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
         this.node = node;
@@ -364,9 +366,8 @@ public class ViewManagement {
      * the gossip. Update the reply with the list of digests the view requires, as well as proposed updates based on the
      * inbound digests that the view has more recent information
      *
+     * @param bff
      * @param p
-     * @param from
-     * @param digests
      */
     JoinGossip processJoins(BloomFilter<Digest> bff, double p) {
         JoinGossip.Builder builder = processJoins(bff);

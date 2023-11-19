@@ -520,6 +520,30 @@ public class HexBloom {
             this(cardinality, crowns, initial, DEFAULT_FPR);
         }
 
+        /**
+         * @return the hash digest of the wrapped crowns
+         */
+        public Digest compactWrapped() {
+            return compactWrapped(hashWraps(accumulators.size()));
+        }
+
+        /**
+         * @return the hash digest of the wrapped crowns
+         */
+        public Digest compactWrapped(List<Function<Digest, Digest>> hashes) {
+            if (hashes.size() != accumulators.size()) {
+                throw new IllegalArgumentException(
+                "Size of supplied hash functions: " + hashes.size() + " must equal the # of crowns: "
+                + accumulators.size());
+            }
+            var algorithm = accumulators.get(0).get().getAlgorithm();
+            return IntStream.range(0, accumulators.size())
+                            .mapToObj(i -> hashes.get(i).apply(accumulators.get(i).get()))
+                            .toList()
+                            .stream()
+                            .reduce(algorithm.getOrigin(), (a, b) -> a.xor(b));
+        }
+
         public List<Digest> wrappedCrowns() {
             return wrappedCrowns(hashWraps(accumulators.size()));
         }
