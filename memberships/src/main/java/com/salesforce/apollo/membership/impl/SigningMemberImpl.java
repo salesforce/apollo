@@ -6,11 +6,6 @@
  */
 package com.salesforce.apollo.membership.impl;
 
-import java.io.InputStream;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.cert.X509Certificate;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -18,24 +13,28 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import org.joou.ULong;
+
+import java.io.InputStream;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
 
 /**
- * A signiner member of a view. This is a local member to the process that can
- * sign and assert things.
- * 
- * @author hal.hildebrand
+ * A signiner member of a view. This is a local member to the process that can sign and assert things.
  *
+ * @author hal.hildebrand
  */
 public class SigningMemberImpl extends MemberImpl implements SigningMember {
 
     private final Signer signer;
 
     /**
-     * @param member
+     * @param cert
      */
-    public SigningMemberImpl(CertificateWithPrivateKey cert) {
+    public SigningMemberImpl(CertificateWithPrivateKey cert, ULong sequenceNumber) {
         this(Member.getMemberIdentifier(cert.getX509Certificate()), cert.getX509Certificate(), cert.getPrivateKey(),
-             new SignerImpl(cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
+             new SignerImpl(cert.getPrivateKey(), sequenceNumber), cert.getX509Certificate().getPublicKey());
     }
 
     public SigningMemberImpl(Digest id, X509Certificate cert, PrivateKey certKey, Signer signer, PublicKey signerKey) {

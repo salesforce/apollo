@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.model;
 
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -45,6 +45,7 @@ import io.grpc.netty.NettyServerBuilder;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,7 +167,7 @@ public class ProcessDomain extends Domain {
             newSpec.setWitnesses(newWitnesses);
             var incp = demesne.inception(member.getIdentifier().getIdentifier().toIdent(), newSpec);
             var sigs = new HashMap<Integer, JohnHancock>();
-            sigs.put(0, new Signer.SignerImpl(witness.getPrivate()).sign(incp.toKeyEvent_().toByteString()));
+            sigs.put(0, new Signer.SignerImpl(witness.getPrivate(), ULong.MIN).sign(incp.toKeyEvent_().toByteString()));
             var attached = new com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl(sigs);
             var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(dht.digestAlgorithm()),
                                                 incp.getSequenceNumber().longValue());

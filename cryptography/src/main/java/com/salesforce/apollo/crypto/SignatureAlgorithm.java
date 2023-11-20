@@ -6,6 +6,11 @@
  */
 package com.salesforce.apollo.crypto;
 
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
+import com.salesforce.apollo.utils.BbBackedInputStream;
+import org.joou.ULong;
+
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.KeyPair;
@@ -16,16 +21,10 @@ import java.security.interfaces.EdECPrivateKey;
 import java.security.interfaces.EdECPublicKey;
 import java.security.spec.NamedParameterSpec;
 
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
-import com.salesforce.apollo.utils.BbBackedInputStream;
-
 /**
- * 
  * Ye Enumeration of ye olde thyme Signature alorithms.
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public enum SignatureAlgorithm {
 
@@ -78,13 +77,13 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHancock sign(PrivateKey[] privateKeys, InputStream is) {
-            return ops.sign(privateKeys, is);
+        public JohnHancock sign(ULong sequenceNumber, PrivateKey[] privateKeys, InputStream is) {
+            return ops.sign(privateKeys, is, sequenceNumber);
         }
 
         @Override
-        public JohnHancock signature(byte[] signatureBytes) {
-            return ops.signature(signatureBytes);
+        public JohnHancock signature(ULong sequenceNumber, byte[] signatureBytes) {
+            return ops.signature(signatureBytes, sequenceNumber);
         }
 
         @Override
@@ -163,13 +162,13 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHancock sign(PrivateKey[] privateKeys, InputStream is) {
-            return ops.sign(privateKeys, is);
+        public JohnHancock sign(ULong sequenceNumber, PrivateKey[] privateKeys, InputStream is) {
+            return ops.sign(privateKeys, is, sequenceNumber);
         }
 
         @Override
-        public JohnHancock signature(byte[] signatureBytes) {
-            return ops.signature(signatureBytes);
+        public JohnHancock signature(ULong sequenceNumber, byte[] signatureBytes) {
+            return ops.signature(signatureBytes, sequenceNumber);
         }
 
         @Override
@@ -197,9 +196,7 @@ public enum SignatureAlgorithm {
             return ops.verify(publicKey, bytes, message);
         }
 
-    },
-    NULL_SIGNATURE {
-
+    }, NULL_SIGNATURE {
         @Override
         public String algorithmName() {
             return "Null Algorithm";
@@ -246,8 +243,8 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public JohnHancock signature(byte[] signatureBytes) {
-            return new JohnHancock(NULL_SIGNATURE, signatureBytes);
+        public JohnHancock signature(ULong sequenceNumber, byte[] signatureBytes) {
+            return new JohnHancock(NULL_SIGNATURE, signatureBytes, sequenceNumber);
         }
 
         @Override
@@ -271,8 +268,8 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        JohnHancock sign(PrivateKey[] privateKeys, InputStream message) {
-            return new JohnHancock(NULL_SIGNATURE, new byte[64]);
+        JohnHancock sign(ULong sequenceNumber, PrivateKey[] privateKeys, InputStream message) {
+            return new JohnHancock(NULL_SIGNATURE, new byte[64], sequenceNumber);
         }
 
     };
@@ -283,43 +280,43 @@ public enum SignatureAlgorithm {
 
     public static SignatureAlgorithm fromSignatureCode(int i) {
         return switch (i) {
-        case 0:
-            throw new IllegalArgumentException("Unknown signature code: " + i);
-        case 1:
-            yield NULL_SIGNATURE;
-        case 2:
-            yield ED_25519;
-        case 3:
-            yield ED_448;
-        default:
-            throw new IllegalArgumentException("Unknown signature code: " + i);
+            case 0:
+                throw new IllegalArgumentException("Unknown signature code: " + i);
+            case 1:
+                yield NULL_SIGNATURE;
+            case 2:
+                yield ED_25519;
+            case 3:
+                yield ED_448;
+            default:
+                throw new IllegalArgumentException("Unknown signature code: " + i);
         };
     }
 
     public static SignatureAlgorithm lookup(PrivateKey privateKey) {
         return switch (privateKey.getAlgorithm()) {
-        case "EdDSA" -> lookupEd(((EdECPrivateKey) privateKey).getParams());
-        case "Ed25519" -> ED_25519;
-        case "Ed448" -> ED_448;
-        default -> throw new IllegalArgumentException("Unknown algorithm: " + privateKey.getAlgorithm());
+            case "EdDSA" -> lookupEd(((EdECPrivateKey) privateKey).getParams());
+            case "Ed25519" -> ED_25519;
+            case "Ed448" -> ED_448;
+            default -> throw new IllegalArgumentException("Unknown algorithm: " + privateKey.getAlgorithm());
         };
     }
 
     public static SignatureAlgorithm lookup(PublicKey publicKey) {
         return switch (publicKey.getAlgorithm()) {
-        case "EdDSA" -> lookupEd(((EdECPublicKey) publicKey).getParams());
-        case "Ed25519" -> ED_25519;
-        case "Ed448" -> ED_448;
-        default -> throw new IllegalArgumentException("Unknown algorithm: " + publicKey.getAlgorithm());
+            case "EdDSA" -> lookupEd(((EdECPublicKey) publicKey).getParams());
+            case "Ed25519" -> ED_25519;
+            case "Ed448" -> ED_448;
+            default -> throw new IllegalArgumentException("Unknown algorithm: " + publicKey.getAlgorithm());
         };
     }
 
     private static SignatureAlgorithm lookupEd(NamedParameterSpec params) {
         var curveName = params.getName();
         return switch (curveName.toLowerCase()) {
-        case "ed25519" -> ED_25519;
-        case "ed448" -> ED_448;
-        default -> throw new IllegalArgumentException("Unknown edwards curve: " + curveName);
+            case "ed25519" -> ED_25519;
+            case "ed448" -> ED_448;
+            default -> throw new IllegalArgumentException("Unknown edwards curve: " + curveName);
         };
     }
 
@@ -345,19 +342,19 @@ public enum SignatureAlgorithm {
 
     abstract public int publicKeyLength();
 
-    final public JohnHancock sign(PrivateKey privateKey, byte[]... message) {
-        return sign(new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(message));
+    final public JohnHancock sign(ULong sequenceNumber, PrivateKey privateKey, byte[]... message) {
+        return sign(sequenceNumber, new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(message));
     }
 
-    final public JohnHancock sign(PrivateKey privateKey, ByteBuffer... buffers) {
-        return sign(new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(buffers));
+    final public JohnHancock sign(ULong sequenceNumber, PrivateKey privateKey, ByteBuffer... buffers) {
+        return sign(sequenceNumber, new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(buffers));
     }
 
-    final public JohnHancock sign(PrivateKey privateKey, ByteString... buffers) {
-        return sign(new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(buffers));
+    final public JohnHancock sign(ULong sequenceNumber, PrivateKey privateKey, ByteString... buffers) {
+        return sign(sequenceNumber, new PrivateKey[] { privateKey }, BbBackedInputStream.aggregate(buffers));
     }
 
-    abstract public JohnHancock signature(byte[] signatureBytes);
+    abstract public JohnHancock signature(ULong sequenceNumber, byte[] signatureBytes);
 
     abstract public byte signatureCode();
 
@@ -379,7 +376,7 @@ public enum SignatureAlgorithm {
 
     abstract protected boolean verify(PublicKey publicKey, byte[] signature, InputStream message);
 
-    abstract JohnHancock sign(PrivateKey[] privateKeys, InputStream message);
+    abstract JohnHancock sign(ULong sequenceNumber, PrivateKey[] privateKeys, InputStream message);
 
     final boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
         return new DefaultVerifier(new PublicKey[] { publicKey }).verify(SigningThreshold.unweighted(1), signature,

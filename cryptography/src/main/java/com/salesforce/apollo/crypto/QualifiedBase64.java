@@ -1,31 +1,22 @@
 package com.salesforce.apollo.crypto;
 
-import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_256;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2B_512;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE2S_256;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE3_256;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.BLAKE3_512;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_256;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA2_512;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_256;
-import static com.salesforce.apollo.crypto.DigestAlgorithm.SHA3_512;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
-
-import java.security.PublicKey;
-import java.util.Arrays;
-import java.util.Base64;
-
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesfoce.apollo.cryptography.proto.PubKey;
 import com.salesfoce.apollo.cryptography.proto.Sig;
 
+import java.security.PublicKey;
+import java.util.Arrays;
+import java.util.Base64;
+
+import static com.salesforce.apollo.crypto.DigestAlgorithm.*;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
+import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
+
 /**
  * Qualifieed Base 64 KERI conversion for core crypto interop
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class QualifiedBase64 {
 
@@ -49,23 +40,27 @@ public class QualifiedBase64 {
         }
     }
 
+    protected QualifiedBase64() {
+        throw new IllegalStateException("Do not instantiate.");
+    }
+
     public static SignatureAlgorithm attachedSignatureAlgorithm(String code) {
         return switch (code.charAt(0)) {
-        case 'A' -> SignatureAlgorithm.ED_25519;
-        case '0' -> switch (code.charAt(1)) {
-        case 'A' -> SignatureAlgorithm.ED_448;
-        default -> throw new IllegalArgumentException("unknown code: " + code);
-        };
-        default -> throw new IllegalArgumentException("unknown code: " + code);
+            case 'A' -> SignatureAlgorithm.ED_25519;
+            case '0' -> switch (code.charAt(1)) {
+                case 'A' -> SignatureAlgorithm.ED_448;
+                default -> throw new IllegalArgumentException("unknown code: " + code);
+            };
+            default -> throw new IllegalArgumentException("unknown code: " + code);
         };
     }
 
     public static String attachedSignatureCode(SignatureAlgorithm algorithm, int index) {
         return switch (algorithm) {
-        case ED_25519 -> "A" + base64(index, 1);
-        case ED_448 -> "0A" + base64(index, 2);
-        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
-        default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
+            case ED_25519 -> "A" + base64(index, 1);
+            case ED_448 -> "0A" + base64(index, 2);
+            case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
+            default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
         };
     }
 
@@ -113,21 +108,21 @@ public class QualifiedBase64 {
         if (qb64.startsWith("0")) {
             var bytes = unbase64(qb64.substring(2));
             return switch (qb64.substring(1, 2)) {
-            case "D" -> new Digest(BLAKE3_512, bytes);
-            case "E" -> new Digest(SHA3_512, bytes);
-            case "F" -> new Digest(BLAKE2B_512, bytes);
-            case "G" -> new Digest(SHA2_512, bytes);
-            default -> throw new IllegalStateException("Unrecognized digest: " + qb64);
+                case "D" -> new Digest(BLAKE3_512, bytes);
+                case "E" -> new Digest(SHA3_512, bytes);
+                case "F" -> new Digest(BLAKE2B_512, bytes);
+                case "G" -> new Digest(SHA2_512, bytes);
+                default -> throw new IllegalStateException("Unrecognized digest: " + qb64);
             };
         } else if (!qb64.matches("^[0-6-]")) {
             var bytes = unbase64(qb64.substring(1));
             return switch (qb64.substring(0, 1)) {
-            case "E" -> new Digest(BLAKE3_256, bytes);
-            case "F" -> new Digest(BLAKE2B_256, bytes);
-            case "G" -> new Digest(BLAKE2S_256, bytes);
-            case "H" -> new Digest(SHA3_256, bytes);
-            case "I" -> new Digest(SHA2_256, bytes);
-            default -> throw new IllegalStateException("Unrecognized digest: " + qb64);
+                case "E" -> new Digest(BLAKE3_256, bytes);
+                case "F" -> new Digest(BLAKE2B_256, bytes);
+                case "G" -> new Digest(BLAKE2S_256, bytes);
+                case "H" -> new Digest(SHA3_256, bytes);
+                case "I" -> new Digest(SHA2_256, bytes);
+                default -> throw new IllegalStateException("Unrecognized digest: " + qb64);
             };
         } else {
             throw new IllegalStateException("Unrecognized digest: " + qb64);
@@ -136,25 +131,25 @@ public class QualifiedBase64 {
 
     public static String digestCode(DigestAlgorithm algorithm) {
         return switch (algorithm) {
-        case BLAKE2B_256 -> "F";
-        case BLAKE2B_512 -> "0F";
-        case BLAKE2S_256 -> "G";
-        case BLAKE3_256 -> "E";
-        case BLAKE3_512 -> "0D";
-        case SHA2_256 -> "I";
-        case SHA2_512 -> "0G";
-        case SHA3_256 -> "H";
-        case SHA3_512 -> "0E";
-        default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
+            case BLAKE2B_256 -> "F";
+            case BLAKE2B_512 -> "0F";
+            case BLAKE2S_256 -> "G";
+            case BLAKE3_256 -> "E";
+            case BLAKE3_512 -> "0D";
+            case SHA2_256 -> "I";
+            case SHA2_512 -> "0G";
+            case SHA3_256 -> "H";
+            case SHA3_512 -> "0E";
+            default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
         };
     }
 
     public static String nonTransferrableIdentifierCode(SignatureAlgorithm a) {
         return switch (a) {
-        case ED_25519 -> "B";
-        case ED_448 -> "1AAC";
-        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + a);
-        default -> throw new IllegalArgumentException("Unexpected value: " + a);
+            case ED_25519 -> "B";
+            case ED_448 -> "1AAC";
+            case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + a);
+            default -> throw new IllegalArgumentException("Unexpected value: " + a);
         };
     }
 
@@ -168,14 +163,14 @@ public class QualifiedBase64 {
         if (qb64.startsWith("1")) {
             var bytes = unbase64(qb64.substring(4));
             return switch (qb64.substring(1, 4)) {
-            case "AAD" -> ED_448.publicKey(bytes);
-            default -> throw new IllegalStateException("Unrecognized public key: " + qb64);
+                case "AAD" -> ED_448.publicKey(bytes);
+                default -> throw new IllegalStateException("Unrecognized public key: " + qb64);
             };
         } else if (!qb64.matches("^[0-6-]")) {
             var bytes = unbase64(qb64.substring(1));
             return switch (qb64.substring(0, 1)) {
-            case "D" -> ED_25519.publicKey(bytes);
-            default -> throw new IllegalStateException("Unrecognized public key: " + qb64);
+                case "D" -> ED_25519.publicKey(bytes);
+                default -> throw new IllegalStateException("Unrecognized public key: " + qb64);
             };
         } else {
             throw new IllegalStateException("Unrecognized public key: " + qb64);
@@ -184,17 +179,17 @@ public class QualifiedBase64 {
 
     public static SignatureAlgorithm publicKeyAlgorithm(String code) {
         return switch (code) {
-        case "D" -> SignatureAlgorithm.ED_25519;
-        case "1AAD" -> SignatureAlgorithm.ED_448;
-        default -> throw new IllegalArgumentException("unknown code: " + code);
+            case "D" -> SignatureAlgorithm.ED_25519;
+            case "1AAD" -> SignatureAlgorithm.ED_448;
+            default -> throw new IllegalArgumentException("unknown code: " + code);
         };
     }
 
     public static String publicKeyCode(SignatureAlgorithm a) {
         return switch (a) {
-        case ED_25519 -> "D";
-        case ED_448 -> "1AAD";
-        default -> throw new IllegalArgumentException("Unexpected value: " + a);
+            case ED_25519 -> "D";
+            case ED_448 -> "1AAD";
+            default -> throw new IllegalArgumentException("Unexpected value: " + a);
         };
     }
 
@@ -244,38 +239,20 @@ public class QualifiedBase64 {
         return new JohnHancock(s);
     }
 
-    public static JohnHancock signature(String qb64) {
-        if (qb64.startsWith("0")) {
-            var bytes = unbase64(qb64.substring(2));
-            return switch (qb64.substring(1, 2)) {
-            case "B" -> ED_25519.signature(bytes);
-            default -> throw new IllegalStateException("Unrecognized signature: " + qb64);
-            };
-        } else if (qb64.startsWith("1")) {
-            var bytes = unbase64(qb64.substring(4));
-            return switch (qb64.substring(1, 4)) {
-            case "AAE" -> ED_448.signature(bytes);
-            default -> throw new IllegalStateException("Unrecognized signature: " + qb64);
-            };
-        } else {
-            throw new IllegalStateException("Unrecognized signature: " + qb64);
-        }
-    }
-
     public static SignatureAlgorithm signatureAlgorithm(String code) {
         return switch (code) {
-        case "0B" -> SignatureAlgorithm.ED_25519;
-        case "1AAE" -> SignatureAlgorithm.ED_448;
-        default -> throw new IllegalArgumentException("unknown code: " + code);
+            case "0B" -> SignatureAlgorithm.ED_25519;
+            case "1AAE" -> SignatureAlgorithm.ED_448;
+            default -> throw new IllegalArgumentException("unknown code: " + code);
         };
     }
 
     public static String signatureCode(SignatureAlgorithm algorithm) {
         return switch (algorithm) {
-        case ED_25519 -> "0B";
-        case ED_448 -> "1AAE";
-        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
-        default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
+            case ED_25519 -> "0B";
+            case ED_448 -> "1AAE";
+            case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
+            default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
         };
     }
 
@@ -290,10 +267,6 @@ public class QualifiedBase64 {
             result += REVERSE_LOOKUP[chars[i]] << (6 * (chars.length - i - 1));
         }
         return result;
-    }
-
-    protected QualifiedBase64() {
-        throw new IllegalStateException("Do not instantiate.");
     }
 
 }

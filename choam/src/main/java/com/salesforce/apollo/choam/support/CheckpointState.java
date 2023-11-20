@@ -89,8 +89,8 @@ public class CheckpointState {
             byte[] buf = state.get(i);
             accumulator.add(algorithm.digest(buf));
         });
+        var candidates = accumulator.wrappedCrowns();
         for (int i = 0; i < crowns.size(); i++) {
-            var candidates = accumulator.wrappedCrowns();
             if (!crowns.get(i).equals(candidates.get(i))) {
                 LoggerFactory.getLogger(CheckpointState.class)
                              .warn("Crown[{}] expected: {} found: {}", i, crowns.get(i), candidates.get(i));

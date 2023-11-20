@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.Objects;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
@@ -15,12 +13,14 @@ import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 import com.salesforce.apollo.membership.Context;
+import org.joou.ULong;
+
+import java.util.Objects;
 
 /**
  * Configuration for an Ethereal instantiation.
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public record Config(String label, short nProc, int epochLength, short pid, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey,
@@ -45,7 +45,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
         private int              numberOfEpochs  = 3;
         private double           pByz            = -1;
         private short            pid;
-        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
+        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT, ULong.MIN);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
 
@@ -79,53 +79,13 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return bias;
         }
 
-        public DigestAlgorithm getDigestAlgorithm() {
-            return digestAlgorithm;
-        }
-
-        public int getEpochLength() {
-            return epochLength;
-        }
-
-        public double getFpr() {
-            return fpr;
-        }
-
-        public String getLabel() {
-            return label;
-        }
-
-        public short getnProc() {
-            return nProc;
-        }
-
-        public int getNumberOfEpochs() {
-            return numberOfEpochs;
-        }
-
-        public double getpByz() {
-            return pByz;
-        }
-
-        public short getPid() {
-            return pid;
-        }
-
-        public Signer getSigner() {
-            return signer;
-        }
-
-        public Verifier[] getVerifiers() {
-            return verifiers;
-        }
-
-        public WeakThresholdKey getWtk() {
-            return wtk;
-        }
-
         public Builder setBias(int bias) {
             this.bias = bias;
             return this;
+        }
+
+        public DigestAlgorithm getDigestAlgorithm() {
+            return digestAlgorithm;
         }
 
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
@@ -133,9 +93,17 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
+        public int getEpochLength() {
+            return epochLength;
+        }
+
         public Builder setEpochLength(int epochLength) {
             this.epochLength = epochLength;
             return this;
+        }
+
+        public double getFpr() {
+            return fpr;
         }
 
         public Builder setFpr(double fpr) {
@@ -143,9 +111,17 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
+        public String getLabel() {
+            return label;
+        }
+
         public Builder setLabel(String label) {
             this.label = label;
             return this;
+        }
+
+        public short getnProc() {
+            return nProc;
         }
 
         public Builder setnProc(short nProc) {
@@ -153,9 +129,17 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
+        public int getNumberOfEpochs() {
+            return numberOfEpochs;
+        }
+
         public Builder setNumberOfEpochs(int numberOfEpochs) {
             this.numberOfEpochs = numberOfEpochs;
             return this;
+        }
+
+        public double getpByz() {
+            return pByz;
         }
 
         public Builder setpByz(double pByz) {
@@ -163,9 +147,17 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
+        public short getPid() {
+            return pid;
+        }
+
         public Builder setPid(short pid) {
             this.pid = pid;
             return this;
+        }
+
+        public Signer getSigner() {
+            return signer;
         }
 
         public Builder setSigner(Signer signer) {
@@ -173,9 +165,17 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
+        public Verifier[] getVerifiers() {
+            return verifiers;
+        }
+
         public Builder setVerifiers(Verifier[] verifiers) {
             this.verifiers = verifiers;
             return this;
+        }
+
+        public WeakThresholdKey getWtk() {
+            return wtk;
         }
 
         public Builder setWtk(WeakThresholdKey wtk) {

@@ -6,22 +6,38 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.DecodedShare;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.Share;
+import org.joou.ULong;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface WeakThresholdKey {
+
+    static WeakThresholdKey seededWTK(short nProc, short pid, int i, Object object) {
+        return null;
+    }
+
+    JohnHancock combineShares(Collection<Share> shareSlice);
+
+    Share createShare(Proof proof, short pid);
+
+    Map<Short, Boolean> shareProviders();
+
+    int threshold();
+
+    boolean verifyShare(DecodedShare share);
+
+    boolean verifySignature(EpochProof decoded);
 
     class NoOpWeakThresholdKey implements WeakThresholdKey {
         private final Map<Short, Boolean> shareProviders = new HashMap<>();
@@ -33,12 +49,13 @@ public interface WeakThresholdKey {
 
         @Override
         public JohnHancock combineShares(Collection<Share> shareSlice) {
-            return shareSlice.size() >= threshold ? new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]) : null;
+            return shareSlice.size() >= threshold ? new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0], ULong.MIN)
+                                                  : null;
         }
 
         @Override
         public Share createShare(Proof proof, short pid) {
-            return new Share(pid, new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]));
+            return new Share(pid, new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0], ULong.MIN));
         }
 
         @Override
@@ -61,21 +78,5 @@ public interface WeakThresholdKey {
             return true;
         }
     }
-
-    static WeakThresholdKey seededWTK(short nProc, short pid, int i, Object object) {
-        return null;
-    }
-
-    JohnHancock combineShares(Collection<Share> shareSlice);
-
-    Share createShare(Proof proof, short pid);
-
-    Map<Short, Boolean> shareProviders();
-
-    int threshold();
-
-    boolean verifyShare(DecodedShare share);
-
-    boolean verifySignature(EpochProof decoded);
 
 }

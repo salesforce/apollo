@@ -35,7 +35,7 @@ public class Ani {
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
     private final Digest id;
-    private final KERL kerl;
+    private final KERL   kerl;
 
     public Ani(Digest id, KERL kerl) {
         this.id = id;
@@ -129,9 +129,11 @@ public class Ani {
                     signatures[entry.getKey()] = entry.getValue().getBytes()[0];
                 }
             }
-            witnessed = new JohnHancock(algo, signatures).verify(state.getSigningThreshold(), witnesses,
-                    BbBackedInputStream.aggregate(event.toKeyEvent_()
-                            .toByteString()));
+            witnessed = new JohnHancock(algo, signatures, state.getSequenceNumber()).verify(state.getSigningThreshold(),
+                                                                                            witnesses,
+                                                                                            BbBackedInputStream.aggregate(
+                                                                                            event.toKeyEvent_()
+                                                                                                 .toByteString()));
         }
         return witnessed;
     }

@@ -23,6 +23,7 @@ import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.h2.jdbc.JdbcConnection;
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
@@ -54,7 +55,7 @@ public class TestUniKERL {
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
         try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
-                database)) {
+                                                 database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "", false);
@@ -166,10 +167,10 @@ public class TestUniKERL {
                                      KeyPair nextKeyPair) {
 
         specification.addKey(initialKeyPair.getPublic())
-                .setSigningThreshold(unweighted(1))
-                .setNextKeys(List.of(nextKeyPair.getPublic()))
-                .setWitnesses(Collections.emptyList())
-                .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
+                     .setSigningThreshold(unweighted(1))
+                     .setNextKeys(List.of(nextKeyPair.getPublic()))
+                     .setWitnesses(Collections.emptyList())
+                     .setSigner(new SignerImpl(initialKeyPair.getPrivate(), ULong.MIN));
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
@@ -213,12 +214,12 @@ public class TestUniKERL {
                                    KeyPair nextKeyPair, ProtobufEventFactory factory) {
         var rotSpec = RotationSpecification.newBuilder();
         rotSpec.setIdentifier(prev.getIdentifier())
-                .setCurrentCoords(prev.getCoordinates())
-                .setCurrentDigest(prevDigest)
-                .setKey(prevNext.getPublic())
-                .setSigningThreshold(unweighted(1))
-                .setNextKeys(List.of(nextKeyPair.getPublic()))
-                .setSigner(new SignerImpl(prevNext.getPrivate()));
+               .setCurrentCoords(prev.getCoordinates())
+               .setCurrentDigest(prevDigest)
+               .setKey(prevNext.getPublic())
+               .setSigningThreshold(unweighted(1))
+               .setNextKeys(List.of(nextKeyPair.getPublic()))
+               .setSigner(new SignerImpl(prevNext.getPrivate(), ULong.MIN));
 
         RotationEvent rotation = factory.rotation(rotSpec.build(), false);
         return rotation;

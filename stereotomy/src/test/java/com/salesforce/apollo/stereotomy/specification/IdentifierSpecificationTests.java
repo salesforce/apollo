@@ -1,21 +1,21 @@
 package com.salesforce.apollo.stereotomy.specification;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import org.joou.ULong;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IdentifierSpecificationTests {
 
@@ -31,7 +31,7 @@ public class IdentifierSpecificationTests {
         this.deterministicRandom.setSeed(new byte[] { 0 });
 
         this.keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        this.signer = new SignerImpl(this.keyPair.getPrivate());
+        this.signer = new SignerImpl(this.keyPair.getPrivate(), ULong.MIN);
 
         this.keyPair2 = SignatureAlgorithm.ED_25519.generateKeyPair();
 
@@ -67,8 +67,8 @@ public class IdentifierSpecificationTests {
     public void testBuilderSigningThresholdWeighted() {
         var spec = IdentifierSpecification.newBuilder()
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), this.keyPair2.getPublic()))
-                                          .setNextKeys(Arrays.asList(this.keyPair.getPublic(),
-                                                                     this.keyPair2.getPublic()))
+                                          .setNextKeys(
+                                          Arrays.asList(this.keyPair.getPublic(), this.keyPair2.getPublic()))
                                           .setSigner(this.signer)
                                           .setSigningThreshold(SigningThreshold.weighted("1", "2"))
                                           .build();

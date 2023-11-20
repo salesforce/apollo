@@ -6,6 +6,13 @@
  */
 package com.salesforce.apollo.crypto;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.cryptography.proto.Sig;
+import com.salesforce.apollo.crypto.Verifier.Filtered;
+import com.salesforce.apollo.utils.Hex;
+import org.joou.ULong;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,20 +22,34 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.cryptography.proto.Sig;
-import com.salesforce.apollo.crypto.Verifier.Filtered;
-import com.salesforce.apollo.utils.Hex;
-
 /**
  * A signature
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class JohnHancock {
+
+    private final ULong              sequenceNumber;
+    private final SignatureAlgorithm algorithm;
+    private final byte[][]           bytes;
+
+    public JohnHancock(Sig sig) {
+        this.algorithm = SignatureAlgorithm.fromSignatureCode(sig.getCode());
+        bytes = new byte[sig.getSignaturesCount()][];
+        sequenceNumber = ULong.valueOf(sig.getSequenceNumber());
+        int i = 0;
+        sig.getSignaturesList().forEach(bs -> bytes[i] = bs.toByteArray());
+    }
+
+    public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes, ULong sequenceNumber) {
+        this(algorithm, new byte[][] { bytes }, sequenceNumber);
+    }
+
+    public JohnHancock(SignatureAlgorithm algorithm, byte[][] bytes, ULong sequenceNumber) {
+        this.algorithm = algorithm;
+        this.bytes = bytes;
+        this.sequenceNumber = sequenceNumber;
+    }
 
     public static JohnHancock from(Sig signature) {
         return new JohnHancock(signature);
@@ -36,25 +57,6 @@ public class JohnHancock {
 
     public static JohnHancock of(Sig signature) {
         return new JohnHancock(signature);
-    }
-
-    private final SignatureAlgorithm algorithm;
-    private final byte[][]           bytes;
-
-    public JohnHancock(Sig sig) {
-        this.algorithm = SignatureAlgorithm.fromSignatureCode(sig.getCode());
-        bytes = new byte[sig.getSignaturesCount()][];
-        int i = 0;
-        sig.getSignaturesList().forEach(bs -> bytes[i] = bs.toByteArray());
-    }
-
-    public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes) {
-        this(algorithm, new byte[][] { bytes });
-    }
-
-    public JohnHancock(SignatureAlgorithm algorithm, byte[][] bytes) {
-        this.algorithm = algorithm;
-        this.bytes = bytes;
     }
 
     @Override
@@ -87,7 +89,7 @@ public class JohnHancock {
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
         return new Filtered(SigningThreshold.thresholdMet(threshold, arrIndexes), arrIndexes.length,
-                            new JohnHancock(algorithm, filtered));
+                            new JohnHancock(algorithm, filtered, sequenceNumber));
     }
 
     public SignatureAlgorithm getAlgorithm() {
@@ -113,15 +115,15 @@ public class JohnHancock {
 
     public Digest toDigest(DigestAlgorithm digestAlgorithm) {
         if (digestAlgorithm.digestLength() * 2 != algorithm.signatureLength()) {
-            throw new IllegalArgumentException("Cannot convert to a hash, as digest and signature length are not compatible");
+            throw new IllegalArgumentException(
+            "Cannot convert to a hash, as digest and signature length are not compatible");
         }
         Digest combined = digestAlgorithm.getOrigin();
         for (byte[] segment : bytes) {
-            combined = combined.xor(new Digest(digestAlgorithm,
-                                               Arrays.copyOf(segment, digestAlgorithm.digestLength())));
-            combined = combined.xor(new Digest(digestAlgorithm,
-                                               Arrays.copyOfRange(segment, digestAlgorithm.digestLength(),
-                                                                  segment.length)));
+            combined = combined.xor(
+            new Digest(digestAlgorithm, Arrays.copyOf(segment, digestAlgorithm.digestLength())));
+            combined = combined.xor(
+            new Digest(digestAlgorithm, Arrays.copyOfRange(segment, digestAlgorithm.digestLength(), segment.length)));
         }
         return combined;
     }
@@ -129,6 +131,7 @@ public class JohnHancock {
     public Sig toSig() {
         return Sig.newBuilder()
                   .setCode(algorithm.signatureCode())
+                  .setSequenceNumber(sequenceNumber.longValue())
                   .addAllSignatures(Arrays.asList(bytes).stream().map(b -> ByteString.copyFrom(b)).toList())
                   .build();
     }

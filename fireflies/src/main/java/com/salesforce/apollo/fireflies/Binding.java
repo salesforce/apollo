@@ -10,8 +10,8 @@ import com.codahale.metrics.Timer;
 import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.fireflies.proto.*;
 import com.salesfoce.apollo.cryptography.proto.HexBloome;
+import com.salesfoce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -28,6 +28,7 @@ import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -331,7 +332,8 @@ class Binding {
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(
                                                      Node.createInitialMask(context).toByteArray())))
-                                        .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
+                                        .setSignature(
+                                        SignatureAlgorithm.NULL_SIGNATURE.sign(ULong.MIN, null, new byte[0]).toSig())
                                         .build();
         return new NoteWrapper(seedNote, digestAlgo);
     }

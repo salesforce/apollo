@@ -19,6 +19,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.stub.StreamObserver;
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -51,8 +52,8 @@ public class LocalServerTest {
 
     @Test
     public void smokin() throws Exception {
-        final var memberA = new SigningMemberImpl(Utils.getMember(0));
-        final var memberB = new SigningMemberImpl(Utils.getMember(1));
+        final var memberA = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
+        final var memberB = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
 
