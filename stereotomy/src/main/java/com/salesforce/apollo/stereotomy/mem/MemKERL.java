@@ -18,10 +18,11 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
+import org.joou.ULong;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
@@ -31,20 +32,22 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
  */
 public class MemKERL implements KERL {
 
-    private final DigestAlgorithm digestAlgorithm;
+    private final DigestAlgorithm                                           digestAlgorithm;
     // Order by <stateOrdering>
-    private final Map<String, KeyEvent> events = new ConcurrentHashMap<>();
-    private final Map<Digest, String> eventsByHash = new ConcurrentHashMap<>();
+    private final Map<String, KeyEvent>                                     events                   = new ConcurrentHashMap<>();
+    private final Map<Digest, String>                                       eventsByHash             = new ConcurrentHashMap<>();
     // Order by <stateOrdering>
-    private final Map<String, KeyState> keyState = new ConcurrentHashMap<>();
+    private final Map<String, KeyState>                                     keyState                 = new ConcurrentHashMap<>();
     // Order by <identifier>
-    private final Map<String, String> keyStateByIdentifier = new ConcurrentHashMap<>();
-    private final Map<String, Digest> locationToHash = new ConcurrentHashMap<>();
-    private final KeyEventProcessor processor = new KeyEventProcessor(this);
+    private final Map<String, String>                                       keyStateByIdentifier     = new ConcurrentHashMap<>();
+    private final Map<String, Digest>                                       locationToHash           = new ConcurrentHashMap<>();
+    private final Map<ULong, String>                                        sequenceNumberToLocation = new ConcurrentSkipListMap<>();
+    private final KeyEventProcessor                                         processor                = new KeyEventProcessor(
+    this);
     // Order by <receiptOrdering>
-    private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
+    private final Map<String, Attachment>                                   receipts                 = new ConcurrentHashMap<>();
     // Order by <coordinateOrdering>
-    private final Map<EventCoordinates, Map<EventCoordinates, JohnHancock>> validations = new ConcurrentHashMap<>();
+    private final Map<EventCoordinates, Map<EventCoordinates, JohnHancock>> validations              = new ConcurrentHashMap<>();
 
     public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
@@ -92,7 +95,7 @@ public class MemKERL implements KERL {
     public KeyState append(KeyEvent event) {
         final var newState = processor.process(event);
         append(event, newState);
-        return  newState;
+        return newState;
     }
 
     @Override
@@ -104,22 +107,21 @@ public class MemKERL implements KERL {
     @Override
     public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         var states = events.stream().map(event -> {
-                return append(event);
+            return append(event);
         }).toList();
         append(attachments);
         return states;
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                  Map<EventCoordinates, JohnHancock> v) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> v) {
         validations.put(coordinates, v);
         return null;
     }
 
     @Override
     public Attachment getAttachment(EventCoordinates coordinates) {
-        return  receipts.get(coordinateOrdering(coordinates));
+        return receipts.get(coordinateOrdering(coordinates));
     }
 
     @Override
@@ -150,11 +152,18 @@ public class MemKERL implements KERL {
         return validations.computeIfAbsent(coordinates, k -> Collections.emptyMap());
     }
 
+    @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        var location = sequenceNumberToLocation.get(sequenceNumber);
+        return location == null ? null : keyState.get(location);
+    }
+
     private void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
         eventsByHash.put(newState.getDigest(), coordinates);
         locationToHash.put(coordinates, newState.getDigest());
+        sequenceNumberToLocation.put(event.getCoordinates().getSequenceNumber(), coordinates);
         keyState.put(coordinates, newState);
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
     }

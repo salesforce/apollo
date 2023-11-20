@@ -9,76 +9,77 @@ import "google/protobuf/empty.proto";
 import "crypto.proto";
 import "stereotomy.proto";
 
-package stereotomy.services; 
+package stereotomy.services;
 
 message KeyStates {
-    repeated KeyState_ keyStates = 1;
+  repeated KeyState_ keyStates = 1;
 }
 
 message AttachmentsContext {
-    repeated AttachmentEvent attachments = 1;
+  repeated AttachmentEvent attachments = 1;
 }
 
 message KERLContext {
-    stereotomy.KERL_ kerl = 1;
-    repeated stereotomy.Validations validations = 2;
+  stereotomy.KERL_ kerl = 1;
+  repeated stereotomy.Validations validations = 2;
 }
 
 message KeyEventContext {
-    KeyEvent_ keyEvent = 1;
-    Validations validations = 2;
+  KeyEvent_ keyEvent = 1;
+  Validations validations = 2;
 }
 
 message KeyEventsContext {
-    repeated KeyEvent_ keyEvent = 1;
-    repeated stereotomy.Validations validations = 2;
+  repeated KeyEvent_ keyEvent = 1;
+  repeated stereotomy.Validations validations = 2;
 }
 
 message KeyEventWithAttachmentsContext {
-    repeated KeyEvent_ events = 1;
-    repeated AttachmentEvent attachments = 2;
+  repeated KeyEvent_ events = 1;
+  repeated AttachmentEvent attachments = 2;
 }
 
-message AttachmentEvents { 
-    repeated AttachmentEvent attachments = 1;
+message AttachmentEvents {
+  repeated AttachmentEvent attachments = 1;
 }
 
 service KERLService {
-    rpc append (KeyEventsContext) returns(KeyStates) {}
-    rpc appendKERL (KERLContext) returns(KeyStates) {}
-    rpc appendWithAttachments (KeyEventWithAttachmentsContext) returns(KeyStates) {}
-    rpc appendAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
-    rpc appendValidations (stereotomy.Validations ) returns (google.protobuf.Empty) {}
+  rpc append (KeyEventsContext) returns(KeyStates) {}
+  rpc appendKERL (KERLContext) returns(KeyStates) {}
+  rpc appendWithAttachments (KeyEventWithAttachmentsContext) returns(KeyStates) {}
+  rpc appendAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+  rpc appendValidations (stereotomy.Validations) returns (google.protobuf.Empty) {}
 
-    rpc getAttachment (stereotomy.EventCoords) returns(Attachment) {}
-    rpc getKeyEvent (crypto.Digeste ) returns(KeyEvent_) {}
-    rpc getKeyEventCoords (stereotomy.EventCoords) returns(KeyEvent_) {}
-    rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateWithAttachments (stereotomy.EventCoords) returns (stereotomy.KeyStateWithAttachments_) {}
-    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.EventCoords) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
-    rpc getKERL (stereotomy.Ident) returns (stereotomy.KERL_) {}
-    rpc getValidations (stereotomy.EventCoords) returns (stereotomy.Validations) {}
+  rpc getAttachment (stereotomy.EventCoords) returns(Attachment) {}
+  rpc getKeyEvent (crypto.Digeste) returns(KeyEvent_) {}
+  rpc getKeyEventCoords (stereotomy.EventCoords) returns(KeyEvent_) {}
+  rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateSeqNum (stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateWithAttachments (stereotomy.EventCoords) returns (stereotomy.KeyStateWithAttachments_) {}
+  rpc getKeyStateWithEndorsementsAndValidations (stereotomy.EventCoords) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
+  rpc getKERL (stereotomy.Ident) returns (stereotomy.KERL_) {}
+  rpc getValidations (stereotomy.EventCoords) returns (stereotomy.Validations) {}
 }
 
-service EventObserver { 
-    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
-    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
-    rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+service EventObserver {
+  rpc publish(KERLContext) returns(google.protobuf.Empty) {}
+  rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
+  rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
 }
 
 // Binding API for Resolver
 service Binder {
-    rpc bind(stereotomy.Binding ) returns(google.protobuf.Empty) {}
-    rpc unbind(stereotomy.Ident) returns(google.protobuf.Empty) {}
+  rpc bind(stereotomy.Binding) returns(google.protobuf.Empty) {}
+  rpc unbind(stereotomy.Ident) returns(google.protobuf.Empty) {}
 }
 
 // Resolver API
 service Resolver {
-    rpc lookup (stereotomy.Ident) returns (stereotomy.Binding) {}
+  rpc lookup (stereotomy.Ident) returns (stereotomy.Binding) {}
 }
 
 // Validator API
 service Validator {
-    rpc validate(KeyEventContext) returns (google.protobuf.BoolValue) {}
+  rpc validate(KeyEventContext) returns (google.protobuf.BoolValue) {}
 }

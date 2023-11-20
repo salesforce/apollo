@@ -21,6 +21,7 @@ import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidat
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,9 +46,13 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments = new ArrayList<>();
         k.getEventsList().stream().map(e -> ProtobufEventFactory.from(e)).forEach(ewa -> {
             events.add(ewa.event());
-            attachments.add(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(), ewa.attachments()));
+            attachments.add(
+            ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(), ewa.attachments()));
         });
-        return kerl.append(events, attachments).stream().map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_()).toList();
+        return kerl.append(events, attachments)
+                   .stream()
+                   .map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_())
+                   .toList();
     }
 
     @Override
@@ -58,23 +63,41 @@ public class ProtoKERLAdapter implements ProtoKERLService {
             events[i++] = event;
         }
         List<KeyState> keyStates = kerl.append(events);
-        return keyStates == null ? Collections.emptyList() : (keyStates.stream().map(ks -> ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_()).toList());
+        return keyStates == null ? Collections.emptyList() : (keyStates.stream()
+                                                                       .map(
+                                                                       ks -> ks == null ? KeyState_.getDefaultInstance()
+                                                                                        : ks.toKeyState_())
+                                                                       .toList());
     }
 
     @Override
     public List<KeyState_> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
-        return kerl.append(eventsList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList(), attachmentsList.stream().map(ae -> new AttachmentEventImpl(ae)).map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e).toList()).stream().map(ks -> ks == null ? null : ks.toKeyState_()).toList();
+        return kerl.append(eventsList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList(),
+                           attachmentsList.stream()
+                                          .map(ae -> new AttachmentEventImpl(ae))
+                                          .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
+                                          .toList()).stream().map(ks -> ks == null ? null : ks.toKeyState_()).toList();
     }
 
     @Override
     public Empty appendAttachments(List<AttachmentEvent> attachments) {
-        kerl.append(attachments.stream().map(e -> new AttachmentEventImpl(e)).map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e).toList());
+        kerl.append(attachments.stream()
+                               .map(e -> new AttachmentEventImpl(e))
+                               .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
+                               .toList());
         return Empty.getDefaultInstance();
     }
 
     @Override
     public Empty appendValidations(Validations validations) {
-        kerl.appendValidations(EventCoordinates.from(validations.getCoordinates()), validations.getValidationsList().stream().collect(Collectors.toMap(v -> EventCoordinates.from(v.getValidator()), v -> JohnHancock.from(v.getSignature()))));
+        kerl.appendValidations(EventCoordinates.from(validations.getCoordinates()), validations.getValidationsList()
+                                                                                               .stream()
+                                                                                               .collect(
+                                                                                               Collectors.toMap(
+                                                                                               v -> EventCoordinates.from(
+                                                                                               v.getValidator()),
+                                                                                               v -> JohnHancock.from(
+                                                                                               v.getSignature()))));
         return Empty.getDefaultInstance();
     }
 
@@ -107,6 +130,12 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     }
 
     @Override
+    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+        KeyState ks = kerl.getKeyState(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
+        return ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_();
+    }
+
+    @Override
     public KeyState_ getKeyState(Ident identifier) {
         KeyState ks = kerl.getKeyState(Identifier.from(identifier));
         return ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_();
@@ -120,14 +149,23 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
-        KeyStateWithEndorsementsAndValidations ks = kerl.getKeyStateWithEndorsementsAndValidations(EventCoordinates.from(coordinates));
+        KeyStateWithEndorsementsAndValidations ks = kerl.getKeyStateWithEndorsementsAndValidations(
+        EventCoordinates.from(coordinates));
         return ks == null ? KeyStateWithEndorsementsAndValidations_.getDefaultInstance() : ks.toKS();
     }
 
     @Override
     public Validations getValidations(EventCoords coords) {
         Map<EventCoordinates, JohnHancock> vs = kerl.getValidations(EventCoordinates.from(coords));
-        return Validations.newBuilder().addAllValidations(vs.entrySet().stream().map(e -> Validation_.newBuilder().setValidator(e.getKey().toEventCoords()).setSignature(e.getValue().toSig()).build()).toList()).build();
+        return Validations.newBuilder()
+                          .addAllValidations(vs.entrySet()
+                                               .stream()
+                                               .map(e -> Validation_.newBuilder()
+                                                                    .setValidator(e.getKey().toEventCoords())
+                                                                    .setSignature(e.getValue().toSig())
+                                                                    .build())
+                                               .toList())
+                          .build();
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

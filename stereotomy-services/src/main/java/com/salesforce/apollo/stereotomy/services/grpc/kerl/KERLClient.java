@@ -14,14 +14,21 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class KERLClient extends CommonKERLClient implements KERLService {
 
-    private final ManagedServerChannel  channel;
+    private final ManagedServerChannel channel;
+
     public KERLClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         super(KERLServiceGrpc.newBlockingStub(channel).withCompression("gzip"), metrics);
         this.channel = channel;
+    }
+
+    public static CreateClientCommunications<KERLService> getCreate(StereotomyMetrics metrics) {
+        return (c) -> {
+            return new KERLClient(c, metrics);
+        };
+
     }
 
     @Override
@@ -32,12 +39,5 @@ public class KERLClient extends CommonKERLClient implements KERLService {
     @Override
     public Member getMember() {
         return channel.getMember();
-    }
-
-    public static CreateClientCommunications<KERLService> getCreate(StereotomyMetrics metrics) {
-        return (c) -> {
-            return new KERLClient(c, metrics);
-        };
-    
     }
 }

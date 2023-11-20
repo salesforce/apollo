@@ -6,10 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
@@ -18,10 +14,13 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegatedKERL implements KERL {
     protected final KERL delegate;
@@ -51,8 +50,7 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                                     Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
         return delegate.appendValidations(coordinates, validations);
     }
 
@@ -87,7 +85,8 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
+    public KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(
+    EventCoordinates coordinates) {
         return delegate.getKeyStateWithEndorsementsAndValidations(coordinates);
     }
 
@@ -104,5 +103,10 @@ public class DelegatedKERL implements KERL {
     @Override
     public List<EventWithAttachments> kerl(Identifier identifier) {
         return delegate.kerl(identifier);
+    }
+
+    @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        return delegate.getKeyState(identifier, sequenceNumber);
     }
 }

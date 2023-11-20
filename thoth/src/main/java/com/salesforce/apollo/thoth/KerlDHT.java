@@ -40,6 +40,7 @@ import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.LoggingOutputStream.LogLevel;
 import com.salesforce.apollo.thoth.grpc.dht.DhtClient;
 import com.salesforce.apollo.thoth.grpc.dht.DhtServer;
 import com.salesforce.apollo.thoth.grpc.dht.DhtService;
@@ -48,7 +49,6 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationClient;
 import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationServer;
 import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.thoth.LoggingOutputStream.LogLevel;
 import liquibase.Liquibase;
 import liquibase.Scope;
 import liquibase.Scope.Attr;
@@ -60,6 +60,7 @@ import liquibase.ui.UIService;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -520,6 +521,50 @@ public class KerlDHT implements ProtoKERLService {
                                                                            .iterate(digest, null,
                                                                                     (link, r) -> link.getKeyState(
                                                                                     coordinates),
+                                                                                    () -> failedMajority(result,
+                                                                                                         maxCount(
+                                                                                                         gathered)),
+                                                                                    (tally, futureSailor, destination) -> read(
+                                                                                    result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    destination,
+                                                                                    "get key state for coordinates",
+                                                                                    KeyState_.getDefaultInstance()),
+                                                                                    t -> failedMajority(result,
+                                                                                                        maxCount(
+                                                                                                        gathered)));
+        try {
+            return result.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
+    }
+
+    @Override
+    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+        if (log.isInfoEnabled()) {
+            log.info("Get key state for: {} seq#: {} on: {}", Identifier.from(identifier),
+                     ULong.valueOf(sequenceNumber), member.getId());
+        }
+        if (identifier == null) {
+            return completeIt(KeyState_.getDefaultInstance());
+        }
+        Digest digest = digestAlgorithm().digest(identifier.toByteString());
+        if (digest == null) {
+            return completeIt(KeyState_.getDefaultInstance());
+        }
+        var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyState_>();
+        HashMultiset<KeyState_> gathered = HashMultiset.create();
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms).noDuplicates()
+                                                                           .iterate(digest, null,
+                                                                                    (link, r) -> link.getKeyState(
+                                                                                    identAndSeq),
                                                                                     () -> failedMajority(result,
                                                                                                          maxCount(
                                                                                                          gathered)),
@@ -1059,6 +1104,11 @@ public class KerlDHT implements ProtoKERLService {
         public KeyState_ getKeyState(EventCoords coordinates) {
             log.trace("get key state for coordinates on: {}", member.getId());
             return complete(k -> k.getKeyState(coordinates));
+        }
+
+        @Override
+        public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+            return null;
         }
 
         @Override

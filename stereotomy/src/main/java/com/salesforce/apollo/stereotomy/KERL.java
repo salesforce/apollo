@@ -15,6 +15,7 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -28,17 +29,16 @@ public interface KERL extends KEL {
 
     Void append(List<AttachmentEvent> events);
 
-    Void appendValidations(EventCoordinates coordinates,
-                           Map<EventCoordinates, JohnHancock> validations);
+    Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations);
 
-    default KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(EventCoordinates coordinates) {
+    default KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(
+    EventCoordinates coordinates) {
         var ks = getKeyStateWithAttachments(coordinates);
         if (ks != null) {
             return null;
         }
-        return KeyStateWithEndorsementsAndValidations.create(ks.state(),
-                ks.attachments().endorsements(),
-                getValidations(coordinates));
+        return KeyStateWithEndorsementsAndValidations.create(ks.state(), ks.attachments().endorsements(),
+                                                             getValidations(coordinates));
     }
 
     Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates);
@@ -53,8 +53,7 @@ public interface KERL extends KEL {
         return kerl(ke);
     }
 
-    private EventWithAttachments completeKerl(EventCoordinates c,
-                                              List<EventWithAttachments> result) {
+    private EventWithAttachments completeKerl(EventCoordinates c, List<EventWithAttachments> result) {
         if (c == null) {
             return null;
         }
@@ -79,6 +78,8 @@ public interface KERL extends KEL {
         return result;
     }
 
+    KeyState getKeyState(Identifier identifier, ULong sequenceNumber);
+
     record EventWithAttachments(KeyEvent event, Attachment attachments) {
 
         static EventWithAttachments fromBase64(String encoded) {
@@ -87,7 +88,8 @@ public interface KERL extends KEL {
             Attachment attachment = null;
             if (split.length == 3) {
                 try {
-                    attachment = Attachment.of(com.salesfoce.apollo.stereotomy.event.proto.Attachment.parseFrom(decoder.decode(split[2])));
+                    attachment = Attachment.of(
+                    com.salesfoce.apollo.stereotomy.event.proto.Attachment.parseFrom(decoder.decode(split[2])));
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalArgumentException("Invalid attachment: " + encoded);
                 }
@@ -95,7 +97,7 @@ public interface KERL extends KEL {
                 throw new IllegalArgumentException("Invalid encoding: " + encoded);
             }
             return new EventWithAttachments(ProtobufEventFactory.toKeyEvent(decoder.decode(split[1]), split[0]),
-                    attachment);
+                                            attachment);
         }
 
         public KeyEventWithAttachments toKeyEvente() {
@@ -109,11 +111,12 @@ public interface KERL extends KEL {
 
         public String toBase64() {
             var encoder = Base64.getUrlEncoder().withoutPadding();
-            var attachBytes = attachments == null ? com.salesfoce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
-                    .toByteArray()
-                    : attachments.toAttachemente().toByteArray();
-            var encoded = event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|"
-                    + encoder.encodeToString(attachBytes);
+            var attachBytes =
+            attachments == null ? com.salesfoce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
+                                                                                        .toByteArray()
+                                : attachments.toAttachemente().toByteArray();
+            var encoded =
+            event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|" + encoder.encodeToString(attachBytes);
             return encoded;
         }
     }

@@ -15,6 +15,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,8 +50,7 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                  Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
         try {
             return complete(kerl -> kerl.appendValidations(coordinates, validations));
         } catch (Throwable e) {
@@ -77,5 +77,10 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
             log.error("Cannot complete kerl", e);
             return null;
         }
+    }
+
+    @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        return complete(kerl -> kerl.getKeyState(identifier, sequenceNumber));
     }
 }

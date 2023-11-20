@@ -167,4 +167,8 @@ public class JohnHancock {
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
         return SigningThreshold.thresholdMet(threshold, arrIndexes);
     }
+
+    public ULong getSequenceNumber() {
+        return sequenceNumber;
+    }
 }

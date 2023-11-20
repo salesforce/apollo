@@ -19,6 +19,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import org.joou.ULong;
 
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
  */
 public class KERLAdapter implements KERL {
 
-    private final DigestAlgorithm algorithm;
+    private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;
 
     public KERLAdapter(ProtoKERLService kerl, DigestAlgorithm algorithm) {
@@ -45,8 +46,7 @@ public class KERLAdapter implements KERL {
             return null;
         }
         KeyState_ published = appended.getFirst();
-        return published.equals(KeyState_.getDefaultInstance())
-                ? null : new KeyStateImpl(published);
+        return published.equals(KeyState_.getDefaultInstance()) ? null : new KeyStateImpl(published);
     }
 
     @Override
@@ -57,31 +57,32 @@ public class KERLAdapter implements KERL {
 
     @Override
     public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
-        var l = kerl.append(events.stream().map(d -> d.toKeyEvent_()).toList(), attachments.stream().map(ae -> ae.toEvent_()).toList());
+        var l = kerl.append(events.stream().map(d -> d.toKeyEvent_()).toList(),
+                            attachments.stream().map(ae -> ae.toEvent_()).toList());
         return l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList();
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                  Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
         kerl.appendValidations(Validations.newBuilder()
-                .setCoordinates(coordinates.toEventCoords())
-                .addAllValidations(validations.entrySet()
-                        .stream()
-                        .map(e -> Validation_.newBuilder()
-                                .setValidator(e.getKey()
-                                        .toEventCoords())
-                                .setSignature(e.getValue()
-                                        .toSig())
-                                .build())
-                        .toList())
-                .build());
+                                          .setCoordinates(coordinates.toEventCoords())
+                                          .addAllValidations(validations.entrySet()
+                                                                        .stream()
+                                                                        .map(e -> Validation_.newBuilder()
+                                                                                             .setValidator(
+                                                                                             e.getKey().toEventCoords())
+                                                                                             .setSignature(
+                                                                                             e.getValue().toSig())
+                                                                                             .build())
+                                                                        .toList())
+                                          .build());
         return null;
     }
 
     @Override
     public Attachment getAttachment(EventCoordinates coordinates) {
-        com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment = kerl.getAttachment(coordinates.toEventCoords());
+        com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment = kerl.getAttachment(
+        coordinates.toEventCoords());
         return Attachment.of(attachment);
     }
 
@@ -120,11 +121,21 @@ public class KERLAdapter implements KERL {
         return v.getValidationsList()
                 .stream()
                 .collect(Collectors.toMap(val -> EventCoordinates.from(val.getValidator()),
-                        val -> JohnHancock.from(val.getSignature())));
+                                          val -> JohnHancock.from(val.getSignature())));
     }
 
     @Override
     public List<EventWithAttachments> kerl(Identifier identifier) {
-        return kerl.getKERL(identifier.toIdent()).getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList();
+        return kerl.getKERL(identifier.toIdent())
+                   .getEventsList()
+                   .stream()
+                   .map(kwa -> ProtobufEventFactory.from(kwa))
+                   .toList();
+    }
+
+    @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        var keyState = kerl.getKeyState(identifier.toIdent(), sequenceNumber.longValue());
+        return keyState == null ? null : new KeyStateImpl(keyState);
     }
 }

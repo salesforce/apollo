@@ -49,9 +49,9 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
  */
 public class StereotomyImpl implements Stereotomy {
     private static final Logger             log = LoggerFactory.getLogger(StereotomyImpl.class);
+    final                EventFactory       eventFactory;
+    final                KERL               kerl;
     private final        SecureRandom       entropy;
-    private final        EventFactory       eventFactory;
-    private final        KERL               kerl;
     private final        StereotomyKeyStore keyStore;
 
     public StereotomyImpl(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
