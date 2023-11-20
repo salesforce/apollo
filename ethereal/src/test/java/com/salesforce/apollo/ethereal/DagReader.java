@@ -6,26 +6,21 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.crypto.*;
+import com.salesforce.apollo.ethereal.Dag.Decoded;
+import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import org.joou.ULong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.security.KeyPair;
 import java.util.HashMap;
 import java.util.Scanner;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.ethereal.Dag.Decoded;
-import com.salesforce.apollo.ethereal.PreUnit.preUnit;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class DagReader {
     public static final KeyPair DEFAULT_KEYPAIR;
@@ -37,7 +32,7 @@ public class DagReader {
 
     static {
         DEFAULT_KEYPAIR = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        DEFAULT_SIGNER = new Signer.SignerImpl(DEFAULT_KEYPAIR.getPrivate());
+        DEFAULT_SIGNER = new Signer.SignerImpl(DEFAULT_KEYPAIR.getPrivate(), ULong.MIN);
     }
 
     public static void add(Dag dag, PreUnit pu) {

@@ -40,6 +40,7 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -307,7 +308,7 @@ abstract public class Domain {
         ByteBuffer buff = ByteBuffer.allocate(4);
         buff.putInt(0);
         buff.flip();
-        var signer = new Signer.MockSigner(params.viewSigAlgorithm());
+        var signer = new Signer.MockSigner(params.viewSigAlgorithm(), ULong.MIN);
         var digeste = params.digestAlgorithm().getOrigin().toDigeste();
         var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
                               message.toByteString().asReadOnlyByteBuffer());

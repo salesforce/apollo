@@ -27,6 +27,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -164,8 +165,8 @@ public class ViewAssemblyTest {
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
-                                               new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
-                                               null);
+                                               new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
+                                               validators, null);
             views.put(m, view);
             var ds = dataSources.get(m);
             var com = comms.get(m);

@@ -26,6 +26,7 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,8 +88,8 @@ public class EnclaveTest {
     public void smokin() throws Exception {
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var ctxB = DigestAlgorithm.DEFAULT.getLast().prefix(0x666);
-        var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
-        var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
+        var serverMember1 = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
+        var serverMember2 = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var bridge = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
 
         final var routes = new HashMap<String, DomainSocketAddress>();

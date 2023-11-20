@@ -9,6 +9,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -26,8 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RingCommunicationsTest {
     @Test
     public void smokin() throws Exception {
-        var serverMember1 = new SigningMemberImpl(Utils.getMember(0));
-        var serverMember2 = new SigningMemberImpl(Utils.getMember(1));
+        var serverMember1 = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
+        var serverMember2 = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         var pinged1 = new AtomicBoolean();
         var pinged2 = new AtomicBoolean();
 

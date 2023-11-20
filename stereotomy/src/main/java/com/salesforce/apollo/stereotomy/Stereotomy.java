@@ -6,22 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-
-import java.security.cert.X509Certificate;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-
-import javax.naming.InvalidNameException;
-import javax.naming.ldap.LdapName;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.cryptography.proto.Sig;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -33,16 +19,23 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * The Controller interface
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public interface Stereotomy {
-
-    record Decoded(EventCoordinates coordinates, JohnHancock signature) {}
 
     static Version currentVersion() {
         return new Version() {
@@ -90,7 +83,14 @@ public interface Stereotomy {
             getLogger().debug("Unable to deserialize key event coordinates", e);
             return Optional.empty();
         }
-        return Optional.of(new Decoded(keyCoords, signature(signature)));
+        Sig sig = null;
+        try {
+            sig = Sig.parseFrom(Base64.getUrlDecoder().decode(signature.getBytes()));
+        } catch (InvalidProtocolBufferException e) {
+            getLogger().debug("Unable to deserialize signature", e);
+            return Optional.empty();
+        }
+        return Optional.of(new Decoded(keyCoords, JohnHancock.from(sig)));
     }
 
     /**
@@ -122,46 +122,46 @@ public interface Stereotomy {
     /**
      * Answer the BoundIdentifier of the EventCoordinates
      */
-    <D extends Identifier>  BoundIdentifier<D> bindingOf(EventCoordinates coordinates);
+    <D extends Identifier> BoundIdentifier<D> bindingOf(EventCoordinates coordinates);
 
     /**
-     * Publish the delegated inception event, answering the future supplying the
-     * ControlledIdentifier for the new key state
+     * Publish the delegated inception event, answering the future supplying the ControlledIdentifier for the new key
+     * state
      *
      * @param delegation - the inception event for the new identifier
      * @param commitment - the attachment with the seal to the delegation event
      * @return
      */
-     ControlledIdentifier<SelfAddressingIdentifier> commit(DelegatedInceptionEvent delegation,
-                                                                             AttachmentEvent commitment);
+    ControlledIdentifier<SelfAddressingIdentifier> commit(DelegatedInceptionEvent delegation,
+                                                          AttachmentEvent commitment);
 
     /**
      * Answer the Controllable identifier
      */
-    <D extends Identifier>  ControlledIdentifier<D> controlOf(D identifier);
+    <D extends Identifier> ControlledIdentifier<D> controlOf(D identifier);
 
     DigestAlgorithm digestAlgorithm();
 
     /**
      * Answer the KeyState of the provided event coordinates
      */
-     KeyState getKeyState(EventCoordinates eventCoordinates);
+    KeyState getKeyState(EventCoordinates eventCoordinates);
 
     /**
      * Answer the KeyState of the key coordinates
      */
-    default  KeyState getKeyState(KeyCoordinates keyCoordinates) {
+    default KeyState getKeyState(KeyCoordinates keyCoordinates) {
         return getKeyState(keyCoordinates.getEstablishmentEvent());
     }
 
     /**
      * Answer the Verifier for the key coordinates
      */
-     Verifier getVerifier(KeyCoordinates coordinates);
+    Verifier getVerifier(KeyCoordinates coordinates);
 
     /**
      * Create but do no publish a new delegated identifier.
-     * 
+     *
      * @param controller    - the controlling identifier
      * @param specification - the specification for the delegated identifier
      * @return the created DelegatedInceptionEvent
@@ -170,21 +170,22 @@ public interface Stereotomy {
                                                    Builder<SelfAddressingIdentifier> specification);
 
     /**
-     * Answer a new ControlledIdentifier created from the
-     * {@link SelfAddressingIdentifier} prototype and Identifier.NONE as the base
-     * identifier
+     * Answer a new ControlledIdentifier created from the {@link SelfAddressingIdentifier} prototype and Identifier.NONE
+     * as the base identifier
      */
-     ControlledIdentifier<SelfAddressingIdentifier> newIdentifier();
+    ControlledIdentifier<SelfAddressingIdentifier> newIdentifier();
 
     /**
      * Answer a new delegated ControlledIdentifier
      */
-    <T extends Identifier>  ControlledIdentifier<T> newIdentifier(Identifier controller,
-                                                                                    Builder<T> specification);
+    <T extends Identifier> ControlledIdentifier<T> newIdentifier(Identifier controller, Builder<T> specification);
 
     /**
-     * Answer a new ControlledIdentifier created from the supplied specification
-     * prototype and Identifier.NONE as the base identifier
+     * Answer a new ControlledIdentifier created from the supplied specification prototype and Identifier.NONE as the
+     * base identifier
      */
-    <T extends Identifier>  ControlledIdentifier<T> newIdentifier(IdentifierSpecification.Builder<T> spec);
+    <T extends Identifier> ControlledIdentifier<T> newIdentifier(IdentifierSpecification.Builder<T> spec);
+
+    record Decoded(EventCoordinates coordinates, JohnHancock signature) {
+    }
 }

@@ -32,6 +32,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -77,7 +78,7 @@ public class AbstractDhtTest {
                      .setSigningThreshold(unweighted(1))
                      .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setWitnesses(Collections.emptyList())
-                     .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
+                     .setSigner(new SignerImpl(initialKeyPair.getPrivate(), ULong.MIN));
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
@@ -92,7 +93,7 @@ public class AbstractDhtTest {
                .setKey(prevNext.getPublic())
                .setSigningThreshold(unweighted(1))
                .setNextKeys(List.of(nextKeyPair.getPublic()))
-               .setSigner(new SignerImpl(prevNext.getPrivate()));
+               .setSigner(new SignerImpl(prevNext.getPrivate(), prev.getCoordinates().getSequenceNumber().add(1)));
 
         RotationEvent rotation = factory.rotation(rotSpec.build(), false);
         return rotation;

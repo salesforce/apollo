@@ -244,7 +244,7 @@ public class CHOAM {
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData,
                                                   DigestAlgorithm digestAlgo, SignatureAlgorithm sigAlgo) {
         var source = digestAlgo.getOrigin();
-        SignerImpl signer = new SignerImpl(sigAlgo.generateKeyPair().getPrivate());
+        SignerImpl signer = new SignerImpl(sigAlgo.generateKeyPair().getPrivate(), ULong.MIN);
         AtomicInteger nonce = new AtomicInteger();
         return initializationData.stream()
                                  .map(m -> (Message) m)
@@ -1203,7 +1203,7 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member().getId());
-            Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
+            Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate(), ULong.MIN);
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
             producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, getLabel());
             producer.start();
@@ -1248,7 +1248,7 @@ public class CHOAM {
                           params.digestAlgorithm().digest(c.consensusKeyPair.getPublic().getEncoded()),
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()),
                           params.member().getId());
-                Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
+                Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate(), ULong.MIN);
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
                 assembly = new GenesisAssembly(vc, comm, next.get().member, getLabel());
                 nextViewId.set(params.genesisViewId());
