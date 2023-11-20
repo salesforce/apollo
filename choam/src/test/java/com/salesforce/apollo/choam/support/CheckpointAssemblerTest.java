@@ -11,6 +11,7 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -25,7 +26,6 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
@@ -94,7 +94,8 @@ public class CheckpointAssemblerTest {
                                                .toList();
         members.forEach(m -> context.activate(m));
 
-        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE, DigestAlgorithm.DEFAULT.getOrigin());
+        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE,
+                                                 DigestAlgorithm.DEFAULT.getOrigin(), 2);
 
         SigningMember bootstrapping = members.get(0);
 
