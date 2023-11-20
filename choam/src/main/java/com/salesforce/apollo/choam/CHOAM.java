@@ -135,7 +135,7 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initial) {
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize, Digest initial, int crowns) {
         assert segmentSize > 0 : "segment size must be > 0 : " + segmentSize;
         long length = 0;
         if (state != null) {
@@ -145,7 +145,7 @@ public class CHOAM {
         if (length != 0 && count * segmentSize < length) {
             count++;
         }
-        var accumulator = new HexBloom.HexAccumulator(count, 2, initial);
+        var accumulator = new HexBloom.HexAccumulator(count, crowns, initial);
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setCount(count)
                                                .setByteSize(length)
@@ -386,7 +386,8 @@ public class CHOAM {
             return null;
         }
         final HashedBlock c = checkpoint.get();
-        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize(), c.hash);
+        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize(), c.hash,
+                                   params.crowns());
         if (cp == null) {
             transitions.fail();
             return null;
