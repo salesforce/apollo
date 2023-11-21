@@ -450,7 +450,9 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
+            //            var veri = new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this);
+            var veri = new Verifier.DefaultVerifier(getState().getKeys());
+            return Optional.of(veri);
         }
 
         @Override
@@ -533,7 +535,9 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
+            //            var veri = new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this);
+            var veri = new Verifier.DefaultVerifier(getState().getKeys());
+            return Optional.of(veri);
         }
 
         @Override

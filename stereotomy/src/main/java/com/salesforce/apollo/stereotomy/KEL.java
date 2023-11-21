@@ -14,6 +14,7 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,8 +33,8 @@ public interface KEL {
      * @return
      */
     default Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
-        return new Verifier.DefaultVerifier(getKeyState(coordinates.getEstablishmentEvent()).getKeys()
-                .get(coordinates.getKeyIndex()));
+        return new Verifier.DefaultVerifier(
+        getKeyState(coordinates.getEstablishmentEvent()).getKeys().get(coordinates.getKeyIndex()));
     }
 
     /**
@@ -49,8 +50,7 @@ public interface KEL {
     }
 
     /**
-     * Append the list of events and attachments. The events will be validated
-     * before inserted.
+     * Append the list of events and attachments. The events will be validated before inserted.
      */
     List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments);
 
@@ -88,6 +88,8 @@ public interface KEL {
     default KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
         return new KeyStateWithAttachments(getKeyState(coordinates), getAttachment(coordinates));
     }
+
+    KeyState getKeyState(Identifier identifier, ULong sequenceNumber);
 
     record KeyStateWithAttachments(KeyState state, Attachment attachments) {
         public static KeyStateWithAttachments from(KeyStateWithAttachments_ ksa) {

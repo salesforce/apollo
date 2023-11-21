@@ -4,10 +4,10 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.processing.Validator;
 import org.joou.ULong;
 
 import java.io.InputStream;
+import java.util.Optional;
 
 /**
  * A Verifier that uses the backing Stereotomy for keys used for Signature verification for the Identifier
@@ -30,21 +30,37 @@ public class StereotomyVerifier<D extends Identifier> implements Verifier {
 
     @Override
     public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        return null;
+        var verifier = verifierFor(signature.getSequenceNumber());
+        return verifier.isEmpty() ? new Filtered(false, 0,
+                                                 new JohnHancock(signature.getAlgorithm(), new byte[] {}, ULong.MIN))
+                                  : verifier.get().filtered(threshold, signature, message);
     }
 
     @Override
     public boolean verify(JohnHancock signature, InputStream message) {
-        return false;
+        var verifier = verifierFor(signature.getSequenceNumber());
+        return verifier.isEmpty() ? false : verifier.get().verify(signature, message);
     }
 
     @Override
     public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-        return false;
+        var verifier = verifierFor(signature.getSequenceNumber());
+        return verifier.isEmpty() ? false : verifier.get().verify(threshold, signature, message);
     }
 
-    private Validator validatorFor(ULong sequenceNumber) {
+    private Optional<Verifier> verifierFor(ULong sequenceNumber) {
         KeyState keyState = stereotomy.kerl.getKeyState(identifier, sequenceNumber);
-        return new KeyStateValidator(keyState);
+        if (keyState == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new DefaultVerifier(keyState.getKeys()));
+    }
+
+    public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+        KeyState keyState = stereotomy.kerl.getKeyState(coordinates);
+        if (keyState == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new DefaultVerifier(keyState.getKeys()));
     }
 }

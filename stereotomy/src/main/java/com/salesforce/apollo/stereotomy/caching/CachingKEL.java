@@ -22,6 +22,7 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,18 +42,18 @@ import java.util.function.Function;
  * @author hal.hildebrand
  */
 public class CachingKEL<K extends KEL> implements KEL {
-    private static final Logger log = LoggerFactory.getLogger(CachingKEL.class);
-    private final Function<Function<K, ?>, ?> kelSupplier;
-    private final LoadingCache<EventCoordinates, KeyEvent> keyCoords;
-    private final LoadingCache<EventCoordinates, KeyState> ksCoords;
+    private static final Logger                                   log = LoggerFactory.getLogger(CachingKEL.class);
+    private final        Function<Function<K, ?>, ?>              kelSupplier;
+    private final        LoadingCache<EventCoordinates, KeyEvent> keyCoords;
+    private final        LoadingCache<EventCoordinates, KeyState> ksCoords;
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier) {
         this(kelSupplier, defaultKsCoordsBuilder(), defaultEventCoordsBuilder());
     }
 
-    public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder, Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
+    public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
+                      Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
         ksCoords = builder.build(new CacheLoader<EventCoordinates, KeyState>() {
-
 
             @Override
             public @Nullable KeyState load(EventCoordinates key) throws Exception {
@@ -70,11 +71,19 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder() {
-        return Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(10)).removalListener((EventCoordinates coords, KeyEvent e, RemovalCause cause) -> log.trace("KeyEvent {} was removed ({})", coords, cause));
+        return Caffeine.newBuilder()
+                       .maximumSize(10_000)
+                       .expireAfterWrite(Duration.ofMinutes(10))
+                       .removalListener((EventCoordinates coords, KeyEvent e, RemovalCause cause) -> log.trace(
+                       "KeyEvent {} was removed ({})", coords, cause));
     }
 
     public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
-        return Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(10)).removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace("KeyState {} was removed ({})", coords, cause));
+        return Caffeine.newBuilder()
+                       .maximumSize(10_000)
+                       .expireAfterWrite(Duration.ofMinutes(10))
+                       .removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace(
+                       "KeyState {} was removed ({})", coords, cause));
     }
 
     public KeyState append(KeyEvent event) {
@@ -172,6 +181,16 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        try {
+            return complete(kel -> kel.getKeyState(identifier, sequenceNumber));
+        } catch (Throwable e) {
+            log.error("Cannot complete append", e);
+            return null;
+        }
+    }
+
+    @Override
     public Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
         try {
             return complete(kel -> kel.getVerifier(coordinates));
@@ -183,7 +202,8 @@ public class CachingKEL<K extends KEL> implements KEL {
 
     protected <T, I> T complete(Function<K, I> func) {
         try {
-            @SuppressWarnings("unchecked") final var result = (T) kelSupplier.apply(func);
+            @SuppressWarnings("unchecked")
+            final var result = (T) kelSupplier.apply(func);
             return result;
         } catch (Throwable t) {
             log.error("Error completing cache", t);

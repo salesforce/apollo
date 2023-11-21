@@ -12,9 +12,7 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.jooq.impl.DSL;
-import org.joou.ULong;
 
 import java.sql.Connection;
 import java.util.ArrayList;
@@ -67,11 +65,6 @@ public class UniKERLDirect extends UniKERL {
         dsl.transaction(ctx -> {
             appendValidations(DSL.using(ctx), coordinates, validations);
         });
-        return null;
-    }
-
-    @Override
-    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
         return null;
     }
 }

@@ -15,7 +15,6 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import org.joou.ULong;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -77,8 +76,6 @@ public interface KERL extends KEL {
         Collections.reverse(result);
         return result;
     }
-
-    KeyState getKeyState(Identifier identifier, ULong sequenceNumber);
 
     record EventWithAttachments(KeyEvent event, Attachment attachments) {
 
