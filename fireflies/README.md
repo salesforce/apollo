@@ -47,7 +47,7 @@ Apollo also implements the same  _amplification_  strategy of Rapid.  When a mem
 
 ## View Identity
 
-The  _crown_  of a View in Apollo Fireflies is defined by the set of digest IDs of the total membership XORd together.  The  _identity_  of the view is the digest value of  _crown.rehash()_  .
+Views are membership groups and are identified by a hash (32 bytes by default). The  _crown_  of a View in Apollo Fireflies is a HexBloom (see the cryptography module) and is defined by the set of digest IDs of the total membership XORd together.  The  _identity_  of the view is the the public rehashing of the crowns of the HexBloom.  This final rehashing of the crown becomes the View ID.  The integration of HexBloom into the calculation of the view id ensures that individual membership identities are authenticated in aggregate simply and compactly and validated with a strong binding through rehashing to produce the view identifier.  Group membership is strongly bound to the  _identifier_  of the View.  When the group membership set changes - i.e. members joining or leaving - the view identifier also changes.
 
 ## Liveness, Failure Detection and Monitoring
 
@@ -59,11 +59,11 @@ This is a crisp defintion of  _liveness_  that also matches the functional opera
 
 ## Current Limitations
 
-The system is mostly complete. Currently, only the super majority fast path consensus is implemented. Fall back consensus to appear at a later date.  Full bootstrap and join integration with Thoth pending.
+The system is mostly complete. Currently, only the super majority fast path consensus is implemented. Fall back consensus to appear at a later date.  Full bootstrap and join integration with Thoth is now complete and tested.
 
 ## Status
 
-Apollo Fireflies is mostly functionally complete and is MVP, but certainly quite a bit more scale testing and hardening is in order.  As Fireflies provides the secure communication base for the rest of the Apollo stack.
+Apollo Fireflies is functionally complete and is MVP, but certainly quite a bit more scale testing and hardening is always in order.
 
 __Current Functionality__
 * Byzantine intrusion tolerant secure communications overlay
@@ -74,7 +74,7 @@ __Current Functionality__
     * Node identity, validation and key managment managed via Stereotomy Identifiers
 * Certificate key rotation
     * provided by Stereotomy key rotation facilities
+* Identity bootstrapping
+     * provided by Gorgoneion module
 * Full generalization of key algorithms, hash and signing algorthm, etc
      * provided by Stereotomy and the crypto utils
-* Handling of the certificate authority certificate rotation
-    * provided by Stereotomy key rotation facilities
