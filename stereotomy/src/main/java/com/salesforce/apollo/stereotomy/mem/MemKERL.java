@@ -22,7 +22,6 @@ import org.joou.ULong;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
@@ -41,7 +40,7 @@ public class MemKERL implements KERL {
     // Order by <identifier>
     private final Map<String, String>                                       keyStateByIdentifier     = new ConcurrentHashMap<>();
     private final Map<String, Digest>                                       locationToHash           = new ConcurrentHashMap<>();
-    private final Map<ULong, String>                                        sequenceNumberToLocation = new ConcurrentSkipListMap<>();
+    private final Map<String, String>                                       sequenceNumberToLocation = new ConcurrentHashMap<>();
     private final KeyEventProcessor                                         processor                = new KeyEventProcessor(
     this);
     // Order by <receiptOrdering>
@@ -66,6 +65,10 @@ public class MemKERL implements KERL {
 
     public static String receiptDigestSuffix(EventCoordinates event, EventCoordinates signer) {
         return qb64(event.getDigest()) + ':' + qb64(signer.getDigest());
+    }
+
+    public static String locationOrdering(Identifier identifier, ULong sequenceNumber) {
+        return qb64(identifier) + ':' + sequenceNumber;
     }
 
     /**
@@ -154,7 +157,7 @@ public class MemKERL implements KERL {
 
     @Override
     public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
-        var location = sequenceNumberToLocation.get(sequenceNumber);
+        var location = sequenceNumberToLocation.get(locationOrdering(identifier, sequenceNumber));
         return location == null ? null : keyState.get(location);
     }
 
@@ -163,7 +166,7 @@ public class MemKERL implements KERL {
         events.put(coordinates, event);
         eventsByHash.put(newState.getDigest(), coordinates);
         locationToHash.put(coordinates, newState.getDigest());
-        sequenceNumberToLocation.put(event.getCoordinates().getSequenceNumber(), coordinates);
+        sequenceNumberToLocation.put(locationOrdering(event.getIdentifier(), event.getSequenceNumber()), coordinates);
         keyState.put(coordinates, newState);
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
     }

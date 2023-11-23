@@ -450,9 +450,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            //            var veri = new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this);
-            var veri = new Verifier.DefaultVerifier(getState().getKeys());
-            return Optional.of(veri);
+            return Optional.of(new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this));
         }
 
         @Override
@@ -531,13 +529,6 @@ public class StereotomyImpl implements Stereotomy {
         @Override
         public Signer getSigner() {
             return StereotomyImpl.this.getSigner(getState());
-        }
-
-        @Override
-        public Optional<Verifier> getVerifier() {
-            //            var veri = new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this);
-            var veri = new Verifier.DefaultVerifier(getState().getKeys());
-            return Optional.of(veri);
         }
 
         @Override

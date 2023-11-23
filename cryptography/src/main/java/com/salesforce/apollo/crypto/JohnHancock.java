@@ -139,7 +139,7 @@ public class JohnHancock {
     @Override
     public String toString() {
         return "Sig[" + Arrays.asList(bytes).stream().map(b -> Hex.hexSubString(b, 12)).toList() + ":"
-        + algorithm.signatureCode() + "]";
+        + algorithm.signatureCode() + " #" + sequenceNumber + "]";
     }
 
     public boolean verify(SigningThreshold threshold, Map<Integer, PublicKey> keys, InputStream input) {
