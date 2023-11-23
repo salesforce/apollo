@@ -51,6 +51,7 @@ public class Ani {
             @Override
             public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                      InputStream message) {
+
                 KeyState ks = kerl.getKeyState(coordinates);
                 var v = new Verifier.DefaultVerifier(ks.getKeys());
                 return v.filtered(threshold, signature, message);
@@ -94,14 +95,12 @@ public class Ani {
 
             @Override
             public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
-                EstablishmentEvent ke = (EstablishmentEvent) kerl.getKeyEvent(coordinates);
-                return Optional.ofNullable(new Verifier.DefaultVerifier(ke.getKeys()));
+                return Optional.of(new KerlVerifier<>(coordinates.getIdentifier(), kerl));
             }
 
             @Override
             public Optional<Verifier> verifierFor(Identifier identifier) {
-                EstablishmentEvent ke = (EstablishmentEvent) kerl.getKeyState(identifier);
-                return Optional.ofNullable(new Verifier.DefaultVerifier(ke.getKeys()));
+                return Optional.of(new KerlVerifier<>(identifier, kerl));
             }
         };
     }
@@ -147,4 +146,5 @@ public class Ani {
     private boolean validateKerl(KeyEvent event, Duration timeout) {
         return performKerlValidation(event.getCoordinates(), timeout);
     }
+
 }

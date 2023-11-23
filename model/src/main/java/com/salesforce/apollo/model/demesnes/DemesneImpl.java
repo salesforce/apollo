@@ -178,11 +178,9 @@ public class DemesneImpl implements Demesne {
     @Override
     public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = domain;
-        joining.forEach(coords -> {
-            EstablishmentEvent keyEvent;
-            keyEvent = (EstablishmentEvent) kerl.getKeyState(coords);
-            current.activate(new IdentifierMember(keyEvent));
-        });
+        joining.forEach(coords -> current.activate(
+        new IdentifierMember(coords.getIdentifier().getDigest(kerl.getDigestAlgorithm()),
+                             new KerlVerifier<>(coords.getIdentifier(), kerl))));
         leaving.forEach(id -> current.getContext().remove(id));
     }
 
