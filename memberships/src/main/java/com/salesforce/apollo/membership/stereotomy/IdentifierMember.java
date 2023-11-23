@@ -6,32 +6,25 @@
  */
 package com.salesforce.apollo.membership.stereotomy;
 
-import java.io.InputStream;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+
+import java.io.InputStream;
 
 /**
- * @author hal.hildebrand
  *
  */
 public class IdentifierMember implements Member {
 
-    private final EstablishmentEvent event;
-    private final Digest             id;
+    private final Verifier verifier;
+    private final Digest   id;
 
-    public IdentifierMember(EstablishmentEvent event) {
-        if (!(event.getIdentifier() instanceof SelfAddressingIdentifier)) {
-            throw new IllegalArgumentException("Event identifier must be self identifying: "
-            + event.getIdentifier().getClass());
-        }
-        this.event = event;
-        this.id = ((SelfAddressingIdentifier) event.getIdentifier()).getDigest();
+    public IdentifierMember(Digest id, Verifier verifier) {
+        this.id = id;
+        this.verifier = verifier;
     }
 
     @Override
@@ -80,6 +73,6 @@ public class IdentifierMember implements Member {
     }
 
     private Verifier verifier() {
-        return new DefaultVerifier(event.getKeys());
+        return verifier;
     }
 }

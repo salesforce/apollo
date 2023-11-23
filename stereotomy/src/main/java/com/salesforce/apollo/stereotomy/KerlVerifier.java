@@ -14,14 +14,14 @@ import java.util.Optional;
  *
  * @author hal.hildebrand
  **/
-public class StereotomyVerifier<D extends Identifier> implements Verifier {
+public class KerlVerifier<D extends Identifier> implements Verifier {
 
-    private final D              identifier;
-    private final StereotomyImpl stereotomy;
+    private final D    identifier;
+    private final KERL kerl;
 
-    public StereotomyVerifier(D identifier, StereotomyImpl stereotomy) {
+    public KerlVerifier(D identifier, KERL kerl) {
         this.identifier = identifier;
-        this.stereotomy = stereotomy;
+        this.kerl = kerl;
     }
 
     public D identifier() {
@@ -49,7 +49,7 @@ public class StereotomyVerifier<D extends Identifier> implements Verifier {
     }
 
     private Optional<Verifier> verifierFor(ULong sequenceNumber) {
-        KeyState keyState = stereotomy.kerl.getKeyState(identifier, sequenceNumber);
+        KeyState keyState = kerl.getKeyState(identifier, sequenceNumber);
         if (keyState == null) {
             return Optional.empty();
         }
@@ -57,7 +57,7 @@ public class StereotomyVerifier<D extends Identifier> implements Verifier {
     }
 
     public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
-        KeyState keyState = stereotomy.kerl.getKeyState(coordinates);
+        KeyState keyState = kerl.getKeyState(coordinates);
         if (keyState == null) {
             return Optional.empty();
         }

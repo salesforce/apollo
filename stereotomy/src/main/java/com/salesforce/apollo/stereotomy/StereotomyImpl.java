@@ -450,7 +450,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this));
+            return Optional.of(new KerlVerifier<D>(getIdentifier(), kerl));
         }
 
         @Override

@@ -26,8 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A controlled identifier, representing the current state of the identifier at
- * all times.
+ * A controlled identifier, representing the current state of the identifier at all times.
  *
  * @author hal.hildebrand
  */
@@ -74,13 +73,11 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     <I extends Identifier> ControlledIdentifier<I> newIdentifier(Builder<I> newBuilder);
 
     /**
-     * Provision a certificate that encodes this identifier using a generated Basic
-     * Identifier. The certificate returned is signed by this self same generated
-     * basic identifier
+     * Provision a certificate that encodes this identifier using a generated Basic Identifier. The certificate returned
+     * is signed by this self same generated basic identifier
      * <p>
-     * A new key pair is generated and this becomes the signing key of the
-     * certificate. This new public key is then signed by this identifier's current
-     * key state's key(s)..
+     * A new key pair is generated and this becomes the signing key of the certificate. This new public key is then
+     * signed by this identifier's current key state's key(s)..
      * <p>
      * The values are encoded into the SubjectDN of the certificate as follows:
      * <ul>
@@ -89,25 +86,21 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * generated public key that signs the certificate</li>
      * </ul>
      *
-     * @param validFrom          - the Instant which the generated certificate
-     *                           becomes valid
-     * @param valid              - how long the certificate will be valid
-     * @param extensions         - any extra stuff to put into ye pot
-     * @param signatureAlgorithm - the sig algorithm to use
-     * @return a CertificateWithPrivateKey that is self signed by the public key of
-     * the X509Certificate
+     * @param validFrom  - the Instant which the generated certificate becomes valid
+     * @param valid      - how long the certificate will be valid
+     * @param extensions - any extra stuff to put into ye pot
+     * @param algo       - the sig algorithm to use
+     * @return a CertificateWithPrivateKey that is self-signed by the public key of the X509Certificate
      */
-    CertificateWithPrivateKey provision(Instant validFrom, Duration valid,
-                                        List<CertExtension> extensions, SignatureAlgorithm algo);
+    CertificateWithPrivateKey provision(Instant validFrom, Duration valid, List<CertExtension> extensions,
+                                        SignatureAlgorithm algo);
 
     /**
-     * Provision a certificate that encodes this identifier using a generated Basic
-     * Identifier. The certificate returned is signed by this self same generated
-     * basic identifier
+     * Provision a certificate that encodes this identifier using a generated Basic Identifier. The certificate returned
+     * is signed by this self same generated basic identifier
      * <p>
-     * A new key pair is generated and this becomes the signing key of the
-     * certificate. This new public key is then signed by this identifier's current
-     * key state's key(s).
+     * A new key pair is generated and this becomes the signing key of the certificate. This new public key is then
+     * signed by this identifier's current key state's key(s).
      * <p>
      * The values are encoded into the SubjectDN of the certificate as follows:
      * <ul>
@@ -116,15 +109,12 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * generated public key that signs the certificate</li>
      * </ul>
      *
-     * @param validFrom          - the Instant which the generated certificate
-     *                           becomes valid
-     * @param valid              - how long the certificate will be valid
-     * @param signatureAlgorithm - the sig algorithm to use
-     * @return a CertificateWithPrivateKey that is self signed by the public key of
-     * the X509Certificate
+     * @param validFrom - the Instant which the generated certificate becomes valid
+     * @param valid     - how long the certificate will be valid
+     * @param algo      - the sig algorithm to use
+     * @return a CertificateWithPrivateKey that is self-signed by the public key of the X509Certificate
      */
-    default CertificateWithPrivateKey provision(Instant validFrom, Duration valid,
-                                                SignatureAlgorithm algo) {
+    default CertificateWithPrivateKey provision(Instant validFrom, Duration valid, SignatureAlgorithm algo) {
         return provision(validFrom, valid, Collections.emptyList(), algo);
     }
 
