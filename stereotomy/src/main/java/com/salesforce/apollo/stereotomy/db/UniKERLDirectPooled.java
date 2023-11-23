@@ -20,6 +20,7 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.joou.ULong;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
@@ -37,7 +38,8 @@ import java.util.Map;
 public class UniKERLDirectPooled {
 
     private final JdbcConnectionPool connectionPool;
-    private final DigestAlgorithm digestAlgorithm;
+    private final DigestAlgorithm    digestAlgorithm;
+
     public UniKERLDirectPooled(JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm) {
         this.connectionPool = connectionPool;
         this.digestAlgorithm = digestAlgorithm;
@@ -86,8 +88,7 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public Void appendValidations(EventCoordinates coordinates,
-                                      Map<EventCoordinates, JohnHancock> validations) {
+        public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
             return kerl.appendValidations(coordinates, validations);
         }
 
@@ -148,6 +149,11 @@ public class UniKERLDirectPooled {
         @Override
         public List<EventWithAttachments> kerl(Identifier identifier) {
             return kerl.kerl(identifier);
+        }
+
+        @Override
+        public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+            return kerl.getKeyState(identifier, sequenceNumber);
         }
     }
 }

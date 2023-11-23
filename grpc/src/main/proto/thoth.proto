@@ -14,58 +14,59 @@ import "crypto.proto";
 package thoth;
 
 service KerlDht {
-    rpc append (stereotomy.services.KeyEventsContext) returns (stereotomy.services.KeyStates) {}
-    rpc appendKERL (stereotomy.services.KERLContext) returns (stereotomy.services.KeyStates) {}
-    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (stereotomy.services.KeyStates) {}
-    rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
-    rpc appendValidations (stereotomy.Validations) returns (google.protobuf.Empty) {}
-    
-    rpc getAttachment (stereotomy.EventCoords) returns (stereotomy.Attachment) {}
-    rpc getKeyEventCoords (stereotomy.EventCoords) returns (stereotomy.KeyEvent_) {}
-    rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
-    rpc getKeyStateWithAttachments (stereotomy.EventCoords) returns (stereotomy.KeyStateWithAttachments_) {}
-    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.EventCoords) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
-    rpc getKERL (stereotomy.Ident) returns (stereotomy.KERL_) {}
-    rpc getValidations (stereotomy.EventCoords) returns (stereotomy.Validations) {}
+  rpc append (stereotomy.services.KeyEventsContext) returns (stereotomy.services.KeyStates) {}
+  rpc appendKERL (stereotomy.services.KERLContext) returns (stereotomy.services.KeyStates) {}
+  rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (stereotomy.services.KeyStates) {}
+  rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
+  rpc appendValidations (stereotomy.Validations) returns (google.protobuf.Empty) {}
+
+  rpc getAttachment (stereotomy.EventCoords) returns (stereotomy.Attachment) {}
+  rpc getKeyEventCoords (stereotomy.EventCoords) returns (stereotomy.KeyEvent_) {}
+  rpc getKeyState (stereotomy.Ident) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateSeqNum (stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateCoords (stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateWithAttachments (stereotomy.EventCoords) returns (stereotomy.KeyStateWithAttachments_) {}
+  rpc getKeyStateWithEndorsementsAndValidations (stereotomy.EventCoords) returns (stereotomy.KeyStateWithEndorsementsAndValidations_) {}
+  rpc getKERL (stereotomy.Ident) returns (stereotomy.KERL_) {}
+  rpc getValidations (stereotomy.EventCoords) returns (stereotomy.Validations) {}
 }
 
 service Delegated {
-    rpc reconcile ( Intervals ) returns (Update) {}
-    rpc update (Updating) returns (google.protobuf.Empty) {}
+  rpc reconcile (Intervals) returns (Update) {}
+  rpc update (Updating) returns (google.protobuf.Empty) {}
 }
 
 service Reconciliation {
-    rpc reconcile ( Intervals ) returns (Update) {}
-    rpc update (Updating) returns (google.protobuf.Empty) {}
+  rpc reconcile (Intervals) returns (Update) {}
+  rpc update (Updating) returns (google.protobuf.Empty) {}
 }
 
 message Update {
-    repeated stereotomy.KeyEventWithAttachmentAndValidations_ events = 1;
-    repeated Interval intervals = 2;
-    crypto.Biff have = 3;
+  repeated stereotomy.KeyEventWithAttachmentAndValidations_ events = 1;
+  repeated Interval intervals = 2;
+  crypto.Biff have = 3;
 }
 
 message Updating {
-    int32 ring = 1;
-    repeated stereotomy.KeyEventWithAttachmentAndValidations_ events = 2; 
+  int32 ring = 1;
+  repeated stereotomy.KeyEventWithAttachmentAndValidations_ events = 2;
 }
 
-message Intervals { 
-    int32 ring = 1;
-    repeated Interval intervals = 2;
-    crypto.Biff have = 3;
+message Intervals {
+  int32 ring = 1;
+  repeated Interval intervals = 2;
+  crypto.Biff have = 3;
 }
 
 message Interval {
-    crypto.Digeste start = 1;
-    crypto.Digeste end = 2;
+  crypto.Digeste start = 1;
+  crypto.Digeste end = 2;
 }
 
 message ViewState {
-    crypto.Digeste crown = 1;
-    crypto.Digeste previous = 2;
-    crypto.Biff roots = 3;
-    int32 threshold = 4;
-    stereotomy.Validations validations = 5;
+  crypto.Digeste crown = 1;
+  crypto.Digeste previous = 2;
+  crypto.Biff roots = 3;
+  int32 threshold = 4;
+  stereotomy.Validations validations = 5;
 }

@@ -10,216 +10,221 @@ package stereotomy;
 
 // The KERI Identifier
 message Ident {
-    oneof type {
-        crypto.PubKey basic = 1;
-        crypto.Digeste selfAddressing = 2;
-        crypto.Sig selfSigning = 3;
-        bool NONE = 5;
-    }
+  oneof type {
+    crypto.PubKey basic = 1;
+    crypto.Digeste selfAddressing = 2;
+    crypto.Sig selfSigning = 3;
+    bool NONE = 5;
+  }
+}
+
+message IdentAndSeq {
+  Ident identifier = 1;
+  uint64 sequenceNumber = 2;
 }
 
 // Coordinates of an event
 message EventCoords {
-    Ident identifier = 1;
-    uint64 sequenceNumber = 2;
-    string ilk = 3;
-    crypto.Digeste digest = 4;
+  Ident identifier = 1;
+  uint64 sequenceNumber = 2;
+  string ilk = 3;
+  crypto.Digeste digest = 4;
 }
 
 // Location of an event
 message EventLoc {
-    Ident identifier = 1;
-    uint64 sequenceNumber = 2;
-    crypto.Digeste digest = 3;
+  Ident identifier = 1;
+  uint64 sequenceNumber = 2;
+  crypto.Digeste digest = 3;
 }
 
 // Coordinates of a key
 message KeyCoords {
-    EventCoords establishment = 1;
-    int32 keyIndex = 2;
+  EventCoords establishment = 1;
+  int32 keyIndex = 2;
 }
 
 // Sealed content for events
-message Sealed { 
-    oneof type {
-        EventCoords eventCoordinates = 1;
-        crypto.Digeste digest = 2;
-        EventLoc event = 3;
-        bytes bits = 4;
-    }
+message Sealed {
+  oneof type {
+    EventCoords eventCoordinates = 1;
+    crypto.Digeste digest = 2;
+    EventLoc event = 3;
+    bytes bits = 4;
+  }
 }
 
 // Common header for events
 message Header {
-    uint64 sequenceNumber = 1;
-    Ident identifier = 2;
-    crypto.Digeste priorEventDigest = 3;
-    Version version = 4;
-    string ilk = 5;
+  uint64 sequenceNumber = 1;
+  Ident identifier = 2;
+  crypto.Digeste priorEventDigest = 3;
+  Version version = 4;
+  string ilk = 5;
 }
 
 // Common configuration, signature authentication and coordinates of the previous event
 message EventCommon {
-    crypto.Digeste configuration = 2;
-    EventCoords previous = 3;
-    crypto.Sig authentication = 4;
+  crypto.Digeste configuration = 2;
+  EventCoords previous = 3;
+  crypto.Sig authentication = 4;
 }
 
 // Specification of an interaction
 message InteractionSpec {
-    Header header = 1;
-    repeated Sealed seals = 2;
+  Header header = 1;
+  repeated Sealed seals = 2;
 }
 
 // The establishment criteria and record of a key
 message Establishment {
-    SigningThreshold signingThreshold = 1;
-    repeated crypto.PubKey keys = 2;
-    crypto.Digeste nextKeysDigest = 3;
-    int32 witnessThreshold = 4;
+  SigningThreshold signingThreshold = 1;
+  repeated crypto.PubKey keys = 2;
+  crypto.Digeste nextKeysDigest = 3;
+  int32 witnessThreshold = 4;
 }
 
 // The specification of the rotation of a key
 message RotationSpec {
-    Header header = 1;
-    Establishment establishment = 2;
-    repeated Ident witnessesRemoved = 3;
-    repeated Ident witnessesAdded = 41;
-    repeated Sealed seals = 5;
+  Header header = 1;
+  Establishment establishment = 2;
+  repeated Ident witnessesRemoved = 3;
+  repeated Ident witnessesAdded = 41;
+  repeated Sealed seals = 5;
 }
 
 // The specification of an identififer
 message IdentifierSpec {
-    Header header = 1;
-    Establishment establishment = 2;
-    repeated crypto.PubKey witnesses = 3;
-    repeated string configuration = 4;
+  Header header = 1;
+  Establishment establishment = 2;
+  repeated crypto.PubKey witnesses = 3;
+  repeated string configuration = 4;
 }
 
 // The interaction specification and common event structure
 message InteractionEvent {
-    InteractionSpec specification = 1;
-    EventCommon common = 2;
+  InteractionSpec specification = 1;
+  EventCommon common = 2;
 }
 
 // An attactment to an event in the KEL
 message AttachmentEvent {
-    Version version = 1;
-    EventCoords coordinates = 2;
-    Attachment attachment = 3;
+  Version version = 1;
+  EventCoords coordinates = 2;
+  Attachment attachment = 3;
 }
 
 // The rotation of a key
 message RotationEvent {
-    RotationSpec specification = 1; 
-    EventCommon common = 2;
+  RotationSpec specification = 1;
+  EventCommon common = 2;
 }
 
 // The birth of a key
 message InceptionEvent {
-    Ident identifier = 1;
-    IdentifierSpec specification = 2;
-    EventCommon common = 3;
-    Ident delegatingPrefix = 4; // Delegated inception event
+  Ident identifier = 1;
+  IdentifierSpec specification = 2;
+  EventCommon common = 3;
+  Ident delegatingPrefix = 4; // Delegated inception event
 }
 
 message KeyEventWithAttachments {
-    oneof event {
-        InceptionEvent inception = 1;
-        RotationEvent rotation = 2;
-        InteractionEvent interaction = 3;
-    }
-    Attachment attachment = 4;
+  oneof event {
+    InceptionEvent inception = 1;
+    RotationEvent rotation = 2;
+    InteractionEvent interaction = 3;
+  }
+  Attachment attachment = 4;
 }
 
 message KeyEvent_ {
-    oneof event {
-        InceptionEvent inception = 1;
-        RotationEvent rotation = 2;
-        InteractionEvent interaction = 3;
-    }
+  oneof event {
+    InceptionEvent inception = 1;
+    RotationEvent rotation = 2;
+    InteractionEvent interaction = 3;
+  }
 }
 
 message Attachment {
-    map<int32, crypto.Sig> endorsements = 1;
-    repeated Sealed seals = 2;
+  map<int32, crypto.Sig> endorsements = 1;
+  repeated Sealed seals = 2;
 }
 
 message Validation_ {
-    stereotomy.EventCoords validator = 1;
-    crypto.Sig signature = 2;
+  stereotomy.EventCoords validator = 1;
+  crypto.Sig signature = 2;
 }
 
 message KeyStateWithEndorsementsAndValidations_ {
-    stereotomy.KeyState_ state = 1;
-    map<int32, crypto.Sig> endorsements = 2;
-    repeated stereotomy.Validation_ validations = 3;
+  stereotomy.KeyState_ state = 1;
+  map<int32, crypto.Sig> endorsements = 2;
+  repeated stereotomy.Validation_ validations = 3;
 }
 
 message KeyEventWithAttachmentAndValidations_ {
-    stereotomy.KeyEvent_ event = 1;
-    Attachment attachment = 2;
-    Validations validations = 3;
+  stereotomy.KeyEvent_ event = 1;
+  Attachment attachment = 2;
+  Validations validations = 3;
 }
 
 message Validations {
-    stereotomy.EventCoords coordinates = 1;
-    repeated Validation_ validations = 2;
+  stereotomy.EventCoords coordinates = 1;
+  repeated Validation_ validations = 2;
 }
 
 message KERL_ {
-    repeated KeyEventWithAttachments events = 1;
+  repeated KeyEventWithAttachments events = 1;
 }
 
 message Weight {
-    int32 denominator = 1;
-    int32 numerator = 2;
+  int32 denominator = 1;
+  int32 numerator = 2;
 }
 
 message Weights {
-    repeated Weight weights = 1;
+  repeated Weight weights = 1;
 }
 
 message SigningThreshold {
-    int32 threshold = 1;
-    repeated Weights weights = 2;
+  int32 threshold = 1;
+  repeated Weights weights = 2;
 }
 
-message Version { 
-    int32 major = 1;
-    int32 minor = 2;
+message Version {
+  int32 major = 1;
+  int32 minor = 2;
 }
 
 // KeyState represents the materialized state of an identifier
 // and corresponding public/private keys in the corresponding KEL/KERL
 message KeyState_ {
-    crypto.Digeste digest = 1;
-    EventCoords coordinates = 2;
-    EventCoords lastEvent = 3;
-    EventCoords lastEstablishmentEvent = 4;
-    Ident delegatingIdentifier = 5;
-    repeated string configurationTraits = 6;
-    crypto.Digeste nextKeyConfigurationDigest = 7;
-    repeated crypto.PubKey keys = 8;
-    SigningThreshold signingThreshold = 9;
-    repeated Ident witnesses = 10;
-    int32 witnessThreshold = 11; 
+  crypto.Digeste digest = 1;
+  EventCoords coordinates = 2;
+  EventCoords lastEvent = 3;
+  EventCoords lastEstablishmentEvent = 4;
+  Ident delegatingIdentifier = 5;
+  repeated string configurationTraits = 6;
+  crypto.Digeste nextKeyConfigurationDigest = 7;
+  repeated crypto.PubKey keys = 8;
+  SigningThreshold signingThreshold = 9;
+  repeated Ident witnesses = 10;
+  int32 witnessThreshold = 11;
 }
 
 message KeyStateWithAttachments_ {
-    KeyState_ state = 1;
-    Attachment attachment = 2;
+  KeyState_ state = 1;
+  Attachment attachment = 2;
 }
 
 // A bound value
 message Bound {
-    InceptionEvent identifier = 1;
-    string host = 2;
-    int32 port = 3;
+  InceptionEvent identifier = 1;
+  string host = 2;
+  int32 port = 3;
 }
 
 // A signed bound value
 message Binding {
-    Bound value = 1;
-    crypto.Sig signature = 2;
+  Bound value = 1;
+  crypto.Sig signature = 2;
 }

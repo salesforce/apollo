@@ -25,9 +25,9 @@ import java.util.List;
  */
 public class DhtClient implements DhtService {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel            channel;
     private final KerlDhtGrpc.KerlDhtBlockingStub client;
-    private final StereotomyMetrics metrics;
+    private final StereotomyMetrics               metrics;
 
     public DhtClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
@@ -104,7 +104,8 @@ public class DhtClient implements DhtService {
             }
 
             @Override
-            public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(
+            EventCoords coordinates) {
                 return service.getKeyStateWithEndorsementsAndValidations(coordinates);
             }
 
@@ -116,6 +117,11 @@ public class DhtClient implements DhtService {
             @Override
             public Validations getValidations(EventCoords coordinates) {
                 return service.getValidations(coordinates);
+            }
+
+            @Override
+            public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
+                return null;
             }
         };
     }
@@ -155,9 +161,9 @@ public class DhtClient implements DhtService {
     public KeyStates append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
         var request = KeyEventWithAttachmentsContext.newBuilder()
-                .addAllEvents(eventsList)
-                .addAllAttachments(attachmentsList)
-                .build();
+                                                    .addAllEvents(eventsList)
+                                                    .addAllAttachments(attachmentsList)
+                                                    .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
@@ -334,7 +340,8 @@ public class DhtClient implements DhtService {
             metrics.outboundBandwidth().mark(serializedSize);
             metrics.outboundGetAttachmentRequest().mark(serializedSize);
         }
-        KeyStateWithEndorsementsAndValidations_ complete = client.getKeyStateWithEndorsementsAndValidations(coordinates);
+        KeyStateWithEndorsementsAndValidations_ complete = client.getKeyStateWithEndorsementsAndValidations(
+        coordinates);
         if (timer != null) {
             timer.stop();
         }
@@ -369,5 +376,26 @@ public class DhtClient implements DhtService {
             metrics.inboundGetAttachmentResponse().mark(serializedSize);
         }
         return complete;
+    }
+
+    @Override
+    public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
+        Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
+        if (metrics != null) {
+            final var bs = identAndSeq.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateRequest().mark(bs);
+        }
+        var result = client.getKeyStateSeqNum(identAndSeq);
+        if (timer != null) {
+            timer.stop();
+        }
+        if (timer != null) {
+            final var serializedSize = result.getSerializedSize();
+            timer.stop();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+        }
+        return result;
     }
 }

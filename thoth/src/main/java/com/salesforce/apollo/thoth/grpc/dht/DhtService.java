@@ -46,4 +46,6 @@ public interface DhtService extends Link {
     KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
 
     Validations getValidations(EventCoords coordinates);
+
+    KeyState_ getKeyState(IdentAndSeq identAndSeq);
 }

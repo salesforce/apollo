@@ -61,8 +61,7 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public Void appendValidations(EventCoordinates coordinates,
-                                  Map<EventCoordinates, JohnHancock> validations) {
+    public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
         dsl.transaction(ctx -> {
             appendValidations(DSL.using(ctx), coordinates, validations);
         });

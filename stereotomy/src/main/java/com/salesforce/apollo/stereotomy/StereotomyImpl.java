@@ -49,9 +49,9 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
  */
 public class StereotomyImpl implements Stereotomy {
     private static final Logger             log = LoggerFactory.getLogger(StereotomyImpl.class);
+    final                EventFactory       eventFactory;
+    final                KERL               kerl;
     private final        SecureRandom       entropy;
-    private final        EventFactory       eventFactory;
-    private final        KERL               kerl;
     private final        StereotomyKeyStore keyStore;
 
     public StereotomyImpl(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
@@ -450,7 +450,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
+            return Optional.of(new StereotomyVerifier<D>(getIdentifier(), StereotomyImpl.this));
         }
 
         @Override
@@ -529,11 +529,6 @@ public class StereotomyImpl implements Stereotomy {
         @Override
         public Signer getSigner() {
             return StereotomyImpl.this.getSigner(getState());
-        }
-
-        @Override
-        public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
         }
 
         @Override

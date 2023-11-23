@@ -24,7 +24,7 @@ import java.util.List;
 public class CommonKERLClient implements ProtoKERLService {
 
     protected final KERLServiceGrpc.KERLServiceBlockingStub client;
-    protected final StereotomyMetrics metrics;
+    protected final StereotomyMetrics                       metrics;
 
     public CommonKERLClient(KERLServiceGrpc.KERLServiceBlockingStub client, StereotomyMetrics metrics) {
         this.client = client;
@@ -45,8 +45,7 @@ public class CommonKERLClient implements ProtoKERLService {
             }
 
             @Override
-            public List<KeyState_> append(List<KeyEvent_> events,
-                                          List<AttachmentEvent> attachments) {
+            public List<KeyState_> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
                 return service.append(events, attachments);
             }
 
@@ -85,6 +84,11 @@ public class CommonKERLClient implements ProtoKERLService {
             }
 
             @Override
+            public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+                return service.getKeyState(identifier, sequenceNumber);
+            }
+
+            @Override
             public KeyState_ getKeyState(Ident identifier) {
                 return service.getKeyState(identifier);
             }
@@ -95,7 +99,8 @@ public class CommonKERLClient implements ProtoKERLService {
             }
 
             @Override
-            public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(
+            EventCoords coordinates) {
                 // TODO Auto-generated method stub
                 return null;
             }
@@ -167,13 +172,12 @@ public class CommonKERLClient implements ProtoKERLService {
     }
 
     @Override
-    public List<KeyState_> append(List<KeyEvent_> eventsList,
-                                  List<AttachmentEvent> attachmentsList) {
+    public List<KeyState_> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
         var request = KeyEventWithAttachmentsContext.newBuilder()
-                .addAllEvents(eventsList)
-                .addAllAttachments(attachmentsList)
-                .build();
+                                                    .addAllEvents(eventsList)
+                                                    .addAllAttachments(attachmentsList)
+                                                    .build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(bsize);
@@ -290,6 +294,30 @@ public class CommonKERLClient implements ProtoKERLService {
             metrics.outboundGetKeyStateCoordsRequest().mark(bs);
         }
         var result = client.getKeyStateCoords(coordinates);
+        if (timer != null) {
+            timer.stop();
+        }
+        KeyState_ ks;
+        ks = result;
+        if (timer != null) {
+            final var serializedSize = ks.getSerializedSize();
+            timer.stop();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+        }
+        return ks.equals(KeyState_.getDefaultInstance()) ? null : ks;
+    }
+
+    @Override
+    public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
+        Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
+        var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
+        if (metrics != null) {
+            final var bs = identAndSeq.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateRequest().mark(bs);
+        }
+        var result = client.getKeyStateSeqNum(identAndSeq);
         if (timer != null) {
             timer.stop();
         }

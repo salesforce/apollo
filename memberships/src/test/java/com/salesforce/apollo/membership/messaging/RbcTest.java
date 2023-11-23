@@ -53,14 +53,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class RbcTest {
 
-    private static final Parameters.Builder        parameters     = Parameters.newBuilder()
-                                                                              .setMaxMessages(100)
-                                                                              .setFalsePositiveRate(0.0125)
-                                                                              .setBufferSize(500);
-    final AtomicReference<CountDownLatch> round = new AtomicReference<>();
-    private final        List<Router>              communications = new ArrayList<>();
-    private final        AtomicInteger             totalReceived  = new AtomicInteger(0);
-    private              List<ReliableBroadcaster> messengers;
+    private static final Parameters.Builder              parameters     = Parameters.newBuilder()
+                                                                                    .setMaxMessages(100)
+                                                                                    .setFalsePositiveRate(0.0125)
+                                                                                    .setBufferSize(500);
+    final                AtomicReference<CountDownLatch> round          = new AtomicReference<>();
+    private final        List<Router>                    communications = new ArrayList<>();
+    private final        AtomicInteger                   totalReceived  = new AtomicInteger(0);
+    private              List<ReliableBroadcaster>       messengers;
 
     @AfterEach
     public void after() {
@@ -75,7 +75,7 @@ public class RbcTest {
         MetricRegistry registry = new MetricRegistry();
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[] { 6, 6, 7, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         List<SigningMember> members = IntStream.range(0, 50)

@@ -6,21 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
-import java.util.concurrent.CompletableFuture;
-
-import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ProtoKERLProvider {
     Attachment getAttachment(EventCoords coordinates);
@@ -30,6 +19,8 @@ public interface ProtoKERLProvider {
     KeyEvent_ getKeyEvent(EventCoords coordinates);
 
     KeyState_ getKeyState(EventCoords coordinates);
+
+    KeyState_ getKeyState(Ident identifier, long sequenceNumber);
 
     KeyState_ getKeyState(Ident identifier);
 
