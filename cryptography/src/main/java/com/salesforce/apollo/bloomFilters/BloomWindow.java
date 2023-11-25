@@ -14,6 +14,10 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
+ * Provide a windowed deduplication mechanism.  The implementation is based on the most excellent paper <a
+ * href="https://www.semanticscholar.org/paper/Aging-Bloom-Filter-with-Two-Active-Buffers-for-Sets-Yoon/23bd25ee2e310a7c90f4092d1783793cb58c9816</a>
+ * Aging Bloom Filter with Two Active Buffers for Dynamic Sets</href>
+ *
  * @author hal.hildebrand
  */
 public class BloomWindow<T> {
