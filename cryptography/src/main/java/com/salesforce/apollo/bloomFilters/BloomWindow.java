@@ -6,76 +6,94 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.utils.Entropy;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
- * @author hal.hildebrand
+ * Provide a windowed deduplication mechanism.  The implementation is based on the most excellent paper <a
+ * href="https://www.semanticscholar.org/paper/Aging-Bloom-Filter-with-Two-Active-Buffers-for-Sets-Yoon/23bd25ee2e310a7c90f4092d1783793cb58c9816</a>
+ * Aging Bloom Filter with Two Active Buffers for Dynamic Sets</href>
  *
+ * @author hal.hildebrand
  */
 public class BloomWindow<T> {
-    private final AtomicInteger                 count    = new AtomicInteger(0);
-    private final Supplier<BloomFilter<T>>      factory;
-    private final ReadWriteLock                 rwLock   = new ReentrantReadWriteLock();
-    private final BlockingDeque<BloomFilter<T>> segments = new LinkedBlockingDeque<>();
-    private final int                           windowSize;
 
-    public BloomWindow(int windowSize, Supplier<BloomFilter<T>> factory, int segments) {
-        this.windowSize = windowSize;
-        this.factory = factory;
-        for (var i = 0; i < segments; i++) {
-            this.segments.add(factory.get());
-        }
+    private final    ReadWriteLock rwLock = new ReentrantReadWriteLock();
+    private final    int           capacity;
+    private volatile Active<T>     active1;
+    private volatile Active<T>     active2;
+
+    private BloomWindow(BloomFilter<T> active1, int capacity, BloomFilter<T> active2) {
+        this.active1 = new Active<>(active1, new AtomicInteger());
+        this.active2 = new Active<>(active2, new AtomicInteger());
+        this.capacity = capacity;
     }
 
-    public void add(T element) {
-        if (count.incrementAndGet() % windowSize == 0) {
-            segments.removeLast();
-            segments.addFirst(factory.get());
-        }
-        segments.getFirst().add(element);
+    public static <Q> BloomWindow<Q> create(int capacity, double fpr, Biff.Type type) {
+        return create(Entropy.nextBitsStreamLong(), Entropy.nextBitsStreamLong(), capacity, fpr, type);
     }
 
-    public boolean add(T element, Consumer<T> ifAbsent) {
-        if (count.incrementAndGet() % windowSize == 0) {
-            segments.removeLast();
-            segments.addFirst(factory.get());
-        }
-        AtomicBoolean added = new AtomicBoolean();
-        Consumer<T> wrap = t -> {
-            if (ifAbsent != null) {
-                ifAbsent.accept(t);
-            }
-            added.set(true);
-        };
-        final var l = rwLock.writeLock();
-        l.lock();
+    public static <Q> BloomWindow<Q> create(long seed1, long seed2, int capacity, double fpr, Biff.Type type) {
+        return new BloomWindow<>(BloomFilter.create(seed1, capacity, fpr, type), capacity,
+                                 BloomFilter.create(seed2, capacity, fpr, type));
+    }
+
+    /**
+     * @param element
+     * @return true if the element is new and has been added to the window, false if element was already present
+     */
+    public boolean add(T element) {
+        var lock = rwLock.writeLock();
+        lock.lock();
         try {
-            segments.getFirst().add(element, wrap);
+            if (active1.contains(element)) {
+                return false;
+            }
+            active1.add(element);
+            if (active1.count.get() == capacity) {
+                active2.clear();
+                // Switch buffers
+                var t = active1;
+                active1 = active2;
+                active2 = t;
+
+                active1.add(element);
+            }
+            return true;
         } finally {
-            l.unlock();
+            lock.unlock();
         }
-        return added.get();
     }
 
     public boolean contains(T element) {
-        final var l = rwLock.readLock();
-        l.lock();
+        var lock = rwLock.readLock();
+        lock.lock();
         try {
-            for (var biff : segments) {
-                if (biff.contains(element)) {
-                    return true;
-                }
+            if (active1.contains(element)) {
+                return true;
             }
+            return active2.contains(element);
         } finally {
-            l.unlock();
+            lock.unlock();
         }
-        return false;
+    }
+
+    private record Active<T>(BloomFilter<T> bff, AtomicInteger count) {
+        public boolean add(T element) {
+            return bff.add(element);
+        }
+
+        public boolean contains(T element) {
+            return bff.contains(element);
+        }
+
+        void clear() {
+            bff.clear();
+            count.set(0);
+        }
     }
 }
