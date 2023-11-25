@@ -10,10 +10,19 @@ import "google/protobuf/timestamp.proto";
 package crypto;
 
 message Biff {
+  enum Type {
+    invalid = 0;
+    DIGEST = 1;
+    INT = 2;
+    LONG = 3;
+    BYTES = 4;
+    STRING = 5;
+    ULONG = 6;
+  }
   int32 m = 1;
   int32 k = 2;
   int64 seed = 3;
-  int32 type = 4;
+  Type type = 4;
   repeated uint64 bits = 5;
 }
 

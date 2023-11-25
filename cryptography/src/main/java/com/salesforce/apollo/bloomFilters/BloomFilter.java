@@ -6,190 +6,34 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
-import java.util.BitSet;
-import java.util.function.Consumer;
-
-import org.joou.ULong;
-
 import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
+import org.joou.ULong;
+
+import java.util.BitSet;
+
+import static com.salesfoce.apollo.cryptography.proto.Biff.Type.*;
 
 /**
- * Simplified Bloom filter for multiple types, with setable seeds and other
- * parameters.
- * 
- * @author hal.hildebrand
+ * Simplified Bloom filter for multiple types, with setable seeds and other parameters.
  *
+ * @author hal.hildebrand
  */
 abstract public class BloomFilter<T> {
+    private final BitSet  bits;
+    private final Hash<T> h;
 
-    public static class BytesBloomFilter extends BloomFilter<byte[]> {
-
-        public BytesBloomFilter(long seed, int n, double p) {
-            super(new Hash<byte[]>(seed, n, p) {
-                @Override
-                protected Hasher<byte[]> newHasher() {
-                    return new BytesHasher();
-                }
-            });
-        }
-
-        public BytesBloomFilter(long seed, int m, int k, long[] bytes) {
-            super(new Hash<byte[]>(seed, k, m) {
-                @Override
-                protected Hasher<byte[]> newHasher() {
-                    return new BytesHasher();
-                }
-            }, BitSet.valueOf(bytes));
-        }
-
-        @Override
-        protected int getType() {
-            return BYTES;
-        }
+    private BloomFilter(Hash<T> h) {
+        this(h, new BitSet(h.getM()));
     }
 
-    public static class DigestBloomFilter extends BloomFilter<Digest> {
-
-        public DigestBloomFilter(long seed, int n, double p) {
-            super(new Hash<Digest>(seed, n, p) {
-                @Override
-                protected Hasher<Digest> newHasher() {
-                    return new DigestHasher();
-                }
-            });
-        }
-
-        public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
-            super(new Hash<Digest>(seed, k, m) {
-                @Override
-                protected Hasher<Digest> newHasher() {
-                    return new DigestHasher();
-                }
-            }, BitSet.valueOf(bytes));
-        }
-
-        @Override
-        protected int getType() {
-            return DIGEST;
-        }
-
+    private BloomFilter(Hash<T> h, BitSet bits) {
+        this.h = h;
+        this.bits = bits;
     }
-
-    public static class IntBloomFilter extends BloomFilter<Integer> {
-
-        public IntBloomFilter(long seed, int n, double p) {
-            super(new Hash<Integer>(seed, n, p) {
-                @Override
-                protected Hasher<Integer> newHasher() {
-                    return new IntHasher();
-                }
-            });
-        }
-
-        public IntBloomFilter(long seed, int m, int k, long[] bits) {
-            super(new Hash<Integer>(seed, k, m) {
-                @Override
-                protected Hasher<Integer> newHasher() {
-                    return new IntHasher();
-                }
-            }, BitSet.valueOf(bits));
-        }
-
-        @Override
-        protected int getType() {
-            return INT;
-        }
-
-    }
-
-    public static class LongBloomFilter extends BloomFilter<Long> {
-        public LongBloomFilter(long seed, int n, double p) {
-            super(new Hash<Long>(seed, n, p) {
-                @Override
-                protected Hasher<Long> newHasher() {
-                    return new LongHasher();
-                }
-            });
-        }
-
-        public LongBloomFilter(long seed, int m, int k, long[] bits) {
-            super(new Hash<Long>(seed, k, m) {
-                @Override
-                protected Hasher<Long> newHasher() {
-                    return new LongHasher();
-                }
-            }, BitSet.valueOf(bits));
-        }
-
-        @Override
-        protected int getType() {
-            return LONG;
-        }
-
-    }
-
-    public static class StringBloomFilter extends BloomFilter<String> {
-
-        public StringBloomFilter(long seed, int n, double p) {
-            super(new Hash<String>(seed, n, p) {
-                @Override
-                protected Hasher<String> newHasher() {
-                    return new StringHasher();
-                }
-            });
-        }
-
-        public StringBloomFilter(long seed, int m, int k, long[] bytes) {
-            super(new Hash<String>(seed, k, m) {
-                @Override
-                protected Hasher<String> newHasher() {
-                    return new StringHasher();
-                }
-            }, BitSet.valueOf(bytes));
-        }
-
-        @Override
-        protected int getType() {
-            return STRING;
-        }
-    }
-
-    public static class ULongBloomFilter extends BloomFilter<ULong> {
-        public ULongBloomFilter(long seed, int n, double p) {
-            super(new Hash<ULong>(seed, n, p) {
-                @Override
-                protected Hasher<ULong> newHasher() {
-                    return new ULongHasher();
-                }
-            });
-        }
-
-        public ULongBloomFilter(long seed, int m, int k, long[] bits) {
-            super(new Hash<ULong>(seed, k, m) {
-                @Override
-                protected Hasher<ULong> newHasher() {
-                    return new ULongHasher();
-                }
-            }, BitSet.valueOf(bits));
-        }
-
-        @Override
-        protected int getType() {
-            return ULONG;
-        }
-
-    }
-
-    private static final int BYTES  = 3;
-    private static final int DIGEST = 0;
-    private static final int INT    = 1;
-    private static final int LONG   = 2;
-    private static final int STRING = 4;
-    private static final int ULONG  = 5;
 
     @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(long seed, int n, double p, int type) {
+    public static <Q> BloomFilter<Q> create(long seed, int n, double p, Biff.Type type) {
         switch (type) {
         case DIGEST:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, n, p);
@@ -209,7 +53,7 @@ abstract public class BloomFilter<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Q> BloomFilter<Q> create(long seed, int m, int k, long[] bits, int type) {
+    public static <Q> BloomFilter<Q> create(long seed, int m, int k, long[] bits, Biff.Type type) {
         switch (type) {
         case DIGEST:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
@@ -242,38 +86,14 @@ abstract public class BloomFilter<T> {
         return -m / ((double) k) * Math.log(1 - oneBits / ((double) m));
     }
 
-    private final BitSet  bits;
-    private final Hash<T> h;
-
-    private BloomFilter(Hash<T> h) {
-        this(h, new BitSet(h.getM()));
-    }
-
-    private BloomFilter(Hash<T> h, BitSet bits) {
-        this.h = h;
-        this.bits = bits;
-    }
-
-    public void add(T element) {
-        for (int hash : h.hashes(element)) {
-            bits.set(hash);
-        }
-    }
-
-    public boolean add(T element, Consumer<T> ifAbsent) {
+    public boolean add(T element) {
         final var hashes = h.hashes(element);
         var contains = true;
         for (int hash : hashes) {
             if (!bits.get(hash)) {
                 contains = false;
-                break;
             }
-        }
-        if (!contains) {
-            ifAbsent.accept(element);
-            for (int hash : hashes) {
-                bits.set(hash);
-            }
+            bits.set(hash);
         }
         return !contains;
     }
@@ -322,5 +142,163 @@ abstract public class BloomFilter<T> {
         return builder.build();
     }
 
-    protected abstract int getType();
+    protected abstract Biff.Type getType();
+
+    public static class BytesBloomFilter extends BloomFilter<byte[]> {
+
+        public BytesBloomFilter(long seed, int n, double p) {
+            super(new Hash<byte[]>(seed, n, p) {
+                @Override
+                protected Hasher<byte[]> newHasher() {
+                    return new BytesHasher();
+                }
+            });
+        }
+
+        public BytesBloomFilter(long seed, int m, int k, long[] bytes) {
+            super(new Hash<byte[]>(seed, k, m) {
+                @Override
+                protected Hasher<byte[]> newHasher() {
+                    return new BytesHasher();
+                }
+            }, BitSet.valueOf(bytes));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return BYTES;
+        }
+    }
+
+    public static class DigestBloomFilter extends BloomFilter<Digest> {
+
+        public DigestBloomFilter(long seed, int n, double p) {
+            super(new Hash<Digest>(seed, n, p) {
+                @Override
+                protected Hasher<Digest> newHasher() {
+                    return new DigestHasher();
+                }
+            });
+        }
+
+        public DigestBloomFilter(long seed, int m, int k, long[] bytes) {
+            super(new Hash<Digest>(seed, k, m) {
+                @Override
+                protected Hasher<Digest> newHasher() {
+                    return new DigestHasher();
+                }
+            }, BitSet.valueOf(bytes));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return DIGEST;
+        }
+
+    }
+
+    public static class IntBloomFilter extends BloomFilter<Integer> {
+
+        public IntBloomFilter(long seed, int n, double p) {
+            super(new Hash<Integer>(seed, n, p) {
+                @Override
+                protected Hasher<Integer> newHasher() {
+                    return new IntHasher();
+                }
+            });
+        }
+
+        public IntBloomFilter(long seed, int m, int k, long[] bits) {
+            super(new Hash<Integer>(seed, k, m) {
+                @Override
+                protected Hasher<Integer> newHasher() {
+                    return new IntHasher();
+                }
+            }, BitSet.valueOf(bits));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return INT;
+        }
+
+    }
+
+    public static class LongBloomFilter extends BloomFilter<Long> {
+        public LongBloomFilter(long seed, int n, double p) {
+            super(new Hash<Long>(seed, n, p) {
+                @Override
+                protected Hasher<Long> newHasher() {
+                    return new LongHasher();
+                }
+            });
+        }
+
+        public LongBloomFilter(long seed, int m, int k, long[] bits) {
+            super(new Hash<Long>(seed, k, m) {
+                @Override
+                protected Hasher<Long> newHasher() {
+                    return new LongHasher();
+                }
+            }, BitSet.valueOf(bits));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return LONG;
+        }
+
+    }
+
+    public static class StringBloomFilter extends BloomFilter<String> {
+
+        public StringBloomFilter(long seed, int n, double p) {
+            super(new Hash<String>(seed, n, p) {
+                @Override
+                protected Hasher<String> newHasher() {
+                    return new StringHasher();
+                }
+            });
+        }
+
+        public StringBloomFilter(long seed, int m, int k, long[] bytes) {
+            super(new Hash<String>(seed, k, m) {
+                @Override
+                protected Hasher<String> newHasher() {
+                    return new StringHasher();
+                }
+            }, BitSet.valueOf(bytes));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return STRING;
+        }
+    }
+
+    public static class ULongBloomFilter extends BloomFilter<ULong> {
+        public ULongBloomFilter(long seed, int n, double p) {
+            super(new Hash<ULong>(seed, n, p) {
+                @Override
+                protected Hasher<ULong> newHasher() {
+                    return new ULongHasher();
+                }
+            });
+        }
+
+        public ULongBloomFilter(long seed, int m, int k, long[] bits) {
+            super(new Hash<ULong>(seed, k, m) {
+                @Override
+                protected Hasher<ULong> newHasher() {
+                    return new ULongHasher();
+                }
+            }, BitSet.valueOf(bits));
+        }
+
+        @Override
+        protected Biff.Type getType() {
+            return ULONG;
+        }
+
+    }
 }
