@@ -53,10 +53,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class RbcTest {
 
+    private static final boolean                         LARGE_TESTS    = Boolean.getBoolean("large_tests");
     private static final Parameters.Builder              parameters     = Parameters.newBuilder()
                                                                                     .setMaxMessages(100)
                                                                                     .setFalsePositiveRate(0.0125)
-                                                                                    .setBufferSize(500);
+                                                                                    .setBufferSize(500)
+                                                                                    .setDedupBufferSize(
+                                                                                    LARGE_TESTS ? 100 * 100 : 50 * 50)
+                                                                                    .setDedupFpr(Math.pow(10, -9));
     final                AtomicReference<CountDownLatch> round          = new AtomicReference<>();
     private final        List<Router>                    communications = new ArrayList<>();
     private final        AtomicInteger                   totalReceived  = new AtomicInteger(0);
@@ -111,7 +115,7 @@ public class RbcTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
-        int rounds = Boolean.getBoolean("large_tests") ? 100 : 5;
+        int rounds = LARGE_TESTS ? 100 : 50;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch latch = new CountDownLatch(messengers.size());
             round.set(latch);

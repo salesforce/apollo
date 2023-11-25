@@ -29,12 +29,13 @@ public class BloomWindow<T> {
         this.capacity = capacity;
     }
 
-    public static <Q> BloomWindow<Q> create(int n, double p, Biff.Type type) {
-        return create(Entropy.nextBitsStreamLong(), Entropy.nextBitsStreamLong(), n, p, type);
+    public static <Q> BloomWindow<Q> create(int capacity, double fpr, Biff.Type type) {
+        return create(Entropy.nextBitsStreamLong(), Entropy.nextBitsStreamLong(), capacity, fpr, type);
     }
 
-    public static <Q> BloomWindow<Q> create(long seed1, long seed2, int n, double p, Biff.Type type) {
-        return new BloomWindow<>(BloomFilter.create(seed1, n, p, type), n, BloomFilter.create(seed2, n, p, type));
+    public static <Q> BloomWindow<Q> create(long seed1, long seed2, int capacity, double fpr, Biff.Type type) {
+        return new BloomWindow<>(BloomFilter.create(seed1, capacity, fpr, type), capacity,
+                                 BloomFilter.create(seed2, capacity, fpr, type));
     }
 
     /**

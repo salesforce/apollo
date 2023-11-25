@@ -24,7 +24,8 @@ public class BloomWindowTest {
         var algo = DigestAlgorithm.DEFAULT;
 
         var window = 1 << 16;
-        var seen = BloomWindow.create(entropy.nextLong(), entropy.nextLong(), window, 0.000000001, Biff.Type.DIGEST);
+        var seen = BloomWindow.create(entropy.nextLong(), entropy.nextLong(), window, Math.pow(10, -9),
+                                      Biff.Type.DIGEST);
         var inserted = new TreeSet<Digest>();
         var falsePositives = new TreeSet<Digest>();
         var decayed = new TreeSet<Digest>();

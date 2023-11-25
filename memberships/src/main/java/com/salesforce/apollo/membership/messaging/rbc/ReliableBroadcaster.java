@@ -7,15 +7,16 @@
 package com.salesforce.apollo.membership.messaging.rbc;
 
 import com.codahale.metrics.Timer;
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.cryptography.proto.Biff;
 import com.salesfoce.apollo.messaging.proto.*;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomWindow;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -295,20 +296,24 @@ public class ReliableBroadcaster {
     }
 
     public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
-                             int deliveredCacheSize) {
+                             int dedupBufferSize, double dedupFpr) {
         public static Parameters.Builder newBuilder() {
             return new Builder();
         }
 
         public static class Builder implements Cloneable {
-            private int             bufferSize         = 1500;
+            private int bufferSize = 1500;
+
+            private int             dedupBufferSize    = 100;
+            private double          dedupFpr           = Math.pow(10, -9);
             private int             deliveredCacheSize = 100;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
             private double          falsePositiveRate  = 0.00125;
             private int             maxMessages        = 500;
 
             public Parameters build() {
-                return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate, deliveredCacheSize);
+                return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate, dedupBufferSize,
+                                      dedupFpr);
             }
 
             @Override
@@ -326,6 +331,24 @@ public class ReliableBroadcaster {
 
             public Parameters.Builder setBufferSize(int bufferSize) {
                 this.bufferSize = bufferSize;
+                return this;
+            }
+
+            public int getDedupBufferSize() {
+                return dedupBufferSize;
+            }
+
+            public Builder setDedupBufferSize(int dedupBufferSize) {
+                this.dedupBufferSize = dedupBufferSize;
+                return this;
+            }
+
+            public double getDedupFpr() {
+                return dedupFpr;
+            }
+
+            public Builder setDedupFpr(double dedupFpr) {
+                this.dedupFpr = dedupFpr;
                 return this;
             }
 
@@ -400,7 +423,7 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final DigestWindow       delivered;
+        private final BloomWindow        delivered;
         private final Semaphore          garbageCollecting = new Semaphore(1);
         private final int                highWaterMark;
         private final int                maxAge;
@@ -408,10 +431,10 @@ public class ReliableBroadcaster {
         private final Map<Digest, state> state             = new ConcurrentHashMap<>();
         private final Semaphore          tickGate          = new Semaphore(1);
 
-        public Buffer(int maxAge) {
+        private Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
-            delivered = new DigestWindow(params.deliveredCacheSize, 3);
+            delivered = BloomWindow.create(params.dedupBufferSize, params.dedupFpr, Biff.Type.DIGEST);
         }
 
         public void clear() {
@@ -437,7 +460,7 @@ public class ReliableBroadcaster {
                             .map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
                             .map(s -> new Msg(adapter.source.apply(s.msg.getContent()), adapter.extractor.apply(s.msg),
                                               s.hash))
-                            .filter(m -> delivered.add(m.hash, null))
+                            .filter(m -> delivered.add(m.hash))
                             .toList());
             gc();
         }
