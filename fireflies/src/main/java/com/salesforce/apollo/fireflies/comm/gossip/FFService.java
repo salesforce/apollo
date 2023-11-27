@@ -9,7 +9,7 @@ package com.salesforce.apollo.fireflies.comm.gossip;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

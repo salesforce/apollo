@@ -11,7 +11,7 @@ import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.gorgoneion.Gorgoneion;
 import com.salesforce.apollo.gorgoneion.Parameters;
 import com.salesforce.apollo.gorgoneion.client.GorgoneionClient;

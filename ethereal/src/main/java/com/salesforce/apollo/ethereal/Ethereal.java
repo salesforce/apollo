@@ -10,7 +10,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;

@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**

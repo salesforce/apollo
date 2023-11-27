@@ -8,8 +8,8 @@ package com.salesforce.apollo.state;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;

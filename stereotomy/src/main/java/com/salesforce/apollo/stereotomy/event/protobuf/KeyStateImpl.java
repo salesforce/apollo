@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.bs;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toSigningThreshold;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
@@ -21,9 +21,9 @@ import java.util.stream.Collectors;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -51,7 +51,7 @@ public class KeyStateImpl implements KeyState {
     }
 
     public static KeyState newKeyState(Identifier identifier,
-                                       com.salesforce.apollo.crypto.SigningThreshold signingThreshold,
+                                       SigningThreshold signingThreshold,
                                        List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
                                        List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
                                        KeyEvent event, EstablishmentEvent lastEstablishmentEvent,

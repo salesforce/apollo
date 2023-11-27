@@ -15,8 +15,8 @@ import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.*;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
@@ -61,7 +61,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
@@ -84,9 +84,9 @@ public class ProcessDomain extends Domain {
     private final Path                                                      communicationsDirectory;
     private final EventLoopGroup                                            contextEventLoopGroup = getEventLoopGroup();
     private final KerlDHT                                                   dht;
-    private final View                                                      foundation;
-    private final Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
-    private final UUID                                                      listener;
+    private final View                 foundation;
+    private final Map<Digest, Demesne> hostedDomains = new ConcurrentHashMap<>();
+    private final UUID                 listener;
     private final DomainSocketAddress                                       outerContextEndpoint;
     private final Server                                                    outerContextService;
     private final Portal<Member>                                            portal;

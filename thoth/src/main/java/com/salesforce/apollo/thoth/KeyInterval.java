@@ -10,7 +10,7 @@ package com.salesforce.apollo.thoth;
 import java.util.function.Predicate;
 
 import com.salesfoce.apollo.thoth.proto.Interval;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

@@ -11,7 +11,7 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.stereotomy.Stereotomy.Decoded;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 

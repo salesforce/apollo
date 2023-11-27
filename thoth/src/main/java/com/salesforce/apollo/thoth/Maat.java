@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;

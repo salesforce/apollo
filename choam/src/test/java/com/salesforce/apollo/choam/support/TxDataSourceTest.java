@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;

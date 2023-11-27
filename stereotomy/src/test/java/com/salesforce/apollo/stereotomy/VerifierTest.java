@@ -1,6 +1,6 @@
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import org.junit.jupiter.api.Test;

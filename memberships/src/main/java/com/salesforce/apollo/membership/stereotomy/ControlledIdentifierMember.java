@@ -7,8 +7,8 @@
 package com.salesforce.apollo.membership.stereotomy;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.crypto.*;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -26,7 +26,7 @@ import java.util.List;
  */
 public class ControlledIdentifierMember implements SigningMember {
 
-    private final Digest id;
+    private final Digest                                         id;
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
 
     public ControlledIdentifierMember(ControlledIdentifier<SelfAddressingIdentifier> identifier) {

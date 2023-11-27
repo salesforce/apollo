@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.jks;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.math.BigInteger;
@@ -29,9 +29,9 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
-import com.salesforce.apollo.crypto.cert.CertExtension;
-import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
+import com.salesforce.apollo.cryptography.cert.CertExtension;
+import com.salesforce.apollo.cryptography.cert.Certificates;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
 

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Adder.State;
 
 /**

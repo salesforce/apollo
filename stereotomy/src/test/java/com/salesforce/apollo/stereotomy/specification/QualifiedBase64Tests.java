@@ -1,6 +1,6 @@
 package com.salesforce.apollo.stereotomy.specification;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64Length;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64Length;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.basicIdentifierPlaceholder;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.selfSigningIdentifierPlaceholder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier;
 
 public class QualifiedBase64Tests {

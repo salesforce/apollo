@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;

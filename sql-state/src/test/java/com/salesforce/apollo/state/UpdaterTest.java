@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static com.salesforce.apollo.state.Mutator.batch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.state.SqlStateMachine.Event;
 
 /**

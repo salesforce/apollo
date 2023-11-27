@@ -28,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.bloomFilters.BloomFilter;

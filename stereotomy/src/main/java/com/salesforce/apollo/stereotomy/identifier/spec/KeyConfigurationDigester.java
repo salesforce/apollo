@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.identifier.spec;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.bs;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
@@ -15,10 +15,10 @@ import java.security.PublicKey;
 import java.util.List;
 import java.util.stream.Stream;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.utils.Hex;
 
 /**

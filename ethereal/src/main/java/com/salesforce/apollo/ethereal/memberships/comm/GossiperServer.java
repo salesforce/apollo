@@ -13,7 +13,7 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperImplBase;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.stub.StreamObserver;

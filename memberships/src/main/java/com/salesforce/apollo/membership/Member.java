@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -15,9 +15,9 @@ import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Verifier;
 
 /**
  * @author hal.hildebrand

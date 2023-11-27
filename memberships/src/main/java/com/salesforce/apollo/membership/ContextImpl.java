@@ -25,7 +25,7 @@ import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * Provides a Context for Membership and is uniquely identified by a Digest;.

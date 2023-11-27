@@ -9,8 +9,8 @@ package com.salesforce.apollo.stereotomy.identifier;
 import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand

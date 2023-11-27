@@ -17,8 +17,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.EpochProof.Builder;
 import com.salesfoce.apollo.ethereal.proto.Proof;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
 
 /**
  * the epoch proof is a message required to verify if the epoch has finished. It

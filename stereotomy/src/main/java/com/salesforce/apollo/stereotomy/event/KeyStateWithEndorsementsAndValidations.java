@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithEndorsementsAndValidations_;
 import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;

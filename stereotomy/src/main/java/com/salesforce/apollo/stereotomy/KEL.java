@@ -7,8 +7,8 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;

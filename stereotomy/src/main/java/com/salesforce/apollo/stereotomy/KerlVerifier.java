@@ -1,8 +1,8 @@
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.joou.ULong;
 

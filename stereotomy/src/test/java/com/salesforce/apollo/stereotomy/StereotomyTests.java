@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.SigningThreshold.Unweighted;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;

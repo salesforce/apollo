@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 import org.h2.mvstore.WriteBuffer;
 import org.h2.mvstore.type.BasicDataType;
 
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

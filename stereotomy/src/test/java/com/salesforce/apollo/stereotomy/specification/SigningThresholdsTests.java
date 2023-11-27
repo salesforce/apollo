@@ -1,10 +1,10 @@
 package com.salesforce.apollo.stereotomy.specification;
 
-import static com.salesforce.apollo.crypto.SigningThreshold.group;
-import static com.salesforce.apollo.crypto.SigningThreshold.thresholdMet;
-import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
-import static com.salesforce.apollo.crypto.SigningThreshold.weight;
-import static com.salesforce.apollo.crypto.SigningThreshold.weighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.group;
+import static com.salesforce.apollo.cryptography.SigningThreshold.thresholdMet;
+import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.weight;
+import static com.salesforce.apollo.cryptography.SigningThreshold.weighted;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
-import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight.WeightImpl;
+import com.salesforce.apollo.cryptography.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.cryptography.SigningThreshold.Weighted.Weight.WeightImpl;
 
 public class SigningThresholdsTests {
 

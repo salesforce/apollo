@@ -13,7 +13,7 @@ import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;

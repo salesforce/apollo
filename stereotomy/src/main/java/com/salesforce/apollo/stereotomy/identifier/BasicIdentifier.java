@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
-import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.bs;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.shortQb64;
 
 import java.io.InputStream;
 import java.security.PublicKey;
@@ -16,9 +16,9 @@ import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.cryptography.proto.PubKey;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.Verifier;
 
 /**
  * @author hal.hildebrand

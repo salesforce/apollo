@@ -17,8 +17,8 @@ import java.util.stream.Stream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
  * Provides a Context for Membership and is uniquely identified by a Digest;.

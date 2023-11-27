@@ -8,7 +8,7 @@ package com.salesforce.apollo.thoth;
 
 import com.salesfoce.apollo.thoth.proto.Interval;
 import com.salesfoce.apollo.thoth.proto.Intervals;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;

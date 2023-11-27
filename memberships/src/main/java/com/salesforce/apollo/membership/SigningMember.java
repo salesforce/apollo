@@ -8,8 +8,8 @@ package com.salesforce.apollo.membership;
 
 import java.io.InputStream;
 
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Signer;
 
 /**
  * @author hal.hildebrand

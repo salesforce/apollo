@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 

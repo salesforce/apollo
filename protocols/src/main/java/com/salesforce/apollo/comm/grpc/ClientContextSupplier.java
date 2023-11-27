@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;

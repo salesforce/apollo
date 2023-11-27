@@ -1,8 +1,8 @@
 package com.salesforce.apollo.stereotomy.specification;
 
-import static com.salesforce.apollo.crypto.SigningThreshold.group;
-import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
-import static com.salesforce.apollo.crypto.SigningThreshold.weighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.group;
+import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.weighted;
 import static com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester.signingThresholdRepresentation;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;

@@ -1,11 +1,11 @@
 package com.salesforce.apollo.utils;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.cert.Certificates;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -23,7 +23,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
  * @author hal.hildebrand

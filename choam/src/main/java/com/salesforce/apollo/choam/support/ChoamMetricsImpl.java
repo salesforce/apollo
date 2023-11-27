@@ -7,7 +7,7 @@
 package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.*;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;

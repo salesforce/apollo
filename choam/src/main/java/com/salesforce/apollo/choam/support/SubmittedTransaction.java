@@ -8,7 +8,7 @@ package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import org.joou.ULong;
 
 import java.util.concurrent.CompletableFuture;

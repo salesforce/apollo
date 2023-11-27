@@ -22,11 +22,11 @@ import javax.net.ssl.SSLSession;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
-import com.salesforce.apollo.crypto.ssl.NodeKeyManagerFactory;
-import com.salesforce.apollo.crypto.ssl.NodeTrustManagerFactory;
-import com.salesforce.apollo.crypto.ssl.TlsInterceptor;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.ssl.NodeKeyManagerFactory;
+import com.salesforce.apollo.cryptography.ssl.NodeTrustManagerFactory;
+import com.salesforce.apollo.cryptography.ssl.TlsInterceptor;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.BindableService;

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 

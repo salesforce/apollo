@@ -10,9 +10,9 @@ import java.io.InputStream;
 import java.util.Optional;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier.Filtered;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.Verifier.Filtered;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 

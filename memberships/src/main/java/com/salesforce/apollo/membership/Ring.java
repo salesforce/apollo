@@ -22,7 +22,7 @@ import java.util.stream.StreamSupport;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * A ring of members. Also, too, addressable functions by Digest, for ring

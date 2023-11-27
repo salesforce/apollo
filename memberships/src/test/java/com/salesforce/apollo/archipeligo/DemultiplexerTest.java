@@ -16,7 +16,7 @@ import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.Demultiplexer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.Status;
@@ -48,7 +48,7 @@ import java.util.function.Function;
 import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**

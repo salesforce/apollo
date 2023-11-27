@@ -8,7 +8,7 @@ package com.salesforce.apollo.stereotomy.services;
 
 import java.util.concurrent.TimeoutException;
 
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;

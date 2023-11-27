@@ -11,7 +11,7 @@ import java.util.Properties;
 
 import org.h2.jdbc.JdbcConnection;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirect;
 
 import liquibase.Liquibase;

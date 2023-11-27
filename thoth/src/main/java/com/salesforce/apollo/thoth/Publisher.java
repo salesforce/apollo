@@ -13,7 +13,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClient;

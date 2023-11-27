@@ -14,7 +14,7 @@ import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
-import com.salesforce.apollo.crypto.*;
+import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -61,8 +61,8 @@ public class ViewAssemblyTest {
     private        List<Ethereal>                  controllers    = new ArrayList<>();
     private        Map<SigningMember, VDataSource> dataSources;
     private        List<ChRbcGossip>               gossipers      = new ArrayList<>();
-    private        List<SigningMember>             members;
-    private        Digest                          nextViewId;
+    private List<SigningMember> members;
+    private Digest              nextViewId;
 
     @AfterEach
     public void after() {
