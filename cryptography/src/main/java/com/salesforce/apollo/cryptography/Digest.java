@@ -285,6 +285,10 @@ public class Digest implements Comparable<Digest> {
         return builder.build();
     }
 
+    public long toLong() {
+        return algorithm.toLong(hash);
+    }
+
     @Override
     public String toString() {
         String hexString = Hex.hex(getBytes());

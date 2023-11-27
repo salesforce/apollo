@@ -440,11 +440,20 @@ public enum DigestAlgorithm {
         return new Digest(digestCode(), hash);
     }
 
+    public long toLong(long[] hash) {
+        assert hash != null;
+        long l = 0;
+        for (var h : hash) {
+            l ^= h;
+        }
+        return l;
+    }
+
     public UUID toUUID(long[] hash) {
         assert hash != null;
         return switch (hash.length) {
-            case 4 -> new UUID(hash[0] ^ hash[2], hash[1] ^ hash[3]);
-            case 8 -> toUUID(new long[] { hash[0] ^ hash[2], hash[1] ^ hash[3], hash[4] ^ hash[6], hash[5] ^ hash[7] });
+            case 4 -> new UUID(hash[0] ^ hash[1], hash[2] ^ hash[3]);
+            case 8 -> toUUID(new long[] { hash[0] ^ hash[1], hash[2] ^ hash[3], hash[4] ^ hash[5], hash[6] ^ hash[7] });
             default -> throw new IllegalArgumentException("invalid hash array size: " + hash.length);
         };
     }
