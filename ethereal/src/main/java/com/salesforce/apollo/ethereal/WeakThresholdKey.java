@@ -8,8 +8,8 @@ package com.salesforce.apollo.ethereal;
 
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.Proof;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.DecodedShare;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.Share;
 import org.joou.ULong;

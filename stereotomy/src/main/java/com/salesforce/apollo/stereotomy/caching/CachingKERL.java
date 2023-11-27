@@ -8,7 +8,7 @@
 package com.salesforce.apollo.stereotomy.caching;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;

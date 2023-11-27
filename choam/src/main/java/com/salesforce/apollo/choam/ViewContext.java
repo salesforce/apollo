@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,11 +25,11 @@ import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 

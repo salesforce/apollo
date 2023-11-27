@@ -6,20 +6,16 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.state.Emulator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
-import javax.xml.bind.DatatypeConverter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Random;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
 import static org.junit.jupiter.api.Assertions.assertEquals;

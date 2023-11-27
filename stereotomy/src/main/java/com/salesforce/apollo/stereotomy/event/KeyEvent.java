@@ -10,9 +10,9 @@ import org.joou.ULong;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 

@@ -13,7 +13,7 @@ import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationImplBas
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.archipelago.RoutableService;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 

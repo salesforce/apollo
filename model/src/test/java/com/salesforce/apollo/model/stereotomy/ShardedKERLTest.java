@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.model.stereotomy;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.SigningThreshold.Unweighted;
 import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
 import com.salesforce.apollo.stereotomy.*;
@@ -31,8 +31,6 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.junit.jupiter.api.Assertions.*;
 

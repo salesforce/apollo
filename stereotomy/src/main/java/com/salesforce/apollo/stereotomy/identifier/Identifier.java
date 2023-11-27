@@ -6,17 +6,17 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**

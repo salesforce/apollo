@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Signer.MockSigner;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.Signer.MockSigner;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 import com.salesforce.apollo.membership.Context;
 import org.joou.ULong;

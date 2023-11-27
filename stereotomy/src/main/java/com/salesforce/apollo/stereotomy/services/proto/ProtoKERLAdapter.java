@@ -8,8 +8,8 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KERL;

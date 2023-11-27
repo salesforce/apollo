@@ -7,7 +7,7 @@
 package com.salesforce.apollo.bloomFilters;
 
 import com.salesfoce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import org.joou.ULong;
 
 import java.util.BitSet;

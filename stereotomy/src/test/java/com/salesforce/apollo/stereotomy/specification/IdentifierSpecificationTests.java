@@ -1,9 +1,9 @@
 package com.salesforce.apollo.stereotomy.specification;
 
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.Signer.SignerImpl;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;

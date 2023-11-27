@@ -7,7 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.crypto.*;
+import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.ethereal.Dag.Decoded;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import org.joou.ULong;

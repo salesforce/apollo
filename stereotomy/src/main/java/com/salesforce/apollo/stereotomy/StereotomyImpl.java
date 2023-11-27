@@ -7,12 +7,12 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.crypto.*;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
-import com.salesforce.apollo.crypto.cert.CertExtension;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.Signer.SignerImpl;
+import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
+import com.salesforce.apollo.cryptography.cert.CertExtension;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.cert.Certificates;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.*;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
@@ -38,7 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
-import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
+import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 /**

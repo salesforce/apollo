@@ -11,7 +11,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**

@@ -10,8 +10,8 @@ import java.security.PublicKey;
 import java.util.List;
 import java.util.Optional;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 
 /**
  * @author hal.hildebrand

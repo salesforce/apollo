@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.crypto.Digest.combine;
+import static com.salesforce.apollo.cryptography.Digest.combine;
 
 import com.salesfoce.apollo.ethereal.proto.Crown_s;
 import com.salesfoce.apollo.ethereal.proto.Crown_s.Builder;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
  * Crown represents nProc units created by different processes in a condensed

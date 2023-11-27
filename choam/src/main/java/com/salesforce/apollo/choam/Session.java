@@ -17,10 +17,10 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.choam.support.TransactionFailed;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.Verifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -8,7 +8,7 @@ package com.salesforce.apollo.thoth.grpc.delegation;
 
 import java.util.concurrent.CompletableFuture;
 
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;

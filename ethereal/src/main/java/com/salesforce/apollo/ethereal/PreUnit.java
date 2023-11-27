@@ -19,11 +19,11 @@ import java.util.Map;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s.Builder;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.utils.Entropy;
 
 /**

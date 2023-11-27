@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 
 import java.util.Map;
 import java.util.function.Consumer;
 
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.Status;

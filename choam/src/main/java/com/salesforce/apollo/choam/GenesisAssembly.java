@@ -18,7 +18,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -36,12 +36,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 /**
  * Construction of the genesis block

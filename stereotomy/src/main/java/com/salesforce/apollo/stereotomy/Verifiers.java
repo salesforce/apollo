@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
+import com.salesforce.apollo.cryptography.Verifier;
+import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;

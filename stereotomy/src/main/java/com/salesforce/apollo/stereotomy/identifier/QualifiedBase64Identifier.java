@@ -7,18 +7,18 @@
 package com.salesforce.apollo.stereotomy.identifier;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.QualifiedBase64;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.QualifiedBase64;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import org.joou.ULong;
 
 import java.math.BigInteger;
 
-import static com.salesforce.apollo.crypto.DigestAlgorithm.*;
-import static com.salesforce.apollo.crypto.SignatureAlgorithm.*;
+import static com.salesforce.apollo.cryptography.DigestAlgorithm.*;
+import static com.salesforce.apollo.cryptography.SignatureAlgorithm.*;
 
 /**
  * QB64 DSL for identifier conversion

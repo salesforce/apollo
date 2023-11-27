@@ -23,8 +23,8 @@ import com.salesforce.apollo.choam.fsm.Combine.Merchantile;
 import com.salesforce.apollo.choam.support.*;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
-import com.salesforce.apollo.crypto.*;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
@@ -53,8 +53,8 @@ import java.util.stream.Collectors;
 import static com.salesforce.apollo.choam.Committee.validatorsOf;
 import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
 import static com.salesforce.apollo.choam.support.HashedBlock.height;
-import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.bs;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 
 /**
  * Combine Honnete Ober Advancer Mercantiles.
@@ -75,9 +75,9 @@ public class CHOAM {
     private final        AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
     private final        AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
     private final        ExecutorService                                       linear;
-    private final        AtomicReference<nextView>                             next                  = new AtomicReference<>();
-    private final        AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
-    private final        Parameters                                            params;
+    private final        AtomicReference<nextView> next       = new AtomicReference<>();
+    private final        AtomicReference<Digest>   nextViewId = new AtomicReference<>();
+    private final        Parameters                params;
     private final        PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
     private final        RoundScheduler                                        roundScheduler;
     private final        Session                                               session;

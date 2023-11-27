@@ -8,7 +8,7 @@ package com.salesforce.apollo.membership;
 
 import java.util.List;
 
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

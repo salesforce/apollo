@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.security.KeyPair;
 import java.security.Provider;
 import java.security.cert.CertificateException;
@@ -24,12 +23,12 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.cert.Certificates;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.cert.Certificates;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;

@@ -10,7 +10,7 @@ import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.protocols.LimitsRegistry;
@@ -30,8 +30,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
  * Enclave Server for routing from a process endpoint in the default Isolate into individual Isolates.

@@ -15,7 +15,7 @@ import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientIntercep
 import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import com.netflix.concurrency.limits.grpc.client.GrpcClientRequestContext;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 
 import io.grpc.ManagedChannel;
 import io.grpc.Status;

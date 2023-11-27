@@ -13,10 +13,10 @@ import java.io.InputStream;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.membership.Member;
 
 /**

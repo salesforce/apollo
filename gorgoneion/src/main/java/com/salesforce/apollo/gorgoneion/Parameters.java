@@ -7,7 +7,7 @@
 package com.salesforce.apollo.gorgoneion;
 
 import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KERL;
 
 import java.time.Clock;

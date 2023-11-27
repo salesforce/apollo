@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.membership.Context;

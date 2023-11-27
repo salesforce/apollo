@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
 import java.security.PublicKey;
 import java.util.List;
@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
 import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 
 /**

@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.MoreObjects;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.ReleasableManagedChannel;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 
 import io.grpc.CallOptions;

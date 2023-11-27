@@ -14,7 +14,7 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import org.slf4j.Logger;
@@ -32,8 +32,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 /**
  * View reconfiguration. Attempts to create a new view reconfiguration. View reconfiguration needs at least 2f+1

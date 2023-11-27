@@ -13,8 +13,8 @@ import java.util.Objects;
 import org.joou.ULong;
 
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 

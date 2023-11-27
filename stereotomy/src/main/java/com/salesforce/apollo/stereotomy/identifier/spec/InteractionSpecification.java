@@ -13,8 +13,8 @@ import java.util.List;
 
 import org.joou.ULong;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.Seal;

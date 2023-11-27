@@ -14,8 +14,8 @@ import java.util.Set;
 import org.joou.ULong;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;

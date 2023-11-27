@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.protocols;
 
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

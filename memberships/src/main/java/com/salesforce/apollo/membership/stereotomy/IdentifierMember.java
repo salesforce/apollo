@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.membership.stereotomy;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SigningThreshold;
-import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SigningThreshold;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Member;
 
 import java.io.InputStream;

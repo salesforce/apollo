@@ -9,8 +9,8 @@ package com.salesforce.apollo.choam.support;
 import org.joou.ULong;
 
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand

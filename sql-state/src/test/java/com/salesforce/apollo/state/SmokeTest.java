@@ -18,8 +18,8 @@ import java.util.zip.DeflaterOutputStream;
 import deterministic.org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 public class SmokeTest {
 

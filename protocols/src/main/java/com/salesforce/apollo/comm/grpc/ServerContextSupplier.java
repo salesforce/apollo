@@ -9,8 +9,8 @@ package com.salesforce.apollo.comm.grpc;
 import java.security.Provider;
 import java.security.cert.X509Certificate;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;

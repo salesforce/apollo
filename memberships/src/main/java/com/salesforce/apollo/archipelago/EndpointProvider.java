@@ -8,7 +8,7 @@ package com.salesforce.apollo.archipelago;
 
 import java.net.SocketAddress;
 
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 
 import io.netty.handler.ssl.ClientAuth;

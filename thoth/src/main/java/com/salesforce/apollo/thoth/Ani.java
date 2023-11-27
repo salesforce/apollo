@@ -7,9 +7,9 @@
 
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.crypto.*;
-import com.salesforce.apollo.crypto.Verifier.Filtered;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.Verifier.Filtered;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.KEL.KeyStateWithAttachments;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;

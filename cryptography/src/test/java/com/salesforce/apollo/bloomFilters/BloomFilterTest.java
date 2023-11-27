@@ -12,11 +12,10 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 

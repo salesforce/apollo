@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
 
 /**
  * @author hal.hildebrand
