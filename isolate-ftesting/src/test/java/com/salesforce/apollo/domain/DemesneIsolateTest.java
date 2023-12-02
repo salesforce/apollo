@@ -6,15 +6,15 @@
  */
 package com.salesforce.apollo.domain;
 
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.JniBridge;

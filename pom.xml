@@ -500,6 +500,20 @@
                 <groupId>io.netty</groupId>
                 <artifactId>netty-transport-native-unix-common</artifactId>
                 <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-transport-native-kqueue</artifactId>
+                <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-transport-native-epoll</artifactId>
+                <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+                <scope>provided</scope>
             </dependency>
             <dependency>
                 <groupId>org.graalvm.sdk</groupId>
@@ -840,4 +854,25 @@
             </plugins>
         </pluginManagement>
     </build>
+    <profiles>
+        <profile>
+            <id>pre</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>h2-deterministic</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>isolates</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>isolates</module>
+                <module>isolate-ftesting</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>
