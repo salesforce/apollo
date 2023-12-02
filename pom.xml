@@ -28,6 +28,8 @@
         <module>gorgoneion</module>
         <module>gorgoneion-client</module>
         <module>cryptography</module>
+        <module>domain-epoll</module>
+        <module>domain-kqueue</module>
     </modules>
 
     <properties>
@@ -596,49 +598,6 @@
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
-    <profiles>
-        <profile>
-            <id>pre</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <modules>
-                <module>h2-deterministic</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>isolates</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <modules>
-                <module>isolates</module>
-                <module>isolate-ftesting</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>mac-domain</id>
-            <activation>
-                <os>
-                    <family>mac</family>
-                </os>
-            </activation>
-            <modules>
-                <module>domain-kqueue</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>linux-domain</id>
-            <activation>
-                <os>
-                    <name>linux</name>
-                </os>
-            </activation>
-            <modules>
-                <module>domain-epoll</module>
-            </modules>
-        </profile>
-    </profiles>
     <build>
         <extensions>
             <extension>
