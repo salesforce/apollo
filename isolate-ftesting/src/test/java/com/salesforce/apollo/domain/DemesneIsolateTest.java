@@ -49,8 +49,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getServerDomainSocketChannelClass;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -58,10 +57,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author hal.hildebrand
  */
 public class DemesneIsolateTest {
-    private static final Class<? extends ServerDomainSocketChannel> channelType       = getServerDomainSocketChannelClass();
-    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
+    private static final Class<? extends ServerDomainSocketChannel> channelType       = IMPL.getServerDomainSocketChannelClass();
+    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
 
-    private EventLoopGroup eventLoopGroup = getEventLoopGroup();
+    private EventLoopGroup eventLoopGroup = IMPL.getEventLoopGroup();
 
     @Test
     public void smokin() throws Exception {
@@ -76,7 +75,7 @@ public class DemesneIsolateTest {
         var parentAddress = UUID.randomUUID().toString();
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
         var serverBuilder = NettyServerBuilder.forAddress(portalEndpoint)
-                                              .protocolNegotiator(new DomainSocketNegotiator())
+                                              .protocolNegotiator(new DomainSocketNegotiator(IMPL))
                                               .channelType(serverChannelType)
                                               .workerEventLoopGroup(eventLoopGroup)
                                               .bossEventLoopGroup(eventLoopGroup)
@@ -106,12 +105,12 @@ public class DemesneIsolateTest {
         var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
         var outerService = new OuterContextServer(service, null);
         var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
-                                                    .protocolNegotiator(new DomainSocketNegotiator())
-                                                    .channelType(getServerDomainSocketChannelClass())
+                                                    .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                    .channelType(IMPL.getServerDomainSocketChannelClass())
                                                     .addService(kerlServer)
                                                     .addService(outerService)
-                                                    .workerEventLoopGroup(getEventLoopGroup())
-                                                    .bossEventLoopGroup(getEventLoopGroup())
+                                                    .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                    .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                     .intercept(new DomainSocketServerInterceptor())
                                                     .build();
         outerContextService.start();

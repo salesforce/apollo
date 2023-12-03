@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
@@ -40,13 +40,13 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class Enclave implements RouterSupplier {
     private final static Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
     private final DomainSocketAddress bridge;
     private final Consumer<Digest>    contextRegistration;
     private final DomainSocketAddress endpoint;
-    private final EventLoopGroup      eventLoopGroup = getEventLoopGroup();
+    private final EventLoopGroup      eventLoopGroup = IMPL.getEventLoopGroup();
     private final Member              from;
     private final String              fromString;
 
@@ -79,10 +79,10 @@ public class Enclave implements RouterSupplier {
         }
         ServerBuilder<?> serverBuilder = NettyServerBuilder.forAddress(endpoint)
                                                            .executor(executor)
-                                                           .protocolNegotiator(new DomainSocketNegotiator())
-                                                           .channelType(getServerDomainSocketChannelClass())
-                                                           .workerEventLoopGroup(getEventLoopGroup())
-                                                           .bossEventLoopGroup(getEventLoopGroup())
+                                                           .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                           .channelType(IMPL.getServerDomainSocketChannelClass())
+                                                           .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                           .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                            .intercept(new DomainSocketServerInterceptor())
                                                            .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                        limitsBuilder.build())

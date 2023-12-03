@@ -8,13 +8,13 @@ package com.salesforce.apollo.demesnes;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesfoce.apollo.demesne.proto.DemesneParameters;
 import com.salesfoce.apollo.demesne.proto.SubContext;
 import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
@@ -59,7 +59,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
@@ -67,8 +67,8 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class DemesneSmoke {
 
-    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
-    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
+    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = IMPL.getChannelType();
+    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
     private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
     private              EventLoopGroup                             eventLoopGroup;
 
@@ -108,7 +108,7 @@ public class DemesneSmoke {
     }
 
     public void before() {
-        eventLoopGroup = getEventLoopGroup();
+        eventLoopGroup = IMPL.getEventLoopGroup();
     }
 
     public void smokin() throws Exception {
@@ -123,7 +123,7 @@ public class DemesneSmoke {
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
         final var router = new RouterImpl(serverMember, NettyServerBuilder.forAddress(portalEndpoint)
                                                                           .protocolNegotiator(
-                                                                          new DomainSocketNegotiator())
+                                                                          new DomainSocketNegotiator(IMPL))
                                                                           .channelType(serverChannelType)
                                                                           .workerEventLoopGroup(eventLoopGroup)
                                                                           .bossEventLoopGroup(eventLoopGroup)
@@ -153,12 +153,12 @@ public class DemesneSmoke {
         final var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
         final var outerService = new OuterContextServer(service, null);
         final var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
-                                                          .protocolNegotiator(new DomainSocketNegotiator())
-                                                          .channelType(getServerDomainSocketChannelClass())
+                                                          .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                          .channelType(IMPL.getServerDomainSocketChannelClass())
                                                           .addService(kerlServer)
                                                           .addService(outerService)
-                                                          .workerEventLoopGroup(getEventLoopGroup())
-                                                          .bossEventLoopGroup(getEventLoopGroup())
+                                                          .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                          .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor())
                                                           .build();
         outerContextService.start();

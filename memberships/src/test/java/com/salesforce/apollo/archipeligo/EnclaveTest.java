@@ -41,7 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * @author hal.hildebrand
  */
 public class EnclaveTest {
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
     private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
     private final        TestItService                             local       = new TestItService() {
 
@@ -81,7 +81,7 @@ public class EnclaveTest {
 
     @BeforeEach
     public void before() {
-        eventLoopGroup = getEventLoopGroup();
+        eventLoopGroup = IMPL.getEventLoopGroup();
     }
 
     @Test
@@ -99,10 +99,10 @@ public class EnclaveTest {
         Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
         final var agent = DigestAlgorithm.DEFAULT.getLast();
         final var portal = new Portal<>(agent, NettyServerBuilder.forAddress(portalEndpoint)
-                                                                 .protocolNegotiator(new DomainSocketNegotiator())
-                                                                 .channelType(getServerDomainSocketChannelClass())
-                                                                 .workerEventLoopGroup(getEventLoopGroup())
-                                                                 .bossEventLoopGroup(getEventLoopGroup())
+                                                                 .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                                 .channelType(IMPL.getServerDomainSocketChannelClass())
+                                                                 .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                                 .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                                  .intercept(new DomainSocketServerInterceptor()),
                                         s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), router);
 

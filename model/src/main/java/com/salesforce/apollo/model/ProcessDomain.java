@@ -60,7 +60,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
@@ -75,23 +75,23 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class ProcessDomain extends Domain {
 
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
 
     private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
 
     private final DomainSocketAddress                                       bridge;
-    private final EventLoopGroup                                            clientEventLoopGroup  = getEventLoopGroup();
+    private final EventLoopGroup                                            clientEventLoopGroup  = IMPL.getEventLoopGroup();
     private final Path                                                      communicationsDirectory;
-    private final EventLoopGroup                                            contextEventLoopGroup = getEventLoopGroup();
+    private final EventLoopGroup                                            contextEventLoopGroup = IMPL.getEventLoopGroup();
     private final KerlDHT                                                   dht;
-    private final View                 foundation;
-    private final Map<Digest, Demesne> hostedDomains = new ConcurrentHashMap<>();
-    private final UUID                 listener;
+    private final View                                                      foundation;
+    private final Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
+    private final UUID                                                      listener;
     private final DomainSocketAddress                                       outerContextEndpoint;
     private final Server                                                    outerContextService;
     private final Portal<Member>                                            portal;
     private final DomainSocketAddress                                       portalEndpoint;
-    private final EventLoopGroup                                            portalEventLoopGroup  = getEventLoopGroup();
+    private final EventLoopGroup                                            portalEventLoopGroup  = IMPL.getEventLoopGroup();
     private final Map<String, DomainSocketAddress>                          routes                = new HashMap<>();
     private final IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification;
 
@@ -118,8 +118,8 @@ public class ProcessDomain extends Domain {
         portalEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portal = new Portal<>(member.getId(), NettyServerBuilder.forAddress(portalEndpoint)
-                                                                .protocolNegotiator(new DomainSocketNegotiator())
-                                                                .channelType(getServerDomainSocketChannelClass())
+                                                                .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                                .channelType(IMPL.getServerDomainSocketChannelClass())
                                                                 .workerEventLoopGroup(portalEventLoopGroup)
                                                                 .bossEventLoopGroup(portalEventLoopGroup)
                                                                 .intercept(new DomainSocketServerInterceptor()),
@@ -127,8 +127,8 @@ public class ProcessDomain extends Domain {
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
-                                                .protocolNegotiator(new DomainSocketNegotiator())
-                                                .channelType(getServerDomainSocketChannelClass())
+                                                .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                .channelType(IMPL.getServerDomainSocketChannelClass())
                                                 .addService(new DemesneKERLServer(dht, null))
                                                 .addService(outerContextService())
                                                 .workerEventLoopGroup(contextEventLoopGroup)

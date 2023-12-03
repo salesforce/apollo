@@ -30,6 +30,7 @@
         <module>cryptography</module>
         <module>domain-epoll</module>
         <module>domain-kqueue</module>
+        <module>domain-sockets</module>
     </modules>
 
     <properties>
@@ -121,6 +122,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>thoth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>domain-sockets</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -495,6 +501,11 @@
                         <artifactId>error_prone_annotations</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-common</artifactId>
+                <version>${netty.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>

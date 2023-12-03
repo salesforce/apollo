@@ -7,7 +7,6 @@
 package io.grpc.netty;
 
 import com.salesforce.apollo.comm.grpc.DomainSockets;
-
 import io.grpc.Attributes;
 import io.grpc.ChannelLogger;
 import io.grpc.Grpc;
@@ -24,35 +23,18 @@ import io.netty.util.AsciiString;
 
 /**
  * @author hal.hildebrand
- *
  */
 
 public class DomainSocketNegotiatorHandler extends ProtocolNegotiationHandler {
-    public static final class DomainSocketNegotiator implements ProtocolNegotiator {
-
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
-            ChannelHandler grpcNegotiationHandler = new GrpcNegotiationHandler(grpcHandler);
-            return new DomainSocketNegotiatorHandler(grpcNegotiationHandler, grpcHandler.getNegotiationLogger());
-        }
-
-        @Override
-        public AsciiString scheme() {
-            return AsciiString.of("domain");
-        }
-    }
-
     @TransportAttr
-    public static final Attributes.Key<PeerCredentials> TRANSPORT_ATTR_PEER_CREDENTIALS = Attributes.Key.create("com.salesforce.apollo.TRANSPORT_ATTR_PEER_CREDENTIAL");
-
+    public static final Attributes.Key<PeerCredentials> TRANSPORT_ATTR_PEER_CREDENTIALS = Attributes.Key.create(
+    "com.salesforce.apollo.TRANSPORT_ATTR_PEER_CREDENTIAL");
+    private final       DomainSockets                   domainSockets;
     boolean protocolNegotiationEventReceived;
 
-    DomainSocketNegotiatorHandler(ChannelHandler next, ChannelLogger negotiationLogger) {
+    DomainSocketNegotiatorHandler(ChannelHandler next, ChannelLogger negotiationLogger, DomainSockets domainSockets) {
         super(next, negotiationLogger);
+        this.domainSockets = domainSockets;
     }
 
     @Override
@@ -76,7 +58,7 @@ public class DomainSocketNegotiatorHandler extends ProtocolNegotiationHandler {
 
     private void replaceOnActive(ChannelHandlerContext ctx) {
         ProtocolNegotiationEvent existingPne = getProtocolNegotiationEvent();
-        PeerCredentials credentials = DomainSockets.getPeerCredentials(ctx.channel());
+        PeerCredentials credentials = domainSockets.getPeerCredentials(ctx.channel());
         Attributes attrs = existingPne.getAttributes()
                                       .toBuilder()
                                       .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY)
@@ -85,5 +67,30 @@ public class DomainSocketNegotiatorHandler extends ProtocolNegotiationHandler {
                                       .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
                                       .build();
         replaceProtocolNegotiationEvent(existingPne.withAttributes(attrs));
+    }
+
+    public static final class DomainSocketNegotiator implements ProtocolNegotiator {
+
+        private final DomainSockets domainSockets;
+
+        public DomainSocketNegotiator(DomainSockets domainSockets) {
+            this.domainSockets = domainSockets;
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public ChannelHandler newHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+            ChannelHandler grpcNegotiationHandler = new GrpcNegotiationHandler(grpcHandler);
+            return new DomainSocketNegotiatorHandler(grpcNegotiationHandler, grpcHandler.getNegotiationLogger(),
+                                                     domainSockets);
+        }
+
+        @Override
+        public AsciiString scheme() {
+            return AsciiString.of("domain");
+        }
     }
 }

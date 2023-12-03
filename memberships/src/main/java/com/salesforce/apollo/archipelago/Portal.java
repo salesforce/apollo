@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 
 /**
  * Local "service mesh" for in process Isolate Enclaves. The Portal provides the externally visible GRPC endpoint that
@@ -36,10 +36,10 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
  */
 public class Portal<To extends Member> {
     private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
-    private final static Class<? extends io.netty.channel.Channel> channelType = getChannelType();
+    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
 
     private final String         agent;
-    private final EventLoopGroup eventLoopGroup = getEventLoopGroup();
+    private final EventLoopGroup eventLoopGroup = IMPL.getEventLoopGroup();
     private final Demultiplexer  inbound;
     private final Duration       keepAlive;
     private final Demultiplexer  outbound;
@@ -49,10 +49,10 @@ public class Portal<To extends Member> {
         this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
                                                             .executor(executor)
-                                                            .protocolNegotiator(new DomainSocketNegotiator())
-                                                            .channelType(getServerDomainSocketChannelClass())
-                                                            .workerEventLoopGroup(getEventLoopGroup())
-                                                            .bossEventLoopGroup(getEventLoopGroup())
+                                                            .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                            .channelType(IMPL.getServerDomainSocketChannelClass())
+                                                            .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                            .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                             .intercept(new DomainSocketServerInterceptor()),
                                           Router.METADATA_TARGET_KEY, outbound);
         this.keepAlive = keepAlive;

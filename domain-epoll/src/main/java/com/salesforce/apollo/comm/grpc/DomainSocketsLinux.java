@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
-import java.io.IOException;
-import java.util.concurrent.Executor;
-
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.EventLoopTaskQueueFactory;
@@ -21,57 +18,56 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
 import io.netty.util.concurrent.EventExecutorChooserFactory;
 import io.netty.util.concurrent.RejectedExecutionHandler;
 
+import java.io.IOException;
+import java.util.concurrent.Executor;
+
 /**
  * @author hal.hildebrand
- *
  */
-public class DomainSockets {
+public class DomainSocketsLinux implements DomainSockets {
 
-    public static Class<? extends Channel> getChannelType() {
+    public Class<? extends Channel> getChannelType() {
         return EpollDomainSocketChannel.class;
     }
 
-    public static EventLoopGroup getEventLoopGroup() {
+    public EventLoopGroup getEventLoopGroup() {
         return new EpollEventLoopGroup();
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads) {
+    public EventLoopGroup getEventLoopGroup(int threads) {
         return new EpollEventLoopGroup(threads);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor) {
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor) {
         return new EpollEventLoopGroup(threads, executor);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory) {
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory) {
         return new EpollEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory,
-                                                   RejectedExecutionHandler rejectedExecutionHandler) {
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory,
+                                            RejectedExecutionHandler rejectedExecutionHandler) {
         return new EpollEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory,
                                        rejectedExecutionHandler);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory,
-                                                   RejectedExecutionHandler rejectedExecutionHandler,
-                                                   EventLoopTaskQueueFactory queueFactory) {
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory,
+                                            RejectedExecutionHandler rejectedExecutionHandler,
+                                            EventLoopTaskQueueFactory queueFactory) {
         return new EpollEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory,
                                        rejectedExecutionHandler, queueFactory);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   SelectStrategyFactory selectStrategyFactory) {
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor,
+                                            SelectStrategyFactory selectStrategyFactory) {
         return new EpollEventLoopGroup(threads, executor, selectStrategyFactory);
     }
 
-    public static PeerCredentials getPeerCredentials(Channel channel) {
+    public PeerCredentials getPeerCredentials(Channel channel) {
         if (channel instanceof EpollDomainSocketChannel ep) {
             try {
                 return ep.peerCredentials();
@@ -83,7 +79,7 @@ public class DomainSockets {
         }
     }
 
-    public static Class<? extends ServerDomainSocketChannel> getServerDomainSocketChannelClass() {
+    public Class<? extends ServerDomainSocketChannel> getServerDomainSocketChannelClass() {
         return EpollServerDomainSocketChannel.class;
     }
 }
