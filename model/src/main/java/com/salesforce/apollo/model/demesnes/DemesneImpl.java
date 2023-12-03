@@ -63,8 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getChannelType;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 
 /**
  * Isolate for the Apollo SubDomain stack
@@ -72,9 +71,9 @@ import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
  * @author hal.hildebrand
  */
 public class DemesneImpl implements Demesne {
-    private static final Class<? extends Channel> channelType             = getChannelType();
+    private static final Class<? extends Channel> channelType             = IMPL.getChannelType();
     private static final Duration                 DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
-    private static final EventLoopGroup           eventLoopGroup          = getEventLoopGroup();
+    private static final EventLoopGroup           eventLoopGroup          = IMPL.getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
     private final static Executor                 executor                = Executors.newVirtualThreadPerTaskExecutor();
     private final        KERL                     kerl;

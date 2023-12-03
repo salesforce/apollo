@@ -28,6 +28,9 @@
         <module>gorgoneion</module>
         <module>gorgoneion-client</module>
         <module>cryptography</module>
+        <module>domain-epoll</module>
+        <module>domain-kqueue</module>
+        <module>domain-sockets</module>
     </modules>
 
     <properties>
@@ -119,6 +122,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>thoth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>domain-sockets</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -496,8 +504,27 @@
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
+                <artifactId>netty-common</artifactId>
+                <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
                 <artifactId>netty-transport-native-unix-common</artifactId>
                 <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-transport-native-kqueue</artifactId>
+                <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-transport-native-epoll</artifactId>
+                <version>${netty.version}</version>
+                <classifier>${os.detected.classifier}</classifier>
+                <scope>provided</scope>
             </dependency>
             <dependency>
                 <groupId>org.graalvm.sdk</groupId>
@@ -596,49 +623,6 @@
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
-    <profiles>
-        <profile>
-            <id>pre</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <modules>
-                <module>h2-deterministic</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>isolates</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <modules>
-                <module>isolates</module>
-                <module>isolate-ftesting</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>mac-domain</id>
-            <activation>
-                <os>
-                    <family>mac</family>
-                </os>
-            </activation>
-            <modules>
-                <module>domain-kqueue</module>
-            </modules>
-        </profile>
-        <profile>
-            <id>linux-domain</id>
-            <activation>
-                <os>
-                    <name>linux</name>
-                </os>
-            </activation>
-            <modules>
-                <module>domain-epoll</module>
-            </modules>
-        </profile>
-    </profiles>
     <build>
         <extensions>
             <extension>
@@ -881,4 +865,25 @@
             </plugins>
         </pluginManagement>
     </build>
+    <profiles>
+        <profile>
+            <id>pre</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>h2-deterministic</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>isolates</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <modules>
+                <module>isolates</module>
+                <module>isolate-ftesting</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

@@ -66,7 +66,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -74,8 +74,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author hal.hildebrand
  */
 public class DemesneTest {
-    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = getChannelType();
-    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = getServerDomainSocketChannelClass();
+    private final static Class<? extends io.netty.channel.Channel>  clientChannelType = IMPL.getChannelType();
+    private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
     private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
     private final        TestItService                              local             = new TestItService() {
 
@@ -123,7 +123,7 @@ public class DemesneTest {
 
     @BeforeEach
     public void before() {
-        eventLoopGroup = getEventLoopGroup();
+        eventLoopGroup = IMPL.getEventLoopGroup();
     }
 
     @Test
@@ -140,13 +140,13 @@ public class DemesneTest {
         final var routes = new HashMap<String, DomainSocketAddress>();
         final var portal = new Portal<>(serverMember1.getId(), NettyServerBuilder.forAddress(portalEndpoint)
                                                                                  .protocolNegotiator(
-                                                                                 new DomainSocketNegotiator())
+                                                                                 new DomainSocketNegotiator(IMPL))
                                                                                  .channelType(
-                                                                                 getServerDomainSocketChannelClass())
+                                                                                 IMPL.getServerDomainSocketChannelClass())
                                                                                  .workerEventLoopGroup(
-                                                                                 getEventLoopGroup())
+                                                                                 IMPL.getEventLoopGroup())
                                                                                  .bossEventLoopGroup(
-                                                                                 getEventLoopGroup())
+                                                                                 IMPL.getEventLoopGroup())
                                                                                  .intercept(
                                                                                  new DomainSocketServerInterceptor()),
                                         s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
@@ -200,7 +200,7 @@ public class DemesneTest {
         final var portalEndpoint = new DomainSocketAddress(commDirectory.resolve(portalAddress).toFile());
         final var router = new RouterImpl(serverMember, NettyServerBuilder.forAddress(portalEndpoint)
                                                                           .protocolNegotiator(
-                                                                          new DomainSocketNegotiator())
+                                                                          new DomainSocketNegotiator(IMPL))
                                                                           .channelType(serverChannelType)
                                                                           .workerEventLoopGroup(eventLoopGroup)
                                                                           .bossEventLoopGroup(eventLoopGroup)
@@ -230,12 +230,12 @@ public class DemesneTest {
         final var kerlServer = new DemesneKERLServer(new ProtoKERLAdapter(kerl), null);
         final var outerService = new OuterContextServer(service, null);
         final var outerContextService = NettyServerBuilder.forAddress(parentEndpoint)
-                                                          .protocolNegotiator(new DomainSocketNegotiator())
-                                                          .channelType(getServerDomainSocketChannelClass())
+                                                          .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                                          .channelType(IMPL.getServerDomainSocketChannelClass())
                                                           .addService(kerlServer)
                                                           .addService(outerService)
-                                                          .workerEventLoopGroup(getEventLoopGroup())
-                                                          .bossEventLoopGroup(getEventLoopGroup())
+                                                          .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                                          .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                           .intercept(new DomainSocketServerInterceptor())
                                                           .build();
         outerContextService.start();

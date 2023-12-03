@@ -12,6 +12,16 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-kqueue</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-epoll</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.checkerframework</groupId>
             <artifactId>checker-qual</artifactId>
         </dependency>
@@ -26,10 +36,6 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-transport-native-unix-common</artifactId>
         </dependency>
         <dependency>
             <groupId>io.perfmark</groupId>
@@ -101,7 +107,7 @@
 
     <profiles>
         <profile>
-            <id>mac</id>
+            <id>mac-domain</id>
             <activation>
                 <os>
                     <family>mac</family>
@@ -109,13 +115,23 @@
             </activation>
             <dependencies>
                 <dependency>
-                    <groupId>com.salesforce.apollo</groupId>
-                    <artifactId>domain-kqueue</artifactId>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-native-unix-common</artifactId>
+                    <version>${netty.version}</version>
+                    <classifier>${os.detected.classifier}</classifier>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-native-kqueue</artifactId>
+                    <version>${netty.version}</version>
+                    <classifier>${os.detected.classifier}</classifier>
+                    <scope>optional</scope>
                 </dependency>
             </dependencies>
         </profile>
         <profile>
-            <id>linux</id>
+            <id>linux-domain</id>
             <activation>
                 <os>
                     <name>linux</name>
@@ -123,9 +139,18 @@
             </activation>
             <dependencies>
                 <dependency>
-                    <groupId>com.salesforce.apollo</groupId>
-                    <artifactId>domain-epoll</artifactId>
-                    <version>${project.version}</version>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-native-unix-common</artifactId>
+                    <version>${netty.version}</version>
+                    <classifier>${os.detected.classifier}</classifier>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-transport-native-epoll</artifactId>
+                    <version>${netty.version}</version>
+                    <classifier>${os.detected.classifier}</classifier>
+                    <scope>optional</scope>
                 </dependency>
             </dependencies>
         </profile>

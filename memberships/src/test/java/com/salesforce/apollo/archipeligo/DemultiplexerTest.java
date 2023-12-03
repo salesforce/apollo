@@ -46,8 +46,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static com.salesforce.apollo.archipelago.RouterImpl.clientInterceptor;
+import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.PEER_CREDENTIALS_CONTEXT_KEY;
-import static com.salesforce.apollo.comm.grpc.DomainSockets.*;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -56,9 +56,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class DemultiplexerTest {
 
-    private static final Class<? extends io.netty.channel.Channel> channelType    = getChannelType();
+    private static final Class<? extends io.netty.channel.Channel> channelType    = IMPL.getChannelType();
     private static final Executor                                  executor       = Executors.newVirtualThreadPerTaskExecutor();
-    private final        EventLoopGroup                            eventLoopGroup = getEventLoopGroup();
+    private final        EventLoopGroup                            eventLoopGroup = IMPL.getEventLoopGroup();
     private final        List<ManagedChannel>                      opened         = new ArrayList<>();
     private              Server                                    serverA;
     private              Server                                    serverB;
@@ -130,10 +130,10 @@ public class DemultiplexerTest {
 
         final var address = new DomainSocketAddress(socketPathA.toFile());
         serverA = NettyServerBuilder.forAddress(address)
-                                    .protocolNegotiator(new DomainSocketNegotiator())
-                                    .channelType(getServerDomainSocketChannelClass())
-                                    .workerEventLoopGroup(getEventLoopGroup())
-                                    .bossEventLoopGroup(getEventLoopGroup())
+                                    .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                    .channelType(IMPL.getServerDomainSocketChannelClass())
+                                    .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                    .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                     .addService(new ServerA())
                                     .intercept(new DomainSocketServerInterceptor())
                                     .build();
@@ -148,10 +148,10 @@ public class DemultiplexerTest {
 
         final var address = new DomainSocketAddress(socketPathA.toFile());
         serverB = NettyServerBuilder.forAddress(address)
-                                    .protocolNegotiator(new DomainSocketNegotiator())
-                                    .channelType(getServerDomainSocketChannelClass())
-                                    .workerEventLoopGroup(getEventLoopGroup())
-                                    .bossEventLoopGroup(getEventLoopGroup())
+                                    .protocolNegotiator(new DomainSocketNegotiator(IMPL))
+                                    .channelType(IMPL.getServerDomainSocketChannelClass())
+                                    .workerEventLoopGroup(IMPL.getEventLoopGroup())
+                                    .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                     .addService(new ServerB())
                                     .intercept(new DomainSocketServerInterceptor())
                                     .build();

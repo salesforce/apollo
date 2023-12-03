@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
-import java.io.IOException;
-import java.util.concurrent.Executor;
-
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.EventLoopTaskQueueFactory;
@@ -21,65 +18,73 @@ import io.netty.channel.unix.ServerDomainSocketChannel;
 import io.netty.util.concurrent.EventExecutorChooserFactory;
 import io.netty.util.concurrent.RejectedExecutionHandler;
 
+import java.io.IOException;
+import java.util.concurrent.Executor;
+
 /**
  * @author hal.hildebrand
- *
  */
-public class DomainSockets {
+public class DomainSocketsOSX implements DomainSockets {
     static {
         try {
             final var sock = new KQueueServerDomainSocketChannel();
             sock.close();
         } catch (Throwable t) {
-//            t.printStackTrace();
+            //            t.printStackTrace();
         }
     }
 
-    public static Class<? extends Channel> getChannelType() {
+    @Override
+    public Class<? extends Channel> getChannelType() {
         return KQueueDomainSocketChannel.class;
     }
 
-    public static EventLoopGroup getEventLoopGroup() {
+    @Override
+    public EventLoopGroup getEventLoopGroup() {
         return new KQueueEventLoopGroup();
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads) {
         return new KQueueEventLoopGroup(threads);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor) {
         return new KQueueEventLoopGroup(threads, executor);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory) {
         return new KQueueEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory,
-                                                   RejectedExecutionHandler rejectedExecutionHandler) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory,
+                                            RejectedExecutionHandler rejectedExecutionHandler) {
         return new KQueueEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory,
                                         rejectedExecutionHandler);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   EventExecutorChooserFactory chooserFactory,
-                                                   SelectStrategyFactory selectStrategyFactory,
-                                                   RejectedExecutionHandler rejectedExecutionHandler,
-                                                   EventLoopTaskQueueFactory queueFactory) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                                            SelectStrategyFactory selectStrategyFactory,
+                                            RejectedExecutionHandler rejectedExecutionHandler,
+                                            EventLoopTaskQueueFactory queueFactory) {
         return new KQueueEventLoopGroup(threads, executor, chooserFactory, selectStrategyFactory,
                                         rejectedExecutionHandler, queueFactory);
     }
 
-    public static EventLoopGroup getEventLoopGroup(int threads, Executor executor,
-                                                   SelectStrategyFactory selectStrategyFactory) {
+    @Override
+    public EventLoopGroup getEventLoopGroup(int threads, Executor executor,
+                                            SelectStrategyFactory selectStrategyFactory) {
         return new KQueueEventLoopGroup(threads, executor, selectStrategyFactory);
     }
 
-    public static PeerCredentials getPeerCredentials(Channel channel) {
+    @Override
+    public PeerCredentials getPeerCredentials(Channel channel) {
         if (channel instanceof KQueueDomainSocketChannel ep) {
             try {
                 return ep.peerCredentials();
@@ -91,7 +96,8 @@ public class DomainSockets {
         }
     }
 
-    public static Class<? extends ServerDomainSocketChannel> getServerDomainSocketChannelClass() {
+    @Override
+    public Class<? extends ServerDomainSocketChannel> getServerDomainSocketChannelClass() {
         return KQueueServerDomainSocketChannel.class;
     }
 }

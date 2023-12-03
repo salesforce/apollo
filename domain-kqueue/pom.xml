@@ -1,20 +1,24 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.salesforce.apollo</groupId>
         <artifactId>apollo.app</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <name>Domain KQueue</name>
+    <name>Domain Sockets KQueue</name>
     <description>Mac/OSx Unix Domain Socket Support</description>
     <artifactId>domain-kqueue</artifactId>
 
     <dependencies>
         <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-sockets</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-transport-native-kqueue</artifactId>
             <version>${netty.version}</version>
-            <classifier>${os.detected.classifier}</classifier>
         </dependency>
     </dependencies>
 </project>

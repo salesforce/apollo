@@ -6,7 +6,24 @@
  */
 package com.salesforce.apollo.demesnes.isolate;
 
-import static com.salesforce.apollo.comm.grpc.DomainSockets.getEventLoopGroup;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesfoce.apollo.demesne.proto.DemesneParameters;
+import com.salesfoce.apollo.demesne.proto.ViewChange;
+import com.salesfoce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.model.demesnes.Demesne;
+import com.salesforce.apollo.model.demesnes.DemesneImpl;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
+import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -19,41 +36,16 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.LogManager;
 
-import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.ViewChange;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
-import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.model.demesnes.Demesne;
-import com.salesforce.apollo.model.demesnes.DemesneImpl;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
-import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-
 /**
  * GraalVM Isolate for the Apollo SubDomain stack
  *
  * @author hal.hildebrand
- *
  */
 public class DemesneIsolate {
-    private static final AtomicReference<DemesneImpl> demesne        = new AtomicReference<>();
-    private static final Lock                         lock           = new ReentrantLock();
-    private static final Logger                       log            = LoggerFactory.getLogger(DemesneIsolate.class);
+    private static final AtomicReference<DemesneImpl> demesne = new AtomicReference<>();
+    private static final Lock                         lock    = new ReentrantLock();
+    private static final Logger                       log     = LoggerFactory.getLogger(DemesneIsolate.class);
+
     static {
         System.setProperty(".level", "FINEST");
     }
@@ -62,8 +54,8 @@ public class DemesneIsolate {
     public static native IsolateThread createIsolate();
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_active")
-    private static boolean active(JNIEnvironment jniEnv, JClass clazz,
-                                  @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
+    private static boolean active(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId)
+    throws GeneralSecurityException {
         final Demesne d = demesne.get();
         return d == null ? false : d.active();
     }
@@ -73,10 +65,8 @@ public class DemesneIsolate {
                                JByteArray eventCoordinates, int eventCoordinatesLen) {
         final Demesne d = demesne.get();
         if (d != null) {
-            var coordBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                               .getGetByteArrayElements()
-                                                               .call(jniEnv, eventCoordinates, false),
-                                                         eventCoordinatesLen);
+            var coordBuff = CTypeConversion.asByteBuffer(
+            jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, eventCoordinates, false), eventCoordinatesLen);
             EventCoords coords;
             try {
                 coords = EventCoords.parseFrom(coordBuff);
@@ -136,14 +126,10 @@ public class DemesneIsolate {
                                         int identLen, JByteArray spec, int specLen) {
         final Demesne d = demesne.get();
         if (d != null) {
-            var identBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                               .getGetByteArrayElements()
-                                                               .call(jniEnv, ident, false),
-                                                         identLen);
-            var specBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                              .getGetByteArrayElements()
-                                                              .call(jniEnv, spec, false),
-                                                        specLen);
+            var identBuff = CTypeConversion.asByteBuffer(
+            jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, ident, false), identLen);
+            var specBuff = CTypeConversion.asByteBuffer(
+            jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, spec, false), specLen);
             Ident identifier;
             try {
                 identifier = Ident.parseFrom(identBuff);
@@ -170,15 +156,15 @@ public class DemesneIsolate {
         return jniEnv.getFunctions().getNewByteArray().call(jniEnv, 0);
     }
 
-    private static void launch(JNIEnvironment jniEnv, ByteBuffer data, JClass clazz) throws GeneralSecurityException,
-                                                                                     IOException {
+    private static void launch(JNIEnvironment jniEnv, ByteBuffer data, JClass clazz)
+    throws GeneralSecurityException, IOException {
         final var parameters = DemesneParameters.parseFrom(data);
         configureLogging(parameters);
         launch(jniEnv, parameters, clazz);
     }
 
-    private static void launch(JNIEnvironment jniEnv, DemesneParameters parameters,
-                               JClass clazz) throws GeneralSecurityException, IOException {
+    private static void launch(JNIEnvironment jniEnv, DemesneParameters parameters, JClass clazz)
+    throws GeneralSecurityException, IOException {
         try {
             lock.lock();
             if (demesne.get() != null) {
@@ -193,10 +179,8 @@ public class DemesneIsolate {
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_launch")
     private static boolean launch(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId,
                                   JByteArray parameters, int parametersLen) {
-        var parametersBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                                .getGetByteArrayElements()
-                                                                .call(jniEnv, parameters, false),
-                                                          parametersLen);
+        var parametersBuff = CTypeConversion.asByteBuffer(
+        jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, parameters, false), parametersLen);
         log.trace("Launch Demesne Isolate: {}", isolateId);
         try {
             launch(jniEnv, parametersBuff, clazz);
@@ -212,10 +196,8 @@ public class DemesneIsolate {
                                        @CEntryPoint.IsolateThreadContext long isolateId, JByteArray spec, int specLen) {
         final Demesne d = demesne.get();
         if (d != null) {
-            var specBuff = CTypeConversion.asByteBuffer(jniEnv.getFunctions()
-                                                              .getGetByteArrayElements()
-                                                              .call(jniEnv, spec, false),
-                                                        specLen);
+            var specBuff = CTypeConversion.asByteBuffer(
+            jniEnv.getFunctions().getGetByteArrayElements().call(jniEnv, spec, false), specLen);
             RotationSpecification.Builder specification;
             try {
                 specification = RotationSpecification.Builder.from(RotationSpec.parseFrom(specBuff));
@@ -228,8 +210,8 @@ public class DemesneIsolate {
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_start")
-    private static void start(JNIEnvironment jniEnv, JClass clazz,
-                              @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
+    private static void start(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId)
+    throws GeneralSecurityException {
         final Demesne d = demesne.get();
         if (d != null) {
             d.start();
@@ -237,8 +219,8 @@ public class DemesneIsolate {
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_stop")
-    private static void stop(JNIEnvironment jniEnv, JClass clazz,
-                             @CEntryPoint.IsolateThreadContext long isolateId) throws GeneralSecurityException {
+    private static void stop(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId)
+    throws GeneralSecurityException {
         final Demesne d = demesne.get();
         if (d != null) {
             d.stop();

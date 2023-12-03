@@ -39,6 +39,17 @@
             <groupId>org.scijava</groupId>
             <artifactId>native-lib-loader</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-epoll</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-kqueue</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Test Only Dependencies Below This Line -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
