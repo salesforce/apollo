@@ -6,7 +6,7 @@
         <artifactId>apollo.app</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <name>Domain KQueue</name>
+    <name>Domain Sockets KQueue</name>
     <description>Mac/OSx Unix Domain Socket Support</description>
     <artifactId>domain-kqueue</artifactId>
 

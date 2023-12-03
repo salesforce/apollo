@@ -9,13 +9,13 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>domain-sockets</artifactId>
+    <name>Domain Sockets</name>
+    <description>Domain Socket Access Interface</description>
 
     <dependencies>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
         </dependency>
-
     </dependencies>
-
 </project>
