@@ -16,12 +16,10 @@ import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ReconciliationServer extends ReconciliationImplBase {
     private final ClientIdentity                  identity;

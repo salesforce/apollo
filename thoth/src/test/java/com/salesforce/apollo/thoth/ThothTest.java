@@ -35,7 +35,7 @@ public class ThothTest {
     @BeforeEach
     public void before() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
-        secureRandom.setSeed(new byte[]{0});
+        secureRandom.setSeed(new byte[] { 0 });
     }
 
     @Test
@@ -50,11 +50,11 @@ public class ThothTest {
 
         // delegated inception
         var incp = thoth.inception(controller.getIdentifier(),
-                IdentifierSpecification.<SelfAddressingIdentifier>newBuilder());
+                                   IdentifierSpecification.<SelfAddressingIdentifier>newBuilder());
         assertNotNull(incp);
 
         var seal = Seal.EventSeal.construct(incp.getIdentifier(), incp.hash(stereotomy.digestAlgorithm()),
-                incp.getSequenceNumber().longValue());
+                                            incp.getSequenceNumber().longValue());
 
         var builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
 
@@ -69,7 +69,7 @@ public class ThothTest {
         assertNotNull(rot);
 
         seal = Seal.EventSeal.construct(rot.getIdentifier(), rot.hash(stereotomy.digestAlgorithm()),
-                rot.getSequenceNumber().longValue());
+                                        rot.getSequenceNumber().longValue());
 
         builder = InteractionSpecification.newBuilder().addAllSeals(Collections.singletonList(seal));
 

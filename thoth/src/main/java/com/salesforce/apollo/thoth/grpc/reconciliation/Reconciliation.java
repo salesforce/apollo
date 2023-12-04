@@ -14,7 +14,6 @@ import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Reconciliation {
     Update reconcile(Intervals intervals, Digest member);

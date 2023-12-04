@@ -10,7 +10,6 @@ import com.salesfoce.apollo.thoth.proto.DelegatedGrpc.DelegatedImplBase;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegationServer extends DelegatedImplBase {
 

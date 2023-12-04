@@ -186,13 +186,6 @@ public class KerlDHT implements ProtoKERLService {
         return result;
     }
 
-    /**
-     * Clear the caches of the receiver
-     */
-    public void clearCache() {
-        cache.clear();
-    }
-
     public KeyState_ append(AttachmentEvent event) {
         if (event == null) {
             return null;
@@ -377,6 +370,13 @@ public class KerlDHT implements ProtoKERLService {
 
     public KERL asKERL() {
         return cache;
+    }
+
+    /**
+     * Clear the caches of the receiver
+     */
+    public void clearCache() {
+        cache.clear();
     }
 
     public DigestAlgorithm digestAlgorithm() {
@@ -964,10 +964,7 @@ public class KerlDHT implements ProtoKERLService {
         if (successor == null) {
             return false;
         }
-        if (!successor.equals(member)) {
-            return false;
-        }
-        return true;
+        return successor.equals(member);
     }
 
     private DelegatedKERL wrap(ClosableKERL k) {
@@ -1042,12 +1039,6 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private class Service implements ProtoKERLService {
-
-        @Override
-        public Validations getValidations(EventCoords coordinates) {
-            log.trace("get validations for coordinates on: {}", member.getId());
-            return complete(k -> k.getValidations(coordinates));
-        }
 
         @Override
         public List<KeyState_> append(KERL_ kerl_) {
@@ -1141,6 +1132,12 @@ public class KerlDHT implements ProtoKERLService {
                                                                             validations.getValidationsList())
                                                                             .build();
             });
+        }
+
+        @Override
+        public Validations getValidations(EventCoords coordinates) {
+            log.trace("get validations for coordinates on: {}", member.getId());
+            return complete(k -> k.getValidations(coordinates));
         }
     }
 }

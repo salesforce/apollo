@@ -41,11 +41,11 @@ public interface DhtService extends Link {
 
     KeyState_ getKeyState(Ident identifier);
 
+    KeyState_ getKeyState(IdentAndSeq identAndSeq);
+
     KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates);
 
     KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates);
 
     Validations getValidations(EventCoords coordinates);
-
-    KeyState_ getKeyState(IdentAndSeq identAndSeq);
 }

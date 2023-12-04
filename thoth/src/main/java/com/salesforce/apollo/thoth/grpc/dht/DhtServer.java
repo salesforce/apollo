@@ -23,7 +23,7 @@ import io.grpc.stub.StreamObserver;
  */
 public class DhtServer extends KerlDhtImplBase {
 
-    private final StereotomyMetrics metrics;
+    private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
 
     public DhtServer(RoutableService<ProtoKERLService> router, StereotomyMetrics metrics) {

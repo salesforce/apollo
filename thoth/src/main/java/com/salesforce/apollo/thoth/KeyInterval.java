@@ -7,14 +7,13 @@
 
 package com.salesforce.apollo.thoth;
 
-import java.util.function.Predicate;
-
 import com.salesfoce.apollo.thoth.proto.Interval;
 import com.salesforce.apollo.cryptography.Digest;
 
+import java.util.function.Predicate;
+
 /**
  * @author hal.hildebrand
- *
  */
 public class KeyInterval implements Predicate<Digest> {
     private final Digest begin;
@@ -30,17 +29,17 @@ public class KeyInterval implements Predicate<Digest> {
         this(Digest.from(interval.getStart()), Digest.from(interval.getEnd()));
     }
 
-    @Override
-    public boolean test(Digest t) {
-        return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
-    }
-
     public Digest getBegin() {
         return begin;
     }
 
     public Digest getEnd() {
         return end;
+    }
+
+    @Override
+    public boolean test(Digest t) {
+        return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
     }
 
     public Interval toInterval() {

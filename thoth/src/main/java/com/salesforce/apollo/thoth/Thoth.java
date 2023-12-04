@@ -29,11 +29,11 @@ import java.util.function.Consumer;
  * @author hal.hildebrand
  */
 public class Thoth {
-    private static final Logger log = LoggerFactory.getLogger(Thoth.class);
-    private final Stereotomy stereotomy;
-    private volatile SelfAddressingIdentifier controller;
-    private volatile ControlledIdentifier<SelfAddressingIdentifier> identifier;
-    private volatile Consumer<EventCoordinates> pending;
+    private static final Logger                                         log = LoggerFactory.getLogger(Thoth.class);
+    private final        Stereotomy                                     stereotomy;
+    private volatile     SelfAddressingIdentifier                       controller;
+    private volatile     ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    private volatile     Consumer<EventCoordinates>                     pending;
 
     public Thoth(Stereotomy stereotomy) {
         this.stereotomy = stereotomy;
@@ -85,11 +85,9 @@ public class Thoth {
 
     private Consumer<EventCoordinates> inception(DelegatedInceptionEvent incp) {
         return coordinates -> {
-            var commitment = ProtobufEventFactory.INSTANCE.attachment(incp,
-                    new AttachmentImpl(Seal.EventSeal.construct(coordinates.getIdentifier(),
-                            coordinates.getDigest(),
-                            coordinates.getSequenceNumber()
-                                    .longValue())));
+            var commitment = ProtobufEventFactory.INSTANCE.attachment(incp, new AttachmentImpl(
+            Seal.EventSeal.construct(coordinates.getIdentifier(), coordinates.getDigest(),
+                                     coordinates.getSequenceNumber().longValue())));
             ControlledIdentifier<SelfAddressingIdentifier> cid = stereotomy.commit(incp, commitment);
             identifier = cid;
             controller = (SelfAddressingIdentifier) identifier.getDelegatingIdentifier().get();
@@ -100,15 +98,13 @@ public class Thoth {
 
     private Consumer<EventCoordinates> rotation(DelegatedRotationEvent rot) {
         return coordinates -> {
-            var commitment = ProtobufEventFactory.INSTANCE.attachment(rot,
-                    new AttachmentImpl(Seal.EventSeal.construct(coordinates.getIdentifier(),
-                            coordinates.getDigest(),
-                            coordinates.getSequenceNumber()
-                                    .longValue())));
+            var commitment = ProtobufEventFactory.INSTANCE.attachment(rot, new AttachmentImpl(
+            Seal.EventSeal.construct(coordinates.getIdentifier(), coordinates.getDigest(),
+                                     coordinates.getSequenceNumber().longValue())));
             Void cid = identifier.commit(rot, commitment);
             pending = null;
             log.info("Rotated delegated identifier: {} controller: {}", identifier.getCoordinates(), controller,
-                    identifier.getCoordinates());
+                     identifier.getCoordinates());
         };
     }
 }

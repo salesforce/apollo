@@ -36,7 +36,7 @@ import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFacto
  * @author hal.hildebrand
  */
 public class Maat extends DelegatedKERL {
-    private static Logger log = LoggerFactory.getLogger(Maat.class);
+    private static final Logger log = LoggerFactory.getLogger(Maat.class);
 
     private final Context<Member> context;
 
