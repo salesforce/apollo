@@ -28,6 +28,10 @@ public class ThothServer extends Thoth_Grpc.Thoth_ImplBase {
     private final        RotationSpecification.Builder                             rotation;
     private final        Thoth                                                     thoth;
 
+    public ThothServer(Thoth thoth) {
+        this(IdentifierSpecification.newBuilder(), RotationSpecification.newBuilder(), thoth);
+    }
+
     public ThothServer(IdentifierSpecification.Builder<SelfAddressingIdentifier> inception,
                        RotationSpecification.Builder rotation, Thoth thoth) {
         this.inception = inception;
@@ -46,6 +50,10 @@ public class ThothServer extends Thoth_Grpc.Thoth_ImplBase {
             log.info("Error committing delegation event: " + from, t);
             responseObserver.onError(t);
         }
+    }
+
+    public Thoth getThoth() {
+        return thoth;
     }
 
     @Override

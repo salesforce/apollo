@@ -14,9 +14,7 @@ import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
-import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.thoth.grpc.ThothServer;
@@ -55,14 +53,10 @@ public class ThothServerTest {
 
         var localId = UUID.randomUUID().toString();
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(localId)
-                                                               .addService(
-                                                               new ThothServer(IdentifierSpecification.newBuilder(),
-                                                                               RotationSpecification.newBuilder(),
-                                                                               new Thoth(stereotomy)));
+                                                               .addService(new ThothServer(new Thoth(stereotomy)));
         var server = serverBuilder.build();
         server.start();
         try {
-
             var channel = InProcessChannelBuilder.forName(localId).usePlaintext().build();
             var thoth = new ThothClient(channel);
 
