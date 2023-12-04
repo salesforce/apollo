@@ -119,14 +119,14 @@
                     <artifactId>netty-transport-native-unix-common</artifactId>
                     <version>${netty.version}</version>
                     <classifier>${os.detected.classifier}</classifier>
-                    <scope>test</scope>
+                    <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>io.netty</groupId>
                     <artifactId>netty-transport-native-kqueue</artifactId>
                     <version>${netty.version}</version>
                     <classifier>${os.detected.classifier}</classifier>
-                    <scope>optional</scope>
+                    <scope>provided</scope>
                 </dependency>
             </dependencies>
         </profile>
