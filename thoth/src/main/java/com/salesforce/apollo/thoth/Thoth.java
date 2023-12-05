@@ -109,12 +109,10 @@ public class Thoth {
             identifier = cid;
             controller = (SelfAddressingIdentifier) identifier.getDelegatingIdentifier().get();
             pending = null;
-            Thread.ofVirtual().factory().newThread(() -> {
+            if (onInception != null) {
                 log.info("Notifying inception complete for: {} controller: {}", identifier.getIdentifier(), controller);
-                if (onInception != null) {
-                    onInception.accept(identifier);
-                }
-            }).start();
+                onInception.accept(identifier);
+            }
             log.info("Created delegated identifier: {} controller: {}", identifier.getIdentifier(), controller);
         };
     }

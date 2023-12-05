@@ -12,6 +12,23 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-kqueue</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>domain-epoll</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-unix-common</artifactId>
+            <version>${netty.version}</version>
+            <classifier>${os.detected.classifier}</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
             <artifactId>isolates</artifactId>
             <classifier>native</classifier>
             <scope>test</scope>
@@ -47,17 +64,10 @@
             <dependencies>
                 <dependency>
                     <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-unix-common</artifactId>
-                    <version>${netty.version}</version>
-                    <classifier>${os.detected.classifier}</classifier>
-                    <scope>test</scope>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
                     <artifactId>netty-transport-native-kqueue</artifactId>
                     <version>${netty.version}</version>
                     <classifier>${os.detected.classifier}</classifier>
-                    <scope>optional</scope>
+                    <scope>test</scope>
                 </dependency>
             </dependencies>
         </profile>
@@ -71,17 +81,10 @@
             <dependencies>
                 <dependency>
                     <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-unix-common</artifactId>
-                    <version>${netty.version}</version>
-                    <classifier>${os.detected.classifier}</classifier>
-                    <scope>test</scope>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
                     <artifactId>netty-transport-native-epoll</artifactId>
                     <version>${netty.version}</version>
                     <classifier>${os.detected.classifier}</classifier>
-                    <scope>optional</scope>
+                    <scope>test</scope>
                 </dependency>
             </dependencies>
         </profile>

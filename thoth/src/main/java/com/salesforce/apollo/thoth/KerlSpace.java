@@ -211,7 +211,7 @@ public class KerlSpace {
      * @return the bloom filter of Digests bounded by the identifier location hash intervals
      */
     public Biff populate(long seed, CombinedIntervals intervals, double fpr) {
-        DigestBloomFilter bff = new DigestBloomFilter(seed, cardinality(), fpr);
+        DigestBloomFilter bff = new DigestBloomFilter(seed, Math.max(cardinality(), 100), fpr);
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             eventDigestsIn(intervals, dsl).forEach(d -> {
@@ -296,8 +296,7 @@ public class KerlSpace {
             return dsl.fetchCount(dsl.selectFrom(IDENTIFIER));
         } catch (SQLException e) {
             log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);
-            throw new IllegalStateException("Unable to provide estimated cardinality, cannot acquire JDBC connection",
-                                            e);
+            return 0;
         }
     }
 
