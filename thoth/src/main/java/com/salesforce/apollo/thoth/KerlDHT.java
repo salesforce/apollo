@@ -926,6 +926,9 @@ public class KerlDHT implements ProtoKERLService {
                 log.debug("null interval reconciliation with {} : {} on: {}", destination.member().getId(),
                           member.getId(), e.getCause());
             }
+        } else {
+            log.trace("Received no events in interval reconciliation from: {} on: {}", destination.member().getId(),
+                      member.getId());
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -933,6 +936,9 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private Update reconcile(ReconciliationService link, Integer ring) {
+        if (member.equals(link.getMember())) {
+            return null;
+        }
         CombinedIntervals keyIntervals = keyIntervals();
         log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(),
                   member.getId(), keyIntervals);
@@ -1027,13 +1033,16 @@ public class KerlDHT implements ProtoKERLService {
         public Update reconcile(Intervals intervals, Digest from) {
             var ring = intervals.getRing();
             if (!valid(from, ring)) {
+                log.trace("Invalid reconcile from: {} ring: {} on: {}", from, ring, member.getId());
                 return Update.getDefaultInstance();
             }
+            log.trace("Reconcile from: {} ring: {} on: {}", from, ring, member.getId());
             try (var k = kerlPool.create()) {
                 final var builder = KerlDHT.this.kerlSpace.reconcile(intervals, k);
                 CombinedIntervals keyIntervals = keyIntervals();
                 builder.addAllIntervals(keyIntervals.toIntervals())
                        .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr));
+                log.trace("Reconcile for: {} ring: {} count: {} on: {}", from, ring, builder.getEventsCount(), member);
                 return builder.build();
             } catch (IOException | SQLException e) {
                 throw new IllegalStateException("Cannot acquire KERL", e);

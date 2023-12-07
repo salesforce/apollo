@@ -8,11 +8,11 @@ package com.salesforce.apollo.thoth;
 
 import com.salesfoce.apollo.thoth.proto.Interval;
 import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
@@ -22,6 +22,7 @@ import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
+import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,55 +31,62 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class KerlSpaceTest {
 
-    @Test
-    public void smokin() throws Exception {
-        final var digestAlgorithm = DigestAlgorithm.DEFAULT;
-        var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
-
-        JdbcConnectionPool connectionPoolA = JdbcConnectionPool.create("jdbc:h2:mem:A;DB_CLOSE_DELAY=-1", "", "");
-        connectionPoolA.setMaxConnections(10);
-        var spaceA = new KerlSpace(connectionPoolA);
-        var kerlPoolA = new UniKERLDirectPooled(connectionPoolA, digestAlgorithm);
-        final var kerlA = kerlPoolA.create();
-        var stereotomyA = new StereotomyImpl(new MemKeyStore(), kerlA, entropy);
+    private static void initialize(JdbcConnectionPool connectionPoolA, JdbcConnectionPool connectionPoolB)
+    throws SQLException {
         var database = new H2Database();
         try (var connection = connectionPoolA.getConnection()) {
             database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("/initialize-thoth.xml", new ClassLoaderResourceAccessor(),
-                    database)) {
+                                                     database)) {
                 liquibase.update((String) null);
             } catch (LiquibaseException e) {
                 throw new IllegalStateException(e);
             }
         }
 
-        JdbcConnectionPool connectionPoolB = JdbcConnectionPool.create("jdbc:h2:mem:B;DB_CLOSE_DELAY=-1", "", "");
-        connectionPoolB.setMaxConnections(10);
-        var spaceB = new KerlSpace(connectionPoolB);
-        var kerlPoolB = new UniKERLDirectPooled(connectionPoolB, digestAlgorithm);
-        final var kerlB = kerlPoolB.create();
-        var stereotomyB = new StereotomyImpl(new MemKeyStore(), kerlB, entropy);
         database = new H2Database();
         try (var connection = connectionPoolB.getConnection()) {
             database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("/initialize-thoth.xml", new ClassLoaderResourceAccessor(),
-                    database)) {
+                                                     database)) {
                 liquibase.update((String) null);
             } catch (LiquibaseException e) {
                 throw new IllegalStateException(e);
             }
         }
+    }
+
+    @Test
+    public void smokin() throws Exception {
+        final var digestAlgorithm = DigestAlgorithm.DEFAULT;
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+
+        JdbcConnectionPool connectionPoolA = JdbcConnectionPool.create("jdbc:h2:mem:A;DB_CLOSE_DELAY=-1", "", "");
+        connectionPoolA.setMaxConnections(10);
+        JdbcConnectionPool connectionPoolB = JdbcConnectionPool.create("jdbc:h2:mem:B;DB_CLOSE_DELAY=-1", "", "");
+        connectionPoolB.setMaxConnections(10);
+
+        var spaceA = new KerlSpace(connectionPoolA);
+        var stereotomyA = new StereotomyImpl(new MemKeyStore(),
+                                             new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create(),
+                                             entropy);
+        var spaceB = new KerlSpace(connectionPoolB);
+        var stereotomyB = new StereotomyImpl(new MemKeyStore(),
+                                             new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create(),
+                                             entropy);
+
+        initialize(connectionPoolA, connectionPoolB);
 
         var identifierA = stereotomyA.newIdentifier();
         try (var connection = connectionPoolA.getConnection()) {
             KerlDHT.updateLocationHash(identifierA.getIdentifier(), digestAlgorithm, DSL.using(connection));
         }
+
         identifierA.rotate();
         var digestA = identifierA.getLastEstablishingEvent().getCoordinates().getDigest();
-        var biffA = spaceA.populate(0x1638, new CombinedIntervals(new KeyInterval(digestAlgorithm.getOrigin(),
-                        digestAlgorithm.getLast())),
-                0.125);
+        var biffA = spaceA.populate(0x1638, new CombinedIntervals(
+        new KeyInterval(digestAlgorithm.getOrigin(), digestAlgorithm.getLast())), 0.000125);
         assertNotNull(biffA);
         var bffA = BloomFilter.from(biffA);
 
@@ -88,9 +96,8 @@ public class KerlSpaceTest {
         try (var connection = connectionPoolB.getConnection()) {
             KerlDHT.updateLocationHash(identifierB.getIdentifier(), digestAlgorithm, DSL.using(connection));
         }
-        var biffB = spaceB.populate(0x1638, new CombinedIntervals(new KeyInterval(digestAlgorithm.getOrigin(),
-                        digestAlgorithm.getLast())),
-                0.125);
+        var biffB = spaceB.populate(0x1638, new CombinedIntervals(
+        new KeyInterval(digestAlgorithm.getOrigin(), digestAlgorithm.getLast())), 0.000125);
         assertNotNull(biffB);
         var bffB = BloomFilter.from(biffB);
 
@@ -100,35 +107,39 @@ public class KerlSpaceTest {
         assertTrue(bffB.contains(digestB));
         assertFalse(bffB.contains(digestA));
 
-        assertNull(kerlA.getKeyState(identifierB.getIdentifier()));
-        assertNull(kerlB.getKeyState(identifierA.getIdentifier()));
+        assertNull(
+        new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create().getKeyState(identifierB.getIdentifier()));
+        assertNull(
+        new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create().getKeyState(identifierA.getIdentifier()));
 
         var updateA = spaceA.reconcile(Intervals.newBuilder()
-                        .addIntervals(Interval.newBuilder()
-                                .setStart(digestAlgorithm.getOrigin().toDigeste())
-                                .setEnd(digestAlgorithm.getLast().toDigeste())
-                                .build())
-                        .setHave(biffB)
-                        .build(),
-                kerlA);
+                                                .addIntervals(Interval.newBuilder()
+                                                                      .setStart(digestAlgorithm.getOrigin().toDigeste())
+                                                                      .setEnd(digestAlgorithm.getLast().toDigeste())
+                                                                      .build())
+                                                .setHave(biffB)
+                                                .build(),
+                                       new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create());
         assertNotNull(updateA);
         assertEquals(2, updateA.getEventsCount());
 
         var updateB = spaceB.reconcile(Intervals.newBuilder()
-                        .addIntervals(Interval.newBuilder()
-                                .setStart(digestAlgorithm.getOrigin().toDigeste())
-                                .setEnd(digestAlgorithm.getLast().toDigeste())
-                                .build())
-                        .setHave(biffA)
-                        .build(),
-                kerlB);
+                                                .addIntervals(Interval.newBuilder()
+                                                                      .setStart(digestAlgorithm.getOrigin().toDigeste())
+                                                                      .setEnd(digestAlgorithm.getLast().toDigeste())
+                                                                      .build())
+                                                .setHave(biffA)
+                                                .build(),
+                                       new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create());
         assertNotNull(updateB);
         assertEquals(2, updateB.getEventsCount());
 
-        spaceA.update(updateB.getEventsList(), kerlA);
-        spaceB.update(updateA.getEventsList(), kerlB);
+        spaceA.update(updateB.getEventsList(), new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create());
+        spaceB.update(updateA.getEventsList(), new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create());
 
-        assertNotNull(kerlA.getKeyState(identifierB.getIdentifier()));
-        assertNotNull(kerlB.getKeyState(identifierA.getIdentifier()));
+        assertNotNull(
+        new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create().getKeyState(identifierB.getIdentifier()));
+        assertNotNull(
+        new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create().getKeyState(identifierA.getIdentifier()));
     }
 }

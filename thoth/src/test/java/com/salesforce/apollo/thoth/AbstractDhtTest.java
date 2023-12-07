@@ -57,7 +57,7 @@ public class AbstractDhtTest {
     protected static final boolean                                                            LARGE_TESTS = Boolean.getBoolean(
     "large_tests");
     protected static final double                                                             PBYZ        = 0.25;
-    protected final        Map<SigningMember, KerlDHT>                                        dhts        = new HashMap<>();
+    protected final        Map<SigningMember, KerlDHT>                                        dhts        = new TreeMap<>();
     protected final        Map<SigningMember, Router>                                         routers     = new HashMap<>();
     protected final        AtomicBoolean                                                      gate        = new AtomicBoolean(
     false);
@@ -137,7 +137,7 @@ public class AbstractDhtTest {
     protected void instantiate(SigningMember member, Context<Member> context,
                                ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
-        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);

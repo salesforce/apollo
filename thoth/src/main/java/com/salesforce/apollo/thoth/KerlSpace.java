@@ -177,7 +177,7 @@ public class KerlSpace {
                          ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
-            log.trace("Id: {} for: {}", id, logCoords);
+            log.trace("Id: {} for: {}", id.value1(), logCoords);
         } catch (DataAccessException e) {
             log.trace("access exception for: {}", logCoords, e);
             // Already exists
@@ -215,6 +215,7 @@ public class KerlSpace {
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             eventDigestsIn(intervals, dsl).forEach(d -> {
+                log.trace("Adding reconcile digest: {}", d);
                 bff.add(d);
             });
         } catch (SQLException e) {
@@ -238,14 +239,14 @@ public class KerlSpace {
             var dsl = DSL.using(connection);
             intervals.getIntervalsList()
                      .stream()
-                     .map(i -> new KeyInterval(i))
+                     .map(KeyInterval::new)
                      .flatMap(i -> eventDigestsIn(i, dsl))
+                     .peek(d -> log.trace("reconcile digest: {}", d))
                      .filter(d -> !biff.contains(d))
+                     .peek(d -> log.trace("filtered reconcile digest: {}", d))
                      .map(d -> event(d, dsl, kerl))
                      .filter(ke -> ke != null)
-                     .forEach(ke -> {
-                         update.addEvents(ke);
-                     });
+                     .forEach(update::addEvents);
         } catch (SQLException e) {
             log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);
             throw new IllegalStateException("Unable to provide estimated cardinality, cannot acquire JDBC connection",
@@ -262,9 +263,11 @@ public class KerlSpace {
      */
     public void update(List<KeyEventWithAttachmentAndValidations_> events, KERL kerl) {
         if (events.isEmpty()) {
+            log.trace("No events to update");
             return;
         }
 
+        log.trace("Events to update: {}", events.size());
         final var digestAlgorithm = kerl.getDigestAlgorithm();
 
         try (var connection = connectionPool.getConnection()) {
@@ -301,6 +304,7 @@ public class KerlSpace {
     }
 
     private void commitPending(DSLContext context, KERL kerl) {
+        log.trace("Commit pending");
         context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_COORDINATES.ILK)
                .from(PENDING_EVENT)
                .join(PENDING_COORDINATES)
