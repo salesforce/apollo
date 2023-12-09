@@ -273,7 +273,7 @@ public class DemesneTest {
         assertNotNull(attached);
         assertEquals(1, attached.seals().size());
         final var extracted = attached.seals().get(0);
-        assertTrue(extracted instanceof Seal.DigestSeal);
+        assertTrue(extracted instanceof Seal.EventSeal);
         //        assertEquals(1, attached.endorsements().size());
     }
 

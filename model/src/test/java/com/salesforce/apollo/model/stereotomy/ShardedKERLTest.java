@@ -14,7 +14,7 @@ import com.salesforce.apollo.state.Emulator;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -43,7 +43,7 @@ public class ShardedKERLTest {
     @BeforeEach
     public void before() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
-        secureRandom.setSeed(new byte[]{0});
+        secureRandom.setSeed(new byte[] { 0 });
     }
 
     @Test
@@ -52,8 +52,7 @@ public class ShardedKERLTest {
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
-        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout,
-                                           DigestAlgorithm.DEFAULT);
+        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout, DigestAlgorithm.DEFAULT);
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
@@ -68,7 +67,7 @@ public class ShardedKERLTest {
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
         assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
-                Hex.hex(sap.getDigest().getBytes()));
+                     Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
 
@@ -76,7 +75,8 @@ public class ShardedKERLTest {
         assertEquals(1, identifier.getKeys().size());
         assertNotNull(identifier.getKeys().get(0));
 
-        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(identifier.getLastEstablishmentEvent());
+        EstablishmentEvent lastEstablishmentEvent = (EstablishmentEvent) kerl.getKeyEvent(
+        identifier.getLastEstablishmentEvent());
         assertEquals(identifier.getKeys().get(0), lastEstablishmentEvent.getKeys().get(0));
 
         var keyCoordinates = KeyCoordinates.of(lastEstablishmentEvent, 0);
@@ -89,10 +89,10 @@ public class ShardedKERLTest {
         var keyStoreNextKeyPair = ks.getNextKey(keyCoordinates);
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
-                List.of(keyStoreNextKeyPair.get().getPublic()),
-                identifier.getNextKeyConfigurationDigest()
-                        .get()
-                        .getAlgorithm());
+                                                               List.of(keyStoreNextKeyPair.get().getPublic()),
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
+                                                                         .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
         // witnesses
@@ -116,8 +116,7 @@ public class ShardedKERLTest {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kerl.getKeyEvent(identifier.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         identifier.rotate();
         identifier.seal(InteractionSpecification.newBuilder());
@@ -131,8 +130,7 @@ public class ShardedKERLTest {
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
-        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout,
-                                           DigestAlgorithm.DEFAULT);
+        ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), timeout, DigestAlgorithm.DEFAULT);
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
@@ -140,8 +138,7 @@ public class ShardedKERLTest {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         i.rotate();
         i.seal(InteractionSpecification.newBuilder());

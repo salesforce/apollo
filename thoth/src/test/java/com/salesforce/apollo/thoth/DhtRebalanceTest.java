@@ -16,7 +16,7 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -110,8 +110,7 @@ public class DhtRebalanceTest {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(testKerl.getKeyEvent(identifier.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         identifier.rotate();
         identifier.seal(InteractionSpecification.newBuilder());
