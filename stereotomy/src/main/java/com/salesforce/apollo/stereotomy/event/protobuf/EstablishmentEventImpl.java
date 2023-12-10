@@ -14,16 +14,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
-import com.salesfoce.apollo.stereotomy.event.proto.Header;
+import com.salesforce.apollo.stereotomy.event.proto.Establishment;
+import com.salesforce.apollo.stereotomy.event.proto.EventCommon;
+import com.salesforce.apollo.stereotomy.event.proto.Header;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 
 /**
  * @author hal.hildebrand
- *
  */
 abstract public class EstablishmentEventImpl extends KeyEventImpl implements EstablishmentEvent {
 

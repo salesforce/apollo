@@ -8,8 +8,8 @@ package com.salesforce.apollo.stereotomy.event;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -18,7 +18,6 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface KeyEvent {
 

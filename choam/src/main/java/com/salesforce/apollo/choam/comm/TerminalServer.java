@@ -6,15 +6,15 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesfoce.apollo.choam.proto.BlockReplication;
-import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.CheckpointReplication;
-import com.salesfoce.apollo.choam.proto.CheckpointSegments;
-import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.Synchronize;
-import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
-import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.choam.proto.BlockReplication;
+import com.salesforce.apollo.choam.proto.Blocks;
+import com.salesforce.apollo.choam.proto.CheckpointReplication;
+import com.salesforce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.choam.proto.Initial;
+import com.salesforce.apollo.choam.proto.Synchronize;
+import com.salesforce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
+import com.salesforce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.cryptography.Digest;
@@ -24,13 +24,12 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TerminalServer extends TerminalImplBase {
-    private ClientIdentity                   identity;
     @SuppressWarnings("unused")
     private final ChoamMetrics               metrics;
     private final RoutableService<Concierge> router;
+    private       ClientIdentity             identity;
 
     public TerminalServer(ClientIdentity identity, ChoamMetrics metrics, RoutableService<Concierge> router) {
         this.metrics = metrics;

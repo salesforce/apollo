@@ -10,12 +10,12 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.EntranceGrpc;
-import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
-import com.salesfoce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.EntranceGrpc;
+import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -23,23 +23,21 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EntranceClient implements Entrance {
 
-    public static CreateClientCommunications<Entrance> getCreate(FireflyMetrics metrics) {
-        return (c) -> new EntranceClient(c, metrics);
-
-    }
-
     private final ManagedServerChannel channel;
-    private final EntranceFutureStub       client;
-    private final FireflyMetrics           metrics;
-
+    private final EntranceFutureStub   client;
+    private final FireflyMetrics       metrics;
     public EntranceClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
         this.client = EntranceGrpc.newFutureStub(channel).withCompression("gzip");
         this.metrics = metrics;
+    }
+
+    public static CreateClientCommunications<Entrance> getCreate(FireflyMetrics metrics) {
+        return (c) -> new EntranceClient(c, metrics);
+
     }
 
     @Override

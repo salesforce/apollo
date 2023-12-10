@@ -8,9 +8,9 @@ package com.salesforce.apollo.stereotomy.services.grpc.binder;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -21,13 +21,12 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class BinderServer extends BinderImplBase {
 
-    private ClientIdentity                     identity;
     private final StereotomyMetrics            metrics;
     private final RoutableService<ProtoBinder> routing;
+    private       ClientIdentity               identity;
 
     public BinderServer(RoutableService<ProtoBinder> router, ClientIdentity identity, StereotomyMetrics metrics) {
         this.metrics = metrics;

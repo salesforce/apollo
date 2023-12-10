@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.salesfoce.apollo.choam.proto.Checkpoint;
-import com.salesfoce.apollo.choam.proto.CheckpointReplication;
-import com.salesfoce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.choam.proto.Checkpoint;
+import com.salesforce.apollo.choam.proto.CheckpointReplication;
+import com.salesforce.apollo.choam.proto.CheckpointSegments;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.Concierge;
@@ -77,6 +77,12 @@ public class CheckpointAssembler {
         return assembled;
     }
 
+    private void assembled(CheckpointState cs) {
+        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
+                 member.getId());
+        assembled.complete(cs);
+    }
+
     private CheckpointReplication buildRequest() {
         long seed = Entropy.nextBitsStreamLong();
         BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getCount(), fpr);
@@ -99,12 +105,6 @@ public class CheckpointAssembler {
             return false;
         }
         return true;
-    }
-
-    private void assembled(CheckpointState cs) {
-        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
-                 member.getId());
-        assembled.complete(cs);
     }
 
     private void gossip(ScheduledExecutorService scheduler, Duration duration) {

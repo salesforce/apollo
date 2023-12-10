@@ -8,9 +8,9 @@ package com.salesforce.apollo.comm.grpc;
 
 import com.google.common.primitives.Ints;
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.test.proto.PeerCreds;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.test.proto.PeerCreds;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;

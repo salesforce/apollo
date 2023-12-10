@@ -17,10 +17,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.ViewChange;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.ViewChange;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -36,7 +36,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  * Interface to SubDomain Demesne running in the GraalVM Isolate as JNI library
  *
  * @author hal.hildebrand
- *
  */
 public class JniBridge implements Demesne {
     private static final String DEMESNE_SHARED_LIB_NAME = "demesne";
@@ -48,6 +47,14 @@ public class JniBridge implements Demesne {
         } catch (IOException e) {
             throw new IllegalStateException("Cannot load shared library: " + DEMESNE_SHARED_LIB_NAME, e);
         }
+    }
+
+    private final long isolateId;
+
+    public JniBridge(DemesneParameters parameters) {
+        isolateId = createIsolate();
+        final var serialized = parameters.toByteString().toByteArray();
+        launch(isolateId, serialized, serialized.length);
     }
 
     private static native boolean active(long isolateId);
@@ -76,14 +83,6 @@ public class JniBridge implements Demesne {
     }
 
     private static native boolean viewChange(long isolateId, byte[] parameters, int paramLength);
-
-    private final long isolateId;
-
-    public JniBridge(DemesneParameters parameters) {
-        isolateId = createIsolate();
-        final var serialized = parameters.toByteString().toByteArray();
-        launch(isolateId, serialized, serialized.length);
-    }
 
     @Override
     public boolean active() {

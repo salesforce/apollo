@@ -6,13 +6,12 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Submitter {
 

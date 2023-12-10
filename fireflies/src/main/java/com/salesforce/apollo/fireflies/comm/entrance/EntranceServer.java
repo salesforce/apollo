@@ -7,11 +7,11 @@
 package com.salesforce.apollo.fireflies.comm.entrance;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
-import com.salesfoce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -22,13 +22,12 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EntranceServer extends EntranceImplBase {
 
-    private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
+    private       ClientIdentity           identity;
 
     public EntranceServer(ClientIdentity identity, RoutableService<Service> r, FireflyMetrics metrics) {
         this.metrics = metrics;

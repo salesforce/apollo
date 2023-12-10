@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesfoce.apollo.choam.proto.*;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.SubmitResult.Result;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;

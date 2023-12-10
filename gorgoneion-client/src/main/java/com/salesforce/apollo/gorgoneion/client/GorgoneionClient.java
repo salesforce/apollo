@@ -8,12 +8,12 @@ package com.salesforce.apollo.gorgoneion.client;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.gorgoneion.proto.Attestation;
-import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.gorgoneion.proto.Attestation;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.gorgoneion.client.client.comm.Admissions;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import org.slf4j.Logger;
@@ -30,12 +30,12 @@ public class GorgoneionClient {
     private static final Logger log = LoggerFactory.getLogger(GorgoneionClient.class);
 
     private final Function<SignedNonce, Any> attester;
-    private final Admissions client;
-    private final Clock clock;
+    private final Admissions                 client;
+    private final Clock                      clock;
     private final ControlledIdentifierMember member;
 
-    public GorgoneionClient(ControlledIdentifierMember member, Function<SignedNonce, Any> attester,
-                            Clock clock, Admissions client) {
+    public GorgoneionClient(ControlledIdentifierMember member, Function<SignedNonce, Any> attester, Clock clock,
+                            Admissions client) {
         this.member = member;
         this.attester = attester;
         this.clock = clock;
@@ -53,17 +53,16 @@ public class GorgoneionClient {
         KERL_ kerl = member.kerl();
         var now = clock.instant();
         var attestation = Attestation.newBuilder()
-                .setAttestation(proof)
-                .setKerl(kerl)
-                .setNonce(member.sign(nonce.toByteString()).toSig())
-                .setTimestamp(Timestamp.newBuilder()
-                        .setSeconds(now.getEpochSecond())
-                        .setNanos(now.getNano()))
-                .build();
+                                     .setAttestation(proof)
+                                     .setKerl(kerl)
+                                     .setNonce(member.sign(nonce.toByteString()).toSig())
+                                     .setTimestamp(
+                                     Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
+                                     .build();
         return SignedAttestation.newBuilder()
-                .setAttestation(attestation)
-                .setSignature(member.sign(attestation.toByteString()).toSig())
-                .build();
+                                .setAttestation(attestation)
+                                .setSignature(member.sign(attestation.toByteString()).toSig())
+                                .build();
 
     }
 
@@ -71,9 +70,6 @@ public class GorgoneionClient {
         KERL_ kerl = member.kerl();
         var attestation = attester.apply(nonce);
         var sa = attestation(nonce, attestation);
-        return Credentials.newBuilder()
-                .setNonce(nonce)
-                .setAttestation(sa)
-                .build();
+        return Credentials.newBuilder().setNonce(nonce).setAttestation(sa).build();
     }
 }

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
@@ -86,7 +86,7 @@ public interface KERL extends KEL {
             if (split.length == 3) {
                 try {
                     attachment = Attachment.of(
-                    com.salesfoce.apollo.stereotomy.event.proto.Attachment.parseFrom(decoder.decode(split[2])));
+                    com.salesforce.apollo.stereotomy.event.proto.Attachment.parseFrom(decoder.decode(split[2])));
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalArgumentException("Invalid attachment: " + encoded);
                 }
@@ -97,6 +97,17 @@ public interface KERL extends KEL {
                                             attachment);
         }
 
+        public String toBase64() {
+            var encoder = Base64.getUrlEncoder().withoutPadding();
+            var attachBytes =
+            attachments == null ? com.salesforce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
+                                                                                         .toByteArray()
+                                : attachments.toAttachemente().toByteArray();
+            var encoded =
+            event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|" + encoder.encodeToString(attachBytes);
+            return encoded;
+        }
+
         public KeyEventWithAttachments toKeyEvente() {
             var builder = KeyEventWithAttachments.newBuilder();
             event.setEventOf(builder);
@@ -104,17 +115,6 @@ public interface KERL extends KEL {
                 builder.setAttachment(attachments.toAttachemente());
             }
             return builder.build();
-        }
-
-        public String toBase64() {
-            var encoder = Base64.getUrlEncoder().withoutPadding();
-            var attachBytes =
-            attachments == null ? com.salesfoce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
-                                                                                        .toByteArray()
-                                : attachments.toAttachemente().toByteArray();
-            var encoded =
-            event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|" + encoder.encodeToString(attachBytes);
-            return encoded;
         }
     }
 }

@@ -15,13 +15,13 @@ import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.choam.proto.Assemble;
-import com.salesfoce.apollo.choam.proto.Block;
-import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.Executions;
-import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.choam.proto.Assemble;
+import com.salesforce.apollo.choam.proto.Block;
+import com.salesforce.apollo.choam.proto.Certification;
+import com.salesforce.apollo.choam.proto.Executions;
+import com.salesforce.apollo.choam.proto.Join;
+import com.salesforce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -35,34 +35,16 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ViewContext {
 
     private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
-
-    public static String print(Certification c, DigestAlgorithm algo) {
-        return String.format("id: %s sig: %s", Digest.from(c.getId()), algo.digest(c.getSignature().toByteString()));
-    }
-
-    public static String print(Validate v, DigestAlgorithm algo) {
-        return String.format("id: %s hash: %s sig: %s", Digest.from(v.getWitness().getId()), Digest.from(v.getHash()),
-                             algo.digest(v.getWitness().getSignature().toByteString()));
-    }
-
-    public static String print(ViewMember vm, DigestAlgorithm algo) {
-        return String.format("id: %s key: %s sig: %s", Digest.from(vm.getId()),
-                             algo.digest(publicKey(vm.getConsensusKey()).getEncoded()),
-                             algo.digest(vm.getSignature().toByteString()));
-    }
-
     private final BlockProducer         blockProducer;
     private final Context<Member>       context;
     private final Parameters            params;
     private final Map<Digest, Short>    roster;
     private final Signer                signer;
     private final Map<Member, Verifier> validators;
-
     public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
                        BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
@@ -77,6 +59,21 @@ public class ViewContext {
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
         }
+    }
+
+    public static String print(Certification c, DigestAlgorithm algo) {
+        return String.format("id: %s sig: %s", Digest.from(c.getId()), algo.digest(c.getSignature().toByteString()));
+    }
+
+    public static String print(Validate v, DigestAlgorithm algo) {
+        return String.format("id: %s hash: %s sig: %s", Digest.from(v.getWitness().getId()), Digest.from(v.getHash()),
+                             algo.digest(v.getWitness().getSignature().toByteString()));
+    }
+
+    public static String print(ViewMember vm, DigestAlgorithm algo) {
+        return String.format("id: %s key: %s sig: %s", Digest.from(vm.getId()),
+                             algo.digest(publicKey(vm.getConsensusKey()).getEncoded()),
+                             algo.digest(vm.getSignature().toByteString()));
     }
 
     public Block checkpoint() {

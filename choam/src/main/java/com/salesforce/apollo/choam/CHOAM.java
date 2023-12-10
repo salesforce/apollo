@@ -11,10 +11,10 @@ import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.*;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.cryptography.proto.PubKey;
-import com.salesfoce.apollo.messaging.proto.AgedMessageOrBuilder;
+import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.SubmitResult.Result;
+import com.salesforce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.messaging.proto.AgedMessageOrBuilder;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.*;
@@ -75,9 +75,9 @@ public class CHOAM {
     private final        AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
     private final        AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
     private final        ExecutorService                                       linear;
-    private final        AtomicReference<nextView> next       = new AtomicReference<>();
-    private final        AtomicReference<Digest>   nextViewId = new AtomicReference<>();
-    private final        Parameters                params;
+    private final        AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final        AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
+    private final        Parameters                                            params;
     private final        PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
     private final        RoundScheduler                                        roundScheduler;
     private final        Session                                               session;
@@ -587,6 +587,10 @@ public class CHOAM {
         }
     }
 
+    private String getLabel() {
+        return "CHOAM" + params.member().getId() + params.context().getId();
+    }
+
     private boolean isNext(HashedBlock next) {
         if (next == null) {
             return false;
@@ -936,10 +940,6 @@ public class CHOAM {
             }
         }
         pending.add(hcb);
-    }
-
-    private String getLabel() {
-        return "CHOAM" + params.member().getId() + params.context().getId();
     }
 
     public interface BlockProducer {

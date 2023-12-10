@@ -9,14 +9,13 @@ package com.salesforce.apollo.stereotomy.services.proto;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ProtoEventObserver {
 

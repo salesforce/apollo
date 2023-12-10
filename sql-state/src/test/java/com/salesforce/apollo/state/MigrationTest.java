@@ -27,10 +27,10 @@ import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.ChangeLog;
-import com.salesfoce.apollo.state.proto.Migration;
-import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.state.proto.ChangeLog;
+import com.salesforce.apollo.state.proto.Migration;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
@@ -38,7 +38,6 @@ import deterministic.org.h2.jdbc.JdbcSQLSyntaxErrorException;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class MigrationTest {
 
@@ -53,7 +52,8 @@ public class MigrationTest {
         var list = new ArrayList<Message>();
         list.add(Txn.newBuilder()
                     .setMigration(MigrationTest.bookSchemaMigration())
-                    .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                    .setBatch(batch(
+                    "create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
                     .build());
         return list;
     }
@@ -67,22 +67,20 @@ public class MigrationTest {
 
         Migration migration = Migration.newBuilder().setTag("test-1").build();
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(0, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(0, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
 
         migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
 
         success = new CompletableFuture<>();
-        executor.execute(0, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(0, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -93,11 +91,12 @@ public class MigrationTest {
         assertFalse(cb.next(), "Should not exist");
         Transaction.Builder builder = Transaction.newBuilder();
         builder.setContent(Txn.newBuilder()
-                              .setBatch(batch("insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                              .setBatch(batch(
+                              "insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                              "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                              "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                              "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
                               .build()
                               .toByteString());
         Transaction transaction = builder.build();
@@ -120,11 +119,10 @@ public class MigrationTest {
 
         executor.beginBlock(ULong.valueOf(2), DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
 
-        executor.execute(1, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(1, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -149,11 +147,10 @@ public class MigrationTest {
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(0, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(0, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -164,11 +161,12 @@ public class MigrationTest {
         assertFalse(cb.next(), "Should not exist");
         Transaction.Builder builder = Transaction.newBuilder();
         builder.setContent(Txn.newBuilder()
-                              .setBatch(batch("insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                              "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                              "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                              "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                              .setBatch(batch(
+                              "insert into test.books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                              "insert into test.books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                              "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                              "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                              "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
                               .build()
                               .toByteString());
         Transaction transaction = builder.build();

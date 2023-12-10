@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.gorgoneion.client.client.comm;
 
-import com.salesfoce.apollo.gorgoneion.proto.AdmissionsGrpc;
-import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.gorgoneion.proto.AdmissionsGrpc;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;

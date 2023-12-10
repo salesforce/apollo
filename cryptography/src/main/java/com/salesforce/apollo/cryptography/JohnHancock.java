@@ -7,7 +7,7 @@
 package com.salesforce.apollo.cryptography;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.cryptography.proto.Sig;
+import com.salesforce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.cryptography.Verifier.Filtered;
 import com.salesforce.apollo.utils.Hex;
 import org.joou.ULong;
@@ -100,6 +100,10 @@ public class JohnHancock {
         return bytes;
     }
 
+    public ULong getSequenceNumber() {
+        return sequenceNumber;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -166,9 +170,5 @@ public class JohnHancock {
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
         return SigningThreshold.thresholdMet(threshold, arrIndexes);
-    }
-
-    public ULong getSequenceNumber() {
-        return sequenceNumber;
     }
 }

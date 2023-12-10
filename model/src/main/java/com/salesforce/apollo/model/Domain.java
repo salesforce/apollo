@@ -7,14 +7,14 @@
 package com.salesforce.apollo.model;
 
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.Migration;
-import com.salesfoce.apollo.state.proto.Txn;
-import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesforce.apollo.choam.proto.Join;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.state.proto.Migration;
+import com.salesforce.apollo.state.proto.Txn;
+import com.salesforce.apollo.stereotomy.event.proto.Attachment;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;

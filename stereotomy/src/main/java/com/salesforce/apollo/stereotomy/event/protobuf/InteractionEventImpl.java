@@ -11,20 +11,19 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.InteractionEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class InteractionEventImpl extends KeyEventImpl implements InteractionEvent {
 
-    private final com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event;
+    private final com.salesforce.apollo.stereotomy.event.proto.InteractionEvent event;
 
-    public InteractionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent event) {
+    public InteractionEventImpl(com.salesforce.apollo.stereotomy.event.proto.InteractionEvent event) {
         super(event.getSpecification().getHeader(), event.getCommon());
         this.event = event;
     }

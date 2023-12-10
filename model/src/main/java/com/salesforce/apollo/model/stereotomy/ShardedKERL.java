@@ -7,7 +7,7 @@
 package com.salesforce.apollo.model.stereotomy;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;

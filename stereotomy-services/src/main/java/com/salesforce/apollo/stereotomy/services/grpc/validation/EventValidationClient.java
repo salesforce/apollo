@@ -13,10 +13,10 @@ import java.util.concurrent.ExecutionException;
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.BoolValue;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
@@ -25,9 +25,17 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class EventValidationClient implements EventValidationService {
+
+    private final ManagedServerChannel channel;
+    private final ValidatorFutureStub  client;
+    private final StereotomyMetrics    metrics;
+    public EventValidationClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
+        this.channel = channel;
+        this.client = ValidatorGrpc.newFutureStub(channel).withCompression("gzip");
+        this.metrics = metrics;
+    }
 
     public static CreateClientCommunications<EventValidationService> getCreate(StereotomyMetrics metrics) {
         return (c) -> {
@@ -53,16 +61,6 @@ public class EventValidationClient implements EventValidationService {
                 return service.validate(event);
             }
         };
-    }
-
-    private final ManagedServerChannel channel;
-    private final ValidatorFutureStub  client;
-    private final StereotomyMetrics    metrics;
-
-    public EventValidationClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
-        this.channel = channel;
-        this.client = ValidatorGrpc.newFutureStub(channel).withCompression("gzip");
-        this.metrics = metrics;
     }
 
     @Override

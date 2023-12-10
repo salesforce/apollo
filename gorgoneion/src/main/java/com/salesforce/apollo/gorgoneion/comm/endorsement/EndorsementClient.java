@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
-import com.salesfoce.apollo.gorgoneion.proto.*;
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesforce.apollo.gorgoneion.proto.*;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -22,9 +22,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class EndorsementClient implements Endorsement {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel                    channel;
     private final EndorsementGrpc.EndorsementBlockingStub client;
-    private final GorgoneionMetrics metrics;
+    private final GorgoneionMetrics                       metrics;
 
     public EndorsementClient(ManagedServerChannel channel, GorgoneionMetrics metrics) {
         this.channel = channel;
@@ -50,8 +50,7 @@ public class EndorsementClient implements Endorsement {
             metrics.outboundEndorseNonce().update(serializedSize);
         }
 
-        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                .endorse(nonce);
+        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).endorse(nonce);
         if (metrics != null) {
             try {
                 var serializedSize = result.getSerializedSize();
@@ -88,8 +87,7 @@ public class EndorsementClient implements Endorsement {
             metrics.outboundValidateCredentials().update(serializedSize);
         }
 
-        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                .validate(credentials);
+        var result = client.withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS).validate(credentials);
         if (metrics != null) {
             try {
                 var serializedSize = result.getSerializedSize();

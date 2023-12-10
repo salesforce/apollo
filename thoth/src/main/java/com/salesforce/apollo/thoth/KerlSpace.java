@@ -8,11 +8,11 @@
 package com.salesforce.apollo.thoth;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.cryptography.proto.Biff;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.thoth.proto.Intervals;
-import com.salesfoce.apollo.thoth.proto.Update;
+import com.salesforce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.cryptography.Digest;

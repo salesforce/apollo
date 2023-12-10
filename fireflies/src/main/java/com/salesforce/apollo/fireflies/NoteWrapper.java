@@ -10,9 +10,9 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 import java.util.BitSet;
 
-import com.salesfoce.apollo.fireflies.proto.Note;
-import com.salesfoce.apollo.fireflies.proto.Note.Builder;
-import com.salesfoce.apollo.fireflies.proto.SignedNote;
+import com.salesforce.apollo.fireflies.proto.Note;
+import com.salesforce.apollo.fireflies.proto.Note.Builder;
+import com.salesforce.apollo.fireflies.proto.SignedNote;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -22,7 +22,6 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class NoteWrapper {
     private final Digest     currentView;
@@ -59,9 +58,8 @@ public class NoteWrapper {
     }
 
     public Digest getId() {
-        return ((SelfAddressingIdentifier) Identifier.from(note.getNote()
-                                                               .getCoordinates()
-                                                               .getIdentifier())).getDigest();
+        return ((SelfAddressingIdentifier) Identifier.from(
+        note.getNote().getCoordinates().getIdentifier())).getDigest();
     }
 
     public BitSet getMask() {

@@ -1,6 +1,6 @@
 package com.salesforce.apollo.bloomFilters;
 
-import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import org.junit.jupiter.api.Test;

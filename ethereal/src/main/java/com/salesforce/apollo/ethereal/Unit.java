@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
@@ -19,126 +19,8 @@ import com.salesforce.apollo.membership.Context;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Unit extends PreUnit {
-
-    record unitInDag(Unit unit, int forkingHeight) implements Unit {
-
-        @Override
-        public int hashCode() {
-            return unit.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof Unit uid) {
-                return hash().equals(uid.hash());
-            }
-            return false;
-        }
-
-        @Override
-        public short creator() {
-            return unit.creator();
-        }
-
-        @Override
-        public ByteString data() {
-            return unit.data();
-        }
-
-        @Override
-        public int epoch() {
-            return unit.epoch();
-        }
-
-        @Override
-        public Digest hash() {
-            return unit.hash();
-        }
-
-        @Override
-        public int height() {
-            return unit.height();
-        }
-
-        @Override
-        public Crown view() {
-            return unit.view();
-        }
-
-        @Override
-        public boolean aboveWithinProc(Unit v) {
-            if (unit.height() < v.height() || unit.creator() != v.creator()) {
-                return false;
-            }
-            if (v instanceof unitInDag uid) {
-                if (v.height() < commonForkHeight(uid)) {
-                    return true;
-                }
-            }
-            // Either we have a fork or a different type of unit, either way no optimization
-            // is possible.
-            return unit.aboveWithinProc(v);
-
-        }
-
-        int commonForkHeight(unitInDag v) {
-            if (forkingHeight < v.forkingHeight) {
-                return forkingHeight;
-            }
-            return v.forkingHeight;
-        }
-
-        @Override
-        public Unit[] floor(short slice) {
-            return unit.floor(slice);
-        }
-
-        @Override
-        public int level() {
-            return unit.level();
-        }
-
-        @Override
-        public Unit[] parents() {
-            return unit.parents();
-        }
-
-        @Override
-        public String toString() {
-            return "uid[" + shortString() + "]";
-        }
-
-        @Override
-        public String shortString() {
-            return creator() + ":" + level() + ":" + epoch();
-        }
-
-        @Override
-        public PreUnit toPreUnit() {
-            return unit.toPreUnit();
-        }
-
-        @Override
-        public PreUnit_s toPreUnit_s() {
-            return unit.toPreUnit_s();
-        }
-
-        @Override
-        public JohnHancock signature() {
-            return unit.signature();
-        }
-
-        @Override
-        public boolean verify(Verifier[] verifiers) {
-            return unit.verify(verifiers);
-        }
-    }
 
     static int levelFromParents(Unit[] parents, double bias) {
         var nProc = (short) parents.length;
@@ -163,8 +45,7 @@ public interface Unit extends PreUnit {
     }
 
     /**
-     * Computes all maximal units produced by a pid present in parents and their
-     * floors
+     * Computes all maximal units produced by a pid present in parents and their floors
      */
     static Unit[] maximalByPid(Unit[] parents, short pid) {
         if (parents[pid] == null) {
@@ -262,9 +143,8 @@ public interface Unit extends PreUnit {
     }
 
     /**
-     * this implementation works as long as there is no race for writing/reading to
-     * dag.maxUnits, i.e. as long as units created by one process are added
-     * atomically
+     * this implementation works as long as there is no race for writing/reading to dag.maxUnits, i.e. as long as units
+     * created by one process are added atomically
      */
     default int computeForkingHeight(Dag dag) {
         if (dealing()) {
@@ -310,5 +190,122 @@ public interface Unit extends PreUnit {
     /** Return the parent that was created by the same process as the receiver */
     default Unit predecessor() {
         return parents()[creator()];
+    }
+
+    record unitInDag(Unit unit, int forkingHeight) implements Unit {
+
+        @Override
+        public boolean aboveWithinProc(Unit v) {
+            if (unit.height() < v.height() || unit.creator() != v.creator()) {
+                return false;
+            }
+            if (v instanceof unitInDag uid) {
+                if (v.height() < commonForkHeight(uid)) {
+                    return true;
+                }
+            }
+            // Either we have a fork or a different type of unit, either way no optimization
+            // is possible.
+            return unit.aboveWithinProc(v);
+
+        }
+
+        @Override
+        public short creator() {
+            return unit.creator();
+        }
+
+        @Override
+        public ByteString data() {
+            return unit.data();
+        }
+
+        @Override
+        public int epoch() {
+            return unit.epoch();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof Unit uid) {
+                return hash().equals(uid.hash());
+            }
+            return false;
+        }
+
+        @Override
+        public Unit[] floor(short slice) {
+            return unit.floor(slice);
+        }
+
+        @Override
+        public Digest hash() {
+            return unit.hash();
+        }
+
+        @Override
+        public int hashCode() {
+            return unit.hashCode();
+        }
+
+        @Override
+        public int height() {
+            return unit.height();
+        }
+
+        @Override
+        public int level() {
+            return unit.level();
+        }
+
+        @Override
+        public Unit[] parents() {
+            return unit.parents();
+        }
+
+        @Override
+        public String shortString() {
+            return creator() + ":" + level() + ":" + epoch();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return unit.signature();
+        }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return unit.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return unit.toPreUnit_s();
+        }
+
+        @Override
+        public String toString() {
+            return "uid[" + shortString() + "]";
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return unit.verify(verifiers);
+        }
+
+        @Override
+        public Crown view() {
+            return unit.view();
+        }
+
+        int commonForkHeight(unitInDag v) {
+            if (forkingHeight < v.forkingHeight) {
+                return forkingHeight;
+            }
+            return v.forkingHeight;
+        }
     }
 }

@@ -7,7 +7,7 @@
 
 package com.salesforce.apollo.thoth;
 
-import com.salesfoce.apollo.thoth.proto.Interval;
+import com.salesforce.apollo.thoth.proto.Interval;
 import com.salesforce.apollo.cryptography.Digest;
 
 import java.util.function.Predicate;

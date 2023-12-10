@@ -8,9 +8,9 @@ package com.salesforce.apollo.model.demesnes.comm;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import io.grpc.stub.StreamObserver;
@@ -22,7 +22,7 @@ import java.util.List;
  */
 public class DemesneKERLServer extends KERLServiceImplBase {
     private final StereotomyMetrics metrics;
-    private final ProtoKERLService service;
+    private final ProtoKERLService  service;
 
     public DemesneKERLServer(ProtoKERLService service, StereotomyMetrics metrics) {
         this.metrics = metrics;
@@ -44,7 +44,8 @@ public class DemesneKERLServer extends KERLServiceImplBase {
             if (timer != null) {
                 timer.stop();
             }
-            var states = result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
+            var states =
+            result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
             responseObserver.onNext(states);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -90,7 +91,8 @@ public class DemesneKERLServer extends KERLServiceImplBase {
             if (timer != null) {
                 timer.stop();
             }
-            var results = result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
+            var results =
+            result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
             responseObserver.onNext(results);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -122,7 +124,8 @@ public class DemesneKERLServer extends KERLServiceImplBase {
     }
 
     @Override
-    public void appendWithAttachments(KeyEventWithAttachmentsContext request, StreamObserver<KeyStates> responseObserver) {
+    public void appendWithAttachments(KeyEventWithAttachmentsContext request,
+                                      StreamObserver<KeyStates> responseObserver) {
         Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -133,7 +136,8 @@ public class DemesneKERLServer extends KERLServiceImplBase {
             responseObserver.onNext(KeyStates.getDefaultInstance());
             responseObserver.onCompleted();
         } else {
-            var states = result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
+            var states =
+            result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
             responseObserver.onNext(states);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -292,7 +296,8 @@ public class DemesneKERLServer extends KERLServiceImplBase {
     }
 
     @Override
-    public void getKeyStateWithAttachments(EventCoords request, StreamObserver<KeyStateWithAttachments_> responseObserver) {
+    public void getKeyStateWithAttachments(EventCoords request,
+                                           StreamObserver<KeyStateWithAttachments_> responseObserver) {
         Context timer = metrics != null ? metrics.getKeyStateService().time() : null;
         if (metrics != null) {
             final var serializedSize = request.getSerializedSize();

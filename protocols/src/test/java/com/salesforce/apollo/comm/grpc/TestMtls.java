@@ -21,8 +21,8 @@ import java.util.concurrent.ForkJoinPool;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -38,7 +38,6 @@ import io.netty.handler.ssl.SslContext;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestMtls {
 
@@ -47,10 +46,9 @@ public class TestMtls {
         var notBefore = Instant.now();
         var notAfter = Instant.now().plusSeconds(10_000);
         String localhost = InetAddress.getLoopbackAddress().getHostName();
-        X509Certificate generated = Certificates.selfSign(false,
-                                                          Utils.encode(id, localhost, Utils.allocatePort(),
-                                                                       keyPair.getPublic()),
-                                                          keyPair, notBefore, notAfter, Collections.emptyList());
+        X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, localhost, Utils.allocatePort(),
+                                                                              keyPair.getPublic()), keyPair, notBefore,
+                                                          notAfter, Collections.emptyList());
         return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
     }
 

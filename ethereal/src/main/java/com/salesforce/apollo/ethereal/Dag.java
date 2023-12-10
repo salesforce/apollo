@@ -27,7 +27,7 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
 import com.salesforce.apollo.membership.Context;
@@ -36,9 +36,97 @@ import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Dag {
+    static final Logger log = LoggerFactory.getLogger(Dag.class);
+
+    static short threshold(int np) {
+        var nProcesses = (double) np;
+        short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0);
+        return minimalTrusted;
+    }
+
+    static boolean validate(int nProc) {
+        var threshold = threshold(nProc);
+        return (threshold * 3 + 1) == nProc;
+    }
+
+    void addCheck(BiFunction<Unit, Dag, Correctness> checker);
+
+    void afterInsert(Consumer<Unit> h);
+
+    void beforeInsert(Consumer<Unit> h);
+
+    Unit build(PreUnit base, Unit[] parents);
+
+    Correctness check(Unit u);
+
+    boolean contains(Digest digest);
+
+    boolean contains(long parentID);
+
+    /** return a slce of parents of the specified unit if control hash matches */
+    Decoded decodeParents(PreUnit unit);
+
+    int epoch();
+
+    Unit get(Digest digest);
+
+    List<Unit> get(List<Digest> digests);
+
+    Unit get(long id);
+
+    void have(DigestBloomFilter biff);
+
+    void insert(Unit u);
+
+    boolean isQuorum(short cardinality);
+
+    void iterateMaxUnitsPerProcess(Consumer<Unit> work);
+
+    void iterateUnits(Function<Unit, Boolean> consumer);
+
+    void iterateUnitsOnLevel(int level, Function<Unit, Boolean> work);
+
+    /** returns the maximal level of a unit in the dag. */
+    int maxLevel();
+
+    DagInfo maxView();
+
+    List<Unit> maximalUnitsPerProcess();
+
+    void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
+
+    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing);
+
+    short nProc();
+
+    short pid();
+
+    <T> T read(Callable<T> c);
+
+    void read(Runnable r);
+
+    List<Unit> unitsAbove(int[] heights);
+
+    List<Unit> unitsOnLevel(int level);
+
+    void write(Runnable r);
+
+    public interface Decoded {
+        default Correctness classification() {
+            return Correctness.CORRECT;
+        }
+
+        default boolean inError() {
+            return true;
+        }
+
+        default Unit[] parents() {
+            return new Unit[0];
+        }
+    }
+
     public class DagImpl implements Dag {
 
         private final List<BiFunction<Unit, Dag, Correctness>> checks     = new ArrayList<>();
@@ -179,8 +267,8 @@ public interface Dag {
         @Override
         public void insert(Unit v) {
             if (v.epoch() != epoch) {
-                throw new IllegalStateException("Invalid insert of: " + v + " into epoch: " + epoch + " on: "
-                + config.logLabel());
+                throw new IllegalStateException(
+                "Invalid insert of: " + v + " into epoch: " + epoch + " on: " + config.logLabel());
             }
             write(() -> {
                 var unit = v.embed(this);
@@ -231,11 +319,6 @@ public interface Dag {
         }
 
         @Override
-        public List<Unit> maximalUnitsPerProcess() {
-            return read(() -> Arrays.asList(maxUnits));
-        }
-
-        @Override
         public int maxLevel() {
             return read(() -> {
                 int maxLevel = -1;
@@ -263,6 +346,11 @@ public interface Dag {
                 }
                 return new DagInfo(epoch(), heights);
             });
+        }
+
+        @Override
+        public List<Unit> maximalUnitsPerProcess() {
+            return read(() -> Arrays.asList(maxUnits));
         }
 
         @Override
@@ -361,20 +449,6 @@ public interface Dag {
         }
     }
 
-    public interface Decoded {
-        default Correctness classification() {
-            return Correctness.CORRECT;
-        }
-
-        default boolean inError() {
-            return true;
-        }
-
-        default Unit[] parents() {
-            return new Unit[0];
-        }
-    }
-
     public record DecodedR(Unit[] parents) implements Decoded {
         @Override
         public boolean inError() {
@@ -382,14 +456,12 @@ public interface Dag {
         }
     }
 
-    record DagInfo(int epoch, int[] heights) {}
+    record DagInfo(int epoch, int[] heights) {
+    }
 
     class fiberMap {
-        public record getResult(List<Unit> result, int unknown) {}
-
         private final List<Unit[]> content = new ArrayList<>();
         private final short        width;
-
         fiberMap(short width) {
             this.width = width;
         }
@@ -433,14 +505,14 @@ public interface Dag {
         }
 
         /**
-         * get takes a list of heights (of length nProc) and returns a slice (of length
-         * nProc) of slices of corresponding units. The second returned value is the
-         * number of unknown units (no units for that creator-height pair).
+         * get takes a list of heights (of length nProc) and returns a slice (of length nProc) of slices of
+         * corresponding units. The second returned value is the number of unknown units (no units for that
+         * creator-height pair).
          */
         public getResult get(int[] heights) {
             if (heights.length != width) {
-                throw new IllegalStateException("Wrong number of heights passed to fiber map: " + heights.length
-                + " expected: " + width);
+                throw new IllegalStateException(
+                "Wrong number of heights passed to fiber map: " + heights.length + " expected: " + width);
             }
             List<Unit> result = IntStream.range(0, width).mapToObj(e -> (Unit) null).collect(Collectors.toList());
             var unknown = 0;
@@ -497,6 +569,9 @@ public interface Dag {
             }
             return content.get(height);
         }
+
+        public record getResult(List<Unit> result, int unknown) {
+        }
     }
 
     record AmbiguousParents(List<Unit> units) implements Decoded {
@@ -522,79 +597,4 @@ public interface Dag {
             return Correctness.UNKNOWN_PARENTS;
         }
     }
-
-    static final Logger log = LoggerFactory.getLogger(Dag.class);
-
-    static short threshold(int np) {
-        var nProcesses = (double) np;
-        short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0);
-        return minimalTrusted;
-    }
-
-    static boolean validate(int nProc) {
-        var threshold = threshold(nProc);
-        return (threshold * 3 + 1) == nProc;
-    }
-
-    void addCheck(BiFunction<Unit, Dag, Correctness> checker);
-
-    void afterInsert(Consumer<Unit> h);
-
-    void beforeInsert(Consumer<Unit> h);
-
-    Unit build(PreUnit base, Unit[] parents);
-
-    Correctness check(Unit u);
-
-    boolean contains(Digest digest);
-
-    boolean contains(long parentID);
-
-    /** return a slce of parents of the specified unit if control hash matches */
-    Decoded decodeParents(PreUnit unit);
-
-    int epoch();
-
-    Unit get(Digest digest);
-
-    List<Unit> get(List<Digest> digests);
-
-    Unit get(long id);
-
-    void have(DigestBloomFilter biff);
-
-    void insert(Unit u);
-
-    boolean isQuorum(short cardinality);
-
-    void iterateMaxUnitsPerProcess(Consumer<Unit> work);
-
-    void iterateUnits(Function<Unit, Boolean> consumer);
-
-    void iterateUnitsOnLevel(int level, Function<Unit, Boolean> work);
-
-    List<Unit> maximalUnitsPerProcess();
-
-    /** returns the maximal level of a unit in the dag. */
-    int maxLevel();
-
-    DagInfo maxView();
-
-    void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
-
-    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing);
-
-    short nProc();
-
-    short pid();
-
-    <T> T read(Callable<T> c);
-
-    void read(Runnable r);
-
-    List<Unit> unitsAbove(int[] heights);
-
-    List<Unit> unitsOnLevel(int level);
-
-    void write(Runnable r);
 }

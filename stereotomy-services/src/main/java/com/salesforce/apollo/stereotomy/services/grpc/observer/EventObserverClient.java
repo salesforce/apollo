@@ -7,15 +7,15 @@
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverFutureStub;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverFutureStub;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
@@ -30,9 +30,9 @@ import java.util.List;
  */
 public class EventObserverClient implements EventObserverService {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel    channel;
     private final EventObserverFutureStub client;
-    private final StereotomyMetrics metrics;
+    private final StereotomyMetrics       metrics;
 
     public EventObserverClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
@@ -115,9 +115,9 @@ public class EventObserverClient implements EventObserverService {
     public void publishEvents(List<KeyEvent_> events, List<Validations> validations) {
         Context timer = metrics == null ? null : metrics.publishEventsClient().time();
         KeyEventsContext request = KeyEventsContext.newBuilder()
-                .addAllKeyEvent(events)
-                .addAllValidations(validations)
-                .build();
+                                                   .addAllKeyEvent(events)
+                                                   .addAllValidations(validations)
+                                                   .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundPublishEventsRequest().mark(request.getSerializedSize());

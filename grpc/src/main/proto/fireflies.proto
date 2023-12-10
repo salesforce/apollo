@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.fireflies.proto";
+option java_package = "com.salesforce.apollo.fireflies.proto";
 option java_outer_classname = "FirefliesProto";
 option objc_class_prefix = "Ff";
 
@@ -13,136 +13,136 @@ import "stereotomy.proto";
 package fireflies;
 
 service Fireflies {
-    rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (google.protobuf.Empty) {}
+  rpc gossip (SayWhat) returns (Gossip) {}
+  rpc update (State) returns (google.protobuf.Empty) {}
 }
 
-message SayWhat { 
-    crypto.Digeste view = 1;
-    SignedNote note = 2;
-    int32 ring = 3;
-    Digests gossip = 4;
+message SayWhat {
+  crypto.Digeste view = 1;
+  SignedNote note = 2;
+  int32 ring = 3;
+  Digests gossip = 4;
 }
 
-message State { 
-    crypto.Digeste view = 1;
-    int32 ring = 2;
-    Update update = 3;
+message State {
+  crypto.Digeste view = 1;
+  int32 ring = 2;
+  Update update = 3;
 }
 
 message Accusation {
-    int64 epoch = 1;
-    int32 ringNumber = 2;
-    crypto.Digeste accuser = 3;
-    crypto.Digeste accused = 4;
-    crypto.Digeste currentView = 5;
+  int64 epoch = 1;
+  int32 ringNumber = 2;
+  crypto.Digeste accuser = 3;
+  crypto.Digeste accused = 4;
+  crypto.Digeste currentView = 5;
 }
 
 message SignedAccusation {
-    Accusation accusation = 1;
-    crypto.Sig signature = 2;
+  Accusation accusation = 1;
+  crypto.Sig signature = 2;
 }
 
 message Note {
-    int64 epoch = 1;
-    crypto.Digeste currentView = 2;
-    stereotomy.EventCoords coordinates = 3;
-    bytes mask = 4;
-    string host = 5;
-    int32 port = 6;
+  int64 epoch = 1;
+  crypto.Digeste currentView = 2;
+  stereotomy.EventCoords coordinates = 3;
+  bytes mask = 4;
+  string host = 5;
+  int32 port = 6;
 }
 
 message ViewChange {
-    crypto.Digeste observer = 1;
-    crypto.Digeste current = 2;
-    int32 attempt = 3;
-    repeated crypto.Digeste joins = 4;
-    repeated crypto.Digeste leaves = 5;
+  crypto.Digeste observer = 1;
+  crypto.Digeste current = 2;
+  int32 attempt = 3;
+  repeated crypto.Digeste joins = 4;
+  repeated crypto.Digeste leaves = 5;
 }
 
 message SignedViewChange {
-    ViewChange change = 1;
-    crypto.Sig signature = 2;
+  ViewChange change = 1;
+  crypto.Sig signature = 2;
 }
 
 message SignedNote {
-    Note note = 1; 
-    crypto.Sig signature = 2;
+  Note note = 1;
+  crypto.Sig signature = 2;
 }
 
 message AccusationGossip {
-    crypto.Biff bff = 1;
-    repeated SignedAccusation updates = 2;
+  crypto.Biff bff = 1;
+  repeated SignedAccusation updates = 2;
 }
 
 message NoteGossip {
-    crypto.Biff bff = 1;
-    repeated SignedNote updates = 2;
+  crypto.Biff bff = 1;
+  repeated SignedNote updates = 2;
 }
 
 message JoinGossip {
-    crypto.Biff bff = 1;
-    repeated SignedNote updates = 2;
+  crypto.Biff bff = 1;
+  repeated SignedNote updates = 2;
 }
 
 message ViewChangeGossip {
-    crypto.Biff bff = 1;
-    repeated SignedViewChange updates = 2;
+  crypto.Biff bff = 1;
+  repeated SignedViewChange updates = 2;
 }
 
-message Digests { 
-    crypto.Biff identityBff = 1;
-    crypto.Biff noteBff = 2;
-    crypto.Biff accusationBff = 3;
-    crypto.Biff observationBff = 4;
-    crypto.Biff joinBiff = 5;
+message Digests {
+  crypto.Biff identityBff = 1;
+  crypto.Biff noteBff = 2;
+  crypto.Biff accusationBff = 3;
+  crypto.Biff observationBff = 4;
+  crypto.Biff joinBiff = 5;
 }
 
 message Gossip {
-    SignedNote redirect = 1;
-    NoteGossip notes = 3;
-    AccusationGossip accusations = 4;
-    ViewChangeGossip observations = 5;
-    JoinGossip joins = 6;
+  SignedNote redirect = 1;
+  NoteGossip notes = 3;
+  AccusationGossip accusations = 4;
+  ViewChangeGossip observations = 5;
+  JoinGossip joins = 6;
 }
 
 message Update {
-    repeated SignedNote notes = 1;
-    repeated SignedAccusation accusations = 2;
-    repeated SignedViewChange observations = 3;
-    repeated SignedNote joins = 4;
+  repeated SignedNote notes = 1;
+  repeated SignedAccusation accusations = 2;
+  repeated SignedViewChange observations = 3;
+  repeated SignedNote joins = 4;
 }
 
 // Eísodos
 service Entrance {
-    rpc seed (Registration) returns (Redirect) {}
-    rpc join (Join) returns (Gateway) {}
+  rpc seed (Registration) returns (Redirect) {}
+  rpc join (Join) returns (Gateway) {}
 }
 
-message Registration { 
-    crypto.Digeste view = 1;
-    SignedNote note = 2;
+message Registration {
+  crypto.Digeste view = 1;
+  SignedNote note = 2;
 }
 
 message Redirect {
-    crypto.Digeste view = 1;
-    int32 cardinality = 2;
-    int32 rings = 3;
-    bool bootstrap = 4;
-    repeated Seed_ successors = 6;
+  crypto.Digeste view = 1;
+  int32 cardinality = 2;
+  int32 rings = 3;
+  bool bootstrap = 4;
+  repeated Seed_ successors = 6;
 }
 
 message Seed_ {
-    SignedNote note = 1;
-    stereotomy.KeyState_ keyState = 5;
+  SignedNote note = 1;
+  stereotomy.KeyState_ keyState = 5;
 }
 
-message Join { 
-    crypto.Digeste view = 1;
-    SignedNote note = 2;
+message Join {
+  crypto.Digeste view = 1;
+  SignedNote note = 2;
 }
 
-message Gateway { 
-    crypto.HexBloome diadem = 1;
-    repeated SignedNote initialSeedSet = 2;
+message Gateway {
+  crypto.HexBloome diadem = 1;
+  repeated SignedNote initialSeedSet = 2;
 }

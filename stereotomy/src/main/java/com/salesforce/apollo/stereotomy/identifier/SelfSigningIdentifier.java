@@ -8,12 +8,11 @@ package com.salesforce.apollo.stereotomy.identifier;
 
 import java.util.Objects;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.JohnHancock;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class SelfSigningIdentifier implements Identifier {
 

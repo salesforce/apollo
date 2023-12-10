@@ -7,9 +7,9 @@
 package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Timer;
-import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Update;
+import com.salesforce.apollo.ethereal.proto.ContextUpdate;
+import com.salesforce.apollo.ethereal.proto.Gossip;
+import com.salesforce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;

@@ -13,8 +13,8 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import org.joou.ULong;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
-import com.salesfoce.apollo.stereotomy.event.proto.Header;
+import com.salesforce.apollo.stereotomy.event.proto.EventCommon;
+import com.salesforce.apollo.stereotomy.event.proto.Header;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -25,9 +25,8 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * Grpc implemention of abstract KeyEvent
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 abstract public class KeyEventImpl implements KeyEvent {
 

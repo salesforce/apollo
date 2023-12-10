@@ -11,11 +11,10 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegatedInceptionEventImpl extends InceptionEventImpl implements DelegatedInceptionEvent {
 
-    public DelegatedInceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
+    public DelegatedInceptionEventImpl(com.salesforce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
         super(inceptionEvent);
     }
 

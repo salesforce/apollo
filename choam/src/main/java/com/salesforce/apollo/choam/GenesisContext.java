@@ -8,7 +8,7 @@ package com.salesforce.apollo.choam;
 
 import java.util.Collections;
 
-import com.salesfoce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Verifier;
@@ -17,7 +17,6 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class GenesisContext extends ViewContext {
 

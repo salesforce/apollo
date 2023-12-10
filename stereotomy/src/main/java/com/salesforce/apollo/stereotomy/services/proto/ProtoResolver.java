@@ -8,12 +8,11 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.Optional;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ProtoResolver {
     /**

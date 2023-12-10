@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
@@ -26,16 +26,6 @@ import java.util.List;
  * @author hal.hildebrand
  */
 public interface KEL {
-
-    /**
-     * Answer the Verifier using key state at the supplied key coordinates
-     *
-     * @return
-     */
-    default Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
-        return new Verifier.DefaultVerifier(
-        getKeyState(coordinates.getEstablishmentEvent()).getKeys().get(coordinates.getKeyIndex()));
-    }
 
     /**
      * Append the event. The event will be validated before inserted.
@@ -79,6 +69,8 @@ public interface KEL {
      */
     KeyState getKeyState(Identifier identifier);
 
+    KeyState getKeyState(Identifier identifier, ULong sequenceNumber);
+
     /**
      * Answer the combined KeyState and Attachment for this state
      *
@@ -89,7 +81,15 @@ public interface KEL {
         return new KeyStateWithAttachments(getKeyState(coordinates), getAttachment(coordinates));
     }
 
-    KeyState getKeyState(Identifier identifier, ULong sequenceNumber);
+    /**
+     * Answer the Verifier using key state at the supplied key coordinates
+     *
+     * @return
+     */
+    default Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
+        return new Verifier.DefaultVerifier(
+        getKeyState(coordinates.getEstablishmentEvent()).getKeys().get(coordinates.getKeyIndex()));
+    }
 
     record KeyStateWithAttachments(KeyState state, Attachment attachments) {
         public static KeyStateWithAttachments from(KeyStateWithAttachments_ ksa) {

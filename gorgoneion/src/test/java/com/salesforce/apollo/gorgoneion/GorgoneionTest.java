@@ -8,11 +8,11 @@ package com.salesforce.apollo.gorgoneion;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesfoce.apollo.gorgoneion.proto.Attestation;
-import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.gorgoneion.proto.Attestation;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -60,8 +60,8 @@ public class GorgoneionTest {
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
-                                    gorgonRouter,
-                                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), null);
+                                    gorgonRouter, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
+                                    null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());

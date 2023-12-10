@@ -1,11 +1,11 @@
 package com.salesforce.apollo.thoth.grpc;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesfoce.apollo.thoth.proto.Thoth_Grpc;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesforce.apollo.thoth.proto.Thoth_Grpc;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;

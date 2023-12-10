@@ -12,7 +12,7 @@ import java.util.Objects;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -20,13 +20,36 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * Coordinates that precisely locate a unique event in the KEL
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class EventCoordinates {
 
     public static EventCoordinates NONE = new EventCoordinates();
+    private final Digest     digest;
+    private final Identifier identifier;
+    private final String     ilk;
+    private final ULong      sequenceNumber;
+
+    public EventCoordinates(EventCoords coordinates) {
+        digest = Digest.from(coordinates.getDigest());
+        ilk = coordinates.getIlk();
+        identifier = Identifier.from(coordinates.getIdentifier());
+        sequenceNumber = ULong.valueOf(coordinates.getSequenceNumber());
+    }
+
+    public EventCoordinates(Identifier identifier, ULong sequenceNumber, Digest digest, String ilk) {
+        this.identifier = requireNonNull(identifier, "identifier");
+        this.sequenceNumber = sequenceNumber;
+        this.digest = requireNonNull(digest, "digest");
+        this.ilk = ilk;
+    }
+    private EventCoordinates() {
+        identifier = Identifier.NONE;
+        digest = Digest.NONE;
+        sequenceNumber = ULong.valueOf(-1);
+        ilk = KeyEvent.NONE;
+    }
 
     public static EventCoordinates from(EventCoords coordinates) {
         if (EventCoords.getDefaultInstance().equals(coordinates)) {
@@ -62,40 +85,14 @@ public class EventCoordinates {
         return of(event, digest);
     }
 
-    private final Digest     digest;
-    private final Identifier identifier;
-    private final String     ilk;
-    private final ULong      sequenceNumber;
-
-    public EventCoordinates(EventCoords coordinates) {
-        digest = Digest.from(coordinates.getDigest());
-        ilk = coordinates.getIlk();
-        identifier = Identifier.from(coordinates.getIdentifier());
-        sequenceNumber = ULong.valueOf(coordinates.getSequenceNumber());
-    }
-
-    public EventCoordinates(Identifier identifier, ULong sequenceNumber, Digest digest, String ilk) {
-        this.identifier = requireNonNull(identifier, "identifier");
-        this.sequenceNumber = sequenceNumber;
-        this.digest = requireNonNull(digest, "digest");
-        this.ilk = ilk;
-    }
-
-    private EventCoordinates() {
-        identifier = Identifier.NONE;
-        digest = Digest.NONE;
-        sequenceNumber = ULong.valueOf(-1);
-        ilk = KeyEvent.NONE;
-    }
-
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
         }
         if (obj instanceof EventCoordinates other) {
-            return Objects.equals(sequenceNumber, other.sequenceNumber) && Objects.equals(ilk, other.ilk) &&
-                   Objects.equals(identifier, other.identifier) && Objects.equals(digest, other.digest);
+            return Objects.equals(sequenceNumber, other.sequenceNumber) && Objects.equals(ilk, other.ilk)
+            && Objects.equals(identifier, other.identifier) && Objects.equals(digest, other.digest);
         }
         return false;
     }

@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.salesfoce.apollo.choam.proto.BlockReplication;
-import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.Initial;
+import com.salesforce.apollo.choam.proto.BlockReplication;
+import com.salesforce.apollo.choam.proto.Blocks;
+import com.salesforce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.Parameters;

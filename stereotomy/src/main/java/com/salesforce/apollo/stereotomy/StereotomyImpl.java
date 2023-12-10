@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
@@ -389,13 +389,13 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public List<BasicIdentifier> getWitnesses() {
-            return getState().getWitnesses();
+        public int getWitnessThreshold() {
+            return getState().getWitnessThreshold();
         }
 
         @Override
-        public int getWitnessThreshold() {
-            return getState().getWitnessThreshold();
+        public List<BasicIdentifier> getWitnesses() {
+            return getState().getWitnesses();
         }
 
         @Override

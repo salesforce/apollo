@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;

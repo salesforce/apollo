@@ -8,11 +8,11 @@
 package com.salesforce.apollo.thoth.grpc.reconciliation;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.thoth.proto.Intervals;
-import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc;
-import com.salesfoce.apollo.thoth.proto.Update;
-import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.thoth.proto.ReconciliationGrpc;
+import com.salesforce.apollo.thoth.proto.Update;
+import com.salesforce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.cryptography.Digest;

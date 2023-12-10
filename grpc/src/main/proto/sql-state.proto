@@ -1,92 +1,92 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.state.proto";
+option java_package = "com.salesforce.apollo.state.proto";
 option java_outer_classname = "SqlState";
 option objc_class_prefix = "Ss";
 
 package apollo.sqlState;
 
 message Batch{
-    repeated string statements = 1;
+  repeated string statements = 1;
 }
 
 message Arguments {
-    int32 version = 1;
-    bytes args = 2;
+  int32 version = 1;
+  bytes args = 2;
 }
 
 message Statement {
-    EXECUTION execution = 1;
-    string sql = 2;
-    Arguments args = 3;
+  EXECUTION execution = 1;
+  string sql = 2;
+  Arguments args = 3;
 }
 
 message Call {
-    EXECUTION execution = 1;
-    string sql = 2;
-    Arguments args = 3;
-    repeated int32 outParameters = 4; // value is enum of java.sql.SQLType
+  EXECUTION execution = 1;
+  string sql = 2;
+  Arguments args = 3;
+  repeated int32 outParameters = 4; // value is enum of java.sql.SQLType
 }
 
 message Script {
-    string source = 1;
-    string className = 2;
-    string method = 3;
-    Arguments args = 4;
+  string source = 1;
+  string className = 2;
+  string method = 3;
+  Arguments args = 4;
 }
 
 enum EXECUTION {
-    INVALID = 0;
-    EXECUTE = 1;
-    QUERY = 2;
-    UPDATE = 3;
+  INVALID = 0;
+  EXECUTE = 1;
+  QUERY = 2;
+  UPDATE = 3;
 }
 message BatchedTransaction {
-    repeated Txn transactions = 1;
+  repeated Txn transactions = 1;
 }
 
 message BatchUpdate {
-    string sql = 1;
-    repeated Arguments batch = 2;
+  string sql = 1;
+  repeated Arguments batch = 2;
 }
 
 message Migration {
-    string liquibaseSchemaName = 1;
-    oneof command {
-        ChangeLog update = 2; 
-        ChangeLog rollback = 3;
-        ChangeLog changelogSync = 4;
-        bool clearCheckSums = 5;
-        Drop drop = 6;
-        string tag = 7;
-    }
+  string liquibaseSchemaName = 1;
+  oneof command {
+    ChangeLog update = 2;
+    ChangeLog rollback = 3;
+    ChangeLog changelogSync = 4;
+    bool clearCheckSums = 5;
+    Drop drop = 6;
+    string tag = 7;
+  }
 }
 
 message Txn {
-    oneof execution {
-        Statement statement = 1;
-        Call call = 2;
-        Batch batch = 3;
-        BatchUpdate batchUpdate = 4;
-        Script script = 5;
-        BatchedTransaction batched = 6;
-        Migration migration = 7;
-    }
+  oneof execution {
+    Statement statement = 1;
+    Call call = 2;
+    Batch batch = 3;
+    BatchUpdate batchUpdate = 4;
+    Script script = 5;
+    BatchedTransaction batched = 6;
+    Migration migration = 7;
+  }
 }
 
 message ChangeLog {
-    oneof type {
-        int32 count = 1;
-        string tag = 2;
-    }
-    string context = 3;
-    string labels = 4;
-    string root = 5;
-    bytes resources = 6;
+  oneof type {
+    int32 count = 1;
+    string tag = 2;
+  }
+  string context = 3;
+  string labels = 4;
+  string root = 5;
+  bytes resources = 6;
 }
 
 message Drop {
-    string schemas = 1;
-    string catalog = 2;
+  string schemas = 1;
+  string catalog = 2;
 }

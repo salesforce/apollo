@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.cryptography;
 
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.cryptography.proto.Digeste.Builder;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.cryptography.proto.Digeste.Builder;
 import com.salesforce.apollo.bloomFilters.Hash;
 import com.salesforce.apollo.utils.BUZ;
 import com.salesforce.apollo.utils.Hex;

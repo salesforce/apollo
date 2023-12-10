@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesfoce.apollo.choam.proto.Foundation;
-import com.salesfoce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.choam.proto.Foundation;
+import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

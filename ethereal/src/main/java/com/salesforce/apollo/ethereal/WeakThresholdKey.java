@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import com.salesfoce.apollo.ethereal.proto.EpochProof;
-import com.salesfoce.apollo.ethereal.proto.Proof;
+import com.salesforce.apollo.ethereal.proto.EpochProof;
+import com.salesforce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.DecodedShare;

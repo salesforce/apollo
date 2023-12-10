@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -54,7 +54,7 @@ public class TestEventValidation {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -79,11 +79,11 @@ public class TestEventValidation {
         };
 
         serverRouter.create(serverMember, context, protoService, protoService.getClass().toString(),
-                r -> new EventValidationServer(r, null), null, null);
+                            r -> new EventValidationServer(r, null), null, null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService, protoService.getClass().toString(),
-                r -> new EventValidationServer(r, null),
-                EventValidationClient.getCreate(null), null);
+                                              r -> new EventValidationServer(r, null),
+                                              EventValidationClient.getCreate(null), null);
 
         var client = clientComms.connect(serverMember);
 

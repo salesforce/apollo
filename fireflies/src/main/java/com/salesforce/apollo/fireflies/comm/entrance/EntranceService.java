@@ -7,17 +7,16 @@
 package com.salesforce.apollo.fireflies.comm.entrance;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
-import com.salesfoce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.cryptography.Digest;
 
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface EntranceService {
 

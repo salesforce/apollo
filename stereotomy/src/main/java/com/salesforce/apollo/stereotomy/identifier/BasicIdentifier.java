@@ -14,15 +14,14 @@ import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.Objects;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.cryptography.Verifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class BasicIdentifier implements Identifier, Verifier {
     private final PublicKey publicKey;

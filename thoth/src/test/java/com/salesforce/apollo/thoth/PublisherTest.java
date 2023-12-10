@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

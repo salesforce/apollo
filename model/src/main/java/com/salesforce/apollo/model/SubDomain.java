@@ -7,10 +7,10 @@
 package com.salesforce.apollo.model;
 
 import com.codahale.metrics.Timer;
-import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
-import com.salesfoce.apollo.demesne.proto.SignedDelegate;
-import com.salesfoce.apollo.cryptography.proto.Biff;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DelegationUpdate;
+import com.salesforce.apollo.demesne.proto.SignedDelegate;
+import com.salesforce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Enclave.RoutingClientIdentity;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.Parameters.Builder;

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
-import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.utils.Entropy;
 
 import java.util.concurrent.atomic.AtomicInteger;

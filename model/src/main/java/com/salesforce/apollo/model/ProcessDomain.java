@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.SubContext;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;

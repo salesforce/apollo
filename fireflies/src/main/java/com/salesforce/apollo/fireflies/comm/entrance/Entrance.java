@@ -10,17 +10,16 @@ import java.io.IOException;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.fireflies.proto.Gateway;
-import com.salesfoce.apollo.fireflies.proto.Join;
-import com.salesfoce.apollo.fireflies.proto.Redirect;
-import com.salesfoce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Entrance extends Link {
 

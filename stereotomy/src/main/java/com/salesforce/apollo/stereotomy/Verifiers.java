@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
@@ -22,12 +22,43 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Verifiers {
 
+    static Verifiers fromEvents(List<InceptionEvent> states) {
+        return new FixedVerifiers(FixedVerifiers.fromEvents(states));
+    }
+
+    static Verifiers fromEventState(List<com.salesforce.apollo.stereotomy.event.proto.InceptionEvent> states) {
+        return new FixedVerifiers(FixedVerifiers.fromEventState(states));
+    }
+
+    static Verifiers fromKeyState(List<KeyState> states) {
+        return new FixedVerifiers(FixedVerifiers.fromKeyState(states));
+    }
+
+    static Verifiers fromKeyState_(List<KeyState_> states) {
+        return new FixedVerifiers(FixedVerifiers.fromKeyState_(states));
+    }
+
+    Optional<Verifier> verifierFor(EventCoordinates coordinates);
+
+    Optional<Verifier> verifierFor(Identifier identifier);
+
     class FixedVerifiers implements Verifiers {
-        record Pair(Map<EventCoordinates, Verifier> coords, Map<Identifier, Verifier> ids) {}
+        private final Map<EventCoordinates, Verifier> verifiersByCoordinates;
+        private final Map<Identifier, Verifier>       verifiersByIdentifer;
+
+        public FixedVerifiers(Map<EventCoordinates, Verifier> verifiersByCoordinates,
+                              Map<Identifier, Verifier> verifiersByIdentifer) {
+            this.verifiersByCoordinates = verifiersByCoordinates;
+            this.verifiersByIdentifer = verifiersByIdentifer;
+        }
+
+        private FixedVerifiers(Pair verifiers) {
+            verifiersByCoordinates = verifiers.coords;
+            verifiersByIdentifer = verifiers.ids;
+        }
 
         private static Pair fromEvents(Collection<InceptionEvent> states) {
             Map<EventCoordinates, Verifier> coords = new HashMap<>();
@@ -41,7 +72,8 @@ public interface Verifiers {
             return new Pair(coords, ids);
         }
 
-        private static Pair fromEventState(Collection<com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent> states) {
+        private static Pair fromEventState(
+        Collection<com.salesforce.apollo.stereotomy.event.proto.InceptionEvent> states) {
             return fromEvents(states.stream().map(ks -> ProtobufEventFactory.toKeyEvent(ks)).toList());
         }
 
@@ -61,20 +93,6 @@ public interface Verifiers {
             return fromKeyState(states.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
         }
 
-        private final Map<EventCoordinates, Verifier> verifiersByCoordinates;
-        private final Map<Identifier, Verifier>       verifiersByIdentifer;
-
-        public FixedVerifiers(Map<EventCoordinates, Verifier> verifiersByCoordinates,
-                              Map<Identifier, Verifier> verifiersByIdentifer) {
-            this.verifiersByCoordinates = verifiersByCoordinates;
-            this.verifiersByIdentifer = verifiersByIdentifer;
-        }
-
-        private FixedVerifiers(Pair verifiers) {
-            verifiersByCoordinates = verifiers.coords;
-            verifiersByIdentifer = verifiers.ids;
-        }
-
         @Override
         public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
             return Optional.ofNullable(verifiersByCoordinates.get(coordinates));
@@ -84,26 +102,9 @@ public interface Verifiers {
         public Optional<Verifier> verifierFor(Identifier identifier) {
             return Optional.ofNullable(verifiersByIdentifer.get(identifier));
         }
+
+        record Pair(Map<EventCoordinates, Verifier> coords, Map<Identifier, Verifier> ids) {
+        }
     }
-
-    static Verifiers fromEvents(List<InceptionEvent> states) {
-        return new FixedVerifiers(FixedVerifiers.fromEvents(states));
-    }
-
-    static Verifiers fromEventState(List<com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent> states) {
-        return new FixedVerifiers(FixedVerifiers.fromEventState(states));
-    }
-
-    static Verifiers fromKeyState(List<KeyState> states) {
-        return new FixedVerifiers(FixedVerifiers.fromKeyState(states));
-    }
-
-    static Verifiers fromKeyState_(List<KeyState_> states) {
-        return new FixedVerifiers(FixedVerifiers.fromKeyState_(states));
-    }
-
-    Optional<Verifier> verifierFor(EventCoordinates coordinates);
-
-    Optional<Verifier> verifierFor(Identifier identifier);
 
 }

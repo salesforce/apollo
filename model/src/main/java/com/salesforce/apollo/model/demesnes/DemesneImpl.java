@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.model.demesnes;
 
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.SubContext;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;

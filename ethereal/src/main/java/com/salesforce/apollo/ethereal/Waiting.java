@@ -10,24 +10,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Adder.State;
 
 /**
- * 
  * @author hal.hildebrand
- *
  */
 public class Waiting implements Comparable<Waiting> {
 
-    private final List<Waiting>    children       = new ArrayList<>();
-    private volatile Unit          decoded;
-    private volatile int           missingParents = 0;
-    private final PreUnit          pu;
-    private final PreUnit_s        serialized;
-    private AtomicReference<State> state          = new AtomicReference<>(State.PROPOSED);
-    private volatile int           waitingParents = 0;
+    private final    List<Waiting>          children       = new ArrayList<>();
+    private final    PreUnit                pu;
+    private final    PreUnit_s              serialized;
+    private volatile Unit                   decoded;
+    private volatile int                    missingParents = 0;
+    private          AtomicReference<State> state          = new AtomicReference<>(State.PROPOSED);
+    private volatile int                    waitingParents = 0;
 
     public Waiting(PreUnit pu) {
         this(pu, pu.toPreUnit_s());
@@ -74,13 +72,13 @@ public class Waiting implements Comparable<Waiting> {
         missingParents = m - 1;
     }
 
-    public Unit decoded() {
-        return decoded;
-    }
-
     public void decWaiting() {
         final var w = waitingParents;
         waitingParents = w - 1;
+    }
+
+    public Unit decoded() {
+        return decoded;
     }
 
     public int epoch() {

@@ -11,8 +11,8 @@ import com.google.common.base.Function;
 import com.google.protobuf.Message;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
@@ -102,24 +102,16 @@ public class Session {
         submitted.values().forEach(stx -> stx.onCompletion().cancel(true));
     }
 
-    /**
-     * Submit a transaction.
-     *
-     * @param transaction - the Message to submit as a transaction
-     * @param retries     - the number of retries for Cancelled transaction submissions
-     * @param timeout     - non-null timeout of the transaction
-     * @return onCompletion - the future result of the submitted transaction
-     * @throws InvalidTransaction - if the submitted transaction is invalid in any way
-     */
-    public <T> CompletableFuture<T> submit(Message transaction, int retries, Duration timeout)
-    throws InvalidTransaction {
-        return retryNesting(() -> {
-            try {
-                return submit(transaction, timeout);
-            } catch (InvalidTransaction e) {
-                throw new IllegalStateException("Invalid txn", e);
+    public void setView(HashedCertifiedBlock v) {
+        view.set(v);
+        var currentHeight = v.height();
+        for (var it = submitted.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            if (e.getValue().view().compareTo(currentHeight) < 0) {
+                e.getValue().onCompletion().cancel(true);
+                it.remove();
             }
-        }, retries);
+        }
     }
 
     /**
@@ -266,20 +258,28 @@ public class Session {
         return result;
     }
 
-    public int submitted() {
-        return submitted.size();
+    /**
+     * Submit a transaction.
+     *
+     * @param transaction - the Message to submit as a transaction
+     * @param retries     - the number of retries for Cancelled transaction submissions
+     * @param timeout     - non-null timeout of the transaction
+     * @return onCompletion - the future result of the submitted transaction
+     * @throws InvalidTransaction - if the submitted transaction is invalid in any way
+     */
+    public <T> CompletableFuture<T> submit(Message transaction, int retries, Duration timeout)
+    throws InvalidTransaction {
+        return retryNesting(() -> {
+            try {
+                return submit(transaction, timeout);
+            } catch (InvalidTransaction e) {
+                throw new IllegalStateException("Invalid txn", e);
+            }
+        }, retries);
     }
 
-    public void setView(HashedCertifiedBlock v) {
-        view.set(v);
-        var currentHeight = v.height();
-        for (var it = submitted.entrySet().iterator(); it.hasNext(); ) {
-            var e = it.next();
-            if (e.getValue().view().compareTo(currentHeight) < 0) {
-                e.getValue().onCompletion().cancel(true);
-                it.remove();
-            }
-        }
+    public int submitted() {
+        return submitted.size();
     }
 
     SubmittedTransaction complete(Digest hash) {

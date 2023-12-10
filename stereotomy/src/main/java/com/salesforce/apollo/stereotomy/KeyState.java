@@ -13,7 +13,7 @@ import java.util.Set;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
@@ -22,9 +22,8 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * The state of a key in the KEL
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 
 public interface KeyState {
@@ -57,18 +56,19 @@ public interface KeyState {
 
     SigningThreshold getSigningThreshold();
 
-    List<BasicIdentifier> getWitnesses();
-
     int getWitnessThreshold();
 
+    List<BasicIdentifier> getWitnesses();
+
     default boolean isDelegated() {
-        return this.getDelegatingIdentifier().isPresent() &&
-               !this.getDelegatingIdentifier().get().equals(Identifier.NONE);
+        return this.getDelegatingIdentifier().isPresent() && !this.getDelegatingIdentifier()
+                                                                  .get()
+                                                                  .equals(Identifier.NONE);
     }
 
     default boolean isTransferable() {
-        return this.getCoordinates().getIdentifier().isTransferable() &&
-               this.getNextKeyConfigurationDigest().isPresent();
+        return this.getCoordinates().getIdentifier().isTransferable() && this.getNextKeyConfigurationDigest()
+                                                                             .isPresent();
     }
 
     KeyState_ toKeyState_();

@@ -1,7 +1,7 @@
 package com.salesforce.apollo.thoth;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.thoth.proto.Thoth_Grpc;
+import com.salesforce.apollo.thoth.proto.Thoth_Grpc;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;

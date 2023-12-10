@@ -7,8 +7,8 @@
 package com.salesforce.apollo.thoth.grpc.dht;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesforce.apollo.archipelago.Link;
 
 import java.util.List;

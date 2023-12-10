@@ -9,9 +9,9 @@ package com.salesforce.apollo.stereotomy.services.grpc.resolver;
 import java.util.Optional;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
@@ -20,7 +20,6 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ResolverServer extends ResolverImplBase {
 

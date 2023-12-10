@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.salesfoce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;

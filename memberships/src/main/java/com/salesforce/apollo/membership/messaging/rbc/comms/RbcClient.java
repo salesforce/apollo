@@ -7,10 +7,10 @@
 package com.salesforce.apollo.membership.messaging.rbc.comms;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.messaging.proto.MessageBff;
-import com.salesfoce.apollo.messaging.proto.RBCGrpc;
-import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.ReconcileContext;
+import com.salesforce.apollo.messaging.proto.MessageBff;
+import com.salesforce.apollo.messaging.proto.RBCGrpc;
+import com.salesforce.apollo.messaging.proto.Reconcile;
+import com.salesforce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
@@ -22,9 +22,9 @@ import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
  */
 public class RbcClient implements ReliableBroadcast {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel    channel;
     private final RBCGrpc.RBCBlockingStub client;
-    private final RbcMetrics metrics;
+    private final RbcMetrics              metrics;
 
     public RbcClient(ManagedServerChannel c, RbcMetrics metrics) {
         this.channel = c;

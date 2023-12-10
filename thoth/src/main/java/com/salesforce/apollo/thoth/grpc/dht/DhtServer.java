@@ -8,9 +8,9 @@ package com.salesforce.apollo.thoth.grpc.dht;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
+import com.salesforce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;

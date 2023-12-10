@@ -8,8 +8,8 @@ package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Objects;
-import com.salesfoce.apollo.fireflies.proto.*;
-import com.salesfoce.apollo.fireflies.proto.Update.Builder;
+import com.salesforce.apollo.fireflies.proto.*;
+import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -325,16 +325,16 @@ public class ViewManagement {
         };
     }
 
-    boolean joined() {
-        return onJoined.isDone();
-    }
-
     void joinUpdatesFor(BloomFilter<Digest> joinBff, Builder builder) {
         joins.entrySet()
              .stream()
              .filter(e -> !joinBff.contains(e.getKey()))
              .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
              .forEach(e -> builder.addJoins(e.getValue().getWrapped()));
+    }
+
+    boolean joined() {
+        return onJoined.isDone();
     }
 
     /**

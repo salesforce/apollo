@@ -8,29 +8,19 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.cryptography.Digest.combine;
 
-import com.salesfoce.apollo.ethereal.proto.Crown_s;
-import com.salesfoce.apollo.ethereal.proto.Crown_s.Builder;
+import com.salesforce.apollo.ethereal.proto.Crown_s;
+import com.salesforce.apollo.ethereal.proto.Crown_s.Builder;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
- * Crown represents nProc units created by different processes in a condensed
- * form. It contains heights of the units and a combined hash of the units - the
- * controlHash. Any missing unit is represented by height -1, and
+ * Crown represents nProc units created by different processes in a condensed form. It contains heights of the units and
+ * a combined hash of the units - the controlHash. Any missing unit is represented by height -1, and
  * DigestAlgorithm.origin()
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public record Crown(int[] heights, Digest controlHash) {
-
-    public Crown_s toCrown_s() {
-        Builder builder = Crown_s.newBuilder().setControlHash(controlHash.toDigeste());
-        for (int i : heights) {
-            builder.addHeights(i);
-        }
-        return builder.build();
-    }
 
     public static Crown crownFromParents(Unit[] parents, DigestAlgorithm algo) {
         var nProc = parents.length;
@@ -56,5 +46,13 @@ public record Crown(int[] heights, Digest controlHash) {
             heights[i] = crown.getHeights(i);
         }
         return new Crown(heights, new Digest(crown.getControlHash()));
+    }
+
+    public Crown_s toCrown_s() {
+        Builder builder = Crown_s.newBuilder().setControlHash(controlHash.toDigeste());
+        for (int i : heights) {
+            builder.addHeights(i);
+        }
+        return builder.build();
     }
 }

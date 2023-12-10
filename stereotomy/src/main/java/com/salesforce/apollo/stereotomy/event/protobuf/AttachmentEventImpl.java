@@ -20,13 +20,12 @@ import com.salesforce.apollo.stereotomy.event.Version;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class AttachmentEventImpl implements AttachmentEvent {
 
-    private final com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent event;
+    private final com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent event;
 
-    public AttachmentEventImpl(com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent event) {
+    public AttachmentEventImpl(com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent event) {
         this.event = event;
     }
 
@@ -78,7 +77,7 @@ public class AttachmentEventImpl implements AttachmentEvent {
     }
 
     @Override
-    public com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_() {
+    public com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_() {
         return event;
     }
 

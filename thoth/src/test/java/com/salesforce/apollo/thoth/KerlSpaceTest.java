@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesfoce.apollo.thoth.proto.Interval;
-import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.thoth.proto.Interval;
+import com.salesforce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;

@@ -8,11 +8,10 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.concurrent.CompletableFuture;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ProtoEventValidation {
     CompletableFuture<Boolean> validate(KeyEvent_ event);

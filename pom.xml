@@ -31,6 +31,7 @@
         <module>domain-epoll</module>
         <module>domain-kqueue</module>
         <module>domain-sockets</module>
+        <module>leyden</module>
     </modules>
 
     <properties>

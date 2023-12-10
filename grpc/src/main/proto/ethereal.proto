@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.ethereal.proto";
+option java_package = "com.salesforce.apollo.ethereal.proto";
 option java_outer_classname = "EtherealProto";
 option objc_class_prefix = "Ep";
 import "google/protobuf/empty.proto";
@@ -10,85 +10,85 @@ import "crypto.proto";
 package ethereal;
 
 service Gossiper {
-    rpc gossip (Gossip) returns (Update) {}
-    rpc update (ContextUpdate) returns (google.protobuf.Empty) {}
+  rpc gossip (Gossip) returns (Update) {}
+  rpc update (ContextUpdate) returns (google.protobuf.Empty) {}
 }
 
 message Gossip {
-    int32 ring = 1;
-    crypto.Biff have = 2;
-    repeated Have haves = 3;
+  int32 ring = 1;
+  crypto.Biff have = 2;
+  repeated Have haves = 3;
 }
 
 message Have {
-    int32 epoch = 1;
-    crypto.Biff haveUnits = 2;
-    crypto.Biff havePreVotes = 3;
-    crypto.Biff haveCommits = 4;
+  int32 epoch = 1;
+  crypto.Biff haveUnits = 2;
+  crypto.Biff havePreVotes = 3;
+  crypto.Biff haveCommits = 4;
 }
 
 message Missing {
-    int32 epoch = 1;
-    repeated PreUnit_s units = 2;
-    repeated SignedPreVote prevotes = 3;
-    repeated SignedCommit commits = 4;
-    Have haves = 5;
+  int32 epoch = 1;
+  repeated PreUnit_s units = 2;
+  repeated SignedPreVote prevotes = 3;
+  repeated SignedCommit commits = 4;
+  Have haves = 5;
 }
 
 message Update {
-    repeated PreUnit_s missing = 1;
-    repeated PreUnit_s waiting = 2;
-    crypto.Biff have = 3;
-    repeated Missing missings = 4;
+  repeated PreUnit_s missing = 1;
+  repeated PreUnit_s waiting = 2;
+  crypto.Biff have = 3;
+  repeated Missing missings = 4;
 }
 
-message ContextUpdate { 
-    int32 ring = 1;
-    Update update = 2;
+message ContextUpdate {
+  int32 ring = 1;
+  Update update = 2;
 }
 
 message PreVote {
-    int64 unit = 1;
-    crypto.Digeste hash = 2;
-    int32 source = 3;
+  int64 unit = 1;
+  crypto.Digeste hash = 2;
+  int32 source = 3;
 }
 
 message Commit {
-    int64 unit = 1;
-    crypto.Digeste hash = 2;
-    int32 source = 3;
+  int64 unit = 1;
+  crypto.Digeste hash = 2;
+  int32 source = 3;
 }
 
 message SignedPreVote {
-    crypto.Sig signature = 1;
-    PreVote vote = 2;
+  crypto.Sig signature = 1;
+  PreVote vote = 2;
 }
 
 message SignedCommit {
-    crypto.Sig signature = 1;
-    Commit commit = 2;
+  crypto.Sig signature = 1;
+  Commit commit = 2;
 }
 
 message EpochProof {
-    Proof msg = 1;
-    int32 owner = 2;
-    crypto.Sig signature = 3;
+  Proof msg = 1;
+  int32 owner = 2;
+  crypto.Sig signature = 3;
 }
 
 message Proof {
-    int64 encodedId = 1;
-    crypto.Digeste hash = 2;
+  int64 encodedId = 1;
+  crypto.Digeste hash = 2;
 }
 
 message PreUnit_s {
-    int64 id = 1;
-    Crown_s crown = 2;
-    bytes data = 3; 
-    bytes salt = 4;
-    crypto.Sig signature = 5;
+  int64 id = 1;
+  Crown_s crown = 2;
+  bytes data = 3;
+  bytes salt = 4;
+  crypto.Sig signature = 5;
 }
 
 message Crown_s {
-    repeated int32 heights = 1;
-    crypto.Digeste controlHash = 2;
+  repeated int32 heights = 1;
+  crypto.Digeste controlHash = 2;
 }

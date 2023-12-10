@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s.Builder;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s.Builder;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -28,202 +28,8 @@ import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface PreUnit {
-
-    record freeUnit(PreUnit p, Unit[] parents, int level, Map<Short, Unit[]> floor) implements Unit {
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof Unit pu) {
-                return hash().equals(pu.hash());
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return hash().hashCode();
-        }
-
-        @Override
-        public short creator() {
-            return p.creator();
-        }
-
-        @Override
-        public ByteString data() {
-            return p.data();
-        }
-
-        @Override
-        public int epoch() {
-            return p.epoch();
-        }
-
-        @Override
-        public Digest hash() {
-            return p.hash();
-        }
-
-        @Override
-        public int height() {
-            return p.height();
-        }
-
-        @Override
-        public Crown view() {
-            return p.view();
-        }
-
-        @Override
-        public Unit from(Unit[] parents, double bias) {
-            freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
-            assert u.height() == u.level;
-            u.computeFloor();
-            return u;
-        }
-
-        @Override
-        public boolean aboveWithinProc(Unit v) {
-            if (creator() != v.creator()) {
-                return false;
-            }
-            Unit w;
-            for (w = this; w != null && w.height() > v.height(); w = w.predecessor())
-                ;
-            if (w == null) {
-                return false;
-            }
-            return w.hash().equals(v.hash());
-        }
-
-        @Override
-        public Unit[] floor(short pid) {
-            var fl = floor.get(pid);
-            if (fl != null) {
-                return fl;
-            }
-            if (parents[pid] == null) {
-                return new Unit[0];
-            }
-            return Arrays.copyOfRange(parents, pid, pid + 1);
-        }
-
-        private void computeFloor() {
-            if (dealing()) {
-                return;
-            }
-            for (short pid = 0; pid < parents.length; pid++) {
-                var maximal = Unit.maximalByPid(parents, pid);
-                if (maximal.length > 1 || maximal.length == 1 && !maximal[0].equals(parents[pid])) {
-                    floor.put(pid, maximal);
-                }
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "fu[" + shortString() + "]";
-        }
-
-        @Override
-        public String shortString() {
-            return p.shortString();
-        }
-
-        @Override
-        public JohnHancock signature() {
-            return p.signature();
-        }
-
-        @Override
-        public PreUnit toPreUnit() {
-            return p.toPreUnit();
-        }
-
-        @Override
-        public PreUnit_s toPreUnit_s() {
-            return p.toPreUnit_s();
-        }
-
-        @Override
-        public boolean verify(Verifier[] verifiers) {
-            return p.verify(verifiers);
-        }
-    }
-
-    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
-                          JohnHancock signature, byte[] salt)
-                         implements PreUnit {
-
-        @Override
-        public int hashCode() {
-            return hash.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof Unit u) {
-                return hash.equals(u.hash());
-            }
-            return false;
-        }
-
-        @Override
-        public PreUnit_s toPreUnit_s() {
-            Builder builder = PreUnit_s.newBuilder()
-                                       .setSignature(signature.toSig())
-                                       .setId(id())
-                                       .setCrown(crown.toCrown_s());
-            if (data != null) {
-                builder.setData(data);
-            }
-            return builder.build();
-        }
-
-        @Override
-        public Crown view() {
-            return crown;
-        }
-
-        @Override
-        public String toString() {
-            return "pu[" + shortString() + "]";
-        }
-
-        @Override
-        public String shortString() {
-            return creator() + ":" + height() + ":" + epoch();
-        }
-
-        @Override
-        public PreUnit toPreUnit() {
-            return this;
-        }
-
-        @Override
-        public boolean verify(Verifier[] verifiers) {
-            if (creator >= verifiers.length) {
-                return false;
-            }
-            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, salt));
-        }
-    }
-
-    public record DecodedId(int height, short creator, int epoch) {
-        @Override
-        public String toString() {
-            return "[" + creator + ":" + height + ":" + epoch + "]";
-        }
-    }
 
     public static PreUnit from(PreUnit_s pu, DigestAlgorithm algo) {
         var decoded = decode(pu.getId());
@@ -299,9 +105,9 @@ public interface PreUnit {
         var salt = new byte[algo.digestLength()];
         Entropy.nextSecureBytes(salt);
         var signature = sign(signer, id, crown, data, salt);
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, signature,
-                                         salt),
-                             parents, level, new HashMap<>());
+        var u = new freeUnit(
+        new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, signature, salt), parents, level,
+        new HashMap<>());
         u.computeFloor();
         return u;
 
@@ -354,4 +160,196 @@ public interface PreUnit {
     boolean verify(Verifier[] verifiers);
 
     Crown view();
+
+    record freeUnit(PreUnit p, Unit[] parents, int level, Map<Short, Unit[]> floor) implements Unit {
+
+        @Override
+        public boolean aboveWithinProc(Unit v) {
+            if (creator() != v.creator()) {
+                return false;
+            }
+            Unit w;
+            for (w = this; w != null && w.height() > v.height(); w = w.predecessor())
+                ;
+            if (w == null) {
+                return false;
+            }
+            return w.hash().equals(v.hash());
+        }
+
+        @Override
+        public short creator() {
+            return p.creator();
+        }
+
+        @Override
+        public ByteString data() {
+            return p.data();
+        }
+
+        @Override
+        public int epoch() {
+            return p.epoch();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof Unit pu) {
+                return hash().equals(pu.hash());
+            }
+            return false;
+        }
+
+        @Override
+        public Unit[] floor(short pid) {
+            var fl = floor.get(pid);
+            if (fl != null) {
+                return fl;
+            }
+            if (parents[pid] == null) {
+                return new Unit[0];
+            }
+            return Arrays.copyOfRange(parents, pid, pid + 1);
+        }
+
+        @Override
+        public Unit from(Unit[] parents, double bias) {
+            freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
+            assert u.height() == u.level;
+            u.computeFloor();
+            return u;
+        }
+
+        @Override
+        public Digest hash() {
+            return p.hash();
+        }
+
+        @Override
+        public int hashCode() {
+            return hash().hashCode();
+        }
+
+        @Override
+        public int height() {
+            return p.height();
+        }
+
+        @Override
+        public String shortString() {
+            return p.shortString();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return p.signature();
+        }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return p.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return p.toPreUnit_s();
+        }
+
+        @Override
+        public String toString() {
+            return "fu[" + shortString() + "]";
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return p.verify(verifiers);
+        }
+
+        @Override
+        public Crown view() {
+            return p.view();
+        }
+
+        private void computeFloor() {
+            if (dealing()) {
+                return;
+            }
+            for (short pid = 0; pid < parents.length; pid++) {
+                var maximal = Unit.maximalByPid(parents, pid);
+                if (maximal.length > 1 || maximal.length == 1 && !maximal[0].equals(parents[pid])) {
+                    floor.put(pid, maximal);
+                }
+            }
+        }
+    }
+
+    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
+                          JohnHancock signature, byte[] salt) implements PreUnit {
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof Unit u) {
+                return hash.equals(u.hash());
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash.hashCode();
+        }
+
+        @Override
+        public String shortString() {
+            return creator() + ":" + height() + ":" + epoch();
+        }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return this;
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            Builder builder = PreUnit_s.newBuilder()
+                                       .setSignature(signature.toSig())
+                                       .setId(id())
+                                       .setCrown(crown.toCrown_s());
+            if (data != null) {
+                builder.setData(data);
+            }
+            return builder.build();
+        }
+
+        @Override
+        public String toString() {
+            return "pu[" + shortString() + "]";
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            if (creator >= verifiers.length) {
+                return false;
+            }
+            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, salt));
+        }
+
+        @Override
+        public Crown view() {
+            return crown;
+        }
+    }
+
+    public record DecodedId(int height, short creator, int epoch) {
+        @Override
+        public String toString() {
+            return "[" + creator + ":" + height + ":" + epoch + "]";
+        }
+    }
 }

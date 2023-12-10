@@ -8,8 +8,8 @@ package com.salesforce.apollo.model.demesnes;
 
 import java.util.List;
 
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
@@ -22,7 +22,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  * Domain Isolate interface
  *
  * @author hal.hildebrand
- *
  */
 public interface Demesne {
 
