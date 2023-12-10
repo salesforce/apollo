@@ -15,6 +15,10 @@
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>memberships</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2-mvstore</artifactId>
+        </dependency>
 
         <!-- Test Only Dependencies Below This Line -->
         <dependency>
