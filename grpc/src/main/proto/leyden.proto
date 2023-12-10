@@ -15,7 +15,7 @@ package leyden;
 
 
 service Binder {
-  rpc bind(Binding) returns(google.protobuf.Empty) {}
+  rpc bind(Bound) returns(google.protobuf.Empty) {}
   rpc unbind(Key_) returns(google.protobuf.Empty) {}
   rpc get(Key_) returns(Bound) {}
 }
@@ -26,14 +26,14 @@ service Reconciliation {
 }
 
 message Update {
-  repeated Binding bindings = 1;
+  repeated Bound bindings = 1;
   repeated Interval intervals = 2;
   crypto.Biff have = 3;
 }
 
 message Updating {
   int32 ring = 1;
-  repeated Binding bindings = 2;
+  repeated Bound bindings = 2;
 }
 
 message Intervals {
@@ -54,10 +54,4 @@ message Key_ {
 message Bound {
   Key_ key = 1;
   bytes value = 2;
-}
-
-// A signed bound value
-message Binding {
-  Bound bound = 1;
-  crypto.Sig signature = 3;
 }

@@ -2,7 +2,7 @@ package com.salesforce.apollo.leyden.comm.binding;
 
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.leyden.proto.BinderGrpc;
-import com.salesforce.apollo.leyden.proto.Binding;
+import com.salesforce.apollo.leyden.proto.Bound;
 import com.salesforce.apollo.leyden.proto.Key_;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -30,7 +30,7 @@ public class Bind implements BinderClient {
     public static BinderClient getLocalLoopback(BinderService service, SigningMember member) {
         return new BinderClient() {
             @Override
-            public void bind(Binding binding) {
+            public void bind(Bound binding) {
                 service.bind(binding, member.getId());
             }
 
@@ -52,7 +52,7 @@ public class Bind implements BinderClient {
     }
 
     @Override
-    public void bind(Binding binding) {
+    public void bind(Bound binding) {
         client.bind(binding);
     }
 

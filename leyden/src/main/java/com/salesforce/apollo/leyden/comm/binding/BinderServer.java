@@ -5,7 +5,7 @@ import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.leyden.proto.BinderGrpc;
-import com.salesforce.apollo.leyden.proto.Binding;
+import com.salesforce.apollo.leyden.proto.Bound;
 import com.salesforce.apollo.leyden.proto.Key_;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import io.grpc.stub.StreamObserver;
@@ -27,7 +27,7 @@ public class BinderServer extends BinderGrpc.BinderImplBase {
     }
 
     @Override
-    public void bind(Binding request, StreamObserver<Empty> responseObserver) {
+    public void bind(Bound request, StreamObserver<Empty> responseObserver) {
         Timer.Context timer = metrics == null ? null : metrics.inboundBindTimer().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
