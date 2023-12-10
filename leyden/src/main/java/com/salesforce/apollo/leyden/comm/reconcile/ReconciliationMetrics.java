@@ -1,4 +1,4 @@
-package com.salesforce.apollo.leyden.comm;
+package com.salesforce.apollo.leyden.comm.reconcile;
 
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Timer;

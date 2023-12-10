@@ -1,9 +1,9 @@
-package com.salesforce.apollo.leyden.comm;
+package com.salesforce.apollo.leyden.comm.reconcile;
 
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.thoth.proto.Updating;
-import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand

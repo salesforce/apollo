@@ -16,7 +16,7 @@ package leyden;
 
 service Binder {
   rpc bind(Binding) returns(google.protobuf.Empty) {}
-  rpc unbind(stereotomy.Ident) returns(google.protobuf.Empty) {}
+  rpc unbind(Key_) returns(google.protobuf.Empty) {}
 }
 
 service Reconciliation {
@@ -46,8 +46,12 @@ message Interval {
   crypto.Digeste end = 2;
 }
 
-message Bound {
+message Key_ {
   bytes key = 1;
+}
+
+message Bound {
+  Key_ key = 1;
   bytes value = 2;
 }
 
