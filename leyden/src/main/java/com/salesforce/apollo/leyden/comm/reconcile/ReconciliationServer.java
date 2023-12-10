@@ -4,11 +4,11 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.leyden.proto.Intervals;
+import com.salesforce.apollo.leyden.proto.ReconciliationGrpc;
+import com.salesforce.apollo.leyden.proto.Update;
+import com.salesforce.apollo.leyden.proto.Updating;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.thoth.proto.Intervals;
-import com.salesforce.apollo.thoth.proto.ReconciliationGrpc;
-import com.salesforce.apollo.thoth.proto.Update;
-import com.salesforce.apollo.thoth.proto.Updating;
 import io.grpc.stub.StreamObserver;
 
 /**

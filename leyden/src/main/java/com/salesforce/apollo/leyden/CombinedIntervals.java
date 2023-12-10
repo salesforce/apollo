@@ -7,8 +7,8 @@
 
 package com.salesforce.apollo.leyden;
 
-import com.salesforce.apollo.thoth.proto.Interval;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.leyden.proto.Interval;
 
 import java.util.*;
 import java.util.function.Predicate;
