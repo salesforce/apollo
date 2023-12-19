@@ -100,8 +100,31 @@ public class LeydenJar {
         reconcile = new RingCommunications<>(this.context, member, reconComms);
     }
 
-    public void bindRequest(Bound bound) {
-
+    public void bind(Binding bound) {
+        var key = bound.getBound().getKey();
+        log.info("bind: {} on: {}", Hex.hex(key.toByteArray()), member.getId());
+        var hash = algorithm.digest(key);
+        Instant timedOut = Instant.now().plus(operationTimeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<String>();
+        var gathered = HashMultiset.<String>create();
+        var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
+                                                             binderComms);
+        iterate.noDuplicates().iterate(hash, null, (link, r) -> {
+                                           link.bind(bound);
+                                           return "";
+                                       }, () -> failedMajority(result, maxCount(gathered)),
+                                       (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
+                                                                                  hash, isTimedOut, destination, "Bind",
+                                                                                  Attachment.getDefaultInstance()),
+                                       t -> failedMajority(result, maxCount(gathered)));
+        try {
+            result.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     public Bound get(KeyAndToken key) {
@@ -116,7 +139,7 @@ public class LeydenJar {
         iterate.noDuplicates()
                .iterate(hash, null, (link, r) -> link.get(key), () -> failedMajority(result, maxCount(gathered)),
                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, hash,
-                                                                   isTimedOut, destination, "get attachment",
+                                                                   isTimedOut, destination, "Get",
                                                                    Attachment.getDefaultInstance()),
                         t -> failedMajority(result, maxCount(gathered)));
         try {
@@ -148,17 +171,38 @@ public class LeydenJar {
         reconComms.deregister(context.getId());
     }
 
-    public void unbind(KeyAndToken key) {
-
+    public void unbind(KeyAndToken keyAndToken) {
+        var key = keyAndToken.toByteArray();
+        log.info("bind: {} on: {}", Hex.hex(key), member.getId());
+        var hash = algorithm.digest(key);
+        Instant timedOut = Instant.now().plus(operationTimeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<String>();
+        var gathered = HashMultiset.<String>create();
+        var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
+                                                             binderComms);
+        iterate.noDuplicates().iterate(hash, null, (link, r) -> {
+                                           link.unbind(keyAndToken);
+                                           return "";
+                                       }, () -> failedMajority(result, maxCount(gathered)),
+                                       (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
+                                                                                  hash, isTimedOut, destination,
+                                                                                  "Unbind",
+                                                                                  Attachment.getDefaultInstance()),
+                                       t -> failedMajority(result, maxCount(gathered)));
+        try {
+            result.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     private void add(Bound bound) {
         var hash = algorithm.digest(bound.getKey());
         bottled.put(hash.getBytes(), bound);
         log.info("Add: {} on: {}", Hex.hex(bound.getKey().toByteArray()), member.getId());
-    }
-
-    private void bindRequest(Binding request) {
     }
 
     private Bound binding(Digest d) {
@@ -207,10 +251,6 @@ public class LeydenJar {
         result.completeExceptionally(new NoSuchElementException(
         "Unable to achieve majority read, max: %s" + " required: %s on: %s".formatted(maxAgree, context.majority(),
                                                                                       member.getId())));
-    }
-
-    private Bound getRequest(KeyAndToken request) {
-        return null;
     }
 
     private boolean inValid(Digest from, int ring) {
@@ -271,14 +311,14 @@ public class LeydenJar {
         return bff.toBff();
     }
 
-    private boolean read(CompletableFuture<Bound> result, HashMultiset<Bound> gathered, AtomicInteger tally,
-                         Optional<Bound> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
-                         RingCommunications.Destination<Member, BinderClient> destination, String getAttachment,
-                         Attachment defaultInstance) {
+    private <B> boolean read(CompletableFuture<B> result, HashMultiset<B> gathered, AtomicInteger tally,
+                             Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
+                             RingCommunications.Destination<Member, BinderClient> destination, String getAttachment,
+                             Attachment defaultInstance) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
-        Bound content = futureSailor.get();
+        var content = futureSailor.get();
         if (content != null) {
             log.trace("bound: {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
             gathered.add(content);
@@ -397,10 +437,6 @@ public class LeydenJar {
         }
     }
 
-    public enum Operation {
-        PUT, DELETE, GET;
-    }
-
     public interface OpValidator {
         boolean validateBind(Bound bound, Token token);
 
@@ -482,11 +518,12 @@ public class LeydenJar {
                           member, from, request.getRing(), predecessor.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            if (!validator.validateBind(request.getBound(), Token.fromBytes(request.getToken().toByteArray()))) {
+            var bound = request.getBound();
+            if (!validator.validateBind(bound, Token.fromBytes(request.getToken().toByteArray()))) {
                 log.warn("Invalid Bind Token on {}:{}", context.getId(), member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            LeydenJar.this.bindRequest(request);
+            bottled.put(bound.getKey().toByteArray(), bound);
         }
 
         @Override
@@ -502,7 +539,7 @@ public class LeydenJar {
                 log.warn("Invalid Get Token on {}:{}", context.getId(), member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            return LeydenJar.this.getRequest(request);
+            return bottled.getOrDefault(request.getKey().toByteArray(), Bound.getDefaultInstance());
         }
 
         @Override
@@ -518,7 +555,7 @@ public class LeydenJar {
                 log.warn("Invalid Unbind Token on {}:{}", context.getId(), member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            LeydenJar.this.unbindRequest(request);
+            bottled.remove(request.getKey().toByteArray());
         }
     }
 }
