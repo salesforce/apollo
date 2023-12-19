@@ -528,6 +528,11 @@
                 <scope>provided</scope>
             </dependency>
             <dependency>
+                <groupId>com.macasaet.fernet</groupId>
+                <artifactId>fernet-java8</artifactId>
+                <version>1.4.2</version>
+            </dependency>
+            <dependency>
                 <groupId>org.graalvm.sdk</groupId>
                 <artifactId>graal-sdk</artifactId>
                 <version>${graal.vm.version}</version>

@@ -2,8 +2,9 @@ package com.salesforce.apollo.leyden.comm.binding;
 
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.leyden.proto.BinderGrpc;
+import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
-import com.salesforce.apollo.leyden.proto.Key_;
+import com.salesforce.apollo.leyden.proto.KeyAndToken;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
@@ -30,7 +31,7 @@ public class Bind implements BinderClient {
     public static BinderClient getLocalLoopback(BinderService service, SigningMember member) {
         return new BinderClient() {
             @Override
-            public void bind(Bound binding) {
+            public void bind(Binding binding) {
                 service.bind(binding, member.getId());
             }
 
@@ -40,19 +41,24 @@ public class Bind implements BinderClient {
             }
 
             @Override
+            public Bound get(KeyAndToken key) {
+                return null;
+            }
+
+            @Override
             public Member getMember() {
                 return member;
             }
 
             @Override
-            public void unbind(Key_ key) {
+            public void unbind(KeyAndToken key) {
                 service.unbind(key, member.getId());
             }
         };
     }
 
     @Override
-    public void bind(Bound binding) {
+    public void bind(Binding binding) {
         client.bind(binding);
     }
 
@@ -62,12 +68,17 @@ public class Bind implements BinderClient {
     }
 
     @Override
+    public Bound get(KeyAndToken key) {
+        return client.get(key);
+    }
+
+    @Override
     public Member getMember() {
         return channel.getMember();
     }
 
     @Override
-    public void unbind(Key_ key) {
+    public void unbind(KeyAndToken key) {
         client.unbind(key);
     }
 }

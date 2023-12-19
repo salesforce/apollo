@@ -8,7 +8,7 @@
     </parent>
     <artifactId>model</artifactId>
     <name>Model</name>
-    <description>Sytem Domain model for applications, deployments, tenants, etc.</description>
+    <description>System Domain model for applications, deployments, tenants, etc.</description>
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>

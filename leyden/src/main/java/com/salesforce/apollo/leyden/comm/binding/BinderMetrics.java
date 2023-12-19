@@ -12,6 +12,10 @@ public interface BinderMetrics extends EndpointMetrics {
 
     Timer inboundBindTimer();
 
+    Histogram inboundGet();
+
+    Timer inboundGetTimer();
+
     Histogram inboundUnbind();
 
     Timer inboundUnbindTimer();

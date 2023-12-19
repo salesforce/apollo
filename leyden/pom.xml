@@ -19,6 +19,10 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2-mvstore</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.macasaet.fernet</groupId>
+            <artifactId>fernet-java8</artifactId>
+        </dependency>
 
         <!-- Test Only Dependencies Below This Line -->
         <dependency>

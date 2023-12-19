@@ -12,11 +12,6 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyStates;
-import com.salesforce.apollo.thoth.proto.Intervals;
-import com.salesforce.apollo.thoth.proto.Update;
-import com.salesforce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -35,9 +30,11 @@ import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled.ClosableKERL;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLAdapter;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.thoth.LoggingOutputStream.LogLevel;
@@ -48,6 +45,9 @@ import com.salesforce.apollo.thoth.grpc.reconciliation.Reconciliation;
 import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationClient;
 import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationServer;
 import com.salesforce.apollo.thoth.grpc.reconciliation.ReconciliationService;
+import com.salesforce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.thoth.proto.Update;
+import com.salesforce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.utils.Entropy;
 import liquibase.Liquibase;
 import liquibase.Scope;
@@ -940,7 +940,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         }
         CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(),
+        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember().getId(),
                   member.getId(), keyIntervals);
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
@@ -1042,7 +1042,8 @@ public class KerlDHT implements ProtoKERLService {
                 CombinedIntervals keyIntervals = keyIntervals();
                 builder.addAllIntervals(keyIntervals.toIntervals())
                        .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr));
-                log.trace("Reconcile for: {} ring: {} count: {} on: {}", from, ring, builder.getEventsCount(), member);
+                log.trace("Reconcile for: {} ring: {} count: {} on: {}", from, ring, builder.getEventsCount(),
+                          member.getId());
                 return builder.build();
             } catch (IOException | SQLException e) {
                 throw new IllegalStateException("Cannot acquire KERL", e);
