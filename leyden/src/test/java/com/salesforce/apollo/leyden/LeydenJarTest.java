@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -83,8 +81,7 @@ public class LeydenJarTest {
                                                             controlled -> controlled));
         context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
         identities.keySet().forEach(m -> context.activate(m));
-        ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
-        identities.keySet().forEach(member -> instantiate(member, context, serverMembers));
+        identities.keySet().forEach(member -> instantiate(member, context));
 
         System.out.println();
         System.out.println();
@@ -124,11 +121,8 @@ public class LeydenJarTest {
         }
     }
 
-    protected void instantiate(SigningMember member, Context<Member> context,
-                               ConcurrentSkipListMap<Digest, Member> serverMembers) {
-        context.activate(member);
+    protected void instantiate(SigningMember member, Context<Member> context) {
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);
-        context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
         var exec = Executors.newVirtualThreadPerTaskExecutor();

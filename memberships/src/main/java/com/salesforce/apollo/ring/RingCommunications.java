@@ -32,17 +32,17 @@ import java.util.function.Function;
  * @author hal.hildebrand
  */
 public class RingCommunications<T extends Member, Comm extends Link> {
-    private final static Logger                        log            = LoggerFactory.getLogger(
-    RingCommunications.class);
-    final                Context<T>                    context;
-    final                SigningMember                 member;
-    private final        CommonCommunications<Comm, ?> comm;
-    private final        Direction                     direction;
-    private final        boolean                       ignoreSelf;
-    private final        Lock                          lock           = new ReentrantLock();
-    private final        List<iteration<T>>            traversalOrder = new ArrayList<>();
-    protected            boolean                       noDuplicates   = false;
-    volatile             int                           currentIndex   = -1;
+    private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
+
+    final         Context<T>                    context;
+    final         SigningMember                 member;
+    private final CommonCommunications<Comm, ?> comm;
+    private final Direction                     direction;
+    private final boolean                       ignoreSelf;
+    private final Lock                          lock           = new ReentrantLock();
+    private final List<iteration<T>>            traversalOrder = new ArrayList<>();
+    protected     boolean                       noDuplicates   = false;
+    volatile      int                           currentIndex   = -1;
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
         this(context, member, comm, false);
