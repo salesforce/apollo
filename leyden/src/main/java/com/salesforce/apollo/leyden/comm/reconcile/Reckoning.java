@@ -54,7 +54,7 @@ public class Reckoning implements ReconciliationClient {
 
     @Override
     public void close() throws IOException {
-        channel.shutdown();
+        channel.release();
     }
 
     @Override

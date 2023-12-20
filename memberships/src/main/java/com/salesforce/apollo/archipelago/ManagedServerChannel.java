@@ -6,24 +6,21 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
-
-import java.util.concurrent.TimeUnit;
-
 import com.google.common.base.MoreObjects;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
-
-import io.grpc.CallOptions;
-import io.grpc.ClientCall;
-import io.grpc.ConnectivityState;
+import io.grpc.*;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.TimeUnit;
+
+import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 public class ManagedServerChannel extends ManagedChannel {
+    private final static Logger log = LoggerFactory.getLogger(ManagedServerChannel.class);
 
     private final Digest                   context;
     private final ReleasableManagedChannel delegate;
@@ -68,10 +65,10 @@ public class ManagedServerChannel extends ManagedChannel {
     }
 
     @Override
-    public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(MethodDescriptor<RequestT, ResponseT> methodDescriptor,
-                                                                         CallOptions callOptions) {
-        return new SimpleForwardingClientCall<RequestT, ResponseT>(delegate.getChannel()
-                                                                           .newCall(methodDescriptor, callOptions)) {
+    public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
+    MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
+        return new SimpleForwardingClientCall<RequestT, ResponseT>(
+        delegate.getChannel().newCall(methodDescriptor, callOptions)) {
             @Override
             public void start(Listener<ResponseT> responseListener, Metadata headers) {
                 headers.put(Router.METADATA_CONTEXT_KEY, qb64(context));
@@ -97,12 +94,19 @@ public class ManagedServerChannel extends ManagedChannel {
 
     @Override
     public ManagedChannel shutdown() {
-        return delegate.getChannel().shutdown();
+        if (log.isTraceEnabled()) {
+            log.trace("Shutting down connection to: {} on: {}", delegate.getMember().getId(), delegate.getFrom(),
+                      new Exception("Shutdown stacktrace"));
+        } else if (log.isDebugEnabled()) {
+            log.debug("Shutting down connection to: {} on: {}", delegate.getMember().getId(), delegate.getFrom());
+        }
+        return delegate.shutdown();
     }
 
     @Override
     public ManagedChannel shutdownNow() {
-        return delegate.getChannel().shutdownNow();
+        log.trace("Shutting down connection (now) to: {} on: {}", delegate.getMember().getId(), delegate.getFrom());
+        return delegate.shutdownNow();
     }
 
     @Override

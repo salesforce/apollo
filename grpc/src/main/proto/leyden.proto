@@ -26,9 +26,8 @@ service Reconciliation {
 }
 
 message KeyAndToken {
-  int32 ring = 1;
-  bytes key = 2;
-  bytes token = 3;
+  bytes key = 1;
+  bytes token = 2;
 }
 
 message Update {
@@ -54,9 +53,8 @@ message Interval {
 }
 
 message Binding {
-  int32 ring = 1;
-  Bound bound = 2;
-  bytes token = 3;
+  Bound bound = 1;
+  bytes token = 2;
 }
 
 message Bound {

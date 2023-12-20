@@ -94,10 +94,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + currentIndex + "]";
     }
 
-    protected Logger getLog() {
-        return log;
-    }
-
     @SuppressWarnings("unchecked")
     List<iteration<T>> calculateTraversal(Digest digest) {
         var traversal = new ArrayList<iteration<T>>();
@@ -145,6 +141,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         }
     }
 
+    protected Logger getLog() {
+        return log;
+    }
+
     private <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler,
                              Destination<T, Comm> destination) {
         if (destination.link == null) {
@@ -154,7 +154,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             try {
                 result = round.apply(destination.link, destination.ring);
             } catch (Throwable e) {
-                log.trace("error applying round to: %s", destination.member.getId(), e);
+                log.trace("error applying round to: {} on: {}", destination.member.getId(), member.getId(), e);
             }
             handler.handle(Optional.ofNullable(result), destination);
         }

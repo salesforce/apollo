@@ -42,7 +42,7 @@ public class Bind implements BinderClient {
 
             @Override
             public Bound get(KeyAndToken key) {
-                return null;
+                return service.get(key, member.getId());
             }
 
             @Override
@@ -64,7 +64,7 @@ public class Bind implements BinderClient {
 
     @Override
     public void close() throws IOException {
-        channel.shutdown();
+        channel.release();
     }
 
     @Override

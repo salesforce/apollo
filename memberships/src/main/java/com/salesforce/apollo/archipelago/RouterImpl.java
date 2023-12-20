@@ -37,23 +37,26 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class RouterImpl implements Router {
 
-    private final static Logger log = LoggerFactory.getLogger(RouterImpl.class);
-    private final ServerConnectionCache           cache;
-    private final ClientIdentity                  clientIdentityProvider;
-    private final Consumer<Digest>                contextRegistration;
-    private final Member                          from;
-    private final MutableHandlerRegistry          registry = new MutableHandlerRegistry();
-    private final Server                          server;
-    private final Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
-    private final AtomicBoolean                   started  = new AtomicBoolean();
+    private final static Logger                          log      = LoggerFactory.getLogger(RouterImpl.class);
+    private final        ServerConnectionCache           cache;
+    private final        ClientIdentity                  clientIdentityProvider;
+    private final        Consumer<Digest>                contextRegistration;
+    private final        Member                          from;
+    private final        MutableHandlerRegistry          registry = new MutableHandlerRegistry();
+    private final        Server                          server;
+    private final        Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
+    private final        AtomicBoolean                   started  = new AtomicBoolean();
+
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider) {
-        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {});
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
+        });
     }
+
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
-        this.cache = cacheBuilder.build();
+        this.cache = cacheBuilder.clone().setMember(from.getId()).build();
         this.clientIdentityProvider = clientIdentityProvider;
         this.contextRegistration = contextRegistration;
         this.from = from;
@@ -185,7 +188,7 @@ public class RouterImpl implements Router {
         private final CreateClientCommunications<Client> createFunction;
         private final Member                             from;
         private final Client                             localLoopback;
-        private final RoutableService<Service> routing;
+        private final RoutableService<Service>           routing;
 
         public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing) {
             this(context, from, routing, m -> vanilla(from), vanilla(from));

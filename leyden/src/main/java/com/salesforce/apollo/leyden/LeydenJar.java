@@ -3,8 +3,6 @@ package com.salesforce.apollo.leyden;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
@@ -20,7 +18,6 @@ import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
-import com.salesforce.apollo.stereotomy.event.proto.Attachment;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Hex;
 import io.grpc.Status;
@@ -54,7 +51,7 @@ public class LeydenJar {
     private final        DigestAlgorithm                                                              algorithm;
     private final        double                                                                       fpr;
     private final        SigningMember                                                                member;
-    private final        MVMap<byte[], Bound>                                                         bottled;
+    private final        MVMap<Digest, Bound>                                                         bottled;
     private final        AtomicBoolean                                                                started    = new AtomicBoolean();
     private final        RingCommunications<Member, ReconciliationClient>                             reconcile;
     private final        NavigableMap<Digest, List<ConsensusState>>                                   pending    = new ConcurrentSkipListMap<>();
@@ -89,20 +86,15 @@ public class LeydenJar {
                                                                   binderMetrics), c -> Bind.getCreate(c, binderMetrics),
                                             Bind.getLocalLoopback(borders, member));
         this.fpr = fpr;
-        bottled = store.openMap(LEYDEN_JAR,
-                                new MVMap.Builder<byte[], Bound>().valueType(new ProtobufDatatype<Bound>(b -> {
-                                    try {
-                                        return Bound.parseFrom(b);
-                                    } catch (InvalidProtocolBufferException e) {
-                                        throw new IllegalArgumentException(e);
-                                    }
-                                })));
+        bottled = store.openMap(LEYDEN_JAR, new MVMap.Builder<Digest, Bound>().keyType(new DigestDatatype(algorithm))
+                                                                              .valueType(new BoundDatatype()));
         reconcile = new RingCommunications<>(this.context, member, reconComms);
+        reconcile.noDuplicates();
     }
 
     public void bind(Binding bound) {
         var key = bound.getBound().getKey();
-        log.info("bind: {} on: {}", Hex.hex(key.toByteArray()), member.getId());
+        log.info("Bind: {} on: {}", Hex.hex(key.toByteArray()), member.getId());
         var hash = algorithm.digest(key);
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -114,40 +106,49 @@ public class LeydenJar {
                                            link.bind(bound);
                                            return "";
                                        }, () -> failedMajority(result, maxCount(gathered)),
-                                       (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
-                                                                                  hash, isTimedOut, destination, "Bind",
-                                                                                  Attachment.getDefaultInstance()),
+                                       (tally, futureSailor, destination) -> write(result, gathered, tally,
+                                                                                   futureSailor, hash, isTimedOut,
+                                                                                   destination),
                                        t -> failedMajority(result, maxCount(gathered)));
         try {
             result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException re) {
+                throw re;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
 
-    public Bound get(KeyAndToken key) {
-        log.info("get: {} on: {}", Hex.hex(key.toByteArray()), member.getId());
-        var hash = algorithm.digest(key.toByteString());
+    public Bound get(KeyAndToken keyAndToken) {
+        var hash = algorithm.digest(keyAndToken.getKey());
+        log.info("Get: {} on: {}", hash, member.getId());
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Bound>();
         var gathered = HashMultiset.<Bound>create();
         var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
                                                              binderComms);
-        iterate.noDuplicates()
-               .iterate(hash, null, (link, r) -> link.get(key), () -> failedMajority(result, maxCount(gathered)),
-                        (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, hash,
-                                                                   isTimedOut, destination, "Get",
-                                                                   Attachment.getDefaultInstance()),
-                        t -> failedMajority(result, maxCount(gathered)));
+        iterate.noDuplicates().iterate(hash, null, (link, r) -> {
+                                           var bound = link.get(keyAndToken);
+                                           log.debug("Get {}: bound: <{}:{}> from: {} on: {}", hash, bound.getKey().toStringUtf8(),
+                                                     bound.getValue().toStringUtf8(), link.getMember().getId(), member.getId());
+                                           return bound;
+                                       }, () -> failedMajority(result, maxCount(gathered)),
+                                       (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
+                                                                                  hash, isTimedOut, destination, "Get"),
+                                       t -> failedMajority(result, maxCount(gathered)));
         try {
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException re) {
+                throw re;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -173,8 +174,8 @@ public class LeydenJar {
 
     public void unbind(KeyAndToken keyAndToken) {
         var key = keyAndToken.toByteArray();
-        log.info("bind: {} on: {}", Hex.hex(key), member.getId());
         var hash = algorithm.digest(key);
+        log.info("Unbind: {} on: {}", hash, member.getId());
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<String>();
@@ -187,36 +188,34 @@ public class LeydenJar {
                                        }, () -> failedMajority(result, maxCount(gathered)),
                                        (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
                                                                                   hash, isTimedOut, destination,
-                                                                                  "Unbind",
-                                                                                  Attachment.getDefaultInstance()),
+                                                                                  "Unbind"),
                                        t -> failedMajority(result, maxCount(gathered)));
         try {
             result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException re) {
+                throw re;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
 
     private void add(Bound bound) {
         var hash = algorithm.digest(bound.getKey());
-        bottled.put(hash.getBytes(), bound);
+        bottled.put(hash, bound);
         log.info("Add: {} on: {}", Hex.hex(bound.getKey().toByteArray()), member.getId());
-    }
-
-    private Bound binding(Digest d) {
-        return bottled.get(d.getBytes());
     }
 
     private Stream<Digest> bindingsIn(KeyInterval i) {
         Iterator<Digest> it = new Iterator<Digest>() {
-            private final Iterator<byte[]> iterate = bottled.keyIterator(i.getBegin().getBytes());
+            private final Iterator<Digest> iterate = bottled.keyIterator(i.getBegin());
             private Digest next;
 
             {
                 if (iterate.hasNext()) {
-                    next = new Digest(algorithm, iterate.next());
+                    next = iterate.next();
                     if (next.compareTo(i.getEnd()) > 0) {
                         next = null; // got nothing
                     }
@@ -231,11 +230,12 @@ public class LeydenJar {
             @Override
             public Digest next() {
                 var returned = next;
+                next = null;
                 if (returned == null) {
                     throw new NoSuchElementException();
                 }
                 if (iterate.hasNext()) {
-                    next = new Digest(algorithm, iterate.next());
+                    next = iterate.next();
                     if (next.compareTo(i.getEnd()) > 0) {
                         next = null; // got nothing
                     }
@@ -249,24 +249,29 @@ public class LeydenJar {
 
     private void failedMajority(CompletableFuture<?> result, int maxAgree) {
         result.completeExceptionally(new NoSuchElementException(
-        "Unable to achieve majority read, max: %s" + " required: %s on: %s".formatted(maxAgree, context.majority(),
-                                                                                      member.getId())));
+        "Unable to achieve majority read, max: %s required: %s on: %s".formatted(maxAgree, context.majority(),
+                                                                                 member.getId())));
     }
 
-    private boolean inValid(Digest from, int ring) {
+    private boolean invalid(Digest from, int ring) {
         if (ring >= context.getRingCount() || ring < 0) {
-            log.warn("invalid ring {} from {} on: {}", ring, from, member.getId());
+            log.warn("invalid ring: {} from: {} on: {}", ring, from, member.getId());
             return true;
         }
         Member fromMember = context.getMember(from);
         if (fromMember == null) {
             return true;
         }
-        Member successor = context.ring(ring).successor(fromMember, m -> context.isActive(m.getId()));
-        if (successor == null) {
+        Member predecessor = context.ring(ring).predecessor(member, m -> context.isActive(m.getId()));
+        if (predecessor == null) {
             return true;
         }
-        return !successor.equals(member);
+        var invalid = !predecessor.equals(fromMember);
+        if (invalid) {
+            log.warn("Invalid, not predecessor: {}, ring: {} expected: {} on: {}", from, ring, predecessor.getId(),
+                     member.getId());
+        }
+        return invalid;
     }
 
     private CombinedIntervals keyIntervals() {
@@ -302,8 +307,7 @@ public class LeydenJar {
 
     private Biff populate(long seed, CombinedIntervals keyIntervals) {
         BloomFilter.DigestBloomFilter bff = new BloomFilter.DigestBloomFilter(seed, Math.max(bottled.size(), 100), fpr);
-        bottled.keyIterator(algorithm.getOrigin().getBytes()).forEachRemaining(b -> {
-            var d = new Digest(algorithm, b);
+        bottled.keyIterator(algorithm.getOrigin()).forEachRemaining(d -> {
             if (keyIntervals.test(d)) {
                 bff.add(d);
             }
@@ -313,27 +317,27 @@ public class LeydenJar {
 
     private <B> boolean read(CompletableFuture<B> result, HashMultiset<B> gathered, AtomicInteger tally,
                              Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
-                             RingCommunications.Destination<Member, BinderClient> destination, String getAttachment,
-                             Attachment defaultInstance) {
+                             RingCommunications.Destination<Member, BinderClient> destination, String op) {
         if (futureSailor.isEmpty()) {
+            log.debug("{}: {} empty from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
             return !isTimedOut.get();
         }
         var content = futureSailor.get();
         if (content != null) {
-            log.trace("bound: {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            log.debug("{}: {} from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
             gathered.add(content);
             var max = max(gathered);
             if (max != null) {
                 tally.set(max.getCount());
                 if (max.getCount() > context.toleranceLevel()) {
                     result.complete(max.getElement());
-                    log.debug("Majority: {} achieved: {} on: {}", max.getCount(), hash, member.getId());
+                    log.debug("Majority {}: {} achieved: {} on: {}", op, max.getCount(), hash, member.getId());
                     return false;
                 }
             }
             return !isTimedOut.get();
         } else {
-            log.debug("Failed {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            log.debug("Failed {}: {} from: {}  on: {}", op, hash, destination.member().getId(), member.getId());
             return !isTimedOut.get();
         }
     }
@@ -343,8 +347,8 @@ public class LeydenJar {
             return null;
         }
         CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(),
-                  member.getId(), keyIntervals);
+        log.trace("Interval reconciliation on ring: {} with: {} intervals: {} on: {} ", ring, link.getMember(),
+                  keyIntervals, member.getId());
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
@@ -381,9 +385,10 @@ public class LeydenJar {
         if (!started.get()) {
             return;
         }
-        reconcile.execute(this::reconcile,
-                          (futureSailor, destination) -> reconcile(futureSailor, destination, scheduler, duration));
-
+        Thread.ofVirtual()
+              .start(() -> reconcile.execute(this::reconcile,
+                                             (futureSailor, destination) -> reconcile(futureSailor, destination,
+                                                                                      scheduler, duration)));
     }
 
     /**
@@ -399,10 +404,10 @@ public class LeydenJar {
                  .stream()
                  .map(KeyInterval::new)
                  .flatMap(this::bindingsIn)
-                 .peek(d -> log.trace("reconcile digest: {} on: {}", d, member.getId()))
+                 .peek(d -> log.debug("reconcile digest: {} on: {}", d, member.getId()))
                  .filter(d -> !biff.contains(d))
-                 .peek(d -> log.trace("filtered reconcile digest: {} on: {}", d, member.getId()))
-                 .map(this::binding)
+                 .peek(d -> log.debug("filtered reconcile digest: {} on: {}", d, member.getId()))
+                 .map(d1 -> bottled.get(d1))
                  .filter(Objects::nonNull)
                  .forEach(update::addBindings);
         return update;
@@ -437,12 +442,38 @@ public class LeydenJar {
         }
     }
 
+    private <B> boolean write(CompletableFuture<B> result, HashMultiset<B> gathered, AtomicInteger tally,
+                              Optional<B> futureSailor, Digest hash, Supplier<Boolean> isTimedOut,
+                              RingCommunications.Destination<Member, BinderClient> destination) {
+        if (futureSailor.isEmpty()) {
+            return !isTimedOut.get();
+        }
+        var content = futureSailor.get();
+        if (content != null) {
+            log.debug("Bind: {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            gathered.add(content);
+            var max = max(gathered);
+            if (max != null) {
+                tally.set(max.getCount());
+                if (max.getCount() > context.toleranceLevel()) {
+                    result.complete(max.getElement());
+                    log.debug("Majority Bind : {} achieved: {} on: {}", max.getCount(), hash, member.getId());
+                    return true;
+                }
+            }
+            return !isTimedOut.get();
+        } else {
+            log.debug("Failed: Bind : {} from: {}  on: {}", hash, destination.member().getId(), member.getId());
+            return !isTimedOut.get();
+        }
+    }
+
     public interface OpValidator {
-        boolean validateBind(Bound bound, Token token);
+        boolean validateBind(Bound bound, byte[] token);
 
-        boolean validateGet(byte[] key, Token token);
+        boolean validateGet(byte[] key, byte[] token);
 
-        boolean validateUnbind(byte[] key, Token token);
+        boolean validateUnbind(byte[] key, byte[] token);
     }
 
     private static class ConsensusState {
@@ -484,8 +515,8 @@ public class LeydenJar {
         @Override
         public Update reconcile(Intervals intervals, Digest from) {
             var ring = intervals.getRing();
-            if (inValid(from, ring)) {
-                log.trace("Invalid reconcile from: {} ring: {} on: {}", from, ring, member.getId());
+            if (invalid(from, ring)) {
+                log.warn("Invalid reconcile from: {} ring: {} on: {}", from, ring, member.getId());
                 return Update.getDefaultInstance();
             }
             log.trace("Reconcile from: {} ring: {} on: {}", from, ring, member.getId());
@@ -501,7 +532,8 @@ public class LeydenJar {
         @Override
         public void update(Updating update, Digest from) {
             var ring = update.getRing();
-            if (inValid(from, ring)) {
+            if (invalid(from, ring)) {
+                log.warn("Invalid update from: {} ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             LeydenJar.this.update(update.getBindingsList(), from);
@@ -512,50 +544,37 @@ public class LeydenJar {
 
         @Override
         public void bind(Binding request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
-            if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.debug("Invalid Bind ring on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member, from, request.getRing(), predecessor.getId());
-                throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
-            }
             var bound = request.getBound();
-            if (!validator.validateBind(bound, Token.fromBytes(request.getToken().toByteArray()))) {
-                log.warn("Invalid Bind Token on {}:{}", context.getId(), member.getId());
+            if (!validator.validateBind(bound, request.getToken().toByteArray())) {
+                log.warn("Invalid Bind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            bottled.put(bound.getKey().toByteArray(), bound);
+            var hash = algorithm.digest(bound.getKey());
+            log.debug("Bind: {} on: {}", hash, member.getId());
+            bottled.put(hash, bound);
         }
 
         @Override
         public Bound get(KeyAndToken request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
-            if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.debug("Invalid Get ring on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member.getId(), from, request.getRing(), predecessor.getId());
+            if (!validator.validateGet(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+                log.warn("Invalid Get Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            if (!validator.validateGet(request.getKey().toByteArray(),
-                                       Token.fromBytes(request.getToken().toByteArray()))) {
-                log.warn("Invalid Get Token on {}:{}", context.getId(), member.getId());
-                throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
-            }
-            return bottled.getOrDefault(request.getKey().toByteArray(), Bound.getDefaultInstance());
+            var hash = algorithm.digest(request.getKey());
+            var bound = bottled.getOrDefault(hash, Bound.getDefaultInstance());
+            log.debug("Get: {} bound: {} on: {}", hash, bound != null, member.getId());
+            return bound;
         }
 
         @Override
         public void unbind(KeyAndToken request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
-            if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.debug("Invalid Unbind ring on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member.getId(), from, request.getRing(), predecessor.getId());
+            if (!validator.validateUnbind(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+                log.warn("Invalid Unbind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
-            if (!validator.validateUnbind(request.getKey().toByteArray(),
-                                          Token.fromBytes(request.getToken().toByteArray()))) {
-                log.warn("Invalid Unbind Token on {}:{}", context.getId(), member.getId());
-                throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
-            }
-            bottled.remove(request.getKey().toByteArray());
+            var hash = algorithm.digest(request.getKey());
+            log.debug("Remove: {} on: {}", hash, member.getId());
+            bottled.remove(hash);
         }
     }
 }
