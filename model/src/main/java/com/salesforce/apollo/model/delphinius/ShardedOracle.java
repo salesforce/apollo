@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import static com.salesforce.apollo.choam.Session.retryNesting;
 
 /**
- * Oracle where write ops are JDBC stored procedure calls
+ * Oracle where write ops are JDBC stored procedure calls operating on the shared sql state
  *
  * @author hal.hildebrand
  */
@@ -99,6 +99,26 @@ public class ShardedOracle extends AbstractOracle {
         }
     }
 
+    public CompletableFuture<Void> add(Assertion assertion, int retries) {
+        return retryNesting(() -> add(assertion), retries);
+    }
+
+    public CompletableFuture<Void> add(Namespace namespace, int retries) {
+        return retryNesting(() -> add(namespace), retries);
+    }
+
+    public CompletableFuture<Void> add(Object object, int retries) {
+        return retryNesting(() -> add(object), retries);
+    }
+
+    public CompletableFuture<Void> add(Relation relation, int retries) {
+        return retryNesting(() -> add(relation), retries);
+    }
+
+    public CompletableFuture<Void> add(Subject subject, int retries) {
+        return retryNesting(() -> add(subject), retries);
+    }
+
     @Override
     public CompletableFuture<Void> delete(Assertion assertion) {
         var call = mutator.call("call delphinius.deleteAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
@@ -166,6 +186,26 @@ public class ShardedOracle extends AbstractOracle {
         }
     }
 
+    public CompletableFuture<Void> delete(Assertion assertion, int retries) {
+        return retryNesting(() -> delete(assertion), retries);
+    }
+
+    public CompletableFuture<Void> delete(Namespace namespace, int retries) {
+        return retryNesting(() -> delete(namespace), retries);
+    }
+
+    public CompletableFuture<Void> delete(Object object, int retries) {
+        return retryNesting(() -> delete(object), retries);
+    }
+
+    public CompletableFuture<Void> delete(Relation relation, int retries) {
+        return retryNesting(() -> delete(relation), retries);
+    }
+
+    public CompletableFuture<Void> delete(Subject subject, int retries) {
+        return retryNesting(() -> delete(subject), retries);
+    }
+
     @Override
     public CompletableFuture<Void> map(Object parent, Object child) {
         var call = mutator.call("call delphinius.mapObject(?, ?, ?, ?, ?, ?, ?, ?) ", parent.namespace().name(),
@@ -209,6 +249,18 @@ public class ShardedOracle extends AbstractOracle {
         }
     }
 
+    public CompletableFuture<Void> map(Object parent, Object child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> map(Relation parent, Relation child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
+    public CompletableFuture<Void> map(Subject parent, Subject child, int retries) {
+        return retryNesting(() -> map(parent, child), retries);
+    }
+
     @Override
     public CompletableFuture<Void> remove(Object parent, Object child) {
         var call = mutator.call("call delphinius.removeObject(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ",
@@ -250,58 +302,6 @@ public class ShardedOracle extends AbstractOracle {
             f.completeExceptionally(e);
             return f;
         }
-    }
-
-    public CompletableFuture<Void> add(Assertion assertion, int retries) {
-        return retryNesting(() -> add(assertion), retries);
-    }
-
-    public CompletableFuture<Void> add(Namespace namespace, int retries) {
-        return retryNesting(() -> add(namespace), retries);
-    }
-
-    public CompletableFuture<Void> add(Object object, int retries) {
-        return retryNesting(() -> add(object), retries);
-    }
-
-    public CompletableFuture<Void> add(Relation relation, int retries) {
-        return retryNesting(() -> add(relation), retries);
-    }
-
-    public CompletableFuture<Void> add(Subject subject, int retries) {
-        return retryNesting(() -> add(subject), retries);
-    }
-
-    public CompletableFuture<Void> delete(Assertion assertion, int retries) {
-        return retryNesting(() -> delete(assertion), retries);
-    }
-
-    public CompletableFuture<Void> delete(Namespace namespace, int retries) {
-        return retryNesting(() -> delete(namespace), retries);
-    }
-
-    public CompletableFuture<Void> delete(Object object, int retries) {
-        return retryNesting(() -> delete(object), retries);
-    }
-
-    public CompletableFuture<Void> delete(Relation relation, int retries) {
-        return retryNesting(() -> delete(relation), retries);
-    }
-
-    public CompletableFuture<Void> delete(Subject subject, int retries) {
-        return retryNesting(() -> delete(subject), retries);
-    }
-
-    public CompletableFuture<Void> map(Object parent, Object child, int retries) {
-        return retryNesting(() -> map(parent, child), retries);
-    }
-
-    public CompletableFuture<Void> map(Relation parent, Relation child, int retries) {
-        return retryNesting(() -> map(parent, child), retries);
-    }
-
-    public CompletableFuture<Void> map(Subject parent, Subject child, int retries) {
-        return retryNesting(() -> map(parent, child), retries);
     }
 
     public CompletableFuture<Void> remove(Object parent, Object child, int retries) {

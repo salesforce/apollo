@@ -6,17 +6,15 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.cryptography.proto.Digeste;
-import com.salesforce.apollo.demesne.proto.DemesneParameters;
-import com.salesforce.apollo.demesne.proto.SubContext;
-import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.archipelago.Portal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.SubContext;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
@@ -31,6 +29,8 @@ import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -240,12 +240,6 @@ public class ProcessDomain extends Domain {
 
     private ViewLifecycleListener listener() {
         return new ViewLifecycleListener() {
-
-            @Override
-            public void update(EventCoordinates update) {
-                // TODO Auto-generated method stub
-
-            }
 
             @Override
             public void viewChange(Context<Participant> context, Digest id, List<EventCoordinates> join,

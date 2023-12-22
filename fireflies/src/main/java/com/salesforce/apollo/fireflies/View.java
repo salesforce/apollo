@@ -12,15 +12,12 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.fireflies.proto.*;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.ViewManagement.Ballot;
 import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
@@ -30,12 +27,15 @@ import com.salesforce.apollo.fireflies.comm.entrance.EntranceService;
 import com.salesforce.apollo.fireflies.comm.gossip.FFService;
 import com.salesforce.apollo.fireflies.comm.gossip.FfServer;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
@@ -322,24 +322,6 @@ public class View {
                 + context.cardinality();
             }
         });
-        if (!newMember) {
-            if (current != null) {
-                if (
-                current.getCoordinates().getSequenceNumber().compareTo(member.note.getCoordinates().getSequenceNumber())
-                > 0) {
-                    Thread.ofVirtual().factory().newThread(Utils.wrapped(() -> {
-                        final var coordinates = member.note.getCoordinates();
-                        try {
-                            lifecycleListeners.values().forEach(l -> {
-                                l.update(coordinates);
-                            });
-                        } catch (Throwable t) {
-                            log.error("Error during coordinate update: {}", coordinates, t);
-                        }
-                    }, log)).start();
-                }
-            }
-        }
         return true;
     }
 
@@ -1244,9 +1226,6 @@ public class View {
         if (context.activate(member)) {
             log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
                       context.totalCount(), node.getId());
-        } else {
-            //            log.trace("Already active: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
-            //                      context.totalCount(), node.getId());
         }
     }
 
@@ -1410,7 +1389,7 @@ public class View {
     }
 
     private void validate(Digest from, State request) {
-        var valid = true;
+        var valid = false;
         try {
             validate(from, request.getRing(), Digest.from(request.getView()));
             valid = true;
@@ -1422,12 +1401,6 @@ public class View {
     }
 
     public interface ViewLifecycleListener {
-        /**
-         * Notification of update to members' event coordinates
-         *
-         * @param update - the event coordinates to update
-         */
-        void update(EventCoordinates updated);
 
         /**
          * Notification of a view change event

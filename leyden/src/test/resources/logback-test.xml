@@ -17,7 +17,7 @@
     <logger name="com.salesforce.apollo.archipelago" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
-    <logger name="com.salesforce.apollo.leyden" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.leyden" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
     <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">

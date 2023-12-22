@@ -6,111 +6,26 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import org.apache.commons.math3.random.BitsStreamGenerator;
+
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-
 /**
- * Provides a Context for Membership and is uniquely identified by a Digest;.
- * Members may be either active or offline. The Context maintains a number of
- * Rings (may be zero) that the Context provides for Firefly type consistent
- * hash ring ordering operators. Each ring has a unique hash of each individual
- * member, and thus each ring has a different ring order of the same membership
- * set. Hashes for Context level operators include the ID of the ring. Hashes
- * computed and cached for each member, per ring include the ID of the enclosing
- * Context.
- * 
- * @author hal.hildebrand
+ * Provides a Context for Membership and is uniquely identified by a Digest;. Members may be either active or offline.
+ * The Context maintains a number of Rings (may be zero) that the Context provides for Firefly type consistent hash ring
+ * ordering operators. Each ring has a unique hash of each individual member, and thus each ring has a different ring
+ * order of the same membership set. Hashes for Context level operators include the ID of the ring. Hashes computed and
+ * cached for each member, per ring include the ID of the enclosing Context.
  *
+ * @author hal.hildebrand
  */
 public interface Context<T extends Member> {
 
-    abstract class Builder<Z extends Member> {
-        protected int    bias    = 2;
-        protected int    cardinality;
-        protected double epsilon = DEFAULT_EPSILON;
-        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
-        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
-
-        public abstract Context<Z> build();
-
-        public int getBias() {
-            return bias;
-        }
-
-        public int getCardinality() {
-            return cardinality;
-        }
-
-        public double getEpsilon() {
-            return epsilon;
-        }
-
-        public Digest getId() {
-            return id;
-        }
-
-        public double getpByz() {
-            return pByz;
-        }
-
-        public Builder<Z> setBias(int bias) {
-            this.bias = bias;
-            return this;
-        }
-
-        public Builder<Z> setCardinality(int cardinality) {
-            this.cardinality = cardinality;
-            return this;
-        }
-
-        public Builder<Z> setEpsilon(double epsilon) {
-            this.epsilon = epsilon;
-            return this;
-        }
-
-        public Builder<Z> setId(Digest id) {
-            this.id = id;
-            return this;
-        }
-
-        public Builder<Z> setpByz(double pByz) {
-            this.pByz = pByz;
-            return this;
-        }
-    }
-
-    interface MembershipListener<T extends Member> {
-
-        /**
-         * A new member has recovered and is now active
-         * 
-         * @param member
-         */
-        default void active(T member) {
-        }
-
-        /**
-         * A member is offline
-         * 
-         * @param member
-         */
-        default void offline(T member) {
-        }
-    }
-
     double DEFAULT_EPSILON = 0.99999;
-
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
@@ -134,9 +49,8 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @return the minimum t such that the probability of more than t out of bias *
-     *         t+1 monitors are correct with probability e/size given the uniform
-     *         probability pByz that a monitor is Byzantine.
+     * @return the minimum t such that the probability of more than t out of bias * t+1 monitors are correct with
+     * probability e/size given the uniform probability pByz that a monitor is Byzantine.
      */
     static int minMajority(double pByz, int cardinality, double epsilon, int bias) {
         if (epsilon > 1.0 || epsilon <= 0.0) {
@@ -149,19 +63,19 @@ public interface Context<T extends Member> {
                 if (cardinality >= (bias * t) + 1) {
                     return t;
                 } else {
-                    throw new IllegalArgumentException("Cardinality: " + cardinality
-                    + " cannot support required tolerance: " + t);
+                    throw new IllegalArgumentException(
+                    "Cardinality: " + cardinality + " cannot support required tolerance: " + t);
                 }
             }
         }
-        throw new IllegalArgumentException("Cannot compute number of rings from bias=" + bias + " pByz=" + pByz
-        + " cardinality: " + cardinality + " epsilon: " + epsilon);
+        throw new IllegalArgumentException(
+        "Cannot compute number of rings from bias=" + bias + " pByz=" + pByz + " cardinality: " + cardinality
+        + " epsilon: " + epsilon);
     }
 
     /**
-     * @return the minimum t such that the probability of more than t out of 2t+1
-     *         monitors are correct with probability e/size given the uniform
-     *         probability pByz that a monitor is Byzantine.
+     * @return the minimum t such that the probability of more than t out of 2t+1 monitors are correct with probability
+     * e/size given the uniform probability pByz that a monitor is Byzantine.
      */
     static int minMajority(int bias, double pByz, int cardinality) {
         return minMajority(pByz, cardinality, 0.99999, bias);
@@ -200,8 +114,18 @@ public interface Context<T extends Member> {
 
     /**
      * Mark a member as active in the context
+     *
+     * @return true if the member was previously inactive, false if currently active
      */
     boolean activate(T m);
+
+    /**
+     * Mark a member identified by the digest ID as active in the context
+     *
+     * @return true if the member was previously inactive, false if currently active
+     * @throws NoSuchElementException - if no member is found in the context with the supplied ID
+     */
+    boolean activate(Digest id);
 
     /**
      * Mark a member as active in the context
@@ -261,8 +185,8 @@ public interface Context<T extends Member> {
     void deregister(UUID id);
 
     /**
-     * Answer the aproximate diameter of the receiver, assuming the rings were built
-     * with FF parameters, with the rings forming random graph connections segments.
+     * Answer the aproximate diameter of the receiver, assuming the rings were built with FF parameters, with the rings
+     * forming random graph connections segments.
      */
     int diameter();
 
@@ -277,8 +201,8 @@ public interface Context<T extends Member> {
     List<T> getAllMembers();
 
     /**
-     * Answer the bias of the context. The bias is the multiple of the number of
-     * byzantine members the context is designed to foil
+     * Answer the bias of the context. The bias is the multiple of the number of byzantine members the context is
+     * designed to foil
      */
     int getBias();
 
@@ -324,8 +248,7 @@ public interface Context<T extends Member> {
     boolean isActive(T m);
 
     /**
-     * Answer true if a member who's id is the supplied digest is a member of the
-     * view
+     * Answer true if a member who's id is the supplied digest is a member of the view
      */
     boolean isMember(Digest digest);
 
@@ -346,7 +269,7 @@ public interface Context<T extends Member> {
 
     /**
      * Answer true if the member is a successor of the supplied digest on any ring
-     * 
+     *
      * @param member
      * @param digest
      * @return
@@ -354,8 +277,7 @@ public interface Context<T extends Member> {
     boolean isSuccessorOf(T m, Digest digest);
 
     /**
-     * Answer the majority cardinality of the context, based on the current ring
-     * count
+     * Answer the majority cardinality of the context, based on the current ring count
      */
     int majority();
 
@@ -371,7 +293,7 @@ public interface Context<T extends Member> {
 
     /**
      * Take a member offline
-     * 
+     *
      * @return true if the member was active previously
      */
     boolean offline(T m);
@@ -389,8 +311,7 @@ public interface Context<T extends Member> {
     List<T> predecessors(Digest key);
 
     /**
-     * @return the predecessor on each ring for the provided key that pass the
-     *         provided predicate
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
      */
     List<T> predecessors(Digest key, Predicate<T> test);
 
@@ -400,8 +321,7 @@ public interface Context<T extends Member> {
     List<T> predecessors(T key);
 
     /**
-     * @return the predecessor on each ring for the provided key that pass the
-     *         provided predicate
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
      */
     List<T> predecessors(T key, Predicate<T> test);
 
@@ -446,14 +366,12 @@ public interface Context<T extends Member> {
     Stream<Ring<T>> rings();
 
     /**
-     * Answer a random sample of at least range size from the active members of the
-     * context
-     * 
+     * Answer a random sample of at least range size from the active members of the context
+     *
      * @param range    - the desired range
      * @param entropy  - source o randomness
      * @param excluded - the member to exclude from sample
-     * @return a random sample set of the view's live members. May be limited by the
-     *         number of active members.
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
     <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
 
@@ -468,8 +386,7 @@ public interface Context<T extends Member> {
     List<T> successors(Digest key);
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided
-     *         predicate test
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
     List<T> successors(Digest key, Predicate<T> test);
 
@@ -479,20 +396,19 @@ public interface Context<T extends Member> {
     List<T> successors(T key);
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided
-     *         predicate test
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
     List<T> successors(T key, Predicate<T> test);
 
     /**
-     * The number of iterations until a given message has been distributed to all
-     * members in the context, using the rings of the receiver as a gossip graph
+     * The number of iterations until a given message has been distributed to all members in the context, using the
+     * rings of the receiver as a gossip graph
      */
     int timeToLive();
 
     /**
-     * Answer the tolerance level of the context to byzantine members, assuming this
-     * context has been constructed from FF parameters
+     * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
+     * FF parameters
      */
     int toleranceLevel();
 
@@ -502,5 +418,79 @@ public interface Context<T extends Member> {
     int totalCount();
 
     boolean validRing(int ring);
+
+    interface MembershipListener<T extends Member> {
+
+        /**
+         * A new member has recovered and is now active
+         *
+         * @param member
+         */
+        default void active(T member) {
+        }
+
+        /**
+         * A member is offline
+         *
+         * @param member
+         */
+        default void offline(T member) {
+        }
+    }
+
+    abstract class Builder<Z extends Member> {
+        protected int    bias    = 2;
+        protected int    cardinality;
+        protected double epsilon = DEFAULT_EPSILON;
+        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
+        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
+
+        public abstract Context<Z> build();
+
+        public int getBias() {
+            return bias;
+        }
+
+        public Builder<Z> setBias(int bias) {
+            this.bias = bias;
+            return this;
+        }
+
+        public int getCardinality() {
+            return cardinality;
+        }
+
+        public Builder<Z> setCardinality(int cardinality) {
+            this.cardinality = cardinality;
+            return this;
+        }
+
+        public double getEpsilon() {
+            return epsilon;
+        }
+
+        public Builder<Z> setEpsilon(double epsilon) {
+            this.epsilon = epsilon;
+            return this;
+        }
+
+        public Digest getId() {
+            return id;
+        }
+
+        public Builder<Z> setId(Digest id) {
+            this.id = id;
+            return this;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder<Z> setpByz(double pByz) {
+            this.pByz = pByz;
+            return this;
+        }
+    }
 
 }

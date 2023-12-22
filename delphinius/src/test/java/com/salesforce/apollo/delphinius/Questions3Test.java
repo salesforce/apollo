@@ -6,26 +6,21 @@
  */
 package com.salesforce.apollo.delphinius;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesforce.apollo.delphinius.Oracle.Assertion;
+import liquibase.Liquibase;
+import liquibase.database.core.H2Database;
+import liquibase.resource.ClassLoaderResourceAccessor;
+import org.h2.jdbc.JdbcConnection;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
 
-import org.h2.jdbc.JdbcConnection;
-import org.junit.jupiter.api.Test;
-
-import com.salesforce.apollo.delphinius.Oracle.Assertion;
-
-import liquibase.Liquibase;
-import liquibase.database.core.H2Database;
-import liquibase.resource.ClassLoaderResourceAccessor;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class Questions3Test {
 
@@ -73,7 +68,7 @@ public class Questions3Test {
         var member = ns.relation("member");
         var flag = ns.relation("flag");
 
-        // Group membersip
+        // Group membership
         var userMembers = ns.subject("Users", member);
         var adminMembers = ns.subject("Admins", member);
         var helpDeskMembers = ns.subject("HelpDesk", member);
@@ -165,9 +160,9 @@ public class Questions3Test {
         }
 
         // Transitive grants to view the document
-//        var inferredViewable = oracle.expand(egin);
-//        assertEquals(1, inferredViewable.size());
-//        assertTrue(inferredViewable.contains(object123View), "Should contain: " + object123View);
+        //        var inferredViewable = oracle.expand(egin);
+        //        assertEquals(1, inferredViewable.size());
+        //        assertTrue(inferredViewable.contains(object123View), "Should contain: " + object123View);
 
         // Transitive subjects filtered by flag predicate
         var inferredFlaggedViewers = oracle.expand(flag, object123View);
