@@ -1,7 +1,6 @@
 package com.salesforce.apollo.thoth;
 
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.thoth.proto.Thoth_Grpc;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.thoth.grpc.ThothServer;
+import com.salesforce.apollo.thoth.proto.Thoth_Grpc;
 import io.grpc.Channel;
 import io.grpc.ServerBuilder;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -56,10 +56,9 @@ public class ThothServerTest {
                                                                .addService(new ThothServer(new Thoth(stereotomy)));
         var server = serverBuilder.build();
         server.start();
+        var channel = InProcessChannelBuilder.forName(localId).usePlaintext().build();
         try {
-            var channel = InProcessChannelBuilder.forName(localId).usePlaintext().build();
             var thoth = new ThothClient(channel);
-
             ControlledIdentifier<SelfAddressingIdentifier> controller = stereotomy.newIdentifier();
 
             // delegated inception
@@ -90,6 +89,7 @@ public class ThothServerTest {
             coords = controller.seal(builder);
             thoth.commit(coords);
         } finally {
+            channel.shutdown();
             server.shutdown();
             server.awaitTermination(3, TimeUnit.SECONDS);
         }
