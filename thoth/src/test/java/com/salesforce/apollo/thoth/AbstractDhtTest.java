@@ -53,19 +53,19 @@ import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
  * @author hal.hildebrand
  */
 public class AbstractDhtTest {
-    protected static final ProtobufEventFactory                                               factory     = new ProtobufEventFactory();
-    protected static final boolean                                                            LARGE_TESTS = Boolean.getBoolean(
-    "large_tests");
-    protected static final double                                                             PBYZ        = 0.25;
-    protected final        Map<SigningMember, KerlDHT>                                        dhts        = new TreeMap<>();
-    protected final        Map<SigningMember, Router>                                         routers     = new HashMap<>();
-    protected final        AtomicBoolean                                                      gate        = new AtomicBoolean(
+    protected static final ProtobufEventFactory factory     = new ProtobufEventFactory();
+    protected static final boolean              LARGE_TESTS = Boolean.getBoolean("large_tests");
+    protected static final double               PBYZ        = 0.25;
+
+    protected final TreeMap<SigningMember, KerlDHT>                                    dhts    = new TreeMap<>();
+    protected final Map<SigningMember, Router>                                         routers = new HashMap<>();
+    protected final AtomicBoolean                                                      gate    = new AtomicBoolean(
     false);
-    protected              Context<Member>                                                    context;
-    protected              Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    protected              MemKERL                                                            kerl;
-    protected              String                                                             prefix;
-    protected              Stereotomy                                                         stereotomy;
+    protected       Context<Member>                                                    context;
+    protected       Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    protected       MemKERL                                                            kerl;
+    protected       String                                                             prefix;
+    protected       Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {
         super();

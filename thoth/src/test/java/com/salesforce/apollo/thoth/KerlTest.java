@@ -49,7 +49,7 @@ public class KerlTest extends AbstractDhtTest {
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
-        KERL kerl = dhts.values().stream().findFirst().get().asKERL();
+        KERL kerl = dhts.firstEntry().getValue().asKERL();
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
@@ -127,7 +127,7 @@ public class KerlTest extends AbstractDhtTest {
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
-        KERL kerl = dhts.values().stream().findFirst().get().asKERL();
+        KERL kerl = dhts.firstEntry().getValue().asKERL();
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 

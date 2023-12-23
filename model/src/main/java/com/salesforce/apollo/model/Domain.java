@@ -195,6 +195,10 @@ abstract public class Domain {
         return getClass().getSimpleName() + "[" + getIdentifier() + "]";
     }
 
+    protected Transaction migrations() {
+        return null;
+    }
+
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
         log.info("Genesis joins: {} on: {}", members.keySet().stream().map(Member::getId).toList(), params.member());
@@ -203,6 +207,11 @@ abstract public class Domain {
         List<Transaction> transactions = new ArrayList<>();
         // Schemas
         transactions.add(transactionOf(boostrapMigration()));
+        var migrations = migrations();
+        if (migrations != null) {
+            // additional SQL migrations
+            transactions.add(migrations);
+        }
         sorted.stream()
               .map(e -> manifest(members.get(e)))
               .filter(Objects::nonNull)

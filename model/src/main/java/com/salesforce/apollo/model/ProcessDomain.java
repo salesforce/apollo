@@ -26,7 +26,6 @@ import com.salesforce.apollo.model.demesnes.JniBridge;
 import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
@@ -137,6 +136,10 @@ public class ProcessDomain extends Domain {
         this.subDomainSpecification = subDomainSpecification;
     }
 
+    public KerlDHT getDht() {
+        return dht;
+    }
+
     public View getFoundation() {
         return foundation;
     }
@@ -161,7 +164,7 @@ public class ProcessDomain extends Domain {
         });
         if (added.get()) {
             var newSpec = subDomainSpecification.clone();
-            // the receiver is a witness to the sub domain's delegated key
+            // the receiver is a witness to the subdomain's delegated key
             var newWitnesses = new ArrayList<>(subDomainSpecification.getWitnesses());
             newWitnesses.add(new BasicIdentifier(witness.getPublic()));
             newSpec.setWitnesses(newWitnesses);
@@ -228,6 +231,23 @@ public class ProcessDomain extends Domain {
         }
     }
 
+    protected void startServices() {
+        dht.start(params.gossipDuration());
+        try {
+            portal.start();
+        } catch (IOException e) {
+            throw new IllegalStateException(
+            "Unable to start portal, local address: " + bridge.path() + " on: " + params.member().getId());
+        }
+        try {
+            outerContextService.start();
+        } catch (IOException e) {
+            throw new IllegalStateException(
+            "Unable to start outer context service, local address: " + outerContextEndpoint.path() + " on: "
+            + params.member().getId());
+        }
+    }
+
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .executor(executor)
@@ -239,27 +259,22 @@ public class ProcessDomain extends Domain {
     }
 
     private ViewLifecycleListener listener() {
-        return new ViewLifecycleListener() {
-
-            @Override
-            public void viewChange(Context<Participant> context, Digest id, List<EventCoordinates> join,
-                                   List<Digest> leaving) {
-                for (var d : join) {
-                    if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
-                        params.context().activate(context.getMember(sai.getDigest()));
-                    }
+        return (context, id, join, leaving) -> {
+            for (var d : join) {
+                if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
+                    params.context().activate(context.getMember(sai.getDigest()));
                 }
-                for (var d : leaving) {
-                    params.context().remove(d);
-                }
-
-                hostedDomains.forEach((viewId, demesne) -> {
-                    demesne.viewChange(viewId, join, leaving);
-                });
-
-                log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
-                         join.size(), leaving.size(), params.member().getId());
             }
+            for (var d : leaving) {
+                params.context().remove(d);
+            }
+
+            hostedDomains.forEach((viewId, demesne) -> {
+                demesne.viewChange(viewId, join, leaving);
+            });
+
+            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
+                     join.size(), leaving.size(), params.member().getId());
         };
     }
 
@@ -276,23 +291,6 @@ public class ProcessDomain extends Domain {
                 //                routes.put("",qb64(Digest.from(context)));
             }
         }, null);
-    }
-
-    private void startServices() {
-        dht.start(Duration.ofMillis(10)); // TODO parameterize gossip frequency
-        try {
-            portal.start();
-        } catch (IOException e) {
-            throw new IllegalStateException(
-            "Unable to start portal, local address: " + bridge.path() + " on: " + params.member().getId());
-        }
-        try {
-            outerContextService.start();
-        } catch (IOException e) {
-            throw new IllegalStateException(
-            "Unable to start outer context service, local address: " + outerContextEndpoint.path() + " on: "
-            + params.member().getId());
-        }
     }
 
     private void stopServices() {

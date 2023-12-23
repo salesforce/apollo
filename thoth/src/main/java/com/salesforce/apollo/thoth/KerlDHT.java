@@ -953,8 +953,10 @@ public class KerlDHT implements ProtoKERLService {
         if (!started.get()) {
             return;
         }
-        reconcile.execute((link, ring) -> reconcile(link, ring),
-                          (futureSailor, destination) -> reconcile(futureSailor, destination, scheduler, duration));
+        Thread.ofVirtual()
+              .start(() -> reconcile.execute((link, ring) -> reconcile(link, ring),
+                                             (futureSailor, destination) -> reconcile(futureSailor, destination,
+                                                                                      scheduler, duration)));
 
     }
 

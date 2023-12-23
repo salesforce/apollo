@@ -1400,6 +1400,7 @@ public class View {
         }
     }
 
+    @FunctionalInterface
     public interface ViewLifecycleListener {
 
         /**

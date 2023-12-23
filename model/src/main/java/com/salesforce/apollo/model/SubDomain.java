@@ -7,15 +7,17 @@
 package com.salesforce.apollo.model;
 
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.demesne.proto.DelegationUpdate;
-import com.salesforce.apollo.demesne.proto.SignedDelegate;
-import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Enclave.RoutingClientIdentity;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DelegationUpdate;
+import com.salesforce.apollo.demesne.proto.SignedDelegate;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.comms.Delegation;
@@ -23,8 +25,6 @@ import com.salesforce.apollo.model.comms.DelegationServer;
 import com.salesforce.apollo.model.comms.DelegationService;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -57,6 +58,9 @@ public class SubDomain extends Domain {
     private final RingCommunications<Member, Delegation> ring;
     private final AtomicBoolean                          started     = new AtomicBoolean();
     private final MVStore                                store;
+    private final ScheduledExecutorService               scheduler   = Executors.newScheduledThreadPool(1,
+                                                                                                        Thread.ofVirtual()
+                                                                                                              .factory());
 
     public SubDomain(ControlledIdentifierMember member, Builder params, Path checkpointBaseDir,
                      RuntimeParameters.Builder runtime, int maxTransfer, Duration gossipInterval, double fpr) {
@@ -102,8 +106,7 @@ public class SubDomain extends Domain {
         super.start();
         Duration initialDelay = gossipInterval.plusMillis(Entropy.nextBitsStreamLong(gossipInterval.toMillis()));
         log.trace("Starting SubDomain[{}:{}]", params.context().getId(), member.getId());
-        Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
-                 .schedule(() -> oneRound(), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -168,8 +171,7 @@ public class SubDomain extends Domain {
                 timer.stop();
             }
             if (started.get()) {
-                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
-                         .schedule(() -> oneRound(), gossipInterval.toMillis(), TimeUnit.MILLISECONDS);
+                scheduler.schedule(() -> oneRound(), gossipInterval.toMillis(), TimeUnit.MILLISECONDS);
             }
         }
     }
@@ -181,13 +183,16 @@ public class SubDomain extends Domain {
     }
 
     private void oneRound() {
-        Timer.Context timer = null;
-        try {
-            ring.execute((link, ring) -> gossipRound(link, ring),
-                         (result, destination) -> handle(result, destination, timer));
-        } catch (Throwable e) {
-            log.error("Error in delegation gossip in SubDomain[{}:{}]", params.context().getId(), member.getId(), e);
-        }
+        Thread.ofVirtual().start(() -> {
+            Timer.Context timer = null;
+            try {
+                ring.execute((link, ring) -> gossipRound(link, ring),
+                             (result, destination) -> handle(result, destination, timer));
+            } catch (Throwable e) {
+                log.error("Error in delegation gossip in SubDomain[{}:{}]", params.context().getId(), member.getId(),
+                          e);
+            }
+        });
     }
 
     private DelegationUpdate.Builder update(DelegationUpdate update, DelegationUpdate.Builder builder) {

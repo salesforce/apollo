@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.demesnes;
 
-import com.salesforce.apollo.choam.proto.Foundation;
-import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -15,6 +13,8 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.Foundation;
+import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -224,12 +224,6 @@ public class FireFliesTrace {
         new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
-
-                @Override
-                public void update(EventCoordinates update) {
-                    // TODO Auto-generated method stub
-
-                }
 
                 @Override
                 public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
