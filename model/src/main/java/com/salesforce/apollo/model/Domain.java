@@ -13,6 +13,7 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.Join;
 import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Context;
@@ -152,6 +153,22 @@ abstract public class Domain {
         return Domain.class.getResource(resource);
     }
 
+    private static Transaction transactionOf(Message message, SignatureAlgorithm signatureAlgorithm,
+                                             DigestAlgorithm digestAlgorithm) {
+        ByteBuffer buff = ByteBuffer.allocate(4);
+        buff.putInt(0);
+        buff.flip();
+        var signer = new Signer.MockSigner(signatureAlgorithm, ULong.MIN);
+        var digeste = digestAlgorithm.getOrigin().toDigeste();
+        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
+                              message.toByteString().asReadOnlyByteBuffer());
+        return Transaction.newBuilder()
+                          .setSource(digeste)
+                          .setContent(message.toByteString())
+                          .setSignature(sig.toSig())
+                          .build();
+    }
+
     public boolean active() {
         return choam.active();
     }
@@ -197,6 +214,12 @@ abstract public class Domain {
 
     protected Transaction migrations() {
         return null;
+    }
+
+    protected Transaction transactionOf(Message message) {
+        var signatureAlgorithm = params.viewSigAlgorithm();
+        var digestAlgorithm = params.digestAlgorithm();
+        return transactionOf(message, signatureAlgorithm, digestAlgorithm);
     }
 
     // Provide the list of transactions establishing the unified KERL of the group
@@ -259,20 +282,5 @@ abstract public class Domain {
                          attach.toByteArray()));
         }
         return transactionOf(Txn.newBuilder().setBatched(batch.build()).build());
-    }
-
-    private Transaction transactionOf(Message message) {
-        ByteBuffer buff = ByteBuffer.allocate(4);
-        buff.putInt(0);
-        buff.flip();
-        var signer = new Signer.MockSigner(params.viewSigAlgorithm(), ULong.MIN);
-        var digeste = params.digestAlgorithm().getOrigin().toDigeste();
-        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
-                              message.toByteString().asReadOnlyByteBuffer());
-        return Transaction.newBuilder()
-                          .setSource(digeste)
-                          .setContent(message.toByteString())
-                          .setSignature(sig.toSig())
-                          .build();
     }
 }

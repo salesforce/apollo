@@ -84,7 +84,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         // Registering client comms
         clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         AdmissionsService admissions = mock(AdmissionsService.class);
-        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
+        var clientCommunications = clientRouter.create(client, context.getId(), admissions, ":admissions-client",
                                                        r -> new AdmissionsServer(
                                                        clientRouter.getClientIdentityProvider(), r, null),
                                                        AdmissionsClient.getCreate(null),
@@ -92,7 +92,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         clientRouter.start();
 
         // Admin client link
-        var admin = clientComminications.connect(dhts.keySet().stream().findFirst().get());
+        var admin = clientCommunications.connect(dhts.keySet().stream().findFirst().get());
 
         assertNotNull(admin);
         Function<SignedNonce, Any> attester = sn -> {

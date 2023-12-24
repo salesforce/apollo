@@ -27,7 +27,6 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -71,10 +70,6 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
-
-        final var commsDirectory = Path.of("target/comms");
-        commsDirectory.toFile().mkdirs();
-
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -101,8 +96,7 @@ public class FireFliesTest {
                                                           .setFoundation(sealed)
                                                           .setContext(context)
                                                           .setCommunications(localRouter), new InetSocketAddress(0),
-                                         commsDirectory, ffParams, EventValidation.NONE,
-                                         IdentifierSpecification.newBuilder());
+                                         ffParams, EventValidation.NONE);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();

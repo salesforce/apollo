@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.choam.proto.Foundation;
-import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -15,6 +13,8 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.Foundation;
+import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -23,7 +23,6 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -197,10 +196,6 @@ public class DomainTest {
 
     @BeforeEach
     public void before() throws Exception {
-
-        final var commsDirectory = Path.of("target/comms");
-        commsDirectory.toFile().mkdirs();
-
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -229,8 +224,7 @@ public class DomainTest {
                                                             .setFoundation(sealed)
                                                             .setContext(context)
                                                             .setCommunications(localRouter), new InetSocketAddress(0),
-                                           commsDirectory, ffParams, EventValidation.NONE,
-                                           IdentifierSpecification.newBuilder());
+                                           ffParams, EventValidation.NONE);
             domains.add(domain);
             localRouter.start();
         });
@@ -246,7 +240,7 @@ public class DomainTest {
                                                                            .filter(c -> !c.active())
                                                                            .map(Domain::logState)
                                                                            .toList()));
-        var oracle = domains.get(0).getDelphi();
+        var oracle = domains.getFirst().getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
     }

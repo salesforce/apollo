@@ -25,6 +25,7 @@ import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -203,13 +204,13 @@ public class FireFliesTrace {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
-            var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
-                                         RuntimeParameters.newBuilder()
-                                                          .setFoundation(sealed)
-                                                          .setContext(context)
-                                                          .setCommunications(localRouter), new InetSocketAddress(0),
-                                         commsDirectory, ffParams, EventValidation.NONE,
-                                         IdentifierSpecification.newBuilder());
+            var node = new ProcessContainerDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
+                                                  RuntimeParameters.newBuilder()
+                                                                   .setFoundation(sealed)
+                                                                   .setContext(context)
+                                                                   .setCommunications(localRouter),
+                                                  new InetSocketAddress(0), commsDirectory, ffParams,
+                                                  EventValidation.NONE, IdentifierSpecification.newBuilder());
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();
