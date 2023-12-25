@@ -17,8 +17,8 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.thoth.KerlDHT;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
@@ -52,16 +52,16 @@ public class ProcessDomain extends Domain {
     public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                          InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
-                         EventValidation eventValidation) {
+                         StereotomyMetrics stereotomyMetrics) {
         super(member, builder, dbURL, checkpointBaseDir, runtime);
         var base = Context.<Participant>newBuilder().setId(group).build();
-        this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
-                                   DigestAlgorithm.DEFAULT, null);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        dht = new KerlDHT(Duration.ofMillis(10), base, member, connectionPool, params.digestAlgorithm(),
+                          params.communications(), Duration.ofSeconds(1), 0.00125, stereotomyMetrics);
+        this.foundation = new View(base, getMember(), endpoint, dht.getAni().eventValidation(Duration.ofSeconds(30)),
+                                   params.communications(), ff.build(), DigestAlgorithm.DEFAULT, null);
         connectionPool.setMaxConnections(10);
-        dht = new KerlDHT(Duration.ofMillis(10), foundation.getContext(), member, connectionPool,
-                          params.digestAlgorithm(), params.communications(), Duration.ofSeconds(1), 0.00125, null);
         listener = foundation.register(listener());
     }
 

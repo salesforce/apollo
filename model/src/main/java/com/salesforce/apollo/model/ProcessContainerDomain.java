@@ -17,7 +17,6 @@ import com.salesforce.apollo.model.demesnes.JniBridge;
 import com.salesforce.apollo.model.demesnes.comm.DemesneKERLServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextServer;
 import com.salesforce.apollo.model.demesnes.comm.OuterContextService;
-import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
@@ -25,6 +24,7 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
@@ -76,9 +76,9 @@ public class ProcessContainerDomain extends ProcessDomain {
                                   String dbURL, Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
                                   InetSocketAddress endpoint, Path commDirectory,
                                   com.salesforce.apollo.fireflies.Parameters.Builder ff,
-                                  EventValidation eventValidation,
-                                  IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification) {
-        super(group, member, builder, dbURL, checkpointBaseDir, runtime, endpoint, ff, eventValidation);
+                                  IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification,
+                                  StereotomyMetrics stereotomyMetrics) {
+        super(group, member, builder, dbURL, checkpointBaseDir, runtime, endpoint, ff, stereotomyMetrics);
         communicationsDirectory = commDirectory;
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(
