@@ -85,11 +85,16 @@ public class ContainmentDomainTest {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
-            var domain = new ProcessContainerDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
-                                                    RuntimeParameters.newBuilder()
-                                                                     .setFoundation(sealed)
-                                                                     .setContext(context)
-                                                                     .setCommunications(localRouter),
+            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofMinutes(1),
+                                                                     checkpointDirBase, Duration.ofMillis(10), 0.00125,
+                                                                     Duration.ofMinutes(1), 10);
+            var domain = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
+                                                                                                      .setFoundation(
+                                                                                                      sealed)
+                                                                                                      .setContext(
+                                                                                                      context)
+                                                                                                      .setCommunications(
+                                                                                                      localRouter),
                                                     new InetSocketAddress(0), commsDirectory, ffParams,
                                                     IdentifierSpecification.newBuilder(), null);
             domains.add(domain);

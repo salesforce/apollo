@@ -43,25 +43,25 @@ import java.util.concurrent.RejectedExecutionException;
  */
 public class ProcessDomain extends Domain {
 
-    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
+    private final static Logger  log = LoggerFactory.getLogger(ProcessDomain.class);
+    protected final      KerlDHT dht;
+    protected final      View    foundation;
+    private final        UUID    listener;
 
-    protected final KerlDHT dht;
-    protected final View    foundation;
-    private final   UUID    listener;
-
-    public ProcessDomain(Digest group, ControlledIdentifierMember member, Builder builder, String dbURL,
-                         Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
-                         InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
-                         StereotomyMetrics stereotomyMetrics) {
-        super(member, builder, dbURL, checkpointBaseDir, runtime);
+    public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
+                         Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
+                         com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
+        super(member, builder, parameters.dbURL, parameters.checkpointBaseDir, runtime);
         var base = Context.<Participant>newBuilder().setId(group).build();
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
-        dht = new KerlDHT(Duration.ofMillis(10), base, member, connectionPool, params.digestAlgorithm(),
-                          params.communications(), Duration.ofSeconds(1), 0.00125, stereotomyMetrics);
-        this.foundation = new View(base, getMember(), endpoint, dht.getAni().eventValidation(Duration.ofSeconds(30)),
-                                   params.communications(), ff.build(), DigestAlgorithm.DEFAULT, null);
         connectionPool.setMaxConnections(10);
+        dht = new KerlDHT(parameters.dhtOpsFrequency, base, member, connectionPool, params.digestAlgorithm(),
+                          params.communications(), parameters.dhtOperationsTimeout, parameters.dhtFpr,
+                          stereotomyMetrics);
+        this.foundation = new View(base, getMember(), endpoint,
+                                   dht.getAni().eventValidation(parameters.dhtEventValidTO), params.communications(),
+                                   ff.build(), DigestAlgorithm.DEFAULT, null);
         listener = foundation.register(listener());
     }
 
@@ -116,5 +116,11 @@ public class ProcessDomain extends Domain {
 
     protected void stopServices() {
         dht.stop();
+    }
+
+    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, Path checkpointBaseDir,
+                                          Duration dhtOpsFrequency, double dhtFpr, Duration dhtEventValidTO,
+                                          int jdbcMaxConnections) {
+
     }
 }

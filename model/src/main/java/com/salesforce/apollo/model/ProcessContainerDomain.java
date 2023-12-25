@@ -72,13 +72,13 @@ public class ProcessContainerDomain extends ProcessDomain {
     private final Map<String, DomainSocketAddress>                          routes                = new HashMap<>();
     private final IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification;
 
-    public ProcessContainerDomain(Digest group, ControlledIdentifierMember member, Parameters.Builder builder,
-                                  String dbURL, Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
+    public ProcessContainerDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
+                                  Parameters.Builder builder, Parameters.RuntimeParameters.Builder runtime,
                                   InetSocketAddress endpoint, Path commDirectory,
                                   com.salesforce.apollo.fireflies.Parameters.Builder ff,
                                   IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification,
                                   StereotomyMetrics stereotomyMetrics) {
-        super(group, member, builder, dbURL, checkpointBaseDir, runtime, endpoint, ff, stereotomyMetrics);
+        super(group, member, parameters, builder, runtime, endpoint, ff, stereotomyMetrics);
         communicationsDirectory = commDirectory;
         bridge = new DomainSocketAddress(communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         portalEndpoint = new DomainSocketAddress(
