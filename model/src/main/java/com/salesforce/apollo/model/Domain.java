@@ -34,8 +34,6 @@ import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,8 +51,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
-import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
-import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static java.nio.file.Path.of;
 
 /**
@@ -105,20 +101,6 @@ abstract public class Domain {
         this.oracle = new ShardedOracle(stateConnection, mutator, params.getSubmitTimeout());
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
                  member.getId(), dbURL, checkpointBaseDir);
-    }
-
-    public static void addMembers(Connection connection, List<byte[]> members) {
-        var context = DSL.using(connection, SQLDialect.H2);
-        for (var m : members) {
-            var id = context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX)
-                            .values(m)
-                            .onDuplicateKeyIgnore()
-                            .returning(IDENTIFIER.ID)
-                            .fetchOne();
-            if (id != null) {
-                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
-            }
-        }
     }
 
     public static Txn boostrapMigration() {

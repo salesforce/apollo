@@ -246,6 +246,11 @@ public enum DigestAlgorithm {
         }
     }, SHA2_256 {
         @Override
+        public String algorithmName() {
+            return "SHA-256";
+        }
+
+        @Override
         public byte digestCode() {
             return 6;
         }
@@ -258,6 +263,11 @@ public enum DigestAlgorithm {
     },
 
     SHA2_512 {
+        @Override
+        public String algorithmName() {
+            return "SHA-512";
+        }
+
         @Override
         public byte digestCode() {
             return 7;
@@ -272,6 +282,11 @@ public enum DigestAlgorithm {
 
     SHA3_256 {
         @Override
+        public String algorithmName() {
+            return "SHA3-256";
+        }
+
+        @Override
         public byte digestCode() {
             return 8;
         }
@@ -282,6 +297,11 @@ public enum DigestAlgorithm {
         }
 
     }, SHA3_512 {
+        @Override
+        public String algorithmName() {
+            return "SHA3-512";
+        }
+
         @Override
         public byte digestCode() {
             return 9;

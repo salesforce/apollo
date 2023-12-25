@@ -13,7 +13,6 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.choam.proto.Foundation;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -197,9 +196,7 @@ public class FireFliesTrace {
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
-        var foundation = Foundation.newBuilder();
-        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
-        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        var sealed = FoundationSeal.newBuilder().build();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);

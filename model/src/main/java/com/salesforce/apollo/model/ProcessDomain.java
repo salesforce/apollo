@@ -54,10 +54,7 @@ public class ProcessDomain extends Domain {
                          InetSocketAddress endpoint, com.salesforce.apollo.fireflies.Parameters.Builder ff,
                          EventValidation eventValidation) {
         super(member, builder, dbURL, checkpointBaseDir, runtime);
-        var base = Context.<Participant>newBuilder()
-                          .setId(group)
-                          .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
-                          .build();
+        var base = Context.<Participant>newBuilder().setId(group).build();
         this.foundation = new View(base, getMember(), endpoint, eventValidation, params.communications(), ff.build(),
                                    DigestAlgorithm.DEFAULT, null);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");

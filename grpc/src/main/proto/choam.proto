@@ -88,13 +88,8 @@ message Assemble {
   crypto.Digeste nextView = 1;
 }
 
-message Foundation {
-  repeated crypto.Digeste membership = 1;
-  stereotomy.KeyEvent_ authority = 2;
-}
-
 message FoundationSeal {
-  Foundation foundation = 1;
+  stereotomy.KeyEvent_ foundation = 1;
   crypto.Sig signature = 2;
 }
 
