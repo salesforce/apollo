@@ -20,7 +20,6 @@
         <module>model</module>
         <module>delphinius</module>
         <module>schemas</module>
-        <module>demo</module>
         <module>stereotomy-services</module>
         <module>thoth</module>
         <module>liquibase-deterministic</module>
