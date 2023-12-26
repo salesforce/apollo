@@ -8,8 +8,6 @@ package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Objects;
-import com.salesforce.apollo.fireflies.proto.*;
-import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -17,6 +15,8 @@ import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.proto.*;
+import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -461,9 +461,10 @@ public class ViewManagement {
 
     private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
                         Timer.Context timer) {
-        final var builder = Gateway.newBuilder().addAllInitialSeedSet(seedSet).setDiadem(diadem.get().toHexBloome());
-        context.successors(from, m -> context.isActive(m))
-               .forEach(p -> builder.addInitialSeedSet(p.getNote().getWrapped()));
+        var unique = new HashSet<SignedNote>(seedSet);
+        context.successors(from, m -> context.isActive(m)).forEach(p -> unique.add(p.getNote().getWrapped()));
+        final var builder = Gateway.newBuilder().addAllInitialSeedSet(unique).setDiadem(diadem.get().toHexBloome());
+        log.trace("Gateway initial seeding: {} for: {} on: {}", builder.getInitialSeedSetCount(), from, node.getId());
         var gateway = builder.build();
         responseObserver.onNext(gateway);
         responseObserver.onCompleted();
