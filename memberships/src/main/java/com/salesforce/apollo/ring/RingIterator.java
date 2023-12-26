@@ -178,13 +178,11 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             "Determining: {} continuation of: {} for digest: {} tally: {} majority: {} final itr: {} allow: {} on: {}",
             current, key, context.getId(), tally.get(), context.majority(), finalIteration, allow, member.getId());
         }
-        // If there is only one active member in our context, it's us.
-        final var majority = tally.get() >= (context.activeCount() == 1 ? 1 : context.majority());
         if (finalIteration && allow) {
             log.trace("Completing iteration: {} of: {} for digest: {} tally: {} on: {}", iteration(), key,
                       context.getId(), tally.get(), member.getId());
             if (failedMajority != null && !majorityFailed) {
-                if (!majority) {
+                if (tally.get() < context.majority()) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for digest: {} tally: {} required: {} on: {}", key,
                               context.getId(), tally.get(), context.majority(), member.getId());
@@ -199,7 +197,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                       member.getId());
         } else {
             if (onMajority != null && !majoritySucceed) {
-                if (majority) {
+                if (tally.get() >= context.majority()) {
                     majoritySucceed = true;
                     log.debug("Obtained: {} majority of: {} for digest: {} tally: {} on: {}", current, key,
                               context.getId(), tally.get(), member.getId());
