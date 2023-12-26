@@ -34,11 +34,11 @@ public class Ani {
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
-    private final Digest id;
+    private final Digest member;
     private final KERL   kerl;
 
-    public Ani(Digest id, KERL kerl) {
-        this.id = id;
+    public Ani(Digest member, KERL kerl) {
+        this.member = member;
         this.kerl = kerl;
     }
 
@@ -51,7 +51,7 @@ public class Ani {
             @Override
             public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                      InputStream message) {
-
+                log.trace("Filtering for: {} on: {}", coordinates, member);
                 KeyState ks = kerl.getKeyState(coordinates);
                 var v = new Verifier.DefaultVerifier(ks.getKeys());
                 return v.filtered(threshold, signature, message);
@@ -59,22 +59,26 @@ public class Ani {
 
             @Override
             public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+                log.trace("Get key state: {} on: {}", coordinates, member);
                 return Optional.of(kerl.getKeyState(coordinates));
             }
 
             @Override
             public boolean validate(EstablishmentEvent event) {
+                log.trace("Validate event: {} on: {}", event, member);
                 return Ani.this.validateKerl(event, timeout);
             }
 
             @Override
             public boolean validate(EventCoordinates coordinates) {
+                log.trace("Validating coordinates: {} on: {}", coordinates, member);
                 KeyEvent ke = kerl.getKeyEvent(coordinates);
                 return Ani.this.validateKerl(ke, timeout);
             }
 
             @Override
             public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
+                log.trace("Verify coordinates: {} on: {}", coordinates, member);
                 KeyState ks = kerl.getKeyState(coordinates);
                 var v = new Verifier.DefaultVerifier(ks.getKeys());
                 return v.verify(signature, message);
@@ -83,6 +87,7 @@ public class Ani {
             @Override
             public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                                   InputStream message) {
+                log.trace("Verify coordinates: {} on: {}", coordinates, member);
                 KeyState ks = kerl.getKeyState(coordinates);
                 var v = new Verifier.DefaultVerifier(ks.getKeys());
                 return v.verify(threshold, signature, message);
@@ -134,6 +139,7 @@ public class Ani {
                                                                                             event.toKeyEvent_()
                                                                                                  .toByteString()));
         }
+        log.trace("Kerl validation: {} for: {} on: {}", witnessed, ksa.state().getCoordinates(), member);
         return witnessed;
     }
 
@@ -146,5 +152,4 @@ public class Ani {
     private boolean validateKerl(KeyEvent event, Duration timeout) {
         return performKerlValidation(event.getCoordinates(), timeout);
     }
-
 }

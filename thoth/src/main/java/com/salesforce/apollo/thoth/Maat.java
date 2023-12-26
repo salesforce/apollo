@@ -50,6 +50,7 @@ public class Maat extends DelegatedKERL {
 
     @Override
     public KeyState append(KeyEvent event) {
+        log.trace("Append: {}", event);
         var l = append(Collections.singletonList(event), Collections.emptyList());
         return l.isEmpty() ? null : l.get(0);
     }
