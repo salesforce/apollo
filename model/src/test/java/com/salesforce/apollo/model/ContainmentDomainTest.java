@@ -85,8 +85,9 @@ public class ContainmentDomainTest {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
-            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofMinutes(1),
-                                                                     checkpointDirBase, Duration.ofMillis(10), 0.00125,
+            var dbUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1), checkpointDirBase,
+                                                                     Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofMinutes(1), 3, 10, 0.1);
             var domain = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                                       .setFoundation(
@@ -106,7 +107,7 @@ public class ContainmentDomainTest {
 
     @Test
     public void smoke() throws Exception {
-        domains.forEach(Domain::start);
+        domains.forEach(e -> Thread.ofVirtual().start(e::start));
         final var activated = Utils.waitForCondition(60_000, 1_000, () -> domains.stream().allMatch(Domain::active));
         assertTrue(activated, "Domains did not fully activate: " + (domains.stream()
                                                                            .filter(c -> !c.active())

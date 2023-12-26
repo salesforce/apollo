@@ -57,7 +57,7 @@ public class ProcessDomain extends Domain {
                           .setpByz(parameters.dhtPbyz)
                           .setId(group)
                           .build();
-        final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
+        final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(parameters.dhtOpsFrequency, base, member, connectionPool, params.digestAlgorithm(),

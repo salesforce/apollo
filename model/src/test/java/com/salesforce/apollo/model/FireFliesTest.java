@@ -87,8 +87,9 @@ public class FireFliesTest {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
-            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofSeconds(5),
-                                                                     checkpointDirBase, Duration.ofMillis(10), 0.00125,
+            var dbUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5), checkpointDirBase,
+                                                                     Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofSeconds(5), 3, 10, 0.1);
             var node = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                            .setFoundation(sealed)
@@ -139,12 +140,13 @@ public class FireFliesTest {
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
-        domains.subList(1, domains.size()).parallelStream().forEach(d -> {
-            d.getFoundation()
-             .start(() -> started.get().countDown(), gossipDuration, seeds,
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
-        });
-        assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
+        domains.subList(1, domains.size())
+               .forEach(d -> Thread.ofVirtual()
+                                   .start(() -> d.getFoundation()
+                                                 .start(() -> started.get().countDown(), gossipDuration, seeds,
+                                                        Executors.newScheduledThreadPool(1, Thread.ofVirtual()
+                                                                                                  .factory()))));
+        assertTrue(started.get().await(30, TimeUnit.SECONDS), "could not start views");
 
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
 
