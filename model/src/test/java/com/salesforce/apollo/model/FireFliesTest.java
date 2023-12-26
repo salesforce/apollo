@@ -139,7 +139,7 @@ public class FireFliesTest {
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
-        domains.subList(1, domains.size()).forEach(d -> {
+        domains.subList(1, domains.size()).parallelStream().forEach(d -> {
             d.getFoundation()
              .start(() -> started.get().countDown(), gossipDuration, seeds,
                     Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));

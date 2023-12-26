@@ -1472,6 +1472,14 @@ public class View {
             return wrapped.getIdentifier();
         }
 
+        @Override
+        public Seed_ getSeed() {
+            return Seed_.newBuilder()
+                        .setNote(note.getWrapped())
+                        .setKeyState(wrapped.getIdentifier().toKeyState_())
+                        .build();
+        }
+
         public KERL_ kerl() {
             return wrapped.kerl();
         }

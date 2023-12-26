@@ -53,8 +53,8 @@ public class ProcessDomain extends Domain {
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
         super(member, builder, parameters.dbURL, parameters.checkpointBaseDir, runtime);
         var base = Context.<Participant>newBuilder().setId(group).build();
-        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
-        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
         connectionPool.setMaxConnections(10);
         dht = new KerlDHT(parameters.dhtOpsFrequency, base, member, connectionPool, params.digestAlgorithm(),
                           params.communications(), parameters.dhtOperationsTimeout, parameters.dhtFpr,
