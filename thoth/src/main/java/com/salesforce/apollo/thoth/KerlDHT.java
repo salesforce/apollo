@@ -895,7 +895,9 @@ public class KerlDHT implements ProtoKERLService {
             var max = max(gathered);
             if (max != null) {
                 tally.set(max.getCount());
-                if (max.getCount() > context.toleranceLevel()) {
+                // If there is only one active member in our context, it's us.
+                final var majority = tally.get() >= (context.activeCount() == 1 ? 1 : context.majority());
+                if (majority) {
                     result.complete(max.getElement());
                     log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier,
                               member.getId());

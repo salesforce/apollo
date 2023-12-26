@@ -132,10 +132,10 @@ public class FireFliesTest {
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
-        domains.get(0)
+        domains.getFirst()
                .getFoundation()
                .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+                      Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
