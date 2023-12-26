@@ -1419,7 +1419,6 @@ public class View {
     }
 
     public class Node extends Participant implements SigningMember {
-
         private final ControlledIdentifierMember wrapped;
 
         public Node(ControlledIdentifierMember wrapped, InetSocketAddress endpoint) {
@@ -1468,6 +1467,11 @@ public class View {
             return wrapped.algorithm();
         }
 
+        @Override
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return wrapped.filtered(threshold, signature, message);
+        }
+
         public ControlledIdentifier<SelfAddressingIdentifier> getIdentifier() {
             return wrapped.getIdentifier();
         }
@@ -1496,6 +1500,16 @@ public class View {
         @Override
         public String toString() {
             return "Node[" + getId() + "]";
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return wrapped.verify(signature, message);
+        }
+
+        @Override
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return wrapped.verify(threshold, signature, message);
         }
 
         AccusationWrapper accuse(Participant m, int ringNumber) {
