@@ -90,6 +90,8 @@ import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH
 public class KerlDHT implements ProtoKERLService {
     private final static Logger                                                      log            = LoggerFactory.getLogger(
     KerlDHT.class);
+    private final static Logger                                                      reconcileLog   = LoggerFactory.getLogger(
+    KerlSpace.class);
     private final        Ani                                                         ani;
     private final        CachingKERL                                                 cache;
     private final        JdbcConnectionPool                                          connectionPool;
@@ -923,16 +925,15 @@ public class KerlDHT implements ProtoKERLService {
         if (!result.isEmpty()) {
             try {
                 Update update = result.get();
-                log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
-                          destination.member().getId(), member.getId());
-                kerlSpace.update(update.getEventsList(), kerl);
+                if (update.getEventsCount() > 0) {
+                    reconcileLog.trace("Received: {} events in interval reconciliation from: {} on: {}",
+                                       update.getEventsCount(), destination.member().getId(), member.getId());
+                    kerlSpace.update(update.getEventsList(), kerl);
+                }
             } catch (NoSuchElementException e) {
-                log.debug("null interval reconciliation with {} : {} on: {}", destination.member().getId(),
-                          member.getId(), e.getCause());
+                reconcileLog.debug("null interval reconciliation with {} : {} on: {}", destination.member().getId(),
+                                   member.getId(), e.getCause());
             }
-        } else {
-            log.trace("Received no events in interval reconciliation from: {} on: {}", destination.member().getId(),
-                      member.getId());
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -944,8 +945,8 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         }
         CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember().getId(),
-                  member.getId(), keyIntervals);
+        reconcileLog.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring,
+                           link.getMember().getId(), member.getId(), keyIntervals);
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
@@ -1039,17 +1040,19 @@ public class KerlDHT implements ProtoKERLService {
         public Update reconcile(Intervals intervals, Digest from) {
             var ring = intervals.getRing();
             if (!valid(from, ring)) {
-                log.trace("Invalid reconcile from: {} ring: {} on: {}", from, ring, member.getId());
+                reconcileLog.trace("Invalid reconcile from: {} ring: {} on: {}", from, ring, member.getId());
                 return Update.getDefaultInstance();
             }
-            log.trace("Reconcile from: {} ring: {} on: {}", from, ring, member.getId());
+            reconcileLog.trace("Reconcile from: {} ring: {} on: {}", from, ring, member.getId());
             try (var k = kerlPool.create()) {
                 final var builder = KerlDHT.this.kerlSpace.reconcile(intervals, k);
                 CombinedIntervals keyIntervals = keyIntervals();
                 builder.addAllIntervals(keyIntervals.toIntervals())
                        .setHave(kerlSpace.populate(Entropy.nextBitsStreamLong(), keyIntervals, fpr));
-                log.trace("Reconcile for: {} ring: {} count: {} on: {}", from, ring, builder.getEventsCount(),
-                          member.getId());
+                if (builder.getEventsCount() > 0) {
+                    reconcileLog.trace("Reconcile for: {} ring: {} count: {} on: {}", from, ring,
+                                       builder.getEventsCount(), member.getId());
+                }
                 return builder.build();
             } catch (IOException | SQLException e) {
                 throw new IllegalStateException("Cannot acquire KERL", e);
