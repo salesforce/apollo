@@ -52,7 +52,11 @@ public class ProcessDomain extends Domain {
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
         super(member, builder, parameters.dbURL, parameters.checkpointBaseDir, runtime);
-        var base = Context.<Participant>newBuilder().setId(group).build();
+        var base = Context.<Participant>newBuilder()
+                          .setBias(parameters.dhtBias)
+                          .setpByz(parameters.dhtPbyz)
+                          .setId(group)
+                          .build();
         final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), "");
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
         connectionPool.setMaxConnections(10);
@@ -120,7 +124,6 @@ public class ProcessDomain extends Domain {
 
     public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, Path checkpointBaseDir,
                                           Duration dhtOpsFrequency, double dhtFpr, Duration dhtEventValidTO,
-                                          int jdbcMaxConnections) {
-
+                                          int dhtBias, int jdbcMaxConnections, double dhtPbyz) {
     }
 }

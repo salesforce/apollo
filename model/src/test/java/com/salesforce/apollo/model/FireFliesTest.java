@@ -87,9 +87,9 @@ public class FireFliesTest {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
-            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofMinutes(1),
+            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofSeconds(5),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
-                                                                     Duration.ofMinutes(1), 10);
+                                                                     Duration.ofSeconds(5), 3, 10, 0.1);
             var node = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                            .setFoundation(sealed)
                                                                                            .setContext(context)

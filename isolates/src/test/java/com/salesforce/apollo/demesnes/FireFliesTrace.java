@@ -202,7 +202,7 @@ public class FireFliesTrace {
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofMinutes(1),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
-                                                                     Duration.ofMinutes(1), 10);
+                                                                     Duration.ofMinutes(1), 3, 10, 0.1);
             var node = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                                     .setFoundation(
                                                                                                     sealed)
