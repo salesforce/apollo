@@ -108,7 +108,7 @@ public class FireFliesTest {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
