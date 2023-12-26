@@ -60,9 +60,9 @@ public class ProcessDomain extends Domain {
         final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
         connectionPool.setMaxConnections(10);
-        dht = new KerlDHT(parameters.dhtOpsFrequency, base, member, connectionPool, params.digestAlgorithm(),
-                          params.communications(), parameters.dhtOperationsTimeout, parameters.dhtFpr,
-                          stereotomyMetrics);
+        dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
+                          params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
+                          parameters.dhtFpr, stereotomyMetrics);
         this.foundation = new View(base, getMember(), endpoint,
                                    dht.getAni().eventValidation(parameters.dhtEventValidTO), params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
