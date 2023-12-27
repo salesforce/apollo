@@ -82,8 +82,7 @@ public class BootstrapVerifiersTest {
         when(comm.connect(any())).thenReturn(client);
 
         RouterImpl.CommonCommunications<EntranceClient, ?> communications = null;
-        var verifiers = new BootstrapVerifiers(member, Duration.ofSeconds(1), members, majority, Duration.ofMillis(10),
-                                               comm);
+        var verifiers = new Bootstrapper(member, Duration.ofSeconds(1), members, majority, Duration.ofMillis(10), comm);
 
         var verifier = verifiers.verifierFor(member.getIdentifier().getIdentifier());
         assertFalse(verifier.isEmpty());

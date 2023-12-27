@@ -35,6 +35,7 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -1984,6 +1985,11 @@ public class View {
                                    update.getJoinsList());
                 }
             });
+        }
+
+        @Override
+        public Validation validateCoords(EventCoords request, Digest from) {
+            return Validation.newBuilder().setResult(validation.validate(EventCoordinates.from(request))).build();
         }
     }
 }

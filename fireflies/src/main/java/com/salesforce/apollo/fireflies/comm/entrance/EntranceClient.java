@@ -104,4 +104,9 @@ public class EntranceClient implements Entrance {
         }, r -> r.run());
         return result;
     }
+
+    @Override
+    public ListenableFuture<Validation> validate(EventCoords coords) {
+        return client.validate(coords);
+    }
 }

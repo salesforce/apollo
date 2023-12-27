@@ -119,6 +119,11 @@ service Entrance {
   rpc join (Join) returns (Gateway) {}
   rpc getKeyStateCoords(stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
   rpc getKeyStateIdentifier(stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
+  rpc validate(stereotomy.EventCoords) returns (Validation) {}
+}
+
+message Validation {
+  bool result = 1;
 }
 
 message Registration {

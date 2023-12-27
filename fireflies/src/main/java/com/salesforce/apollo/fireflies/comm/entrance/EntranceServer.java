@@ -12,10 +12,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
-import com.salesforce.apollo.fireflies.proto.Gateway;
-import com.salesforce.apollo.fireflies.proto.Join;
-import com.salesforce.apollo.fireflies.proto.Redirect;
-import com.salesforce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
@@ -32,7 +29,7 @@ public class EntranceServer extends EntranceImplBase {
 
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
-    private       ClientIdentity           identity;
+    private final ClientIdentity           identity;
 
     public EntranceServer(ClientIdentity identity, RoutableService<Service> r, FireflyMetrics metrics) {
         this.metrics = metrics;
@@ -111,6 +108,20 @@ public class EntranceServer extends EntranceImplBase {
                 metrics.outboundRedirect().update(serializedSize);
                 timer.stop();
             }
+        });
+    }
+
+    @Override
+    public void validate(EventCoords request, StreamObserver<Validation> responseObserver) {
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, s -> {
+            var r = s.validateCoords(request, from);
+            responseObserver.onNext(r);
+            responseObserver.onCompleted();
         });
     }
 }

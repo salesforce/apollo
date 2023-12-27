@@ -9,10 +9,7 @@ package com.salesforce.apollo.fireflies.comm.entrance;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
-import com.salesforce.apollo.fireflies.proto.Gateway;
-import com.salesforce.apollo.fireflies.proto.Join;
-import com.salesforce.apollo.fireflies.proto.Redirect;
-import com.salesforce.apollo.fireflies.proto.Registration;
+import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
@@ -57,6 +54,11 @@ public interface Entrance extends Link {
             public ListenableFuture<Redirect> seed(Registration registration) {
                 return null;
             }
+
+            @Override
+            public ListenableFuture<Validation> validate(EventCoords coords) {
+                return null;
+            }
         };
     }
 
@@ -67,4 +69,6 @@ public interface Entrance extends Link {
     ListenableFuture<Gateway> join(Join join, Duration timeout);
 
     ListenableFuture<Redirect> seed(Registration registration);
+
+    ListenableFuture<Validation> validate(EventCoords coords);
 }
