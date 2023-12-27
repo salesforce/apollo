@@ -34,14 +34,17 @@ import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1841,6 +1844,26 @@ public class View {
 
     public class Service implements EntranceService, FFService, ServiceRouting {
 
+        @Override
+        public KeyState getKeyState(Identifier identifier, ULong seqNum, Digest from) {
+            if (!introduced.get()) {
+                log.trace("Not introduced!, ignoring key state request from: {} on: {}", from, node.getId());
+                return null;
+            }
+            var keyState = validation.getKeyState(identifier, seqNum);
+            return keyState.isEmpty() ? null : keyState.get();
+        }
+
+        @Override
+        public KeyState getKeyState(EventCoordinates coordinates, Digest from) {
+            if (!introduced.get()) {
+                log.trace("Not introduced!, ignoring key state request from: {} on: {}", from, node.getId());
+                return null;
+            }
+            var keyState = validation.getKeyState(coordinates);
+            return keyState.isEmpty() ? null : keyState.get();
+        }
+
         /**
          * Asynchronously add a member to the next view
          */
@@ -1859,7 +1882,6 @@ public class View {
          * with the Gossip that represents the digests newer or not known in this view, as well as updates from this
          * node based on out of date information in the supplied digests.
          *
-         * @param ring    - the index of the gossip ring the inbound member is gossiping on
          * @param request - the Gossip from our partner
          * @return Teh response for Moar gossip - updates this node has which the sender is out of touch with, and
          * digests from the sender that this node would like updated.
@@ -1928,7 +1950,7 @@ public class View {
         /**
          * The third and final message in the anti-entropy protocol. Process the inbound update from another member.
          *
-         * @param state - update state
+         * @param request - update state
          * @param from
          */
         @Override

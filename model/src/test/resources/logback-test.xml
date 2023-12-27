@@ -45,11 +45,11 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -57,7 +57,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

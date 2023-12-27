@@ -16,6 +16,7 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +62,12 @@ public class Ani {
             public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
                 log.trace("Get key state: {} on: {}", coordinates, member);
                 return Optional.of(kerl.getKeyState(coordinates));
+            }
+
+            @Override
+            public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
+                log.trace("Get key state: {}:{} on: {}", identifier, seqNum, member);
+                return Optional.of(kerl.getKeyState(identifier, seqNum));
             }
 
             @Override

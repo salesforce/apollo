@@ -7,21 +7,27 @@
 package com.salesforce.apollo.fireflies.comm.entrance;
 
 import com.codahale.metrics.Timer.Context;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.proto.Gateway;
 import com.salesforce.apollo.fireflies.proto.Join;
 import com.salesforce.apollo.fireflies.proto.Redirect;
 import com.salesforce.apollo.fireflies.proto.Registration;
-import com.salesforce.apollo.cryptography.Digest;
-
+import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import io.grpc.stub.StreamObserver;
+import org.joou.ULong;
 
 /**
  * @author hal.hildebrand
  */
 public interface EntranceService {
 
+    KeyState getKeyState(Identifier identifier, ULong uLong, Digest from);
+
+    KeyState getKeyState(EventCoordinates coordinates, Digest from);
+
     void join(Join request, Digest from, StreamObserver<Gateway> responseObserver, Context timer);
 
     Redirect seed(Registration request, Digest from);
-
 }

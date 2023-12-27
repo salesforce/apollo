@@ -9,6 +9,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>leyden</artifactId>
+    <name>Leyden</name>
+    <description>Experimental BFT DHT</description>
 
     <dependencies>
         <dependency>

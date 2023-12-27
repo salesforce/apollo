@@ -117,6 +117,13 @@ message Update {
 service Entrance {
   rpc seed (Registration) returns (Redirect) {}
   rpc join (Join) returns (Gateway) {}
+  rpc getKeyStateCoords(stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
+  rpc getKeyStateIdentifier(IdentifierSequenceNumber) returns (stereotomy.KeyState_) {}
+}
+
+message IdentifierSequenceNumber {
+  stereotomy.Ident identifier = 1;
+  uint64 sequenceNumber = 2;
 }
 
 message Registration {
@@ -144,5 +151,6 @@ message Join {
 
 message Gateway {
   crypto.HexBloome diadem = 1;
-  repeated SignedNote initialSeedSet = 2;
+  repeated SignedNote successors = 2;
+  repeated SignedNote initialSeedSet = 3;
 }

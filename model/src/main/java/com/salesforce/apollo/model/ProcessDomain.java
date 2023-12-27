@@ -35,9 +35,7 @@ import java.util.concurrent.RejectedExecutionException;
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
  * <p>
  * The ProcessDomain represents a member node in the top level domain and represents the top level container model for
- * the distributed system. This top level domain contains every sub domain as decendents. The membership of this domain
- * is the entirety of all process members in the system. The Context of this domain is also the foundational fireflies
- * membership domain of the entire system.
+ * the distributed system. The Context of this domain is the foundational fireflies membership domain for the group id.
  *
  * @author hal.hildebrand
  */

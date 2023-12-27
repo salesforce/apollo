@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.stereotomy.event.*;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.Seal.EventSeal;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;

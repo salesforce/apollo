@@ -6,20 +6,18 @@
  */
 package com.salesforce.apollo.fireflies.comm.entrance;
 
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesforce.apollo.fireflies.proto.EntranceGrpc;
-import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
-import com.salesforce.apollo.fireflies.proto.Gateway;
-import com.salesforce.apollo.fireflies.proto.Join;
-import com.salesforce.apollo.fireflies.proto.Redirect;
-import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
+import com.salesforce.apollo.fireflies.proto.*;
+import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author hal.hildebrand
@@ -29,6 +27,7 @@ public class EntranceClient implements Entrance {
     private final ManagedServerChannel channel;
     private final EntranceFutureStub   client;
     private final FireflyMetrics       metrics;
+
     public EntranceClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
         this.client = EntranceGrpc.newFutureStub(channel).withCompression("gzip");
@@ -43,6 +42,16 @@ public class EntranceClient implements Entrance {
     @Override
     public void close() {
         channel.release();
+    }
+
+    @Override
+    public ListenableFuture<KeyState_> getKeyState(IdentifierSequenceNumber idSeq) {
+        return client.getKeyStateIdentifier(idSeq);
+    }
+
+    @Override
+    public ListenableFuture<KeyState_> getKeyState(EventCoords coords) {
+        return client.getKeyStateCoords(coords);
     }
 
     @Override
@@ -94,5 +103,4 @@ public class EntranceClient implements Entrance {
         }, r -> r.run());
         return result;
     }
-
 }
