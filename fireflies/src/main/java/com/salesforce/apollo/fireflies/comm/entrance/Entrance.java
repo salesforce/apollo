@@ -30,6 +30,16 @@ public interface Entrance extends Link {
             }
 
             @Override
+            public ListenableFuture<KeyState_> getKeyState(IdentifierSequenceNumber idSeq) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<KeyState_> getKeyState(EventCoords coords) {
+                return null;
+            }
+
+            @Override
             public Member getMember() {
                 return node;
             }
