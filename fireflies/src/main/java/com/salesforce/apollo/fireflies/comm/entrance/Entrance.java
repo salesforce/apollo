@@ -9,9 +9,13 @@ package com.salesforce.apollo.fireflies.comm.entrance;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
-import com.salesforce.apollo.fireflies.proto.*;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 
 import java.io.IOException;
@@ -30,7 +34,7 @@ public interface Entrance extends Link {
             }
 
             @Override
-            public ListenableFuture<KeyState_> getKeyState(IdentifierSequenceNumber idSeq) {
+            public ListenableFuture<KeyState_> getKeyState(IdentAndSeq idSeq) {
                 return null;
             }
 
@@ -56,7 +60,7 @@ public interface Entrance extends Link {
         };
     }
 
-    ListenableFuture<KeyState_> getKeyState(IdentifierSequenceNumber idSeq);
+    ListenableFuture<KeyState_> getKeyState(IdentAndSeq idSeq);
 
     ListenableFuture<KeyState_> getKeyState(EventCoords coords);
 

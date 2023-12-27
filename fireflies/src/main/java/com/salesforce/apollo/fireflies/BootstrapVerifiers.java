@@ -8,14 +8,15 @@ import com.google.common.collect.HashMultiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.cryptography.Verifier;
-import com.salesforce.apollo.fireflies.comm.entrance.EntranceClient;
-import com.salesforce.apollo.fireflies.proto.IdentifierSequenceNumber;
+import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.KeyStateVerifier;
 import com.salesforce.apollo.stereotomy.Verifiers;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -42,20 +43,21 @@ import java.util.concurrent.Executors;
  * @author hal.hildebrand
  **/
 public class BootstrapVerifiers implements Verifiers {
-    private final static Logger                                             log = LoggerFactory.getLogger(
+    private final static Logger                                       log = LoggerFactory.getLogger(
     BootstrapVerifiers.class);
-    private final        List<View.Participant>                             successors;
-    private final        View.Node                                          member;
-    private final        int                                                majority;
-    private final        LoadingCache<EventCoordinates, KeyState>           ksCoords;
-    private final        LoadingCache<IdentifierSequence, KeyState>         ksSeq;
-    private final        RouterImpl.CommonCommunications<EntranceClient, ?> communications;
-    private final        Duration                                           operationTimeout;
-    private final        Duration                                           operationsFrequency;
+    private final        List<? extends Member>                       successors;
+    private final        SigningMember                                member;
+    private final        int                                          majority;
+    private final        LoadingCache<EventCoordinates, KeyState>     ksCoords;
+    private final        LoadingCache<IdentifierSequence, KeyState>   ksSeq;
+    private final        RouterImpl.CommonCommunications<Entrance, ?> communications;
+    private final        Duration                                     operationTimeout;
+    private final        Duration                                     operationsFrequency;
 
-    public BootstrapVerifiers(View.Node member, Duration operationTimeout, List<View.Participant> successors,
-                              int majority, Duration operationsFrequency,
-                              RouterImpl.CommonCommunications<EntranceClient, ?> communications) {
+    public <S extends SigningMember, M extends Member> BootstrapVerifiers(S member, Duration operationTimeout,
+                                                                          List<M> successors, int majority,
+                                                                          Duration operationsFrequency,
+                                                                          RouterImpl.CommonCommunications<Entrance, ?> communications) {
         this.member = member;
         this.successors = successors;
         this.majority = majority;
@@ -188,11 +190,11 @@ public class BootstrapVerifiers implements Verifiers {
     }
 
     private record IdentifierSequence(Identifier identifier, ULong seqNum) {
-        public IdentifierSequenceNumber toIdSeq() {
-            return IdentifierSequenceNumber.newBuilder()
-                                           .setIdentifier(identifier.toIdent())
-                                           .setSequenceNumber(seqNum.longValue())
-                                           .build();
+        public IdentAndSeq toIdSeq() {
+            return IdentAndSeq.newBuilder()
+                              .setIdentifier(identifier.toIdent())
+                              .setSequenceNumber(seqNum.longValue())
+                              .build();
         }
 
         @Override

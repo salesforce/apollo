@@ -14,6 +14,7 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceFutureStub;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 
 import java.time.Duration;
@@ -45,7 +46,7 @@ public class EntranceClient implements Entrance {
     }
 
     @Override
-    public ListenableFuture<KeyState_> getKeyState(IdentifierSequenceNumber idSeq) {
+    public ListenableFuture<KeyState_> getKeyState(IdentAndSeq idSeq) {
         return client.getKeyStateIdentifier(idSeq);
     }
 
