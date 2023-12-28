@@ -433,17 +433,17 @@ public class View {
     }
 
     void phase1Validation(List<Participant> seeds) {
-        validation = EventValidation.NONE;
         //        validation = new Bootstrapper(node, Duration.ofSeconds(5), seeds, 1, Duration.ofMillis(10),
         //                                      approaches).getValidator();
-        //        log.info("Phase 1 validation: {} on: {}", seeds.size(), node.getId());
+        validation = EventValidation.NONE;
+        log.info("Phase 1 validation: {} on: {}", seeds.size(), node.getId());
     }
 
     void phase2Validation(List<Participant> successors) {
-        validation = EventValidation.NONE;
         //        validation = new Bootstrapper(node, Duration.ofSeconds(5), successors, context.majority(),
         //                                      Duration.ofMillis(10), approaches).getValidator();
-        //        log.info("Phase 2 validation on: {}", node.getId());
+        validation = EventValidation.NONE;
+        log.info("Phase 2 validation on: {}", node.getId());
     }
 
     /**
