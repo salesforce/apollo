@@ -18,32 +18,32 @@
         </encoder>
     </appender>
 
-    <!--    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
 
-    <!--    <logger name="com.salesforce.apollo.fireflies" level="trace" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--        &lt;!&ndash;        <appender-ref ref="FILE" />&ndash;&gt;-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+        <!--        <appender-ref ref="FILE" />-->
+    </logger>
 
-    <!--    <logger name="com.salesforce.apollo.archipelago" level="debug" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo.archipelago" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
 
-    <!--    <logger name="com.salesforce.apollo.ring.SliceIterator" level="trace" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo.ring.SliceIterator" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
 
-    <!--    <logger name="com.salesforce.apollo.protocols" level="info" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo.protocols" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
 
-    <!--    <logger name="com.salesforce.apollo" level="trace" additivity="false">-->
-    <!--        <appender-ref ref="STDOUT"/>-->
-    <!--    </logger>-->
+    <logger name="com.salesforce.apollo" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
 
-    <root level="trace">
+    <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>
 

@@ -26,6 +26,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,7 +103,7 @@ class Binding {
                 return link.seed(registration);
             }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
                 if (!seeding.isDone()) {
-                    scheduler.schedule(Utils.wrapped(() -> reseed.get().run(), log), params.retryDelay().toNanos(),
+                    scheduler.schedule(Utils.wrapped(reseed.get(), log), params.retryDelay().toNanos(),
                                        TimeUnit.NANOSECONDS);
                 }
             }, scheduler, params.retryDelay());
@@ -178,10 +180,6 @@ class Binding {
         return true;
     }
 
-    private Runnable exec(Runnable action) {
-        return () -> Thread.ofVirtual().factory().newThread(Utils.wrapped(action, log)).start();
-    }
-
     private Join join(Digest v) {
         return Join.newBuilder().setView(v.toDigeste()).setNote(node.getNote().getWrapped()).build();
     }
@@ -240,25 +238,45 @@ class Binding {
         final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
+        final var abandon = new AtomicInteger();
         regate.set(() -> {
             redirecting.iterate((link, m) -> {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
-                return link.join(join, params.seedingTimeout());
+                try {
+                    return link.join(join, params.seedingTimeout());
+                } catch (StatusRuntimeException sre) {
+                    if (sre.getStatus().getCode().equals(Status.OUT_OF_RANGE.getCode())) {
+                        log.debug("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(),
+                                  link.getMember().getId(), node.getId());
+                        abandon.incrementAndGet();
+                    } else {
+                        log.debug("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(),
+                                  link.getMember().getId(), node.getId());
+                    }
+                    return null;
+                }
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts,
                                                           initialSeedSet, v, majority), () -> {
                 if (gateway.isDone()) {
                     return;
                 }
-                if (retries.get() < params.joinRetries()) {
-                    log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
-                              params.joinRetries(), node.getId());
-                    trusts.clear();
-                    initialSeedSet.clear();
-                    scheduler.schedule(exec(() -> regate.get().run()),
-                                       Entropy.nextBitsStreamLong(params.retryDelay().toNanos()), TimeUnit.NANOSECONDS);
+                if (abandon.get() >= majority) {
+                    log.debug("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
+                    seeding();
                 } else {
-                    log.error("Failed to join view: {} cannot obtain majority on: {}", view, node.getId());
-                    view.stop();
+                    abandon.set(0);
+                    if (retries.get() < params.joinRetries()) {
+                        log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
+                                  params.joinRetries(), node.getId());
+                        trusts.clear();
+                        initialSeedSet.clear();
+                        scheduler.schedule(Utils.wrapped(regate.get(), log),
+                                           Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
+                                           TimeUnit.NANOSECONDS);
+                    } else {
+                        log.error("Failed to join view: {} cannot obtain majority on: {}", view, node.getId());
+                        view.stop();
+                    }
                 }
             }, scheduler, params.retryDelay());
         });

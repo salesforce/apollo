@@ -77,8 +77,11 @@ public class SliceIterator<Comm extends Link> {
             try {
                 result = round.apply(link, link.getMember());
             } catch (StatusRuntimeException e) {
-                log.trace("Error applying: <{}> slice to: {} on: {}", label, link.getMember().getId(), member.getId(),
-                          e);
+                log.trace("Error: {} applying: <{}> slice to: {} on: {}", e, label, link.getMember().getId(),
+                          member.getId());
+            } catch (Throwable e) {
+                log.error("Unhandled: {} applying: <{}> slice to: {} on: {}", e, label, link.getMember().getId(),
+                          member.getId());
             }
             allowed.accept(handler.handle(Optional.ofNullable(result), link, link.getMember()));
         } catch (IOException e) {

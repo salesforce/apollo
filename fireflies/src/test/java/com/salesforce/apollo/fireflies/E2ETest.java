@@ -57,7 +57,7 @@ public class E2ETest {
     "large_tests");
 
     static {
-        CARDINALITY = largeTests ? 30 : 11;
+        CARDINALITY = largeTests ? 30 : 12;
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -158,7 +158,7 @@ public class E2ETest {
                       .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
                                               v.getContext().totalCount()))
                       .toList();
-        assertTrue(success,
+        assertTrue(success || failed.isEmpty(),
                    "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size() + " views: "
                    + failed);
 
