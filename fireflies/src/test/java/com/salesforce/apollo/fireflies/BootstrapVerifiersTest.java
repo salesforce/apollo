@@ -1,7 +1,5 @@
 package com.salesforce.apollo.fireflies;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -56,24 +54,23 @@ public class BootstrapVerifiersTest {
 
         Digeste testDigest = DigestAlgorithm.DEFAULT.getLast().toDigeste();
         Entrance client = mock(Entrance.class);
-        SettableFuture<KeyState_> ks = SettableFuture.create();
-        ks.set(KeyState_.newBuilder().setDigest(testDigest).build());
+        KeyState_ ks = KeyState_.newBuilder().setDigest(testDigest).build();
         when(client.getKeyState(any(EventCoords.class))).then(new Answer<>() {
             @Override
-            public ListenableFuture<KeyState_> answer(InvocationOnMock invocation) throws Throwable {
+            public KeyState_ answer(InvocationOnMock invocation) throws Throwable {
                 return ks;
             }
         });
         when(client.getKeyState(any(IdentAndSeq.class))).then(new Answer<>() {
             @Override
-            public ListenableFuture<KeyState_> answer(InvocationOnMock invocation) throws Throwable {
+            public KeyState_ answer(InvocationOnMock invocation) throws Throwable {
                 return ks;
             }
         });
         when(client.getMember()).then(new Answer<>() {
             @Override
             public Member answer(InvocationOnMock invocation) throws Throwable {
-                return member;
+                return members.getLast();
             }
         });
 

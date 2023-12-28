@@ -57,7 +57,7 @@ public class E2ETest {
     "large_tests");
 
     static {
-        CARDINALITY = largeTests ? 30 : 10;
+        CARDINALITY = largeTests ? 30 : 11;
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -104,7 +104,7 @@ public class E2ETest {
         final var seeds = members.values()
                                  .stream()
                                  .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                                 .limit(largeTests ? 100 : 10)
+                                 .limit(largeTests ? 10 : 1)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 

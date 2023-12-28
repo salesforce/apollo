@@ -6,14 +6,16 @@
  */
 package com.salesforce.apollo.fireflies.comm.entrance;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -23,7 +25,7 @@ import java.time.Duration;
  */
 public interface Entrance extends Link {
 
-    static Entrance getLocalLoopback(Node node) {
+    static Entrance getLocalLoopback(Node node, EntranceService service) {
         return new Entrance() {
 
             @Override
@@ -31,13 +33,15 @@ public interface Entrance extends Link {
             }
 
             @Override
-            public ListenableFuture<KeyState_> getKeyState(IdentAndSeq idSeq) {
-                return null;
+            public KeyState_ getKeyState(IdentAndSeq idSeq) {
+
+                return service.getKeyState(Identifier.from(idSeq.getIdentifier()),
+                                           ULong.valueOf(idSeq.getSequenceNumber()), getMember().getId()).toKeyState_();
             }
 
             @Override
-            public ListenableFuture<KeyState_> getKeyState(EventCoords coords) {
-                return null;
+            public KeyState_ getKeyState(EventCoords coords) {
+                return service.getKeyState(EventCoordinates.from(coords), getMember().getId()).toKeyState_();
             }
 
             @Override
@@ -46,29 +50,29 @@ public interface Entrance extends Link {
             }
 
             @Override
-            public ListenableFuture<Gateway> join(Join join, Duration timeout) {
+            public Gateway join(Join join, Duration timeout) {
                 return null;
             }
 
             @Override
-            public ListenableFuture<Redirect> seed(Registration registration) {
+            public Redirect seed(Registration registration) {
                 return null;
             }
 
             @Override
-            public ListenableFuture<Validation> validate(EventCoords coords) {
-                return null;
+            public Validation validate(EventCoords coords) {
+                return service.validateCoords(coords, getMember().getId());
             }
         };
     }
 
-    ListenableFuture<KeyState_> getKeyState(IdentAndSeq idSeq);
+    KeyState_ getKeyState(IdentAndSeq idSeq);
 
-    ListenableFuture<KeyState_> getKeyState(EventCoords coords);
+    KeyState_ getKeyState(EventCoords coords);
 
-    ListenableFuture<Gateway> join(Join join, Duration timeout);
+    Gateway join(Join join, Duration timeout);
 
-    ListenableFuture<Redirect> seed(Registration registration);
+    Redirect seed(Registration registration);
 
-    ListenableFuture<Validation> validate(EventCoords coords);
+    Validation validate(EventCoords coords);
 }

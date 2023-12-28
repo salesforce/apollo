@@ -64,6 +64,45 @@ public interface EventValidation {
         }
     };
 
+    EventValidation NO_VALIDATION = new EventValidation() {
+        @Override
+        public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                                 InputStream message) {
+            return null;
+        }
+
+        @Override
+        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean validate(EstablishmentEvent event) {
+            return false;
+        }
+
+        @Override
+        public boolean validate(EventCoordinates coordinates) {
+            return false;
+        }
+
+        @Override
+        public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
+            return false;
+        }
+
+        @Override
+        public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
+                              InputStream message) {
+            return false;
+        }
+    };
+
     Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
                       InputStream message);
 

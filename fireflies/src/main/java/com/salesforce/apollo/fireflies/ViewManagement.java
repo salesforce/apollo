@@ -88,8 +88,11 @@ public class ViewManagement {
         context.activate(node);
 
         resetBootstrapView();
-        view.viewChange(() -> install(
-        new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo)));
+        view.viewChange(() -> {
+            view.finalizeViewValidation();
+            install(
+            new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo));
+        });
 
         view.scheduleViewChange();
         view.schedule(dur, sched);
@@ -219,6 +222,7 @@ public class ViewManagement {
             view.stop();
             throw new IllegalStateException("Invalid crown");
         }
+        view.finalizeViewValidation();
         setDiadem(calculated);
         view.notifyListeners(context.allMembers().map(p -> p.note.getCoordinates()).toList(), Collections.emptyList());
         onJoined.complete(null);
@@ -302,8 +306,12 @@ public class ViewManagement {
                 currentView.set(hex.compact());
 
                 bound.successors().forEach(nw -> view.addToView(nw));
+                bound.initialSeedSet().forEach(nw -> view.addToView(nw));
 
                 view.reset();
+
+                // Phase 2. We have formally started joining the view, but haven't filled out membership
+                view.phase2Validation(bound.successors().stream().map(nw -> context.getMember(nw.getId())).toList());
 
                 context.allMembers().forEach(p -> p.clearAccusations());
 
@@ -462,10 +470,24 @@ public class ViewManagement {
     private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
                         Timer.Context timer) {
         var unique = new HashSet<SignedNote>(seedSet);
-        context.successors(from, m -> context.isActive(m)).forEach(p -> unique.add(p.getNote().getWrapped()));
-        final var builder = Gateway.newBuilder().addAllInitialSeedSet(unique).setDiadem(diadem.get().toHexBloome());
-        log.trace("Gateway initial seeding: {} for: {} on: {}", builder.getInitialSeedSetCount(), from, node.getId());
-        var gateway = builder.build();
+        final var initialSeeds = new ArrayList<SignedNote>(seedSet);
+        final var successors = new HashSet<SignedNote>();
+
+        context.successors(from, m -> context.isActive(m)).forEach(p -> {
+            var sn = p.getNote().getWrapped();
+            if (unique.add(sn)) {
+                initialSeeds.add(sn);
+            }
+            successors.add(sn);
+        });
+        var gateway = Gateway.newBuilder()
+                             .addAllInitialSeedSet(initialSeeds)
+                             .setTrust(BootstrapTrust.newBuilder()
+                                                     .addAllSuccessors(successors)
+                                                     .setDiadem(diadem.get().toHexBloome()))
+                             .build();
+        log.trace("Gateway initial seeding: {} successors: {} for: {} on: {}", gateway.getInitialSeedSetCount(),
+                  successors.size(), from, node.getId());
         responseObserver.onNext(gateway);
         responseObserver.onCompleted();
         if (timer != null) {

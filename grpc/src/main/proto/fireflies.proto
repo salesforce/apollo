@@ -150,7 +150,11 @@ message Join {
 }
 
 message Gateway {
+  BootstrapTrust trust = 1;
+  repeated SignedNote initialSeedSet = 2;
+}
+
+message BootstrapTrust {
   crypto.HexBloome diadem = 1;
   repeated SignedNote successors = 2;
-  repeated SignedNote initialSeedSet = 3;
 }

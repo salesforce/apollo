@@ -36,7 +36,6 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -103,10 +102,11 @@ public class View {
     private final        Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
     private final        AtomicBoolean                               started               = new AtomicBoolean();
     private final        Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
-    private final        EventValidation                             validation;
     private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);
     private final        ViewManagement                              viewManagement;
+    private final        EventValidation                             viewValidation;
+    private volatile     EventValidation                             validation;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -119,10 +119,10 @@ public class View {
                 EventValidation validation, Router communications, Parameters params, Router gateway,
                 DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
-        this.validation = validation;
         this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
+        this.viewValidation = validation;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         this.node = new Node(member, endpoint);
         viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo);
@@ -133,15 +133,16 @@ public class View {
         this.approaches = gateway.create(node, context.getId(), service,
                                          service.getClass().getCanonicalName() + ":approach",
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
-                                         EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node));
+                                         EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
+        this.validation = EventValidation.NONE;
     }
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are satisfied:
      *
      * <pre>
-     * - The mask is of length 2t+1
+     * - The mask is of length bias*t+1
      * - the mask has exactly t + 1 enabled elements.
      * </pre>
      *
@@ -349,7 +350,7 @@ public class View {
             final var cardinality = context.memberCount();
             final var superMajority = cardinality - ((cardinality - 1) / 4);
             if (observations.size() < superMajority) {
-                log.trace("Do not have supermajority: {} required: {}   for: {} on: {}", observations.size(),
+                log.trace("Do not have super majority: {} required: {}   for: {} on: {}", observations.size(),
                           superMajority, currentView(), node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
@@ -385,6 +386,11 @@ public class View {
             removeTimer(View.FINALIZE_VIEW_CHANGE);
             viewManagement.clearVote();
         });
+    }
+
+    void finalizeViewValidation() {
+        validation = viewValidation;
+        log.info("Finalized view validation on: {}", node.getId());
     }
 
     /**
@@ -424,6 +430,18 @@ public class View {
                 log.error("error in view change listener: {} on: {} ", id, node.getId(), e);
             }
         });
+    }
+
+    void phase1Validation(List<Participant> seeds) {
+        validation = new Bootstrapper(node, Duration.ofSeconds(5), seeds, 1, Duration.ofMillis(10),
+                                      approaches).getValidator();
+        log.info("Phase 1 validation: {} on: {}", seeds.size(), node.getId());
+    }
+
+    void phase2Validation(List<Participant> successors) {
+        validation = new Bootstrapper(node, Duration.ofSeconds(5), successors, context.majority(),
+                                      Duration.ofMillis(10), approaches).getValidator();
+        log.info("Phase 2 validation on: {}", node.getId());
     }
 
     /**
@@ -787,7 +805,7 @@ public class View {
     /**
      * If we monitor the target and haven't issued an alert, do so
      *
-     * @param sa
+     * @param target
      */
     private void amplify(Participant target) {
         context.rings()
@@ -974,7 +992,7 @@ public class View {
     /**
      * Handle the gossip response from the destination
      *
-     * @param futureSailor
+     * @param result
      * @param destination
      * @param duration
      * @param scheduler
@@ -1100,7 +1118,7 @@ public class View {
      * members
      *
      * @param p
-     * @param digests
+     * @param bff
      * @return
      */
     private AccusationGossip processAccusations(BloomFilter<Digest> bff, double p) {
@@ -1137,7 +1155,7 @@ public class View {
      *
      * @param from
      * @param p
-     * @param digests
+     * @param bff
      */
     private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
         NoteGossip.Builder builder = processNotes(bff);
@@ -1170,8 +1188,7 @@ public class View {
      * the inbound digests that the view has more recent information
      *
      * @param p
-     * @param from
-     * @param digests
+     * @param bff
      */
     private ViewChangeGossip processObservations(BloomFilter<Digest> bff, double p) {
         ViewChangeGossip.Builder builder = processObservations(bff);
@@ -1488,10 +1505,6 @@ public class View {
                         .build();
         }
 
-        public KERL_ kerl() {
-            return wrapped.kerl();
-        }
-
         public JohnHancock sign(byte[] message) {
             return wrapped.sign(message);
         }
@@ -1761,15 +1774,15 @@ public class View {
                 return;
             }
             if (n.getEpoch() != accusation.getEpoch()) {
-                log.trace("Invalid epoch discarding accusation from {} on {} ring {} on: {}", accusation.getAccuser(),
-                          getId(), ringNumber, node.getId());
+                log.trace("Invalid epoch discarding accusation from: {} context: {} ring {} on: {}",
+                          accusation.getAccuser(), getId(), ringNumber, node.getId());
                 return;
             }
             if (n.getMask().get(ringNumber)) {
                 validAccusations[ringNumber] = accusation;
                 if (log.isDebugEnabled()) {
-                    log.debug("Member {} is accusing {} ring: {} on: {}", accusation.getAccuser(), getId(), ringNumber,
-                              node.getId());
+                    log.debug("Member: {} is accusing: {} context: {} ring: {} on: {}", accusation.getAccuser(),
+                              accusation.getAccused(), getId(), ringNumber, node.getId());
                 }
             }
         }
@@ -1780,7 +1793,8 @@ public class View {
         void clearAccusations() {
             for (var acc : validAccusations) {
                 if (acc != null) {
-                    log.trace("Clearing accusations for: {} on: {}", getId(), node.getId());
+                    log.trace("Clearing accusations for: {} context: {} on: {}", acc.getAccused(), getId(),
+                              node.getId());
                     break;
                 }
             }
@@ -1810,7 +1824,7 @@ public class View {
 
         void invalidateAccusationOnRing(int index) {
             validAccusations[index] = null;
-            log.trace("Invalidating accusations of: {} ring: {} on: {}", getId(), index, node.getId());
+            log.trace("Invalidating accusations context: {} ring: {} on: {}", getId(), index, node.getId());
         }
 
         boolean isAccused() {
@@ -1847,21 +1861,29 @@ public class View {
 
         @Override
         public KeyState getKeyState(Identifier identifier, ULong seqNum, Digest from) {
-            if (!introduced.get()) {
-                log.trace("Not introduced!, ignoring key state request from: {} on: {}", from, node.getId());
+            if (!viewManagement.isJoined()) {
+                log.trace("Not yet joined!, ignoring key state request for: {}:{} request from: {} on: {}", identifier,
+                          seqNum, from, node.getId());
                 return null;
             }
+            log.trace("Retrieving key state: {}:{} for: {} on: {}", identifier, seqNum, from, node.getId());
             var keyState = validation.getKeyState(identifier, seqNum);
+            log.trace("Returning key state: {}:{} -> {} to: {} on: {}", identifier, seqNum, keyState.isPresent(), from,
+                      node.getId());
             return keyState.isEmpty() ? null : keyState.get();
         }
 
         @Override
         public KeyState getKeyState(EventCoordinates coordinates, Digest from) {
-            if (!introduced.get()) {
-                log.trace("Not introduced!, ignoring key state request from: {} on: {}", from, node.getId());
+            if (!viewManagement.isJoined()) {
+                log.trace("Not yet joined!, ignoring key state request for: {} request from: {} on: {}", coordinates,
+                          from, node.getId());
                 return null;
             }
+            log.trace("Retrieving key state: {} for: {} on: {}", coordinates, from, node.getId());
             var keyState = validation.getKeyState(coordinates);
+            log.trace("Returning key state: {} -> {} to: {} on: {}", coordinates, keyState.isPresent(), from,
+                      node.getId());
             return keyState.isEmpty() ? null : keyState.get();
         }
 
@@ -1989,7 +2011,16 @@ public class View {
 
         @Override
         public Validation validateCoords(EventCoords request, Digest from) {
-            return Validation.newBuilder().setResult(validation.validate(EventCoordinates.from(request))).build();
+            var coordinates = EventCoordinates.from(request);
+            if (!viewManagement.isJoined()) {
+                log.trace("Not yet joined!, ignoring validation request: {} from: {} on: {}", from, coordinates,
+                          node.getId());
+                return Validation.newBuilder().setResult(false).build();
+            }
+            log.trace("Validating event: {} for: {} on: {}", request, from, node.getId());
+            var validate = validation.validate(coordinates);
+            log.trace("Returning validate: {}:{} to: {} on: {}", coordinates, validate, from, node.getId());
+            return Validation.newBuilder().setResult(validate).build();
         }
     }
 }
