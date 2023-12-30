@@ -104,8 +104,7 @@ public class View {
     private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);
     private final        ViewManagement                              viewManagement;
-    private final        EventValidation                             viewValidation;
-    private volatile     EventValidation                             validation;
+    private final        EventValidation                             validation;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -121,7 +120,6 @@ public class View {
         this.params = params;
         this.digestAlgo = digestAlgo;
         this.context = context;
-        this.viewValidation = validation;
         this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         this.node = new Node(member, endpoint);
         viewManagement = new ViewManagement(this, context, params, metrics, node, digestAlgo);
@@ -134,7 +132,7 @@ public class View {
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
-        this.validation = EventValidation.NONE;
+        this.validation = validation;
     }
 
     /**
@@ -384,11 +382,6 @@ public class View {
             removeTimer(View.FINALIZE_VIEW_CHANGE);
             viewManagement.clearVote();
         });
-    }
-
-    void finalizeViewValidation() {
-        validation = viewValidation;
-        log.info("Finalized view validation on: {}", node.getId());
     }
 
     /**

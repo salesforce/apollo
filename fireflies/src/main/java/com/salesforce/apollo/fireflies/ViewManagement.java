@@ -89,11 +89,8 @@ public class ViewManagement {
         context.activate(node);
 
         resetBootstrapView();
-        view.viewChange(() -> {
-            install(
-            new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo));
-            view.finalizeViewValidation();
-        });
+        view.viewChange(() -> install(
+        new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo)));
 
         view.scheduleViewChange();
         view.schedule(dur, sched);
@@ -237,7 +234,6 @@ public class ViewManagement {
             log.info("Joined view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
                      context.totalCount(), node.getId());
             onJoined.complete(null);
-            view.finalizeViewValidation();
         } finally {
             joinLock.unlock();
         }
