@@ -368,12 +368,22 @@ public interface Context<T extends Member> {
     /**
      * Answer a random sample of at least range size from the active members of the context
      *
+     * @param range   - the desired range
+     * @param entropy - source o randomness
+     * @param exc     - the member to exclude from sample
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
+     */
+    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
+
+    /**
+     * Answer a random sample of at least range size from the active members of the context
+     *
      * @param range    - the desired range
      * @param entropy  - source o randomness
      * @param excluded - the member to exclude from sample
      * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
-    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
+    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded);
 
     /**
      * Answer the total count of active and offline members of this context

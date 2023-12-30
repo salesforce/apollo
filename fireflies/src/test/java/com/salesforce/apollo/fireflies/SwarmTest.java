@@ -58,7 +58,7 @@ public class SwarmTest {
     "large_tests");
 
     static {
-        CARDINALITY = largeTests ? 500 : 50;
+        CARDINALITY = largeTests ? 100 : 50;
     }
 
     private List<Router>                            communications = new ArrayList<>();

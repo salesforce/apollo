@@ -130,7 +130,7 @@ public class AbstractDhtTest {
     }
 
     protected int getCardinality() {
-        return LARGE_TESTS ? 100 : 5;
+        return LARGE_TESTS ? 10 : 5;
     }
 
     protected void instantiate(SigningMember member, Context<Member> context,

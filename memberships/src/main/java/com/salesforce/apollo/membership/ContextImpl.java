@@ -525,12 +525,27 @@ public class ContextImpl<T extends Member> implements Context<T> {
      *
      * @param range    - the desired range
      * @param entropy  - source o randomness
-     * @param excluded - the member to exclude from sample
+     * @param excluded - predicate to test for exclusion
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
+     */
+    @Override
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
+        return rings.get(entropy.nextInt(rings.size()))
+                    .stream()
+                    .collect(new ReservoirSampler<T>(excluded, range, entropy));
+    }
+
+    /**
+     * Answer a random sample of at least range size from the active members of the context
+     *
+     * @param range   - the desired range
+     * @param entropy - source o randomness
+     * @param exc     - the member to exclude from sample
      * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
-        Member excluded = getMember(exc);
+        Member excluded = exc == null ? null : getMember(exc);
         return rings.get(entropy.nextInt(rings.size()))
                     .stream()
                     .collect(new ReservoirSampler<T>(excluded, range, entropy));

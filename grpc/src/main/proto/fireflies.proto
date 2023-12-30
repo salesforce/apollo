@@ -134,7 +134,7 @@ message Redirect {
   int32 cardinality = 2;
   int32 rings = 3;
   bool bootstrap = 4;
-  repeated Seed_ successors = 6;
+  repeated Seed_ sample = 6;
 }
 
 message Seed_ {

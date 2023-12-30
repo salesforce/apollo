@@ -181,26 +181,25 @@ class Binding {
 
     private void gatewaySRE(Digest v, Entrance link, StatusRuntimeException sre, AtomicInteger abandon) {
         if (sre.getStatus().getCode().equals(Status.OUT_OF_RANGE.getCode())) {
-            log.debug("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                      node.getId());
+            log.info("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                     node.getId());
             abandon.incrementAndGet();
         } else if (sre.getStatus().getCode().equals(Status.FAILED_PRECONDITION.getCode())) {
-            log.debug("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                      node.getId());
+            log.info("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                     node.getId());
             abandon.incrementAndGet();
         } else if (sre.getStatus().getCode().equals(Status.PERMISSION_DENIED.getCode())) {
-            log.debug("Gateway view: {} permission denied: {} from: {} on: {}", v, sre.getMessage(),
-                      link.getMember().getId(), node.getId());
+            log.info("Gateway view: {} permission denied: {} from: {} on: {}", v, sre.getMessage(),
+                     link.getMember().getId(), node.getId());
             abandon.incrementAndGet();
         } else if (sre.getStatus().getCode().equals(Status.RESOURCE_EXHAUSTED.getCode())) {
-            log.debug("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                      node.getId());
+            log.info("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                     node.getId());
             abandon.incrementAndGet();
         } else {
-            log.debug("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                      node.getId());
+            log.info("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                     node.getId());
         }
-        ;
     }
 
     private Join join(Digest v) {
@@ -224,8 +223,8 @@ class Binding {
             this.context.rebalance(r.getCardinality());
             node.nextNote(view);
 
-            log.debug("Completing redirect to view: {} context: {} successors: {} on: {}", view, this.context.getId(),
-                      r.getSuccessorsCount(), node.getId());
+            log.debug("Completing redirect to view: {} context: {} sample: {} on: {}", view, this.context.getId(),
+                      r.getSampleCount(), node.getId());
             if (timer != null) {
                 timer.close();
             }
@@ -234,12 +233,12 @@ class Binding {
     }
 
     private void join(Redirect redirect, Digest v, Duration duration, ScheduledExecutorService scheduler) {
-        var successors = redirect.getSuccessorsList()
-                                 .stream()
-                                 .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
-                                 .map(nw -> view.new Participant(nw))
-                                 .collect(Collectors.toList());
-        log.info("Redirecting to: {} context: {} successors: {} on: {}", v, this.context.getId(), successors.size(),
+        var sample = redirect.getSampleList()
+                             .stream()
+                             .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
+                             .map(nw -> view.new Participant(nw))
+                             .collect(Collectors.toList());
+        log.info("Redirecting to: {} context: {} sample: {} on: {}", v, this.context.getId(), sample.size(),
                  node.getId());
         var gateway = new CompletableFuture<Bound>();
         var timer = metrics == null ? null : metrics.joinDuration().time();
@@ -258,7 +257,7 @@ class Binding {
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
-        final var redirecting = new SliceIterator<>("Gateways", node, successors, approaches);
+        final var redirecting = new SliceIterator<>("Gateways", node, sample, approaches);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
         final var abandon = new AtomicInteger();
@@ -267,14 +266,19 @@ class Binding {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
                 try {
                     var g = link.join(join, params.seedingTimeout());
-                    if (g.equals(Gateway.getDefaultInstance())) {
-                        log.debug("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
+                    if (g == null || g.equals(Gateway.getDefaultInstance())) {
+                        log.info("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
                         abandon.incrementAndGet();
                         return null;
                     }
                     return g;
                 } catch (StatusRuntimeException sre) {
                     gatewaySRE(v, link, sre, abandon);
+                    return null;
+                } catch (Throwable t) {
+                    log.info("Gateway view: {} error: {} from: {} on: {}", v, t.toString(), link.getMember().getId(),
+                             node.getId());
+                    abandon.incrementAndGet();
                     return null;
                 }
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts,
@@ -283,20 +287,20 @@ class Binding {
                     return;
                 }
                 if (abandon.get() >= majority) {
-                    log.debug("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
+                    log.info("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
                     seeding();
                 } else {
                     abandon.set(0);
                     if (retries.get() < params.joinRetries()) {
-                        log.debug("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
-                                  params.joinRetries(), node.getId());
+                        log.info("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
+                                 params.joinRetries(), node.getId());
                         trusts.clear();
                         initialSeedSet.clear();
                         scheduler.schedule(Utils.wrapped(regate.get(), log),
                                            Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
                                            TimeUnit.NANOSECONDS);
                     } else {
-                        log.error("Failed to join view: {} cannot obtain majority on: {}", view, node.getId());
+                        log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
                         view.stop();
                     }
                 }

@@ -85,8 +85,8 @@ public class View {
     private static final Logger                                      log                   = LoggerFactory.getLogger(
     View.class);
     private static final String                                      SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
+    final                CommonCommunications<Fireflies, Service>    comm;
     private final        CommonCommunications<Entrance, Service>     approaches;
-    private final        CommonCommunications<Fireflies, Service>    comm;
     private final        Context<Participant>                        context;
     private final        DigestAlgorithm                             digestAlgo;
     private final        RingCommunications<Participant, Fireflies>  gossiper;
@@ -315,7 +315,7 @@ public class View {
             if (accused) {
                 checkInvalidations(member);
             }
-            if (!viewManagement.isJoined() && context.totalCount() == context.cardinality()) {
+            if (!viewManagement.joined() && context.totalCount() == context.cardinality()) {
                 assert context.totalCount() == context.cardinality();
                 viewManagement.join();
             } else {
@@ -424,6 +424,37 @@ public class View {
     }
 
     /**
+     * Process the updates of the supplied juicy gossip.
+     *
+     * @param gossip
+     */
+    void processUpdates(Gossip gossip) {
+        processUpdates(gossip.getNotes().getUpdatesList(), gossip.getAccusations().getUpdatesList(),
+                       gossip.getObservations().getUpdatesList(), gossip.getJoins().getUpdatesList());
+    }
+
+    /**
+     * Redirect the receiver to the correct ring, processing any new accusations
+     *
+     * @param member
+     * @param gossip
+     * @param ring
+     */
+    boolean redirect(Participant member, Gossip gossip, int ring) {
+        if (!gossip.hasRedirect()) {
+            log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
+                     node.getId());
+            return false;
+        }
+        final var redirect = new NoteWrapper(gossip.getRedirect(), digestAlgo);
+        add(redirect);
+        processUpdates(gossip);
+        log.debug("Redirected from: {} to: {} on ring: {} on: {}", member.getId(), redirect.getId(), ring,
+                  node.getId());
+        return true;
+    }
+
+    /**
      * Remove the participant from the context
      *
      * @param digest
@@ -529,6 +560,10 @@ public class View {
         return shunned.stream();
     }
 
+    void tick() {
+        roundTimers.tick();
+    }
+
     void viewChange(Runnable r) {
         //        log.error("Enter view change on: {}", node.getId());
         final var lock = viewChange.writeLock();
@@ -539,6 +574,74 @@ public class View {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Gossip with the member
+     *
+     * @param ring - the index of the gossip ring the gossip is originating from in this view
+     * @param link - the outbound communications to the paired member
+     * @param ring
+     * @throws Exception
+     */
+    protected Gossip gossip(Fireflies link, int ring) {
+        tick();
+        if (shunned.contains(link.getMember().getId())) {
+            log.trace("Shunning gossip view: {} with: {} on: {}", currentView(), link.getMember().getId(),
+                      node.getId());
+            if (metrics != null) {
+                metrics.shunnedGossip().mark();
+            }
+            return null;
+        }
+
+        final SayWhat gossip = stable(() -> SayWhat.newBuilder()
+                                                   .setView(currentView().toDigeste())
+                                                   .setNote(node.getNote().getWrapped())
+                                                   .setRing(ring)
+                                                   .setGossip(commonDigests())
+                                                   .build());
+        try {
+            return link.gossip(gossip);
+        } catch (Throwable e) {
+            final var p = (Participant) link.getMember();
+            if (!viewManagement.joined()) {
+                log.debug("Exception: {} bootstrap gossiping with:S {} view: {} on: {}", e.getMessage(), p.getId(),
+                          currentView(), node.getId());
+                return null;
+            }
+            if (e instanceof StatusRuntimeException sre) {
+                switch (sre.getStatus().getCode()) {
+                case PERMISSION_DENIED:
+                    log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                              node.getId());
+                    break;
+                case FAILED_PRECONDITION:
+                    log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                              node.getId());
+                    break;
+                case RESOURCE_EXHAUSTED:
+                    log.trace("Unavailable for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
+                              p.getId(), node.getId());
+                    break;
+                case CANCELLED:
+                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                              node.getId());
+                    break;
+                default:
+                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), p.getId(), currentView(),
+                              node.getId());
+                    accuse(p, ring, sre);
+                    break;
+
+                }
+            } else {
+                log.debug("Exception gossiping with: {} view: {} on: {}", p.getId(), currentView(), node.getId(), e);
+                accuse(p, ring, e);
+            }
+            return null;
+        }
+
     }
 
     /**
@@ -908,79 +1011,10 @@ public class View {
         }
 
         if (context.activeCount() == 1) {
-            roundTimers.tick();
+            tick();
         }
         gossiper.execute((link, ring) -> gossip(link, ring),
                          (result, destination) -> gossip(result, destination, duration, scheduler));
-    }
-
-    /**
-     * Gossip with the member
-     *
-     * @param ring - the index of the gossip ring the gossip is originating from in this view
-     * @param link - the outbound communications to the paired member
-     * @param ring
-     * @throws Exception
-     */
-    private Gossip gossip(Fireflies link, int ring) {
-        roundTimers.tick();
-        if (shunned.contains(link.getMember().getId())) {
-            log.trace("Shunning gossip view: {} with: {} on: {}", currentView(), link.getMember().getId(),
-                      node.getId());
-            if (metrics != null) {
-                metrics.shunnedGossip().mark();
-            }
-            return null;
-        }
-
-        final SayWhat gossip = stable(() -> SayWhat.newBuilder()
-                                                   .setView(currentView().toDigeste())
-                                                   .setNote(node.getNote().getWrapped())
-                                                   .setRing(ring)
-                                                   .setGossip(commonDigests())
-                                                   .build());
-        try {
-            return link.gossip(gossip);
-        } catch (Throwable e) {
-            final var p = (Participant) link.getMember();
-            if (!viewManagement.joined()) {
-                log.debug("Exception: {} bootstrap gossiping with:S {} view: {} on: {}", e.getMessage(), p.getId(),
-                          currentView(), node.getId());
-                return null;
-            }
-            if (e instanceof StatusRuntimeException sre) {
-                switch (sre.getStatus().getCode()) {
-                case PERMISSION_DENIED:
-                    log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case FAILED_PRECONDITION:
-                    log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case RESOURCE_EXHAUSTED:
-                    log.trace("Unavailable for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
-                              p.getId(), node.getId());
-                    break;
-                case CANCELLED:
-                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
-                              node.getId());
-                    break;
-                default:
-                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), p.getId(), currentView(),
-                              node.getId());
-                    accuse(p, ring, sre);
-                    break;
-
-                }
-                return null;
-            } else {
-                log.debug("Exception gossiping with {} view: {} on: {}", p.getId(), currentView(), node.getId(), e);
-                accuse(p, ring, e);
-                return null;
-            }
-        }
-
     }
 
     /**
@@ -993,49 +1027,48 @@ public class View {
      */
     private void gossip(Optional<Gossip> result, RingCommunications.Destination<Participant, Fireflies> destination,
                         Duration duration, ScheduledExecutorService scheduler) {
-        final var member = destination.member();
         try {
-            if (result.isEmpty()) {
-                return;
+            if (result.isPresent()) {
+                final var member = destination.member();
+                try {
+                    Gossip gossip = result.get();
+                    if (gossip.hasRedirect()) {
+                        stable(() -> redirect(member, gossip, destination.ring()));
+                    } else if (viewManagement.joined()) {
+                        try {
+                            Update update = stable(() -> response(gossip));
+                            if (update != null && !update.equals(Update.getDefaultInstance())) {
+                                log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
+                                          destination.member().getId(), update.getNotesCount(),
+                                          update.getAccusationsCount(), update.getJoinsCount(),
+                                          update.getObservationsCount(), node.getId());
+                                destination.link()
+                                           .update(State.newBuilder()
+                                                        .setView(currentView().toDigeste())
+                                                        .setRing(destination.ring())
+                                                        .setUpdate(update)
+                                                        .build());
+                            }
+                        } catch (StatusRuntimeException e) {
+                            handleSRE("update", destination, member, e);
+                        }
+                    } else {
+                        stable(() -> processUpdates(gossip));
+                    }
+                } catch (NoSuchElementException e) {
+                    if (!viewManagement.joined()) {
+                        log.debug("Null bootstrap gossiping with: {} view: {} on: {}", member.getId(), currentView(),
+                                  node.getId());
+                    } else {
+                        if (e.getCause() instanceof StatusRuntimeException sre) {
+                            handleSRE("gossip", destination, member, sre);
+                        } else {
+                            accuse(member, destination.ring(), e);
+                        }
+                    }
+                }
             }
 
-            try {
-                Gossip gossip = result.get();
-                if (gossip.hasRedirect()) {
-                    stable(() -> redirect(member, gossip, destination.ring()));
-                } else if (viewManagement.joined()) {
-                    try {
-                        Update update = stable(() -> response(gossip));
-                        if (update != null && !update.equals(Update.getDefaultInstance())) {
-                            log.trace("Update for: {} notes: {} accusations: {} joins: {} observations: {} on: {}",
-                                      destination.link().getMember().getId(), update.getNotesCount(),
-                                      update.getAccusationsCount(), update.getJoinsCount(),
-                                      update.getObservationsCount(), node.getId());
-                            destination.link()
-                                       .update(State.newBuilder()
-                                                    .setView(currentView().toDigeste())
-                                                    .setRing(destination.ring())
-                                                    .setUpdate(update)
-                                                    .build());
-                        }
-                    } catch (StatusRuntimeException e) {
-                        handleSRE("update", destination, member, e);
-                    }
-                } else {
-                    stable(() -> processUpdates(gossip));
-                }
-            } catch (NoSuchElementException e) {
-                if (!viewManagement.joined()) {
-                    log.debug("Null bootstrap gossiping with: {} view: {} on: {}", member.getId(), currentView(),
-                              node.getId());
-                    return;
-                }
-                if (e.getCause() instanceof StatusRuntimeException sre) {
-                    handleSRE("gossip", destination, member, sre);
-                } else {
-                    accuse(member, destination.ring(), e);
-                }
-            }
         } finally {
             futureGossip = scheduler.schedule(Utils.wrapped(() -> gossip(duration, scheduler), log), duration.toNanos(),
                                               TimeUnit.NANOSECONDS);
@@ -1199,16 +1232,6 @@ public class View {
     /**
      * Process the updates of the supplied juicy gossip.
      *
-     * @param gossip
-     */
-    private void processUpdates(Gossip gossip) {
-        processUpdates(gossip.getNotes().getUpdatesList(), gossip.getAccusations().getUpdatesList(),
-                       gossip.getObservations().getUpdatesList(), gossip.getJoins().getUpdatesList());
-    }
-
-    /**
-     * Process the updates of the supplied juicy gossip.
-     *
      * @param notes
      * @param accusations
      */
@@ -1248,27 +1271,6 @@ public class View {
     }
 
     /**
-     * Redirect the receiver to the correct ring, processing any new accusations
-     *
-     * @param member
-     * @param gossip
-     * @param ring
-     */
-    private boolean redirect(Participant member, Gossip gossip, int ring) {
-        if (!gossip.hasRedirect()) {
-            log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
-                     node.getId());
-            return false;
-        }
-        final var redirect = new NoteWrapper(gossip.getRedirect(), digestAlgo);
-        add(redirect);
-        processUpdates(gossip);
-        log.debug("Redirected from: {} to: {} on ring: {} on: {}", member.getId(), redirect.getId(), ring,
-                  node.getId());
-        return true;
-    }
-
-    /**
      * Redirect the member to the successor from this view's perspective
      *
      * @param member
@@ -1281,24 +1283,29 @@ public class View {
         assert member != null;
         assert successor != null;
         if (successor.getNote() == null) {
-            log.debug("Cannot redirect from: {} to: {} on ring: {} as note is null on: {}", node, successor, ring,
-                      node.getId());
+            log.debug("Cannot redirect: {} to: {} on ring: {} as note is null on: {}", member.getId(),
+                      successor.getId(), ring, node.getId());
             return Gossip.getDefaultInstance();
         }
 
         var identity = successor.getNote();
         if (identity == null) {
-            log.debug("Cannot redirect from: {} to: {} on ring: {} as note is null on: {}", node, successor, ring,
-                      node.getId());
+            log.debug("Cannot redirect: {} to: {} on ring: {} as note is null on: {}", member.getId(),
+                      successor.getId(), ring, node.getId());
             return Gossip.getDefaultInstance();
         }
-        return Gossip.newBuilder()
-                     .setRedirect(successor.getNote().getWrapped())
-                     .setNotes(processNotes(BloomFilter.from(digests.getNoteBff())))
-                     .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff())))
-                     .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
-                     .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
-                     .build();
+        var gossip = Gossip.newBuilder()
+                           .setRedirect(successor.getNote().getWrapped())
+                           .setNotes(processNotes(BloomFilter.from(digests.getNoteBff())))
+                           .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff())))
+                           .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
+                           .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
+                           .build();
+        log.info("Redirecting: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
+                 successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
+                 gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
+                 gossip.getJoins().getUpdatesCount(), node.getId());
+        return gossip;
     }
 
     /**
@@ -1990,7 +1997,7 @@ public class View {
         @Override
         public Validation validateCoords(EventCoords request, Digest from) {
             var coordinates = EventCoordinates.from(request);
-            if (!viewManagement.isJoined()) {
+            if (!viewManagement.joined()) {
                 log.info("Not yet joined!, ignoring validation request: {} from: {} on: {}", from, coordinates,
                          node.getId());
                 return Validation.newBuilder().setResult(false).build();

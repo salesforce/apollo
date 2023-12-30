@@ -15,12 +15,15 @@ import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
+import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -57,7 +60,6 @@ public class ViewManagement {
     private final        Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
     private final        View                                          view;
     private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
-    private final        List<Digest>                                  joinSeedSet  = new CopyOnWriteArrayList<>();
     private final        Lock                                          joinLock     = new ReentrantLock();
     private              boolean                                       bootstrap;
     private              AtomicReference<Digest>                       currentView  = new AtomicReference<>();
@@ -149,7 +151,14 @@ public class ViewManagement {
 
         ballot.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> view.remove(p));
 
-        context.rebalance(context.totalCount() + ballot.joining.size());
+        final var seedSet = context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
+                                   .stream()
+                                   .map(p -> p.note.getWrapped())
+                                   .toList();
+
+        var cardinality = context.totalCount() + ballot.joining.size();
+
+        context.rebalance(cardinality);
         var joining = new ArrayList<EstablishmentEvent>();
         var pending = ballot.joining()
                             .stream()
@@ -165,19 +174,13 @@ public class ViewManagement {
                             .map(nw -> pendingJoins.remove(nw.getId()))
                             .filter(p -> p != null)
                             .toList();
+        pendingJoins.clear();
 
         setDiadem(
         HexBloom.construct(context.memberCount(), context.allMembers().map(p -> p.getId()), view.bootstrapView(),
                            params.crowns()));
         view.reset();
-
-        var seedSet = new ArrayList<SignedNote>();
         // complete all pending joins
-        context.ring(Entropy.nextBitsStreamInt(context.getRingCount()))
-               .stream()
-               .limit(params.maximumTxfr())
-               .map(p -> p.getNote().getWrapped())
-               .forEach(sn -> seedSet.add(sn));
         pending.forEach(r -> {
             try {
                 r.accept(seedSet);
@@ -197,10 +200,6 @@ public class ViewManagement {
         view.notifyListeners(joining, ballot.leaving);
     }
 
-    boolean isJoined() {
-        return joined();
-    }
-
     /**
      * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if does not match currentView
      */
@@ -212,6 +211,8 @@ public class ViewManagement {
                 return;
             }
             var current = currentView();
+            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
+                     context.totalCount(), node.getId());
             var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(p -> p.getId()),
                                                 view.bootstrapView(), params.crowns());
 
@@ -252,7 +253,7 @@ public class ViewManagement {
             var note = new NoteWrapper(join.getNote(), digestAlgo);
             if (!from.equals(note.getId())) {
                 responseObserver.onError(
-                new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member not match note")));
+                new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member does not match note")));
                 return;
             }
             log.debug("Join requested from: {} view: {} context: {} cardinality: {} on: {}", from, thisView,
@@ -260,7 +261,11 @@ public class ViewManagement {
             if (contains(from)) {
                 log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
                           context.getId(), context.cardinality(), node.getId());
-                joined(Collections.emptySet(), from, responseObserver, timer);
+                pendingJoins.remove(from);
+                joined(context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
+                              .stream()
+                              .map(p -> p.note.getWrapped())
+                              .toList(), from, responseObserver, timer);
                 return;
             }
             if (!thisView.equals(joinView)) {
@@ -322,14 +327,16 @@ public class ViewManagement {
                 if (timer != null) {
                     timer.stop();
                 }
-                view.introduced();
 
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
                          bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
+                if (context.totalCount() == context.cardinality()) {
+                    join();
+                } else {
+                    var sample = new ArrayList<>(context.activeMembers());
+                    populate(sample, scheduler);
+                }
             });
-            if (context.totalCount() == context.cardinality()) {
-                join();
-            }
         };
     }
 
@@ -354,6 +361,37 @@ public class ViewManagement {
         } else {
             view.scheduleViewChange();
         }
+    }
+
+    void populate(List<Participant> sample, ScheduledExecutorService scheduler) {
+        var populate = new SliceIterator<Fireflies>("Populate: " + context.getId(), node, sample, view.comm);
+        var repopulate = new AtomicReference<Runnable>();
+        repopulate.set(() -> {
+            populate.iterate((link, m) -> {
+                log.debug("Populating: {} contacting: {} on: {}", context.getId(), link.getMember().getId(),
+                          node.getId());
+                view.tick();
+                return view.gossip(link, 0);
+            }, (futureSailor, link, m) -> {
+                futureSailor.ifPresent(g -> {
+                    if (g.hasRedirect()) {
+                        final Participant member = (Participant) link.getMember();
+                        if (g.hasRedirect()) {
+                            view.stable(() -> view.redirect(member, g, 0));
+                        }
+                    } else {
+                        view.stable(() -> view.processUpdates(g));
+                    }
+                });
+                return !joined();
+            }, () -> {
+                if (!joined()) {
+                    scheduler.schedule(Utils.wrapped(() -> repopulate.get(), log), params.retryDelay().toNanos(),
+                                       TimeUnit.NANOSECONDS);
+                }
+            }, scheduler, params.retryDelay());
+        });
+        repopulate.get().run();
     }
 
     JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {
@@ -412,13 +450,13 @@ public class ViewManagement {
         }
         return view.stable(() -> {
             var newMember = view.new Participant(note.getId());
-            final var successors = new TreeSet<Participant>(context.successors(newMember, m -> context.isActive(m)));
+            final var sample = context.sample(params.maximumTxfr(), Entropy.bitsStream(), (Digest) null);
 
-            log.debug("Member seeding: {} view: {} context: {} successors: {} on: {}", newMember.getId(), currentView(),
-                      context.getId(), successors.size(), node.getId());
+            log.info("Member seeding: {} view: {} context: {} sample: {} on: {}", newMember.getId(), currentView(),
+                     context.getId(), sample.size(), node.getId());
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
-                           .addAllSuccessors(successors.stream().filter(p -> p != null).map(p -> p.getSeed()).toList())
+                           .addAllSample(sample.stream().filter(p -> p != null).map(p -> p.getSeed()).toList())
                            .setCardinality(context.cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())

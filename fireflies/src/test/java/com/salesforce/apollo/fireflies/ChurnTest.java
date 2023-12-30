@@ -259,7 +259,7 @@ public class ChurnTest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder().build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 

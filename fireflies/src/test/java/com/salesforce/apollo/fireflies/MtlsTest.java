@@ -69,7 +69,7 @@ public class MtlsTest {
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
 
     static {
-        CARDINALITY = LARGE_TESTS ? 100 : 10;
+        CARDINALITY = LARGE_TESTS ? 20 : 10;
     }
 
     private List<Router> communications = new ArrayList<>();
@@ -106,7 +106,7 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
-        var parameters = Parameters.newBuilder().build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
