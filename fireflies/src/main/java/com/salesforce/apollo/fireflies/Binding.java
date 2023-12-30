@@ -93,7 +93,6 @@ class Binding {
                                  .map(nw -> view.new Participant(nw))
                                  .filter(p -> !node.getId().equals(p.getId()))
                                  .collect(Collectors.toList());
-        view.phase1Validation(bootstrappers); // Phase 1 can only rely upon the kindness of our initial configuration
         var seedlings = new SliceIterator<>("Seedlings", node, bootstrappers, approaches);
         AtomicReference<Runnable> reseed = new AtomicReference<>();
         reseed.set(() -> {

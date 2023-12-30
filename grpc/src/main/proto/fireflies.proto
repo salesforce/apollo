@@ -117,8 +117,6 @@ message Update {
 service Entrance {
   rpc seed (Registration) returns (Redirect) {}
   rpc join (Join) returns (Gateway) {}
-  rpc getKeyStateCoords(stereotomy.EventCoords) returns (stereotomy.KeyState_) {}
-  rpc getKeyStateIdentifier(stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
   rpc validate(stereotomy.EventCoords) returns (Validation) {}
 }
 

@@ -7,10 +7,6 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import org.joou.ULong;
-
-import java.util.Optional;
 
 /**
  * The EventValidation provides validation predicates for EstablishmentEvents
@@ -20,16 +16,6 @@ import java.util.Optional;
 public interface EventValidation {
 
     EventValidation NONE = new EventValidation() {
-
-        @Override
-        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
-            return Optional.empty();
-        }
 
         @Override
         public boolean validate(EstablishmentEvent event) {
@@ -45,16 +31,6 @@ public interface EventValidation {
     EventValidation NO_VALIDATION = new EventValidation() {
 
         @Override
-        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
-            return Optional.empty();
-        }
-
-        @Override
         public boolean validate(EstablishmentEvent event) {
             return false;
         }
@@ -64,10 +40,6 @@ public interface EventValidation {
             return false;
         }
     };
-
-    Optional<KeyState> getKeyState(EventCoordinates coordinates);
-
-    Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum);
 
     /**
      * Answer true if the event is validated. This means that thresholds have been met from indicated witnesses and

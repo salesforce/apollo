@@ -12,8 +12,6 @@ import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -41,16 +39,6 @@ public class EntranceClient implements Entrance {
     @Override
     public void close() {
         channel.release();
-    }
-
-    @Override
-    public KeyState_ getKeyState(IdentAndSeq idSeq) {
-        return client.getKeyStateIdentifier(idSeq);
-    }
-
-    @Override
-    public KeyState_ getKeyState(EventCoords coords) {
-        return client.getKeyStateCoords(coords);
     }
 
     @Override

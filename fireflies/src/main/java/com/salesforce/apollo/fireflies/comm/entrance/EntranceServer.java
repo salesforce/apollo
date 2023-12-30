@@ -14,13 +14,8 @@ import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import io.grpc.stub.StreamObserver;
-import org.joou.ULong;
 
 /**
  * @author hal.hildebrand
@@ -35,35 +30,6 @@ public class EntranceServer extends EntranceImplBase {
         this.metrics = metrics;
         this.identity = identity;
         this.router = r;
-    }
-
-    @Override
-    public void getKeyStateCoords(EventCoords request, StreamObserver<KeyState_> responseObserver) {
-        Digest from = identity.getFrom();
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        router.evaluate(responseObserver, s -> {
-            var keyState = s.getKeyState(EventCoordinates.from(request), from);
-            responseObserver.onNext(keyState == null ? KeyState_.getDefaultInstance() : keyState.toKeyState_());
-            responseObserver.onCompleted();
-        });
-    }
-
-    @Override
-    public void getKeyStateIdentifier(IdentAndSeq request, StreamObserver<KeyState_> responseObserver) {
-        Digest from = identity.getFrom();
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        router.evaluate(responseObserver, s -> {
-            var keyState = s.getKeyState(Identifier.from(request.getIdentifier()),
-                                         ULong.valueOf(request.getSequenceNumber()), from);
-            responseObserver.onNext(keyState == null ? KeyState_.getDefaultInstance() : keyState.toKeyState_());
-            responseObserver.onCompleted();
-        });
     }
 
     @Override

@@ -34,19 +34,16 @@ import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -431,20 +428,6 @@ public class View {
                 log.error("error in view change listener: {} on: {} ", id, node.getId(), e);
             }
         });
-    }
-
-    void phase1Validation(List<Participant> seeds) {
-        validation = new Bootstrapper(node, Duration.ofSeconds(5), seeds, 1, Duration.ofMillis(10),
-                                      approaches).getValidator();
-        log.info("Phase 1 validation: {} on: {}", seeds.size(), node.getId());
-    }
-
-    void phase2Validation(List<Participant> successors) {
-        //        if (getEventValidation() != viewValidation) {
-        //            validation = new Bootstrapper(node, Duration.ofSeconds(5), successors, context.majority(),
-        //                                          Duration.ofMillis(10), approaches).getValidator();
-        //            log.info("Phase 2 validation on: {}", node.getId());
-        //        }
     }
 
     /**
@@ -1881,34 +1864,6 @@ public class View {
     }
 
     public class Service implements EntranceService, FFService, ServiceRouting {
-
-        @Override
-        public KeyState getKeyState(Identifier identifier, ULong seqNum, Digest from) {
-            if (!viewManagement.isJoined()) {
-                log.info("Not yet joined!, ignoring key state request for: {}:{} request from: {} on: {}", identifier,
-                         seqNum, from, node.getId());
-                return null;
-            }
-            log.info("Retrieving key state: {}:{} for: {} on: {}", identifier, seqNum, from, node.getId());
-            var keyState = getEventValidation().getKeyState(identifier, seqNum);
-            log.info("Returning key state: {}:{} -> {} to: {} on: {}", identifier, seqNum, keyState.isPresent(), from,
-                     node.getId());
-            return keyState.isEmpty() ? null : keyState.get();
-        }
-
-        @Override
-        public KeyState getKeyState(EventCoordinates coordinates, Digest from) {
-            if (!viewManagement.isJoined()) {
-                log.info("Not yet joined!, ignoring key state request for: {} request from: {} on: {}", coordinates,
-                         from, node.getId());
-                return null;
-            }
-            log.info("Retrieving key state: {} for: {} on: {}", coordinates, from, node.getId());
-            var keyState = getEventValidation().getKeyState(coordinates);
-            log.info("Returning key state: {} -> {} to: {} on: {}", coordinates, keyState.isPresent(), from,
-                     node.getId());
-            return keyState.isEmpty() ? null : keyState.get();
-        }
 
         /**
          * Asynchronously add a member to the next view

@@ -331,8 +331,6 @@ public class ViewManagement {
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
                          bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
             });
-            // Phase 2. We have formally started joining the view, but haven't filled out membership
-            view.phase2Validation(bound.successors().stream().map(nw -> context.getMember(nw.getId())).toList());
             if (context.totalCount() == context.cardinality()) {
                 join();
             }

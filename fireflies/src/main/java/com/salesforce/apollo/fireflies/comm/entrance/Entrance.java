@@ -10,12 +10,7 @@ import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import org.joou.ULong;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -30,19 +25,6 @@ public interface Entrance extends Link {
 
             @Override
             public void close() throws IOException {
-            }
-
-            @Override
-            public KeyState_ getKeyState(IdentAndSeq idSeq) {
-                var keyState = service.getKeyState(Identifier.from(idSeq.getIdentifier()),
-                                                   ULong.valueOf(idSeq.getSequenceNumber()), getMember().getId());
-                return keyState == null ? null : keyState.toKeyState_();
-            }
-
-            @Override
-            public KeyState_ getKeyState(EventCoords coords) {
-                var keyState = service.getKeyState(EventCoordinates.from(coords), getMember().getId());
-                return keyState == null ? null : keyState.toKeyState_();
             }
 
             @Override
@@ -66,10 +48,6 @@ public interface Entrance extends Link {
             }
         };
     }
-
-    KeyState_ getKeyState(IdentAndSeq idSeq);
-
-    KeyState_ getKeyState(EventCoords coords);
 
     Gateway join(Join join, Duration timeout);
 
