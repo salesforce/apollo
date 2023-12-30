@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import com.salesforce.apollo.stereotomy.event.proto.Binding;
-import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -16,6 +14,8 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.binder.BinderClient;
@@ -28,7 +28,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,7 +63,6 @@ public class TestBinder {
         var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         serverRouter = new LocalServer(prefix, serverMember).router(builder);
         clientRouter = new LocalServer(prefix, clientMember).router(builder);
 

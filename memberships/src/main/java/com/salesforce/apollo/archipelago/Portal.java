@@ -35,14 +35,14 @@ import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL
  * @author hal.hildebrand
  */
 public class Portal<To extends Member> {
-    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
-    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
-
-    private final String         agent;
-    private final EventLoopGroup eventLoopGroup = IMPL.getEventLoopGroup();
-    private final Demultiplexer  inbound;
-    private final Duration       keepAlive;
-    private final Demultiplexer  outbound;
+    private final static Class<? extends io.netty.channel.Channel> channelType    = IMPL.getChannelType();
+    private final        Executor                                  executor       = Executors.newCachedThreadPool(
+    Thread.ofVirtual().factory());
+    private final        String                                    agent;
+    private final        EventLoopGroup                            eventLoopGroup = IMPL.getEventLoopGroup();
+    private final        Demultiplexer                             inbound;
+    private final        Duration                                  keepAlive;
+    private final        Demultiplexer                             outbound;
 
     public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
                   DomainSocketAddress bridge, Duration keepAlive, Function<String, DomainSocketAddress> router) {

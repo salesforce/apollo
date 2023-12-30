@@ -104,7 +104,7 @@ public class SwarmTest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
                                  .limit(largeTests ? 100 : 10)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
@@ -138,18 +138,18 @@ public class SwarmTest {
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
                                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
-        success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
                       .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                              v.getContext().totalCount()))
+                      .map(v -> String.format("%s : %s : %s : %s ", v.getNode().getId(), v.getContext().cardinality(),
+                                              v.getContext().activeCount(), v.getContext().totalCount()))
                       .toList();
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(largeTests ? 2400_000 : 30, 1_000, () -> {
+        success = Utils.waitForCondition(largeTests ? 2400_000 : 30_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 

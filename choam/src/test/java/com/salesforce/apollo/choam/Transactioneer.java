@@ -24,7 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
 class Transactioneer {
     private final static Random                     entropy   = new Random();
     private final static Logger                     log       = LoggerFactory.getLogger(Transactioneer.class);
-    private final static Executor                   executor  = Executors.newVirtualThreadPerTaskExecutor();
+    private final static Executor                   executor  = Executors.newCachedThreadPool(
+    Thread.ofVirtual().factory());
     private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual()
                                                                                                           .factory());
     private final        AtomicInteger              completed = new AtomicInteger();

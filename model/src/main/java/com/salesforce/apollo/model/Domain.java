@@ -60,15 +60,16 @@ import static java.nio.file.Path.of;
  * @author hal.hildebrand
  */
 abstract public class Domain {
-    protected static final Executor                   executor = Executors.newVirtualThreadPerTaskExecutor();
-    private static final   Logger                     log      = LoggerFactory.getLogger(Domain.class);
-    protected final        CHOAM                      choam;
-    protected final        ControlledIdentifierMember member;
-    protected final        Mutator                    mutator;
-    protected final        Oracle                     oracle;
-    protected final        Parameters                 params;
-    protected final        SqlStateMachine            sqlStateMachine;
-    protected final        Connection                 stateConnection;
+    private static final Logger                     log      = LoggerFactory.getLogger(Domain.class);
+    protected final      Executor                   executor = Executors.newCachedThreadPool(
+    Thread.ofVirtual().factory());
+    protected final      CHOAM                      choam;
+    protected final      ControlledIdentifierMember member;
+    protected final      Mutator                    mutator;
+    protected final      Oracle                     oracle;
+    protected final      Parameters                 params;
+    protected final      SqlStateMachine            sqlStateMachine;
+    protected final      Connection                 stateConnection;
 
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
                   RuntimeParameters.Builder runtime) {

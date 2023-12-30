@@ -6,19 +6,21 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
-
-import java.util.BitSet;
-
-import com.salesforce.apollo.fireflies.proto.Note;
-import com.salesforce.apollo.fireflies.proto.Note.Builder;
-import com.salesforce.apollo.fireflies.proto.SignedNote;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.cryptography.Verifier;
+import com.salesforce.apollo.fireflies.proto.Note;
+import com.salesforce.apollo.fireflies.proto.Note.Builder;
+import com.salesforce.apollo.fireflies.proto.SignedNote;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+
+import java.util.BitSet;
+
+import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 /**
  * @author hal.hildebrand
@@ -41,12 +43,12 @@ public class NoteWrapper {
         return currentView;
     }
 
-    public EventCoordinates getCoordinates() {
-        return EventCoordinates.from(note.getNote().getCoordinates());
-    }
-
     public long getEpoch() {
         return note.getNote().getEpoch();
+    }
+
+    public EstablishmentEvent getEstablishment() {
+        return (EstablishmentEvent) ProtobufEventFactory.from(note.getNote().getEstablishment());
     }
 
     public Digest getHash() {
@@ -59,7 +61,7 @@ public class NoteWrapper {
 
     public Digest getId() {
         return ((SelfAddressingIdentifier) Identifier.from(
-        note.getNote().getCoordinates().getIdentifier())).getDigest();
+        note.getNote().getEstablishment().getInception().getIdentifier())).getDigest();
     }
 
     public BitSet getMask() {
@@ -74,6 +76,10 @@ public class NoteWrapper {
         return signature(note.getSignature());
     }
 
+    public Verifier getVerifier() {
+        return new Verifier.DefaultVerifier(getEstablishment().getKeys());
+    }
+
     public SignedNote getWrapped() {
         return note;
     }
@@ -81,4 +87,5 @@ public class NoteWrapper {
     public Builder newBuilder() {
         return Note.newBuilder(note.getNote());
     }
+ 
 }

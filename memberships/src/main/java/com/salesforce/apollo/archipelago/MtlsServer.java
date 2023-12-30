@@ -39,7 +39,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -49,7 +48,6 @@ import java.util.function.Supplier;
  */
 public class MtlsServer implements RouterSupplier {
     static final         String                                  TL_SV1_3          = "TLSv1.3";
-    private final static Executor                                executor          = Executors.newVirtualThreadPerTaskExecutor();
     private static final Provider                                PROVIDER_JSSE     = Security.getProvider("SunJSSE");
     private final        LoadingCache<X509Certificate, Digest>   cachedMembership;
     private final        Function<Member, ClientContextSupplier> contextSupplier;
@@ -139,7 +137,8 @@ public class MtlsServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
-                                                             .executor(executor)
+                                                             .executor(Executors.newCachedThreadPool(
+                                                             Thread.ofVirtual().factory()))
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),

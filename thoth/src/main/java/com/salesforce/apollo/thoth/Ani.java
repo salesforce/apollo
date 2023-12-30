@@ -82,23 +82,6 @@ public class Ani {
                 KeyEvent ke = kerl.getKeyEvent(coordinates);
                 return Ani.this.validateKerl(ke, timeout);
             }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-                log.trace("Verify coordinates: {} on: {}", coordinates, member);
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.verify(signature, message);
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                  InputStream message) {
-                log.trace("Verify coordinates: {} on: {}", coordinates, member);
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.verify(threshold, signature, message);
-            }
         };
     }
 

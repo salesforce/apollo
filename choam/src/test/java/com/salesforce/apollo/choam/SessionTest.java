@@ -103,7 +103,7 @@ public class SessionTest {
 
     @Test
     public void scalingTest() throws Exception {
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var exec = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");

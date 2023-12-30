@@ -46,7 +46,7 @@ message SignedAccusation {
 message Note {
   int64 epoch = 1;
   crypto.Digeste currentView = 2;
-  stereotomy.EventCoords coordinates = 3;
+  stereotomy.KeyEvent_ establishment = 3;
   bytes mask = 4;
   string host = 5;
   int32 port = 6;
@@ -141,7 +141,7 @@ message Redirect {
 
 message Seed_ {
   SignedNote note = 1;
-  stereotomy.KeyState_ keyState = 5;
+  stereotomy.KeyEvent_ establishment = 5;
 }
 
 message Join {

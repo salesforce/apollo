@@ -35,7 +35,9 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -272,8 +274,7 @@ public class View {
         Participant m = context.getMember(note.getId());
         if (m == null) {
             newMember = true;
-            if (!validation.verify(note.getCoordinates(), note.getSignature(),
-                                   note.getWrapped().getNote().toByteString())) {
+            if (!note.getVerifier().verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
                 log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
                 if (metrics != null) {
                     metrics.filteredNotes().mark();
@@ -419,7 +420,7 @@ public class View {
         return viewManagement.join(scheduler, duration, timer);
     }
 
-    void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
+    void notifyListeners(List<EstablishmentEvent> joining, List<Digest> leaving) {
         final var current = currentView();
         lifecycleListeners.forEach((id, listener) -> {
             try {
@@ -433,17 +434,17 @@ public class View {
     }
 
     void phase1Validation(List<Participant> seeds) {
-        //        validation = new Bootstrapper(node, Duration.ofSeconds(5), seeds, 1, Duration.ofMillis(10),
-        //                                      approaches).getValidator();
-        validation = EventValidation.NONE;
+        validation = new Bootstrapper(node, Duration.ofSeconds(5), seeds, 1, Duration.ofMillis(10),
+                                      approaches).getValidator();
         log.info("Phase 1 validation: {} on: {}", seeds.size(), node.getId());
     }
 
     void phase2Validation(List<Participant> successors) {
-        //        validation = new Bootstrapper(node, Duration.ofSeconds(5), successors, context.majority(),
-        //                                      Duration.ofMillis(10), approaches).getValidator();
-        validation = EventValidation.NONE;
-        log.info("Phase 2 validation on: {}", node.getId());
+        //        if (getEventValidation() != viewValidation) {
+        //            validation = new Bootstrapper(node, Duration.ofSeconds(5), successors, context.majority(),
+        //                                          Duration.ofMillis(10), approaches).getValidator();
+        //            log.info("Phase 2 validation on: {}", node.getId());
+        //        }
     }
 
     /**
@@ -553,10 +554,12 @@ public class View {
     }
 
     void viewChange(Runnable r) {
+        //        log.error("Enter view change on: {}", node.getId());
         final var lock = viewChange.writeLock();
         lock.lock();
         try {
             r.run();
+            //            log.error("Exit view change on: {}", node.getId());
         } finally {
             lock.unlock();
         }
@@ -771,8 +774,7 @@ public class View {
             return false;
         }
 
-        if (!validation.verify(note.getCoordinates(), note.getSignature(),
-                               note.getWrapped().getNote().toByteString())) {
+        if (!note.getVerifier().verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
             log.trace("Invalid join note from {} on: {}", note.getId(), node.getId());
             return false;
         }
@@ -888,6 +890,12 @@ public class View {
         return bff;
     }
 
+    private EventValidation getEventValidation() {
+        final var current = validation;
+        log.info("Event validation: {} on: {}", validation, node.getId());
+        return current;
+    }
+
     /**
      * @param seed
      * @param p
@@ -970,9 +978,17 @@ public class View {
                     log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
                               node.getId());
                     break;
+                case FAILED_PRECONDITION:
+                    log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                              node.getId());
+                    break;
                 case RESOURCE_EXHAUSTED:
                     log.trace("Unavailable for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
                               p.getId(), node.getId());
+                    break;
+                case CANCELLED:
+                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                              node.getId());
                     break;
                 default:
                     log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), p.getId(), currentView(),
@@ -1054,12 +1070,15 @@ public class View {
                            final Participant member, StatusRuntimeException sre) {
         switch (sre.getStatus().getCode()) {
         case PERMISSION_DENIED:
-            log.trace("Rejected {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
+            log.trace("Rejected: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
                       node.getId());
             break;
         case RESOURCE_EXHAUSTED:
-            log.trace("Unavailable for {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(),
+            log.trace("Unavailable for: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(),
                       member.getId(), node.getId());
+            break;
+        case CANCELLED:
+            log.trace("Cancelled: {} view: {} from: {} on: {}", type, currentView(), member.getId(), node.getId());
             break;
         default:
             log.debug("Error {}: {} from: {} on: {}", type, sre.getStatus(), member.getId(), node.getId());
@@ -1431,14 +1450,15 @@ public class View {
          *
          * @param context - the context for which the view change has occurred
          * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining member's event coordinates
+         * @param joins   - the list of joining member's establishment event
          * @param leaves  - the list of leaving member's ids
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
+        void viewChange(Context<Participant> context, Digest viewId, List<EstablishmentEvent> joins,
+                        List<Digest> leaves);
 
     }
 
-    public record Seed(EventCoordinates coordinates, InetSocketAddress endpoint) {
+    public record Seed(EstablishmentEvent establishment, InetSocketAddress endpoint) {
     }
 
     public class Node extends Participant implements SigningMember {
@@ -1451,7 +1471,7 @@ public class View {
                         .setEpoch(0)
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
-                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
+                        .setEstablishment(wrapped.getEvent().toKeyEvent_())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             var signedNote = SignedNote.newBuilder()
@@ -1503,7 +1523,7 @@ public class View {
         public Seed_ getSeed() {
             return Seed_.newBuilder()
                         .setNote(note.getWrapped())
-                        .setKeyState(wrapped.getIdentifier().toKeyState_())
+                        .setEstablishment(wrapped.getEvent().toKeyEvent_())
                         .build();
         }
 
@@ -1618,7 +1638,7 @@ public class View {
         void nextNote(long newEpoch, Digest view) {
             final var current = note;
             var n = current.newBuilder()
-                           .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
+                           .setEstablishment(note.getEstablishment().toKeyEvent_())
                            .setEpoch(newEpoch)
                            .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                            .setCurrentView(view.toDigeste())
@@ -1643,7 +1663,7 @@ public class View {
                         .setCurrentView(currentView().toDigeste())
                         .setHost(current.getHost())
                         .setPort(current.getPort())
-                        .setCoordinates(current.getCoordinates().toEventCoords())
+                        .setEstablishment(current.getEstablishment().toKeyEvent_())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             SignedNote signedNote = SignedNote.newBuilder()
@@ -1697,7 +1717,7 @@ public class View {
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             final var current = note;
-            return validation.filtered(current.getCoordinates(), threshold, signature, message);
+            return note.getVerifier().filtered(threshold, signature, message);
         }
 
         public int getAccusationCount() {
@@ -1720,10 +1740,11 @@ public class View {
         }
 
         public Seed_ getSeed() {
-            final var keyState = validation.getKeyState(note.getCoordinates());
+            final var establishment = getNote().getEstablishment();
             return Seed_.newBuilder()
                         .setNote(note.getWrapped())
-                        .setKeyState(keyState.isEmpty() ? KeyState_.getDefaultInstance() : keyState.get().toKeyState_())
+                        .setEstablishment(
+                        establishment == null ? KeyEvent_.getDefaultInstance() : establishment.toKeyEvent_())
                         .build();
         }
 
@@ -1751,13 +1772,13 @@ public class View {
             if (current == null) {
                 return true;
             }
-            return validation.verify(current.getCoordinates(), signature, message);
+            return note.getVerifier().verify(signature, message);
         }
 
         @Override
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             final var current = note;
-            return validation.verify(current.getCoordinates(), threshold, signature, message);
+            return note.getVerifier().verify(threshold, signature, message);
         }
 
         /**
@@ -1864,28 +1885,28 @@ public class View {
         @Override
         public KeyState getKeyState(Identifier identifier, ULong seqNum, Digest from) {
             if (!viewManagement.isJoined()) {
-                log.trace("Not yet joined!, ignoring key state request for: {}:{} request from: {} on: {}", identifier,
-                          seqNum, from, node.getId());
+                log.info("Not yet joined!, ignoring key state request for: {}:{} request from: {} on: {}", identifier,
+                         seqNum, from, node.getId());
                 return null;
             }
-            log.trace("Retrieving key state: {}:{} for: {} on: {}", identifier, seqNum, from, node.getId());
-            var keyState = validation.getKeyState(identifier, seqNum);
-            log.trace("Returning key state: {}:{} -> {} to: {} on: {}", identifier, seqNum, keyState.isPresent(), from,
-                      node.getId());
+            log.info("Retrieving key state: {}:{} for: {} on: {}", identifier, seqNum, from, node.getId());
+            var keyState = getEventValidation().getKeyState(identifier, seqNum);
+            log.info("Returning key state: {}:{} -> {} to: {} on: {}", identifier, seqNum, keyState.isPresent(), from,
+                     node.getId());
             return keyState.isEmpty() ? null : keyState.get();
         }
 
         @Override
         public KeyState getKeyState(EventCoordinates coordinates, Digest from) {
             if (!viewManagement.isJoined()) {
-                log.trace("Not yet joined!, ignoring key state request for: {} request from: {} on: {}", coordinates,
-                          from, node.getId());
+                log.info("Not yet joined!, ignoring key state request for: {} request from: {} on: {}", coordinates,
+                         from, node.getId());
                 return null;
             }
-            log.trace("Retrieving key state: {} for: {} on: {}", coordinates, from, node.getId());
-            var keyState = validation.getKeyState(coordinates);
-            log.trace("Returning key state: {} -> {} to: {} on: {}", coordinates, keyState.isPresent(), from,
-                      node.getId());
+            log.info("Retrieving key state: {} for: {} on: {}", coordinates, from, node.getId());
+            var keyState = getEventValidation().getKeyState(coordinates);
+            log.info("Returning key state: {} -> {} to: {} on: {}", coordinates, keyState.isPresent(), from,
+                     node.getId());
             return keyState.isEmpty() ? null : keyState.get();
         }
 
@@ -1915,29 +1936,36 @@ public class View {
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
                 log.trace("Not introduced!, ring: {} from: {} on: {}", request.getRing(), from, node.getId());
-                return Gossip.getDefaultInstance();
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
+                "Not introduced!, ring: %s from: %s on: %s".formatted(request.getRing(), from, node.getId())));
             }
             return stable(() -> {
                 validate(from, request);
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
                     log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
-                    return Gossip.getDefaultInstance();
+                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
+                    "invalid ring: %s from: %s on: %s".formatted(ring, from, node.getId())));
                 }
+
                 Participant member = context.getActiveMember(from);
                 if (member == null) {
                     add(new NoteWrapper(request.getNote(), digestAlgo));
                     member = context.getActiveMember(from);
                     if (member == null) {
-                        return Gossip.getDefaultInstance();
+                        log.debug("Not active member: {} on: {}", from, node.getId());
+                        throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription(
+                        "Not active member: %s on: %s".formatted(from, node.getId())));
                     }
                 }
+
                 Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No active successor on ring: {} from: {} on: {}", ring, from, node.getId());
-                    throw new StatusRuntimeException(
-                    Status.FAILED_PRECONDITION.withDescription("No successor of: " + from));
+                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
+                    "No active successor on ring: %s from: %s on: %s".formatted(ring, from, node.getId())));
                 }
+
                 Gossip g;
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
@@ -2015,13 +2043,13 @@ public class View {
         public Validation validateCoords(EventCoords request, Digest from) {
             var coordinates = EventCoordinates.from(request);
             if (!viewManagement.isJoined()) {
-                log.trace("Not yet joined!, ignoring validation request: {} from: {} on: {}", from, coordinates,
-                          node.getId());
+                log.info("Not yet joined!, ignoring validation request: {} from: {} on: {}", from, coordinates,
+                         node.getId());
                 return Validation.newBuilder().setResult(false).build();
             }
-            log.trace("Validating event: {} for: {} on: {}", request, from, node.getId());
-            var validate = validation.validate(coordinates);
-            log.trace("Returning validate: {}:{} to: {} on: {}", coordinates, validate, from, node.getId());
+            log.info("Validating event: {} for: {} on: {}", request, from, node.getId());
+            var validate = getEventValidation().validate(coordinates);
+            log.info("Returning validate: {}:{} to: {} on: {}", coordinates, validate, from, node.getId());
             return Validation.newBuilder().setResult(validate).build();
         }
     }

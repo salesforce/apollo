@@ -97,7 +97,7 @@ public class ChurnTest {
 
         var seeds = members.values()
                            .stream()
-                           .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                           .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
                            .limit(25)
                            .toList();
 

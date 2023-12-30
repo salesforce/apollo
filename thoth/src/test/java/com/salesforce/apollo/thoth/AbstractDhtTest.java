@@ -41,7 +41,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -141,7 +140,6 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var router = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         routers.put(member, router);
         dhts.put(member,

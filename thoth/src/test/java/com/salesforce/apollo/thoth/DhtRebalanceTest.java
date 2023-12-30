@@ -138,7 +138,6 @@ public class DhtRebalanceTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var router = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         routers.put(member, router);
         dhts.put(member, new KerlDHT(Duration.ofMillis(3), context, member, (t, k) -> k, connectionPool,

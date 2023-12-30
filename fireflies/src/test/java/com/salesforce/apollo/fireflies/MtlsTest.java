@@ -115,7 +115,7 @@ public class MtlsTest {
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var seeds = members.stream()
-                           .map(m -> new Seed(m.getEvent().getCoordinates(), endpoints.get(m.getId())))
+                           .map(m -> new Seed(m.getEvent(), endpoints.get(m.getId())))
                            .limit(LARGE_TESTS ? 24 : 3)
                            .toList();
 

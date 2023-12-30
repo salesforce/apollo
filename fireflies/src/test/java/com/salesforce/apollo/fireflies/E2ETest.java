@@ -103,7 +103,7 @@ public class E2ETest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
                                  .limit(largeTests ? 10 : 1)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);

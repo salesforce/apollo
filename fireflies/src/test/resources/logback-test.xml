@@ -27,7 +27,7 @@
         <!--        <appender-ref ref="FILE" />-->
     </logger>
 
-    <logger name="com.salesforce.apollo.archipelago" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.archipelago" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -40,6 +40,14 @@
     </logger>
 
     <logger name="com.salesforce.apollo" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.thoth" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

@@ -6,13 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.cryptography.Verifier.Filtered;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 import org.joou.ULong;
 
 import java.io.InputStream;
@@ -51,17 +49,6 @@ public interface EventValidation {
         public boolean validate(EventCoordinates coordinates) {
             return true;
         }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                              InputStream message) {
-            return true;
-        }
     };
 
     EventValidation NO_VALIDATION = new EventValidation() {
@@ -90,17 +77,6 @@ public interface EventValidation {
         public boolean validate(EventCoordinates coordinates) {
             return false;
         }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-            return false;
-        }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                              InputStream message) {
-            return false;
-        }
     };
 
     Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
@@ -121,13 +97,4 @@ public interface EventValidation {
      * indicated witnesses and trusted validators.
      */
     boolean validate(EventCoordinates coordinates);
-
-    boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                   InputStream message);
-
-    default boolean verify(EventCoordinates coordinates, JohnHancock signature, ByteString byteString) {
-        return verify(coordinates, signature, BbBackedInputStream.aggregate(byteString));
-    }
-
-    boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message);
 }

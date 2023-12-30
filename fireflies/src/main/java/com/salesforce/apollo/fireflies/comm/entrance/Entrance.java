@@ -34,14 +34,15 @@ public interface Entrance extends Link {
 
             @Override
             public KeyState_ getKeyState(IdentAndSeq idSeq) {
-
-                return service.getKeyState(Identifier.from(idSeq.getIdentifier()),
-                                           ULong.valueOf(idSeq.getSequenceNumber()), getMember().getId()).toKeyState_();
+                var keyState = service.getKeyState(Identifier.from(idSeq.getIdentifier()),
+                                                   ULong.valueOf(idSeq.getSequenceNumber()), getMember().getId());
+                return keyState == null ? null : keyState.toKeyState_();
             }
 
             @Override
             public KeyState_ getKeyState(EventCoords coords) {
-                return service.getKeyState(EventCoordinates.from(coords), getMember().getId()).toKeyState_();
+                var keyState = service.getKeyState(EventCoordinates.from(coords), getMember().getId());
+                return keyState == null ? null : keyState.toKeyState_();
             }
 
             @Override

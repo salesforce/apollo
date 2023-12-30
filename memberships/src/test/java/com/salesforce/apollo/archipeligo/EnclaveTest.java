@@ -8,16 +8,16 @@ package com.salesforce.apollo.archipeligo;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.test.proto.ByteMessage;
-import com.salesforce.apollo.test.proto.TestItGrpc;
-import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
-import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.test.proto.ByteMessage;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.ManagedChannel;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
@@ -51,7 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class EnclaveTest {
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
-    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+    private static final Executor                                  executor    = Executors.newCachedThreadPool(
+    Thread.ofVirtual().factory());
     private final        TestItService                             local       = new TestItService() {
 
         @Override

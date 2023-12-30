@@ -19,7 +19,7 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.utils.Entropy;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -29,12 +29,11 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -58,6 +57,8 @@ public class ViewManagement {
     private final        Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
     private final        View                                          view;
     private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
+    private final        List<Digest>                                  joinSeedSet  = new CopyOnWriteArrayList<>();
+    private final        Lock                                          joinLock     = new ReentrantLock();
     private              boolean                                       bootstrap;
     private              AtomicReference<Digest>                       currentView  = new AtomicReference<>();
     private              AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
@@ -89,9 +90,9 @@ public class ViewManagement {
 
         resetBootstrapView();
         view.viewChange(() -> {
-            view.finalizeViewValidation();
             install(
             new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo));
+            view.finalizeViewValidation();
         });
 
         view.scheduleViewChange();
@@ -152,12 +153,12 @@ public class ViewManagement {
         ballot.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> view.remove(p));
 
         context.rebalance(context.totalCount() + ballot.joining.size());
-        var joining = new ArrayList<EventCoordinates>();
+        var joining = new ArrayList<EstablishmentEvent>();
         var pending = ballot.joining()
                             .stream()
                             .map(d -> joins.remove(d))
                             .filter(sn -> sn != null)
-                            .peek(nw -> joining.add(nw.getCoordinates()))
+                            .peek(nw -> joining.add(nw.getEstablishment()))
                             .peek(nw -> view.addToView(nw))
                             .peek(nw -> {
                                 if (metrics != null) {
@@ -206,42 +207,48 @@ public class ViewManagement {
     /**
      * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if does not match currentView
      */
-    synchronized void join() {
-        assert context.totalCount() == context.cardinality();
-        if (joined()) {
-            return;
-        }
-        var current = currentView();
-        var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(p -> p.getId()),
-                                            view.bootstrapView(), params.crowns());
+    void join() {
+        joinLock.lock();
+        try {
+            assert context.totalCount() == context.cardinality();
+            if (joined()) {
+                return;
+            }
+            var current = currentView();
+            var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(p -> p.getId()),
+                                                view.bootstrapView(), params.crowns());
 
-        if (!current.equals(calculated.compactWrapped())) {
-            log.error("Crown: {} does not produce view: {} cardinality: {} count: {} on: {}",
-                      calculated.compactWrapped(), currentView(), context.cardinality(), context.totalCount(),
-                      node.getId());
-            view.stop();
-            throw new IllegalStateException("Invalid crown");
-        }
-        view.finalizeViewValidation();
-        setDiadem(calculated);
-        view.notifyListeners(context.allMembers().map(p -> p.note.getCoordinates()).toList(), Collections.emptyList());
-        onJoined.complete(null);
+            if (!current.equals(calculated.compactWrapped())) {
+                log.error("Crown: {} does not produce view: {} cardinality: {} count: {} on: {}",
+                          calculated.compactWrapped(), currentView(), context.cardinality(), context.totalCount(),
+                          node.getId());
+                view.stop();
+                throw new IllegalStateException("Invalid crown");
+            }
+            setDiadem(calculated);
+            view.notifyListeners(context.allMembers().map(p -> p.note.getEstablishment()).toList(),
+                                 Collections.emptyList());
 
-        view.scheduleViewChange();
+            view.scheduleViewChange();
 
-        if (metrics != null) {
-            metrics.viewChanges().mark();
+            if (metrics != null) {
+                metrics.viewChanges().mark();
+            }
+            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
+                     context.totalCount(), node.getId());
+            onJoined.complete(null);
+            view.finalizeViewValidation();
+        } finally {
+            joinLock.unlock();
         }
-        log.info("Joined view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
-                 context.totalCount(), node.getId());
     }
 
     void join(Join join, Digest from, StreamObserver<Gateway> responseObserver, Timer.Context timer) {
         final var joinView = Digest.from(join.getView());
         if (!joined()) {
             log.trace("Not joined, ignored join of view: {} from: {} on: {}", joinView, from, node.getId());
-            responseObserver.onNext(Gateway.getDefaultInstance());
-            responseObserver.onCompleted();
+            responseObserver.onError(new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
+            "Not joined, ignored join of view: %s from: %s on: %s".formatted(joinView, from, node.getId()))));
             return;
         }
         view.stable(() -> {
@@ -310,9 +317,6 @@ public class ViewManagement {
 
                 view.reset();
 
-                // Phase 2. We have formally started joining the view, but haven't filled out membership
-                view.phase2Validation(bound.successors().stream().map(nw -> context.getMember(nw.getId())).toList());
-
                 context.allMembers().forEach(p -> p.clearAccusations());
 
                 view.introduced();
@@ -326,10 +330,12 @@ public class ViewManagement {
 
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
                          bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
-                if (context.totalCount() == context.cardinality()) {
-                    join();
-                }
             });
+            // Phase 2. We have formally started joining the view, but haven't filled out membership
+            view.phase2Validation(bound.successors().stream().map(nw -> context.getMember(nw.getId())).toList());
+            if (context.totalCount() == context.cardinality()) {
+                join();
+            }
         };
     }
 

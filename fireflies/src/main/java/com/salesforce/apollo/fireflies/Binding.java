@@ -180,6 +180,30 @@ class Binding {
         return true;
     }
 
+    private void gatewaySRE(Digest v, Entrance link, StatusRuntimeException sre, AtomicInteger abandon) {
+        if (sre.getStatus().getCode().equals(Status.OUT_OF_RANGE.getCode())) {
+            log.debug("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
+            abandon.incrementAndGet();
+        } else if (sre.getStatus().getCode().equals(Status.FAILED_PRECONDITION.getCode())) {
+            log.debug("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
+            abandon.incrementAndGet();
+        } else if (sre.getStatus().getCode().equals(Status.PERMISSION_DENIED.getCode())) {
+            log.debug("Gateway view: {} permission denied: {} from: {} on: {}", v, sre.getMessage(),
+                      link.getMember().getId(), node.getId());
+            abandon.incrementAndGet();
+        } else if (sre.getStatus().getCode().equals(Status.RESOURCE_EXHAUSTED.getCode())) {
+            log.debug("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
+            abandon.incrementAndGet();
+        } else {
+            log.debug("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
+        }
+        ;
+    }
+
     private Join join(Digest v) {
         return Join.newBuilder().setView(v.toDigeste()).setNote(node.getNote().getWrapped()).build();
     }
@@ -243,16 +267,15 @@ class Binding {
             redirecting.iterate((link, m) -> {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
                 try {
-                    return link.join(join, params.seedingTimeout());
-                } catch (StatusRuntimeException sre) {
-                    if (sre.getStatus().getCode().equals(Status.OUT_OF_RANGE.getCode())) {
-                        log.debug("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(),
-                                  link.getMember().getId(), node.getId());
+                    var g = link.join(join, params.seedingTimeout());
+                    if (g.equals(Gateway.getDefaultInstance())) {
+                        log.debug("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
                         abandon.incrementAndGet();
-                    } else {
-                        log.debug("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(),
-                                  link.getMember().getId(), node.getId());
+                        return null;
                     }
+                    return g;
+                } catch (StatusRuntimeException sre) {
+                    gatewaySRE(v, link, sre, abandon);
                     return null;
                 }
             }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts,
@@ -295,7 +318,7 @@ class Binding {
                                         .setNote(Note.newBuilder()
                                                      .setHost(seed.endpoint().getHostName())
                                                      .setPort(seed.endpoint().getPort())
-                                                     .setCoordinates(seed.coordinates().toEventCoords())
+                                                     .setEstablishment(seed.establishment().toKeyEvent_())
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(
                                                      Node.createInitialMask(context).toByteArray())))

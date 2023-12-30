@@ -69,7 +69,8 @@ public class DemesneSmoke {
 
     private final static Class<? extends io.netty.channel.Channel>  clientChannelType = IMPL.getChannelType();
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
-    private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
+    private final static Executor                                   executor          = Executors.newCachedThreadPool(
+    Thread.ofVirtual().factory());
     private              EventLoopGroup                             eventLoopGroup;
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {

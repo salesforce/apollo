@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.google.common.collect.HashMultiset;
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.SigningThreshold;
@@ -70,8 +69,8 @@ public class Bootstrapper implements Verifiers {
         this.operationTimeout = operationTimeout;
         this.operationsFrequency = operationsFrequency;
         ksCoords = Caffeine.newBuilder()
-                           .maximumSize(10)
-                           .expireAfterWrite(Duration.ofMinutes(10))
+                           .maximumSize(100)
+                           .expireAfterWrite(Duration.ofMinutes(1))
                            .removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace(
                            "KeyState {} was removed ({})", coords, cause))
                            .build(new CacheLoader<EventCoordinates, KeyState>() {
@@ -82,8 +81,8 @@ public class Bootstrapper implements Verifiers {
                                }
                            });
         ksSeq = Caffeine.newBuilder()
-                        .maximumSize(10)
-                        .expireAfterWrite(Duration.ofMinutes(10))
+                        .maximumSize(100)
+                        .expireAfterWrite(Duration.ofMinutes(1))
                         .removalListener((IdentifierSequence seq, KeyState ks, RemovalCause cause) -> log.trace(
                         "KeyState {} was removed ({})", seq, cause))
                         .build(new CacheLoader<IdentifierSequence, KeyState>() {
@@ -100,7 +99,7 @@ public class Bootstrapper implements Verifiers {
             @Override
             public Verifier.Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold,
                                               JohnHancock signature, InputStream message) {
-                log.trace("Filtering for: {} on: {}", coordinates, member);
+                log.trace("Filtering for: {} on: {}", coordinates, member.getId());
                 var keyState = getKeyState(coordinates);
                 if (keyState.isEmpty()) {
                     return new Verifier.Filtered(false, 0, null);
@@ -112,39 +111,26 @@ public class Bootstrapper implements Verifiers {
 
             @Override
             public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-                log.trace("Get key state: {} on: {}", coordinates, member);
-                return Optional.of(Bootstrapper.this.getKeyState(coordinates));
+                log.trace("Get key state: {} on: {}", coordinates, member.getId());
+                return Optional.of(Bootstrapper.this.delegate(coordinates));
             }
 
             @Override
             public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
-                log.trace("Get key state: {}:{} on: {}", identifier, seqNum, member);
-                return Optional.of(Bootstrapper.this.getKeyState(identifier, seqNum));
+                log.trace("Get key state: {}:{} on: {}", identifier, seqNum, member.getId());
+                return Optional.of(Bootstrapper.this.delegate(new IdentifierSequence(identifier, seqNum)));
             }
 
             @Override
             public boolean validate(EstablishmentEvent event) {
-                log.trace("Validate event: {} on: {}", event, member);
+                log.trace("Validate event: {} on: {}", event, member.getId());
                 return Bootstrapper.this.validate(event.getCoordinates());
             }
 
             @Override
             public boolean validate(EventCoordinates coordinates) {
-                log.trace("Validating coordinates: {} on: {}", coordinates, member);
+                log.trace("Validating coordinates: {} on: {}", coordinates, member.getId());
                 return Bootstrapper.this.validate(coordinates);
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-                log.trace("Verify coordinates: {} on: {}", coordinates, member);
-                return new BootstrapVerifier(coordinates.getIdentifier()).verify(signature, message);
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                  InputStream message) {
-                log.trace("Verify coordinates: {} on: {}", coordinates, member);
-                return new BootstrapVerifier(coordinates.getIdentifier()).verify(threshold, signature, message);
             }
         };
     }
@@ -226,7 +212,7 @@ public class Bootstrapper implements Verifiers {
             return link.getKeyState(coords);
         }, (futureSailor, link, m) -> complete(ks, futureSailor, keystates, m), () -> {
             if (!ks.isDone()) {
-                log.warn("Failed to retrieve key state: {} from slice on: {}", coordinates, member);
+                log.warn("Failed to retrieve key state: {} from slice on: {}", coordinates, member.getId());
                 ks.complete(null);
             }
         }, scheduler, operationsFrequency);
@@ -241,7 +227,7 @@ public class Bootstrapper implements Verifiers {
     }
 
     private KeyState delegate(IdentifierSequence idSeq) {
-        log.info("Get key state: {} from slice on: {}", idSeq, member);
+        log.info("Get key state: {} from slice on: {}", idSeq, member.getId());
         var iterator = new SliceIterator<>("Retrieve KeyState", member, successors, communications);
         final var identifierSeq = idSeq.toIdSeq();
         var ks = new CompletableFuture<KeyState>();
@@ -251,7 +237,7 @@ public class Bootstrapper implements Verifiers {
             return link.getKeyState(identifierSeq);
         }, (futureSailor, link, m) -> complete(ks, futureSailor, keystates, m), () -> {
             if (!ks.isDone()) {
-                log.warn("Failed to retrieve key state: {} from slice on: {}", idSeq, member);
+                log.warn("Failed to retrieve key state: {} from slice on: {}", idSeq, member.getId());
                 ks.complete(null);
             }
         }, scheduler, operationsFrequency);
@@ -270,7 +256,7 @@ public class Bootstrapper implements Verifiers {
     }
 
     private boolean validate(EventCoordinates coordinates) {
-        log.info("Validate event: {} from slice on: {}", coordinates, member);
+        log.info("Validate event: {} from slice on: {}", coordinates, member.getId());
         var succ = successors.stream().filter(m -> coordinates.getIdentifier().equals(m.getId())).findFirst();
         if (succ.isPresent()) {
             return true;
@@ -284,7 +270,7 @@ public class Bootstrapper implements Verifiers {
             return link.validate(coordinates.toEventCoords());
         }, (futureSailor, link, m) -> completeValidation(valid, futureSailor, validations, m), () -> {
             if (!valid.isDone()) {
-                log.warn("Failed to validate: {} from slice on: {}", coordinates, member);
+                log.warn("Failed to validate: {} from slice on: {}", coordinates, member.getId());
                 valid.complete(Validation.newBuilder().setResult(false).build());
             }
         }, scheduler, operationsFrequency);
@@ -296,60 +282,6 @@ public class Bootstrapper implements Verifiers {
             log.warn("Unable to validate: {} on: {}", coordinates, member.getId());
         }
         return false;
-    }
-
-    public static class ViewEventValidation implements EventValidation {
-        private EventValidation delegate;
-
-        public ViewEventValidation(EventValidation delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public Verifier.Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold,
-                                          JohnHancock signature, InputStream message) {
-            return delegate.filtered(coordinates, threshold, signature, message);
-        }
-
-        @Override
-        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-            return delegate.getKeyState(coordinates);
-        }
-
-        @Override
-        public Optional<KeyState> getKeyState(Identifier identifier, ULong seqNum) {
-            return delegate.getKeyState(identifier, seqNum);
-        }
-
-        @Override
-        public boolean validate(EstablishmentEvent event) {
-            return delegate.validate(event);
-        }
-
-        @Override
-        public boolean validate(EventCoordinates coordinates) {
-            return delegate.validate(coordinates);
-        }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                              InputStream message) {
-            return delegate.verify(coordinates, threshold, signature, message);
-        }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, JohnHancock signature, ByteString byteString) {
-            return delegate.verify(coordinates, signature, byteString);
-        }
-
-        @Override
-        public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-            return delegate.verify(coordinates, signature, message);
-        }
-
-        void setDelegate(EventValidation delegate) {
-            this.delegate = delegate;
-        }
     }
 
     private record IdentifierSequence(Identifier identifier, ULong seqNum) {
@@ -375,13 +307,13 @@ public class Bootstrapper implements Verifiers {
         @Override
         protected KeyState getKeyState(ULong sequenceNumber) {
             var key = new IdentifierSequence(identifier, sequenceNumber);
-            log.info("Get key state: {} on: {}", key, member);
+            log.info("Get key state: {} on: {}", key, member.getId());
             return ksSeq.get(key);
         }
 
         @Override
         protected KeyState getKeyState(EventCoordinates coordinates) {
-            log.info("Get key state: {} on: {}", coordinates, member);
+            log.info("Get key state: {} on: {}", coordinates, member.getId());
             return ksCoords.get(coordinates);
         }
     }

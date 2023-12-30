@@ -38,8 +38,6 @@ public class PublisherTest {
 
     @Test
     public void smokin() throws Exception {
-
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);

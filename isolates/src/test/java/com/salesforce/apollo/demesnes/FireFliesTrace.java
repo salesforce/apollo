@@ -26,8 +26,8 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -222,12 +222,12 @@ public class FireFliesTrace {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
+        new Seed(domains.get(0).getMember().getEvent(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
+                public void viewChange(Context<Participant> context, Digest viewId, List<EstablishmentEvent> joins,
                                        List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
                         System.out.println(
