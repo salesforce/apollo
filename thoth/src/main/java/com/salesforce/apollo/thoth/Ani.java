@@ -7,8 +7,10 @@
 
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.cryptography.*;
-import com.salesforce.apollo.cryptography.Verifier.Filtered;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.KEL.KeyStateWithAttachments;
@@ -20,7 +22,6 @@ import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.HashMap;
@@ -49,14 +50,6 @@ public class Ani {
 
     public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
-            @Override
-            public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                     InputStream message) {
-                log.trace("Filtering for: {} on: {}", coordinates, member);
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.filtered(threshold, signature, message);
-            }
 
             @Override
             public Optional<KeyState> getKeyState(EventCoordinates coordinates) {

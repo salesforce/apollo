@@ -6,8 +6,6 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.google.common.collect.HashMultiset;
 import com.salesforce.apollo.archipelago.RouterImpl;
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
 import com.salesforce.apollo.fireflies.proto.Validation;
@@ -25,7 +23,6 @@ import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,18 +93,6 @@ public class Bootstrapper implements Verifiers {
 
     public EventValidation getValidator() {
         return new EventValidation() {
-            @Override
-            public Verifier.Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold,
-                                              JohnHancock signature, InputStream message) {
-                log.trace("Filtering for: {} on: {}", coordinates, member.getId());
-                var keyState = getKeyState(coordinates);
-                if (keyState.isEmpty()) {
-                    return new Verifier.Filtered(false, 0, null);
-                }
-                KeyState ks = keyState.get();
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.filtered(threshold, signature, message);
-            }
 
             @Override
             public Optional<KeyState> getKeyState(EventCoordinates coordinates) {

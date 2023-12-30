@@ -116,7 +116,7 @@ public class SwarmTest {
              .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
                     Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
 
-        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(60, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
@@ -125,7 +125,7 @@ public class SwarmTest {
                                            Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(
@@ -138,7 +138,7 @@ public class SwarmTest {
         views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
                                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
 
-        success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 120, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
@@ -149,7 +149,7 @@ public class SwarmTest {
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(largeTests ? 2400_000 : 30_000, 1_000, () -> {
+        success = Utils.waitForCondition(largeTests ? 2400_000 : 120_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 

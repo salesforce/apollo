@@ -6,14 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.SigningThreshold;
-import com.salesforce.apollo.cryptography.Verifier.Filtered;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.joou.ULong;
 
-import java.io.InputStream;
 import java.util.Optional;
 
 /**
@@ -24,11 +20,6 @@ import java.util.Optional;
 public interface EventValidation {
 
     EventValidation NONE = new EventValidation() {
-        @Override
-        public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                 InputStream message) {
-            return null;
-        }
 
         @Override
         public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
@@ -52,11 +43,6 @@ public interface EventValidation {
     };
 
     EventValidation NO_VALIDATION = new EventValidation() {
-        @Override
-        public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                 InputStream message) {
-            return null;
-        }
 
         @Override
         public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
@@ -78,9 +64,6 @@ public interface EventValidation {
             return false;
         }
     };
-
-    Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                      InputStream message);
 
     Optional<KeyState> getKeyState(EventCoordinates coordinates);
 
