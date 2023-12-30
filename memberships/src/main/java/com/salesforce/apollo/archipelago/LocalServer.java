@@ -73,8 +73,7 @@ public class LocalServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
-                                                               .executor(Executors.newCachedThreadPool(
-                                                               Thread.ofVirtual().factory()))
+                                                               .executor(Executors.newCachedThreadPool())
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(
