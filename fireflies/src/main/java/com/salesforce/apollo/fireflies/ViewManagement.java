@@ -21,7 +21,7 @@ import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
@@ -157,12 +157,12 @@ public class ViewManagement {
                                    .collect(Collectors.toSet());
 
         context.rebalance(context.totalCount() + ballot.joining.size());
-        var joining = new ArrayList<EstablishmentEvent>();
+        var joining = new ArrayList<EventCoordinates>();
         var pending = ballot.joining()
                             .stream()
                             .map(d -> joins.remove(d))
                             .filter(sn -> sn != null)
-                            .peek(nw -> joining.add(nw.getEstablishment()))
+                            .peek(nw -> joining.add(nw.getCoordinates()))
                             .peek(nw -> view.addToView(nw))
                             .peek(nw -> {
                                 if (metrics != null) {
@@ -221,7 +221,7 @@ public class ViewManagement {
                 throw new IllegalStateException("Invalid crown");
             }
             setDiadem(calculated);
-            view.notifyListeners(context.allMembers().map(p -> p.note.getEstablishment()).toList(),
+            view.notifyListeners(context.allMembers().map(p -> p.note.getCoordinates()).toList(),
                                  Collections.emptyList());
 
             view.scheduleViewChange();

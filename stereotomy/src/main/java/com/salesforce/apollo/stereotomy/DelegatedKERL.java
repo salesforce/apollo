@@ -22,10 +22,10 @@ import java.util.Map;
 /**
  * @author hal.hildebrand
  */
-public class DelegatedKERL implements KERL {
-    protected final KERL delegate;
+public class DelegatedKERL implements KERL.AppendKERL {
+    protected final AppendKERL delegate;
 
-    public DelegatedKERL(KERL delegate) {
+    public DelegatedKERL(AppendKERL delegate) {
         this.delegate = delegate;
     }
 
@@ -80,6 +80,11 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        return delegate.getKeyState(identifier, sequenceNumber);
+    }
+
+    @Override
     public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
         return delegate.getKeyStateWithAttachments(coordinates);
     }
@@ -103,10 +108,5 @@ public class DelegatedKERL implements KERL {
     @Override
     public List<EventWithAttachments> kerl(Identifier identifier) {
         return delegate.kerl(identifier);
-    }
-
-    @Override
-    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
-        return delegate.getKeyState(identifier, sequenceNumber);
     }
 }

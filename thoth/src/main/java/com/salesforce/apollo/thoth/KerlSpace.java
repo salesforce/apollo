@@ -8,23 +8,23 @@
 package com.salesforce.apollo.thoth;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.cryptography.proto.Digeste;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.thoth.proto.Intervals;
-import com.salesforce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.thoth.proto.Intervals;
+import com.salesforce.apollo.thoth.proto.Update;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
@@ -261,7 +261,7 @@ public class KerlSpace {
      * @param events
      * @param kerl
      */
-    public void update(List<KeyEventWithAttachmentAndValidations_> events, KERL kerl) {
+    public void update(List<KeyEventWithAttachmentAndValidations_> events, KERL.AppendKERL kerl) {
         if (events.isEmpty()) {
             log.trace("No events to update");
             return;
@@ -303,7 +303,7 @@ public class KerlSpace {
         }
     }
 
-    private void commitPending(DSLContext context, KERL kerl) {
+    private void commitPending(DSLContext context, KERL.AppendKERL kerl) {
         log.trace("Commit pending");
         context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_COORDINATES.ILK)
                .from(PENDING_EVENT)

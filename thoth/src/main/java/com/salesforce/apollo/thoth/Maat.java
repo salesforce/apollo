@@ -42,7 +42,7 @@ public class Maat extends DelegatedKERL {
 
     private final KERL validators;
 
-    public Maat(Context<Member> context, KERL delegate, KERL validators) {
+    public Maat(Context<Member> context, AppendKERL delegate, KERL validators) {
         super(delegate);
         this.context = context;
         this.validators = validators;

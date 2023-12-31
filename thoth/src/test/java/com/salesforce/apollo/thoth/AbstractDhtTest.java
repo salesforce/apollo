@@ -147,7 +147,7 @@ public class AbstractDhtTest {
                              router, Duration.ofSeconds(10), 0.0125, null));
     }
 
-    protected BiFunction<KerlDHT, KERL, KERL> wrap() {
+    protected BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap() {
         return (t, k) -> k;
     }
 }

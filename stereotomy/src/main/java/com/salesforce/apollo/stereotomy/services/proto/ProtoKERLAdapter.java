@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy.services.proto;
 
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -34,9 +34,9 @@ import java.util.stream.Collectors;
  */
 public class ProtoKERLAdapter implements ProtoKERLService {
 
-    private final KERL kerl;
+    private final KERL.AppendKERL kerl;
 
-    public ProtoKERLAdapter(KERL kerl) {
+    public ProtoKERLAdapter(KERL.AppendKERL kerl) {
         this.kerl = kerl;
     }
 

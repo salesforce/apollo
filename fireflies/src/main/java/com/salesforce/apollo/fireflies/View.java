@@ -31,14 +31,15 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.ring.RingCommunications;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.Verifiers;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
@@ -105,17 +106,19 @@ public class View {
     true);
     private final        ViewManagement                              viewManagement;
     private final        EventValidation                             validation;
+    private final        Verifiers                                   verifiers;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
-                EventValidation validation, Router communications, Parameters params, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics) {
-        this(context, member, endpoint, validation, communications, params, communications, digestAlgo, metrics);
+                EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
+        this(context, member, endpoint, validation, verifiers, communications, params, communications, digestAlgo,
+             metrics);
     }
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
-                EventValidation validation, Router communications, Parameters params, Router gateway,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
+                EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
+                Router gateway, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.params = params;
         this.digestAlgo = digestAlgo;
@@ -133,6 +136,7 @@ public class View {
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
         this.validation = validation;
+        this.verifiers = verifiers;
     }
 
     /**
@@ -269,7 +273,7 @@ public class View {
         Participant m = context.getMember(note.getId());
         if (m == null) {
             newMember = true;
-            if (!note.getVerifier().verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+            if (!verify(note.getIdentifier(), note.getSignature(), note.getWrapped().getNote().toByteString())) {
                 log.trace("invalid participant note from: {} on: {}", note.getId(), node.getId());
                 if (metrics != null) {
                     metrics.filteredNotes().mark();
@@ -409,7 +413,7 @@ public class View {
         return viewManagement.join(duration, timer);
     }
 
-    void notifyListeners(List<EstablishmentEvent> joining, List<Digest> leaving) {
+    void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = currentView();
         lifecycleListeners.forEach((id, listener) -> {
             try {
@@ -692,7 +696,7 @@ public class View {
             return false;
         }
 
-        if (!accuser.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
+        if (!accused.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
             log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}", accuser.getId(),
                       accused.getId(), node.getId());
             return false;
@@ -853,7 +857,7 @@ public class View {
             return false;
         }
 
-        if (!note.getVerifier().verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+        if (!validation.validate(note.getCoordinates())) {
             log.trace("Invalid join note from {} on: {}", note.getId(), node.getId());
             return false;
         }
@@ -939,6 +943,15 @@ public class View {
                       .build();
     }
 
+    private Verifier.Filtered filtered(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
+                                       InputStream message) {
+        var verifier = verifiers.verifierFor(id);
+        if (verifier.isEmpty()) {
+            return new Verifier.Filtered(false, 0, null);
+        }
+        return verifier.get().filtered(threshold, signature, message);
+    }
+
     /**
      * Garbage collect the member. Member is now shunned and cannot recover
      *
@@ -969,10 +982,8 @@ public class View {
         return bff;
     }
 
-    private EventValidation getEventValidation() {
-        final var current = validation;
-        log.info("Event validation: {} on: {}", validation, node.getId());
-        return current;
+    private KeyEvent getEvent(EventCoordinates coordinates) {
+        return null;
     }
 
     /**
@@ -1425,6 +1436,27 @@ public class View {
         }
     }
 
+    private boolean verify(SelfAddressingIdentifier identifier, JohnHancock signature, ByteString byteString) {
+        return verify(identifier, signature, BbBackedInputStream.aggregate(byteString));
+    }
+
+    private boolean verify(SelfAddressingIdentifier id, JohnHancock signature, InputStream message) {
+        var verifier = verifiers.verifierFor(id);
+        if (verifier.isEmpty()) {
+            return false;
+        }
+        return verifier.get().verify(signature, message);
+    }
+
+    private boolean verify(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
+                           InputStream message) {
+        var verifier = verifiers.verifierFor(id);
+        if (verifier.isEmpty()) {
+            return false;
+        }
+        return verifier.get().verify(threshold, signature, message);
+    }
+
     @FunctionalInterface
     public interface ViewLifecycleListener {
 
@@ -1436,12 +1468,11 @@ public class View {
          * @param joins   - the list of joining member's establishment event
          * @param leaves  - the list of leaving member's ids
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<EstablishmentEvent> joins,
-                        List<Digest> leaves);
+        void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
 
     }
 
-    public record Seed(EstablishmentEvent establishment, InetSocketAddress endpoint) {
+    public record Seed(KeyEvent establishment, InetSocketAddress endpoint) {
     }
 
     public class Node extends Participant implements SigningMember {
@@ -1454,7 +1485,7 @@ public class View {
                         .setEpoch(0)
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
-                        .setEstablishment(wrapped.getEvent().toKeyEvent_())
+                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             var signedNote = SignedNote.newBuilder()
@@ -1493,13 +1524,8 @@ public class View {
             return wrapped.algorithm();
         }
 
-        @Override
-        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return wrapped.filtered(threshold, signature, message);
-        }
-
-        public ControlledIdentifier<SelfAddressingIdentifier> getIdentifier() {
-            return wrapped.getIdentifier();
+        public SelfAddressingIdentifier getIdentifier() {
+            return wrapped.getIdentifier().getIdentifier();
         }
 
         @Override
@@ -1522,16 +1548,6 @@ public class View {
         @Override
         public String toString() {
             return "Node[" + getId() + "]";
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, InputStream message) {
-            return wrapped.verify(signature, message);
-        }
-
-        @Override
-        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return wrapped.verify(threshold, signature, message);
         }
 
         AccusationWrapper accuse(Participant m, int ringNumber) {
@@ -1621,7 +1637,7 @@ public class View {
         void nextNote(long newEpoch, Digest view) {
             final var current = note;
             var n = current.newBuilder()
-                           .setEstablishment(note.getEstablishment().toKeyEvent_())
+                           .setCoordinates(note.getCoordinates().toEventCoords())
                            .setEpoch(newEpoch)
                            .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                            .setCurrentView(view.toDigeste())
@@ -1646,7 +1662,7 @@ public class View {
                         .setCurrentView(currentView().toDigeste())
                         .setHost(current.getHost())
                         .setPort(current.getPort())
-                        .setEstablishment(current.getEstablishment().toKeyEvent_())
+                        .setCoordinates(current.getCoordinates().toEventCoords())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             SignedNote signedNote = SignedNote.newBuilder()
@@ -1700,7 +1716,7 @@ public class View {
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             final var current = note;
-            return note.getVerifier().filtered(threshold, signature, message);
+            return View.this.filtered(getIdentifier(), threshold, signature, message);
         }
 
         public int getAccusationCount() {
@@ -1722,8 +1738,12 @@ public class View {
             return id;
         }
 
+        public SelfAddressingIdentifier getIdentifier() {
+            return note.getIdentifier();
+        }
+
         public Seed_ getSeed() {
-            final var establishment = getNote().getEstablishment();
+            final var establishment = getEvent(getNote().getCoordinates());
             return Seed_.newBuilder()
                         .setNote(note.getWrapped())
                         .setEstablishment(
@@ -1755,13 +1775,13 @@ public class View {
             if (current == null) {
                 return true;
             }
-            return note.getVerifier().verify(signature, message);
+            return View.this.verify(getIdentifier(), signature, message);
         }
 
         @Override
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             final var current = note;
-            return note.getVerifier().verify(threshold, signature, message);
+            return View.this.verify(getIdentifier(), threshold, signature, message);
         }
 
         /**
@@ -2003,7 +2023,7 @@ public class View {
                 return Validation.newBuilder().setResult(false).build();
             }
             log.info("Validating event: {} for: {} on: {}", request, from, node.getId());
-            var validate = getEventValidation().validate(coordinates);
+            var validate = validation.validate(coordinates);
             log.info("Returning validate: {}:{} to: {} on: {}", coordinates, validate, from, node.getId());
             return Validation.newBuilder().setResult(validate).build();
         }

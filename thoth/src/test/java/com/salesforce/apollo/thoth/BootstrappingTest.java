@@ -72,7 +72,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
-        final KERL testKerl = dht.asKERL();
+        final var testKerl = dht.asKERL();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 7, 7, 7 });
         var clientKerl = new MemKERL(DigestAlgorithm.DEFAULT);
@@ -122,7 +122,7 @@ public class BootstrappingTest extends AbstractDhtTest {
     }
 
     @Override
-    protected BiFunction<KerlDHT, KERL, KERL> wrap() {
+    protected BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap() {
         // This allows us to have the core member keys trusted for this test, as we're testing the bootstrapping of the client, not the entire system
         return (t, k) -> gate.get() ? new Maat(context, k, k) : k;
     }

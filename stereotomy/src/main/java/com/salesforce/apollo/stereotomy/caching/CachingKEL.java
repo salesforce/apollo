@@ -41,7 +41,7 @@ import java.util.function.Function;
  *
  * @author hal.hildebrand
  */
-public class CachingKEL<K extends KEL> implements KEL {
+public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
     private static final Logger                                   log = LoggerFactory.getLogger(CachingKEL.class);
     private final        Function<Function<K, ?>, ?>              kelSupplier;
     private final        LoadingCache<EventCoordinates, KeyEvent> keyCoords;
@@ -130,6 +130,11 @@ public class CachingKEL<K extends KEL> implements KEL {
         }
     }
 
+    public void clear() {
+        keyCoords.invalidateAll();
+        ksCoords.invalidateAll();
+    }
+
     @Override
     public Attachment getAttachment(EventCoordinates coordinates) {
         try {
@@ -171,9 +176,9 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
         try {
-            return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
+            return complete(kel -> kel.getKeyState(identifier, sequenceNumber));
         } catch (Throwable e) {
             log.error("Cannot complete append", e);
             return null;
@@ -181,9 +186,9 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+    public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
         try {
-            return complete(kel -> kel.getKeyState(identifier, sequenceNumber));
+            return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
         } catch (Throwable e) {
             log.error("Cannot complete append", e);
             return null;
@@ -209,10 +214,5 @@ public class CachingKEL<K extends KEL> implements KEL {
             log.error("Error completing cache", t);
             return null;
         }
-    }
-
-    public void clear() {
-        keyCoords.invalidateAll();
-        ksCoords.invalidateAll();
     }
 }

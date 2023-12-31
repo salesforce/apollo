@@ -43,8 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class TestKerlService {
     final StereotomyKeyStore ks = new MemKeyStore();
-    KERL         kel;
-    SecureRandom secureRandom;
+    KERL.AppendKERL kel;
+    SecureRandom    secureRandom;
     private Router clientRouter;
     private Router serverRouter;
 

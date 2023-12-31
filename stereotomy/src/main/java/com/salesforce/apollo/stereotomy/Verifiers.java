@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SigningThreshold;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
@@ -14,12 +16,44 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
+import java.io.InputStream;
 import java.util.*;
 
 /**
  * @author hal.hildebrand
  */
 public interface Verifiers {
+
+    Verifiers NONE = new Verifiers() {
+        @Override
+        public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+            return Optional.of(v());
+        }
+
+        @Override
+        public Optional<Verifier> verifierFor(Identifier identifier) {
+            return Optional.of(v());
+        }
+
+        Verifier v() {
+            return new Verifier() {
+                @Override
+                public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+                    return new Filtered(false, 0, null);
+                }
+
+                @Override
+                public boolean verify(JohnHancock signature, InputStream message) {
+                    return true;
+                }
+
+                @Override
+                public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+                    return true;
+                }
+            };
+        }
+    };
 
     static Verifiers fromEvents(List<InceptionEvent> states) {
         return new FixedVerifiers(FixedVerifiers.fromEvents(states));

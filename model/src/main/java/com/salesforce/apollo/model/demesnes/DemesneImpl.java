@@ -72,7 +72,7 @@ public class DemesneImpl implements Demesne {
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
 
     private final    Executor           executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final    KERL               kerl;
+    private final    KERL.AppendKERL    kerl;
     private final    OuterContextClient outer;
     private final    DemesneParameters  parameters;
     private final    AtomicBoolean      started  = new AtomicBoolean();

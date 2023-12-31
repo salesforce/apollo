@@ -46,7 +46,7 @@ message SignedAccusation {
 message Note {
   int64 epoch = 1;
   crypto.Digeste currentView = 2;
-  stereotomy.KeyEvent_ establishment = 3;
+  stereotomy.EventCoords coordinates = 3;
   bytes mask = 4;
   string host = 5;
   int32 port = 6;

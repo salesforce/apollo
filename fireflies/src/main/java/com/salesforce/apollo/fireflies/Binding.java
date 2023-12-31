@@ -324,7 +324,8 @@ class Binding {
                                         .setNote(Note.newBuilder()
                                                      .setHost(seed.endpoint().getHostName())
                                                      .setPort(seed.endpoint().getPort())
-                                                     .setEstablishment(seed.establishment().toKeyEvent_())
+                                                     .setCoordinates(
+                                                     seed.establishment().getCoordinates().toEventCoords())
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(
                                                      Node.createInitialMask(context).toByteArray())))

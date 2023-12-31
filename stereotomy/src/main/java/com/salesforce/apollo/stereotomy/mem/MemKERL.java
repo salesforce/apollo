@@ -29,7 +29,7 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 /**
  * @author hal.hildebrand
  */
-public class MemKERL implements KERL {
+public class MemKERL implements KERL.AppendKERL {
 
     private final DigestAlgorithm                                           digestAlgorithm;
     // Order by <stateOrdering>
@@ -151,14 +151,14 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
-        return validations.computeIfAbsent(coordinates, k -> Collections.emptyMap());
-    }
-
-    @Override
     public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
         var location = sequenceNumberToLocation.get(locationOrdering(identifier, sequenceNumber));
         return location == null ? null : keyState.get(location);
+    }
+
+    @Override
+    public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
+        return validations.computeIfAbsent(coordinates, k -> Collections.emptyMap());
     }
 
     private void append(KeyEvent event, KeyState newState) {

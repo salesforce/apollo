@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesforce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import org.joou.ULong;
@@ -26,23 +26,6 @@ import java.util.List;
  * @author hal.hildebrand
  */
 public interface KEL {
-
-    /**
-     * Append the event. The event will be validated before inserted.
-     */
-    KeyState append(KeyEvent event);
-
-    /**
-     * Append the list of events. The events will be validated before inserted.
-     */
-    default List<KeyState> append(KeyEvent... event) {
-        return append(Arrays.asList(event), Collections.emptyList());
-    }
-
-    /**
-     * Append the list of events and attachments. The events will be validated before inserted.
-     */
-    List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments);
 
     /**
      * Answer the Attachment for the coordinates
@@ -89,6 +72,25 @@ public interface KEL {
     default Verifier.DefaultVerifier getVerifier(KeyCoordinates coordinates) {
         return new Verifier.DefaultVerifier(
         getKeyState(coordinates.getEstablishmentEvent()).getKeys().get(coordinates.getKeyIndex()));
+    }
+
+    interface AppendKEL extends KEL {
+        /**
+         * Append the event. The event will be validated before inserted.
+         */
+        KeyState append(KeyEvent event);
+
+        /**
+         * Append the list of events. The events will be validated before inserted.
+         */
+        default List<KeyState> append(KeyEvent... event) {
+            return append(Arrays.asList(event), Collections.emptyList());
+        }
+
+        /**
+         * Append the list of events and attachments. The events will be validated before inserted.
+         */
+        List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments);
     }
 
     record KeyStateWithAttachments(KeyState state, Attachment attachments) {

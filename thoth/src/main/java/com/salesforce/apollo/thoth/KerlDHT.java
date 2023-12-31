@@ -16,16 +16,14 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
-import com.salesforce.apollo.stereotomy.DelegatedKERL;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled.ClosableKERL;
@@ -112,7 +110,7 @@ public class KerlDHT implements ProtoKERLService {
     private final        TemporalAmount                                              operationTimeout;
 
     public KerlDHT(Duration operationsFrequency, Context<? extends Member> context, SigningMember member,
-                   BiFunction<KerlDHT, KERL, KERL> wrap, JdbcConnectionPool connectionPool,
+                   BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, TemporalAmount operationTimeout,
                    double falsePositiveRate, StereotomyMetrics metrics) {
         @SuppressWarnings("unchecked")
@@ -380,7 +378,7 @@ public class KerlDHT implements ProtoKERLService {
         }
     }
 
-    public KERL asKERL() {
+    public KERL.AppendKERL asKERL() {
         return cache;
     }
 
@@ -756,6 +754,20 @@ public class KerlDHT implements ProtoKERLService {
         } catch (ExecutionException e) {
             throw new IllegalStateException(e.getCause());
         }
+    }
+
+    public Verifiers getVerifiers() {
+        return new Verifiers() {
+            @Override
+            public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+                return verifierFor(coordinates.getIdentifier());
+            }
+
+            @Override
+            public Optional<Verifier> verifierFor(Identifier identifier) {
+                return Optional.of(new KerlVerifier<Identifier>(identifier, asKERL()));
+            }
+        };
     }
 
     public <T> Entry<T> max(HashMultiset<T> gathered) {

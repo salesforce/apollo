@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author hal.hildebrand
  */
 public class StereotomyTests {
-    KERL               kel;
+    KERL.AppendKERL    kel;
     StereotomyKeyStore ks;
     SecureRandom       secureRandom;
 

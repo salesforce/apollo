@@ -17,6 +17,8 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventValidation;
+import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.thoth.KerlDHT;
@@ -61,8 +63,10 @@ public class ProcessDomain extends Domain {
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
                           parameters.dhtFpr, stereotomyMetrics);
-        this.foundation = new View(base, getMember(), endpoint,
-                                   dht.getAni().eventValidation(parameters.dhtEventValidTO), params.communications(),
+        var mock = true;
+        var validation = mock ? EventValidation.NONE : dht.getAni().eventValidation(parameters.dhtEventValidTO);
+        var verifiers = mock ? Verifiers.NONE : dht.getVerifiers();
+        this.foundation = new View(base, getMember(), endpoint, validation, verifiers, params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
         listener = foundation.register(listener());
     }

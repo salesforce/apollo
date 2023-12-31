@@ -7,12 +7,12 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -25,10 +25,6 @@ import java.util.concurrent.CompletableFuture;
  * @author hal.hildebrand
  */
 public interface KERL extends KEL {
-
-    Void append(List<AttachmentEvent> events);
-
-    Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations);
 
     default KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(
     EventCoordinates coordinates) {
@@ -75,6 +71,13 @@ public interface KERL extends KEL {
         completeKerl(c, result);
         Collections.reverse(result);
         return result;
+    }
+
+    interface AppendKERL extends KERL, AppendKEL {
+        Void append(List<AttachmentEvent> events);
+
+        Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations);
+
     }
 
     record EventWithAttachments(KeyEvent event, Attachment attachments) {

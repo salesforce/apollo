@@ -31,7 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -84,7 +83,7 @@ public class DhtRebalanceTest {
         var order = dhts.navigableKeySet().stream().toList();
         System.out.println("Order: " + order);
         members.add(order.getFirst());
-        KERL fristKerl = dhts.get(order.getFirst()).asKERL();
+        var fristKerl = dhts.get(order.getFirst()).asKERL();
         dhts.get(order.getFirst()).start(Duration.ofMillis(10));
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), fristKerl, entropy);

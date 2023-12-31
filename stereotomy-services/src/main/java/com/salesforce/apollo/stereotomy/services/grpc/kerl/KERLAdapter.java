@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
-import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -15,6 +14,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * @author hal.hildebrand
  */
-public class KERLAdapter implements KERL {
+public class KERLAdapter implements KERL.AppendKERL {
 
     private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;

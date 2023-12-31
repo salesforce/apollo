@@ -23,8 +23,8 @@ import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -113,7 +113,7 @@ public class FireFliesTest {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Context<Participant> context, Digest viewId, List<EstablishmentEvent> joins,
+                public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
                                        List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
                         System.out.println(
