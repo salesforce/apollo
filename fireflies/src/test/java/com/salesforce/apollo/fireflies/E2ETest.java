@@ -173,7 +173,7 @@ public class E2ETest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder().setMaxPending(10).setMaximumTxfr(largeTests ? 100 : 20).build();
+        var parameters = Parameters.newBuilder().build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
