@@ -41,7 +41,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -246,19 +245,14 @@ public class FireFliesTrace {
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
-        domains.get(0)
-               .getFoundation()
-               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        domains.get(0).getFoundation().start(() -> started.get().countDown(), gossipDuration, Collections.emptyList());
         if (!started.get().await(10, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Cannot start up kernel");
         }
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation()
-             .start(() -> started.get().countDown(), gossipDuration, seeds,
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+            d.getFoundation().start(() -> started.get().countDown(), gossipDuration, seeds);
         });
         if (!started.get().await(10, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Cannot start views");
