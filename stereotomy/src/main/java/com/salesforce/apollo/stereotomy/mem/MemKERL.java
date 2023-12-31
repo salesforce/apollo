@@ -12,6 +12,7 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -120,6 +121,10 @@ public class MemKERL implements KERL.AppendKERL {
     public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> v) {
         validations.put(coordinates, v);
         return null;
+    }
+
+    public AppendKERL cached() {
+        return new CachingKERL(f -> f.apply(this));
     }
 
     @Override

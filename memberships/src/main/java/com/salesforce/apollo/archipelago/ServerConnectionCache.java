@@ -78,7 +78,14 @@ public class ServerConnectionCache {
             }
             ReleasableManagedChannel connection = cache.computeIfAbsent(to, m -> {
                 log.debug("Creating new channel to: {} on: {}", to.getId(), m.getId());
-                ReleasableManagedChannel conn = new ReleasableManagedChannel(to, factory.connectTo(to), member);
+                ManagedChannel channel;
+                try {
+                    channel = factory.connectTo(to);
+                } catch (Throwable t) {
+                    log.error("Cannot connect to: {} on: {}", to.getId(), member, t);
+                    return null;
+                }
+                ReleasableManagedChannel conn = new ReleasableManagedChannel(to, channel, member);
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();

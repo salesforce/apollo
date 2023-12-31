@@ -288,21 +288,11 @@ public class View {
                 long nextEpoch = note.getEpoch();
                 long currentEpoch = current.getEpoch();
                 if (nextEpoch <= currentEpoch) {
-                    //                    log.trace("Note: {} epoch out of date: {} current: {} on: {}", note.getId(), nextEpoch,
-                    //                              currentEpoch, node.getId());
                     if (metrics != null) {
                         metrics.filteredNotes().mark();
                     }
                     return false;
                 }
-            }
-
-            if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
-                log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
-                if (metrics != null) {
-                    metrics.filteredNotes().mark();
-                }
-                return false;
             }
         }
 
@@ -311,7 +301,14 @@ public class View {
         }
 
         var member = m;
-        stable(() -> {
+        return stable(() -> {
+            if (!member.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
+                log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
+                if (metrics != null) {
+                    metrics.filteredNotes().mark();
+                }
+                return false;
+            }
             var accused = member.isAccused();
             stopRebuttalTimer(member);
             member.setNote(note);
@@ -326,8 +323,8 @@ public class View {
                 assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
                 + context.cardinality();
             }
+            return true;
         });
-        return true;
     }
 
     void bootstrap(NoteWrapper nw, Duration dur) {
@@ -696,12 +693,6 @@ public class View {
             return false;
         }
 
-        if (!accused.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
-            log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}", accuser.getId(),
-                      accused.getId(), node.getId());
-            return false;
-        }
-
         return add(accusation, accuser, accused);
     }
 
@@ -727,6 +718,12 @@ public class View {
             Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
             if (!currentAccuser.equals(accuser)) {
                 if (ring.isBetween(currentAccuser, accuser, accused)) {
+                    if (!accused.verify(accusation.getSignature(),
+                                        accusation.getWrapped().getAccusation().toByteString())) {
+                        log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
+                                  accuser.getId(), accused.getId(), node.getId());
+                        return false;
+                    }
                     accused.addAccusation(accusation);
                     pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
                                                                                                 params.rebuttalTimeout()));
@@ -829,11 +826,13 @@ public class View {
                       node.getId());
             return false;
         }
-        final var signature = JohnHancock.from(observation.getSignature());
-        if (!member.verify(signature, observation.getChange().toByteString())) {
-            return false;
-        }
-        return observations.put(observer.prefix(observation.getChange().getAttempt()), observation) == null;
+        return observations.computeIfAbsent(observer.prefix(observation.getChange().getAttempt()), p -> {
+            final var signature = JohnHancock.from(observation.getSignature());
+            if (!member.verify(signature, observation.getChange().toByteString())) {
+                return null;
+            }
+            return observation;
+        }) != null;
     }
 
     private boolean addJoin(SignedNote sn) {
@@ -1312,10 +1311,10 @@ public class View {
                            .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
                            .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
                            .build();
-        log.info("Redirecting: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
-                 successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
-                 gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
-                 gossip.getJoins().getUpdatesCount(), node.getId());
+        log.trace("Redirecting: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
+                  successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
+                  gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
+                  gossip.getJoins().getUpdatesCount(), node.getId());
         return gossip;
     }
 

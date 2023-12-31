@@ -18,10 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.Verifiers;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -51,6 +48,7 @@ public class ChurnTest {
     private static final int                                                         CARDINALITY    = 100;
     private static final double                                                      P_BYZ          = 0.3;
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static       KERL.AppendKERL                                             kerl;
     private              List<Router>                                                communications = new ArrayList<>();
     private              List<Router>                                                gateways       = new ArrayList<>();
     private              Map<Digest, ControlledIdentifierMember>                     members;
@@ -62,7 +60,8 @@ public class ChurnTest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT).cached();
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .mapToObj(i -> {
                                   return stereotomy.newIdentifier();
@@ -134,7 +133,7 @@ public class ChurnTest {
         "Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + testViews.size()
         + " members");
 
-        // Bring up the remaining members step wise
+        // Bring up the remaining members stepwise
         for (int i = 0; i < 3; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
@@ -218,8 +217,8 @@ public class ChurnTest {
             final var expected = c;
             //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
-            success = Utils.waitForCondition(30_000, 1_000, () -> {
-                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
+            success = Utils.waitForCondition(60_000, 1_000, () -> {
+                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() == 0;
             });
             failed = expected.stream()
                              .filter(e -> e.getContext().activeCount() != testViews.size())
@@ -290,7 +289,7 @@ public class ChurnTest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.NONE, comms,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
                             parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }

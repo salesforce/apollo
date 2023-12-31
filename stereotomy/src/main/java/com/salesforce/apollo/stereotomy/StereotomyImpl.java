@@ -100,7 +100,7 @@ public class StereotomyImpl implements Stereotomy {
     @Override
     public Verifier getVerifier(KeyCoordinates coordinates) {
         KeyState state = getKeyState(coordinates);
-        return new Verifier.DefaultVerifier(state.getKeys().get(coordinates.getKeyIndex()));
+        return new Verifier.DefaultVerifier(state.getKeys());
     }
 
     @Override

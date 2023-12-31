@@ -7,8 +7,8 @@
 package com.salesforce.apollo.cryptography;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.cryptography.Verifier.Filtered;
+import com.salesforce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.utils.Hex;
 import org.joou.ULong;
 import org.slf4j.LoggerFactory;
@@ -169,6 +169,7 @@ public class JohnHancock {
         }
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();
-        return SigningThreshold.thresholdMet(threshold, arrIndexes);
+        var thresholdMet = SigningThreshold.thresholdMet(threshold, arrIndexes);
+        return thresholdMet;
     }
 }
