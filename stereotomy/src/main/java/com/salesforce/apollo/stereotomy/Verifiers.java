@@ -55,6 +55,20 @@ public interface Verifiers {
         }
     };
 
+    static Verifiers from(KERL kerl) {
+        return new Verifiers() {
+            @Override
+            public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+                return verifierFor(coordinates.getIdentifier());
+            }
+
+            @Override
+            public Optional<Verifier> verifierFor(Identifier identifier) {
+                return Optional.of(new KerlVerifier<>(identifier, kerl));
+            }
+        };
+    }
+
     static Verifiers fromEvents(List<InceptionEvent> states) {
         return new FixedVerifiers(FixedVerifiers.fromEvents(states));
     }

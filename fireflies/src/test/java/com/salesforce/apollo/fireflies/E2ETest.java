@@ -18,10 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.Verifiers;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -55,6 +52,7 @@ public class E2ETest {
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       boolean                                                     largeTests = Boolean.getBoolean(
     "large_tests");
+    private static       KERL.AppendKERL                                             kerl;
 
     static {
         CARDINALITY = largeTests ? 30 : 12;
@@ -71,7 +69,8 @@ public class E2ETest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .mapToObj(i -> {
                                   return stereotomy.newIdentifier();
@@ -204,7 +203,7 @@ public class E2ETest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.NONE, comms,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
                             parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
