@@ -86,7 +86,7 @@ public class ViewManagement {
         return joins.put(id, note) == null;
     }
 
-    void bootstrap(NoteWrapper nw, final ScheduledExecutorService sched, final Duration dur) {
+    void bootstrap(NoteWrapper nw, final Duration dur) {
         joins.put(nw.getId(), nw);
         context.activate(node);
 
@@ -95,7 +95,7 @@ public class ViewManagement {
         new Ballot(currentView(), Collections.emptyList(), Collections.singletonList(node.getId()), digestAlgo)));
 
         view.scheduleViewChange();
-        view.schedule(dur, sched);
+        view.schedule(dur);
 
         log.info("Bootstrapped view: {} cardinality: {} count: {} context: {} on: {}", currentView(),
                  context.cardinality(), context.activeCount(), context.getId(), node.getId());
@@ -154,11 +154,9 @@ public class ViewManagement {
         final var seedSet = context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
                                    .stream()
                                    .map(p -> p.note.getWrapped())
-                                   .toList();
+                                   .collect(Collectors.toSet());
 
-        var cardinality = context.totalCount() + ballot.joining.size();
-
-        context.rebalance(cardinality);
+        context.rebalance(context.totalCount() + ballot.joining.size());
         var joining = new ArrayList<EstablishmentEvent>();
         var pending = ballot.joining()
                             .stream()
@@ -174,7 +172,6 @@ public class ViewManagement {
                             .map(nw -> pendingJoins.remove(nw.getId()))
                             .filter(p -> p != null)
                             .toList();
-        pendingJoins.clear();
 
         setDiadem(
         HexBloom.construct(context.memberCount(), context.allMembers().map(p -> p.getId()), view.bootstrapView(),
@@ -261,7 +258,6 @@ public class ViewManagement {
             if (contains(from)) {
                 log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
                           context.getId(), context.cardinality(), node.getId());
-                pendingJoins.remove(from);
                 joined(context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
                               .stream()
                               .map(p -> p.note.getWrapped())
@@ -284,7 +280,7 @@ public class ViewManagement {
                 new StatusRuntimeException(Status.RESOURCE_EXHAUSTED.withDescription("No room at the inn")));
                 return;
             }
-            pendingJoins.put(from, seeds -> {
+            pendingJoins.computeIfAbsent(from, d -> seeds -> {
                 log.info("Gateway established for: {} view: {}  context: {} cardinality: {} on: {}", from,
                          currentView(), context.getId(), context.cardinality(), node.getId());
                 joined(seeds, from, responseObserver, timer);
@@ -295,8 +291,7 @@ public class ViewManagement {
         });
     }
 
-    BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
-                                                      Timer.Context timer) {
+    BiConsumer<? super Bound, ? super Throwable> join(Duration duration, Timer.Context timer) {
         return (bound, t) -> {
             view.viewChange(() -> {
                 final var hex = bound.view();
@@ -320,21 +315,19 @@ public class ViewManagement {
 
                 context.allMembers().forEach(p -> p.clearAccusations());
 
-                view.introduced();
-
-                view.schedule(duration, scheduler);
+                view.schedule(duration);
 
                 if (timer != null) {
                     timer.stop();
                 }
 
+                view.introduced();
                 log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
                          bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
                 if (context.totalCount() == context.cardinality()) {
                     join();
                 } else {
-                    var sample = new ArrayList<>(context.activeMembers());
-                    populate(sample, scheduler);
+                    populate(new ArrayList<Participant>(context.activeMembers()));
                 }
             });
         };
@@ -363,9 +356,10 @@ public class ViewManagement {
         }
     }
 
-    void populate(List<Participant> sample, ScheduledExecutorService scheduler) {
+    void populate(List<Participant> sample) {
         var populate = new SliceIterator<Fireflies>("Populate: " + context.getId(), node, sample, view.comm);
         var repopulate = new AtomicReference<Runnable>();
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         repopulate.set(() -> {
             populate.iterate((link, m) -> {
                 log.debug("Populating: {} contacting: {} on: {}", context.getId(), link.getMember().getId(),
@@ -386,10 +380,9 @@ public class ViewManagement {
                 return !joined();
             }, () -> {
                 if (!joined()) {
-                    scheduler.schedule(Utils.wrapped(() -> repopulate.get(), log), params.retryDelay().toNanos(),
-                                       TimeUnit.NANOSECONDS);
+                    scheduler.schedule(Utils.wrapped(() -> repopulate.get(), log), 500, TimeUnit.MILLISECONDS);
                 }
-            }, scheduler, params.retryDelay());
+            }, scheduler, Duration.ofMillis(500));
         });
         repopulate.get().run();
     }
@@ -524,8 +517,8 @@ public class ViewManagement {
                                                      .addAllSuccessors(successors)
                                                      .setDiadem(diadem.get().toHexBloome()))
                              .build();
-        log.trace("Gateway initial seeding: {} successors: {} for: {} on: {}", gateway.getInitialSeedSetCount(),
-                  successors.size(), from, node.getId());
+        log.info("Gateway initial seeding: {} successors: {} for: {} on: {}", gateway.getInitialSeedSetCount(),
+                 successors.size(), from, node.getId());
         responseObserver.onNext(gateway);
         responseObserver.onCompleted();
         if (timer != null) {

@@ -34,7 +34,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -109,9 +108,7 @@ public class ChurnTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         long then = System.currentTimeMillis();
 
-        views.get(0)
-             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList());
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -120,8 +117,7 @@ public class ChurnTest {
         var bootstrappers = views.subList(1, seeds.size());
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
-        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -149,8 +145,7 @@ public class ChurnTest {
             then = System.currentTimeMillis();
             countdown.set(new CountDownLatch(toStart.size()));
 
-            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                               Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
             failed = testViews.stream()

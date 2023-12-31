@@ -39,17 +39,16 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class Enclave implements RouterSupplier {
-    private final static Class<? extends io.netty.channel.Channel> channelType    = IMPL.getChannelType();
-    private static final Logger                                    log            = LoggerFactory.getLogger(
-    Enclave.class);
-    private final        Executor                                  executor       = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
-    private final        DomainSocketAddress                       bridge;
-    private final        Consumer<Digest>                          contextRegistration;
-    private final        DomainSocketAddress                       endpoint;
-    private final        EventLoopGroup                            eventLoopGroup = IMPL.getEventLoopGroup();
-    private final        Member                                    from;
-    private final        String                                    fromString;
+    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
+    private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
+
+    private final Executor            executor       = Executors.newVirtualThreadPerTaskExecutor();
+    private final DomainSocketAddress bridge;
+    private final Consumer<Digest>    contextRegistration;
+    private final DomainSocketAddress endpoint;
+    private final EventLoopGroup      eventLoopGroup = IMPL.getEventLoopGroup();
+    private final Member              from;
+    private final String              fromString;
 
     public Enclave(Member from, DomainSocketAddress endpoint, DomainSocketAddress bridge,
                    Consumer<Digest> contextRegistration) {

@@ -28,7 +28,7 @@ import static com.salesforce.apollo.comm.grpc.MtlsServer.forClient;
  * @author hal.hildebrand
  */
 public class MtlsClient {
-    private static final Executor       exec = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+    private static final Executor       exec = Executors.newVirtualThreadPerTaskExecutor();
     private final        ManagedChannel channel;
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, ClientContextSupplier supplier,

@@ -53,7 +53,8 @@ public class SliceIterator<Comm extends Link> {
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
                             Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
         log.trace("Starting iteration of: <{}> on: {}", label, member.getId());
-        internalIterate(round, handler, onComplete, scheduler, frequency);
+        Thread.ofVirtual()
+              .start(Utils.wrapped(() -> internalIterate(round, handler, onComplete, scheduler, frequency), log));
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
@@ -120,7 +121,8 @@ public class SliceIterator<Comm extends Link> {
             }
         } else if (allow) {
             log.trace("Proceeding for: <{}> on: {}", label, member.getId());
-            scheduler.schedule(Utils.wrapped(proceed, log), frequency.toNanos(), TimeUnit.NANOSECONDS);
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(proceed, log)), frequency.toNanos(),
+                               TimeUnit.NANOSECONDS);
         } else {
             log.trace("Termination for: <{}> on: {}", label, member.getId());
         }

@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
  * @author hal.hildebrand
  */
 public class MtlsClient {
-    private final Executor exec = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+    private final Executor exec = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ManagedChannel channel;
 

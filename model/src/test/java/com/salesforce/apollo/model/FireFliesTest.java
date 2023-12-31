@@ -39,7 +39,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -135,17 +134,14 @@ public class FireFliesTest {
 
         domains.getFirst()
                .getFoundation()
-               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList());
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
         domains.subList(1, domains.size())
                .forEach(d -> Thread.ofVirtual()
                                    .start(() -> d.getFoundation()
-                                                 .start(() -> started.get().countDown(), gossipDuration, seeds,
-                                                        Executors.newScheduledThreadPool(1, Thread.ofVirtual()
-                                                                                                  .factory()))));
+                                                 .start(() -> started.get().countDown(), gossipDuration, seeds)));
         assertTrue(started.get().await(30, TimeUnit.SECONDS), "could not start views");
 
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");

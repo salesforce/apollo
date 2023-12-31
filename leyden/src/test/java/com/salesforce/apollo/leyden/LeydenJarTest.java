@@ -125,7 +125,7 @@ public class LeydenJarTest {
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
-        var exec = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var router = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         routers.put(member, router);
         dhts.put(member,

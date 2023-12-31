@@ -91,7 +91,7 @@ public class CHOAM {
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
-        executions = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+        executions = Executors.newVirtualThreadPerTaskExecutor();
 
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.communications(),

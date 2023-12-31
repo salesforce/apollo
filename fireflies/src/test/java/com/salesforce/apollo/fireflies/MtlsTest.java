@@ -45,7 +45,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -144,9 +143,7 @@ public class MtlsTest {
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
 
-        views.get(0)
-             .start(() -> countdown.get().countDown(), duration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), duration, Collections.emptyList());
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "KERNEL did not stabilize");
 
@@ -155,14 +152,12 @@ public class MtlsTest {
 
         countdown.set(new CountDownLatch(seedlings.size()));
 
-        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel,
-                                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Seeds did not stabilize");
 
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds,
-                                         Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds));
 
         assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()

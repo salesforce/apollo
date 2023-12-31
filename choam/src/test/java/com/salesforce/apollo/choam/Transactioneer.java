@@ -7,8 +7,8 @@
 package com.salesforce.apollo.choam;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 class Transactioneer {
     private final static Random                     entropy   = new Random();
     private final static Logger                     log       = LoggerFactory.getLogger(Transactioneer.class);
-    private final static Executor                   executor  = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
+    private final static Executor                   executor  = Executors.newVirtualThreadPerTaskExecutor();
     private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual()
                                                                                                           .factory());
     private final        AtomicInteger              completed = new AtomicInteger();

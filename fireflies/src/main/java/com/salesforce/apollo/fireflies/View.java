@@ -197,8 +197,7 @@ public class View {
     /**
      * Start the View
      */
-    public void start(CompletableFuture<Void> onJoin, Duration d, List<Seed> seedpods,
-                      ScheduledExecutorService scheduler) {
+    public void start(CompletableFuture<Void> onJoin, Duration d, List<Seed> seedpods) {
         Objects.requireNonNull(onJoin, "Join completion must not be null");
         if (!started.compareAndSet(false, true)) {
             return;
@@ -214,10 +213,11 @@ public class View {
         context.clear();
         node.reset();
 
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
         scheduler.schedule(Utils.wrapped(
-        () -> new Binding(this, seeds, d, scheduler, context, approaches, node, params, metrics, digestAlgo).seeding(),
-        log), initial, TimeUnit.NANOSECONDS);
+                           () -> new Binding(this, seeds, d, context, approaches, node, params, metrics, digestAlgo).seeding(), log),
+                           initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -225,12 +225,12 @@ public class View {
     /**
      * Start the View
      */
-    public void start(Runnable onJoin, Duration d, List<Seed> seedpods, ScheduledExecutorService scheduler) {
+    public void start(Runnable onJoin, Duration d, List<Seed> seedpods) {
         final var futureSailor = new CompletableFuture<Void>();
         futureSailor.whenComplete((v, t) -> {
             onJoin.run();
         });
-        start(futureSailor, d, seedpods, scheduler);
+        start(futureSailor, d, seedpods);
     }
 
     /**
@@ -326,8 +326,8 @@ public class View {
         return true;
     }
 
-    void bootstrap(NoteWrapper nw, ScheduledExecutorService sched, Duration dur) {
-        viewManagement.bootstrap(nw, sched, dur);
+    void bootstrap(NoteWrapper nw, Duration dur) {
+        viewManagement.bootstrap(nw, dur);
     }
 
     Digest bootstrapView() {
@@ -405,9 +405,8 @@ public class View {
         introduced.set(true);
     }
 
-    BiConsumer<? super Bound, ? super Throwable> join(ScheduledExecutorService scheduler, Duration duration,
-                                                      com.codahale.metrics.Timer.Context timer) {
-        return viewManagement.join(scheduler, duration, timer);
+    BiConsumer<? super Bound, ? super Throwable> join(Duration duration, com.codahale.metrics.Timer.Context timer) {
+        return viewManagement.join(duration, timer);
     }
 
     void notifyListeners(List<EstablishmentEvent> joining, List<Digest> leaving) {
@@ -490,7 +489,8 @@ public class View {
         viewManagement.resetBootstrapView();
     }
 
-    void schedule(final Duration duration, final ScheduledExecutorService scheduler) {
+    void schedule(final Duration duration) {
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         futureGossip = scheduler.schedule(Utils.wrapped(() -> gossip(duration, scheduler), log),
                                           Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
     }

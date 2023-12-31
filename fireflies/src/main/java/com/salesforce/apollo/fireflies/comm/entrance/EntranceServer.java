@@ -46,8 +46,11 @@ public class EntranceServer extends EntranceImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            // async handling
-            s.join(request, from, responseObserver, timer);
+            try {
+                s.join(request, from, responseObserver, timer);
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+            }
         });
     }
 
@@ -65,7 +68,13 @@ public class EntranceServer extends EntranceImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            var r = s.seed(request, from);
+            Redirect r;
+            try {
+                r = s.seed(request, from);
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+                return;
+            }
             responseObserver.onNext(r);
             responseObserver.onCompleted();
             if (timer != null) {
@@ -85,7 +94,13 @@ public class EntranceServer extends EntranceImplBase {
             return;
         }
         router.evaluate(responseObserver, s -> {
-            var r = s.validateCoords(request, from);
+            Validation r;
+            try {
+                r = s.validateCoords(request, from);
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+                return;
+            }
             responseObserver.onNext(r);
             responseObserver.onCompleted();
         });

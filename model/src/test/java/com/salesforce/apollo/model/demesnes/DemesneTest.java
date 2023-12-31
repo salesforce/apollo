@@ -76,9 +76,9 @@ import static org.junit.jupiter.api.Assertions.*;
 public class DemesneTest {
     private final static Class<? extends io.netty.channel.Channel>  clientChannelType = IMPL.getChannelType();
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
-    private final static Executor                                   executor          = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
-    private final        TestItService                              local             = new TestItService() {
+    private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
+
+    private final TestItService  local = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -94,7 +94,7 @@ public class DemesneTest {
             return null;
         }
     };
-    private              EventLoopGroup                             eventLoopGroup;
+    private       EventLoopGroup eventLoopGroup;
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {

@@ -34,12 +34,13 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class LocalServer implements RouterSupplier {
-    private static final Logger            log            = LoggerFactory.getLogger(LocalServer.class);
-    private static final String            NAME_TEMPLATE  = "%s-%s";
-    private final        Executor          clientExecutor = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
-    private final        ClientInterceptor clientInterceptor;
-    private final        Member            from;
-    private final        String            prefix;
+    private static final Logger   log           = LoggerFactory.getLogger(LocalServer.class);
+    private static final String   NAME_TEMPLATE = "%s-%s";
+    private final        Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
+
+    private final ClientInterceptor clientInterceptor;
+    private final Member            from;
+    private final String            prefix;
 
     public LocalServer(String prefix, Member member) {
         this.from = member;
@@ -73,7 +74,7 @@ public class LocalServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
-                                                               .executor(Executors.newCachedThreadPool())
+                                                               .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(
@@ -93,7 +94,7 @@ public class LocalServer implements RouterSupplier {
     private ManagedChannel connectTo(Member to) {
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
         final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name)
-                                                                       .executor(clientExecutor)
+                                                                       .executor(executor)
                                                                        .usePlaintext()
                                                                        .intercept(clientInterceptor);
         disableTrash(builder);

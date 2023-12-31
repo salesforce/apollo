@@ -137,7 +137,7 @@ public class MtlsServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
-                                                             .executor(Executors.newCachedThreadPool())
+                                                             .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),

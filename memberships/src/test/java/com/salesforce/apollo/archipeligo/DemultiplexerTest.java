@@ -56,14 +56,14 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class DemultiplexerTest {
 
-    private static final Class<? extends io.netty.channel.Channel> channelType    = IMPL.getChannelType();
-    private static final Executor                                  executor       = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
-    private final        EventLoopGroup                            eventLoopGroup = IMPL.getEventLoopGroup();
-    private final        List<ManagedChannel>                      opened         = new ArrayList<>();
-    private              Server                                    serverA;
-    private              Server                                    serverB;
-    private              Demultiplexer                             terminus;
+    private static final Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
+    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+
+    private final EventLoopGroup       eventLoopGroup = IMPL.getEventLoopGroup();
+    private final List<ManagedChannel> opened         = new ArrayList<>();
+    private       Server               serverA;
+    private       Server               serverB;
+    private       Demultiplexer        terminus;
 
     @AfterEach
     public void after() throws InterruptedException {

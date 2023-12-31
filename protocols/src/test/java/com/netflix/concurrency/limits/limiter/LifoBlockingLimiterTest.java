@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class LifoBlockingLimiterTest {
 
-    private final Executor                     executor = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+    private final Executor                     executor = Executors.newVirtualThreadPerTaskExecutor();
     private       LifoBlockingLimiter<Integer> blockingLimiter;
     private       SettableLimit                limit;
     private       SimpleLimiter<Integer>       simpleLimiter;

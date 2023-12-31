@@ -70,16 +70,16 @@ public class DemesneImpl implements Demesne {
     private static final Duration                 DEFAULT_GOSSIP_INTERVAL = Duration.ofMillis(5);
     private static final EventLoopGroup           eventLoopGroup          = IMPL.getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
-    private final static Executor                 executor                = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
-    private final        KERL                     kerl;
-    private final        OuterContextClient       outer;
-    private final        DemesneParameters        parameters;
-    private final        AtomicBoolean            started                 = new AtomicBoolean();
-    private final        Thoth                    thoth;
-    private final        Context<Member>          context;
-    private volatile     SubDomain                domain;
-    private volatile     Enclave                  enclave;
+
+    private final    Executor           executor = Executors.newVirtualThreadPerTaskExecutor();
+    private final    KERL               kerl;
+    private final    OuterContextClient outer;
+    private final    DemesneParameters  parameters;
+    private final    AtomicBoolean      started  = new AtomicBoolean();
+    private final    Thoth              thoth;
+    private final    Context<Member>    context;
+    private volatile SubDomain          domain;
+    private volatile Enclave            enclave;
 
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";

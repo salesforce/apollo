@@ -34,7 +34,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -112,17 +111,14 @@ public class SwarmTest {
         final var gossipDuration = Duration.ofMillis(largeTests ? 150 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
-        views.get(0)
-             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList());
 
         assertTrue(countdown.get().await(60, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
         bootstrappers.subList(1, bootstrappers.size())
-                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed));
 
         // Test that all bootstrappers up
         var success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
@@ -135,8 +131,7 @@ public class SwarmTest {
 
         // Start remaining views
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                   Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
         success = countdown.get().await(largeTests ? 2400 : 120, TimeUnit.SECONDS);
 

@@ -13,13 +13,12 @@ import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.Block;
 import com.salesforce.apollo.choam.proto.CertifiedBlock;
 import com.salesforce.apollo.choam.proto.Header;
 import com.salesforce.apollo.choam.proto.SubmitResult;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
-import com.salesforce.apollo.test.proto.ByteMessage;
-import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
@@ -31,6 +30,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -103,7 +103,7 @@ public class SessionTest {
 
     @Test
     public void scalingTest() throws Exception {
-        var exec = Executors.newCachedThreadPool(Thread.ofVirtual().factory());
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");

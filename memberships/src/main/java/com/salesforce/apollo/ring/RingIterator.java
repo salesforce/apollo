@@ -76,10 +76,8 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         AtomicInteger tally = new AtomicInteger(0);
         var traversed = new ConcurrentSkipListSet<Member>();
         Thread.ofVirtual()
-              .factory()
-              .newThread(
-              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed))
-              .start();
+              .start(
+              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed));
 
     }
 
@@ -208,6 +206,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     }
 
     private void schedule(Runnable proceed) {
-        scheduler.schedule(Utils.wrapped(proceed, log), frequency.toNanos(), TimeUnit.NANOSECONDS);
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(proceed, log)), frequency.toNanos(),
+                           TimeUnit.NANOSECONDS);
     }
 }

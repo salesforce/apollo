@@ -67,7 +67,7 @@ public class MtlsServer implements ClientIdentity {
                                                        .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                        .intercept(interceptor)
                                                        .intercept(EnableCompressionInterceptor.SINGLETON);
-        builder.executor(Executors.newCachedThreadPool(Thread.ofVirtual().factory()));
+        builder.executor(Executors.newVirtualThreadPerTaskExecutor());
         server = builder.build();
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override

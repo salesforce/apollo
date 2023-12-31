@@ -26,7 +26,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -35,7 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -56,17 +55,15 @@ class Binding {
     private final        FireflyMetrics                          metrics;
     private final        Node                                    node;
     private final        Parameters                              params;
-    private final        ScheduledExecutorService                scheduler;
     private final        List<Seed>                              seeds;
     private final        View                                    view;
 
-    public Binding(View view, List<Seed> seeds, Duration duration, ScheduledExecutorService scheduler,
-                   Context<Participant> context, CommonCommunications<Entrance, Service> approaches, Node node,
-                   Parameters params, FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
+    public Binding(View view, List<Seed> seeds, Duration duration, Context<Participant> context,
+                   CommonCommunications<Entrance, Service> approaches, Node node, Parameters params,
+                   FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
         this.view = view;
         this.duration = duration;
         this.seeds = new ArrayList<>(seeds);
-        this.scheduler = scheduler;
         this.context = context;
         this.node = node;
         this.params = params;
@@ -84,9 +81,9 @@ class Binding {
         log.info("Seeding view: {} context: {} with seeds: {} started on: {}", view.currentView(), this.context.getId(),
                  seeds.size(), node.getId());
 
-        var seeding = new CompletableFuture<Redirect>();
+        var redirect = new CompletableFuture<Redirect>();
         var timer = metrics == null ? null : metrics.seedDuration().time();
-        seeding.whenComplete(join(duration, scheduler, timer));
+        redirect.whenComplete(join(duration, timer));
 
         var bootstrappers = seeds.stream()
                                  .map(this::seedFor)
@@ -95,13 +92,14 @@ class Binding {
                                  .collect(Collectors.toList());
         var seedlings = new SliceIterator<>("Seedlings", node, bootstrappers, approaches);
         AtomicReference<Runnable> reseed = new AtomicReference<>();
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         reseed.set(() -> {
             final var registration = registration();
             seedlings.iterate((link, m) -> {
                 log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), node.getId());
                 return link.seed(registration);
-            }, (futureSailor, link, m) -> complete(seeding, futureSailor, m), () -> {
-                if (!seeding.isDone()) {
+            }, (futureSailor, link, m) -> complete(redirect, futureSailor, m), () -> {
+                if (!redirect.isDone()) {
                     scheduler.schedule(Utils.wrapped(reseed.get(), log), params.retryDelay().toNanos(),
                                        TimeUnit.NANOSECONDS);
                 }
@@ -115,7 +113,7 @@ class Binding {
                  node.getId());
         var nw = node.getNote();
 
-        view.bootstrap(nw, scheduler, duration);
+        view.bootstrap(nw, duration);
     }
 
     private boolean complete(CompletableFuture<Redirect> redirect, Optional<Redirect> futureSailor, Member m) {
@@ -123,14 +121,15 @@ class Binding {
             return true;
         }
         if (redirect.isDone()) {
-            return true;
+            return false;
         }
         final var r = futureSailor.get();
         if (redirect.complete(r)) {
-            log.info("Redirect to view: {} context: {} from: {} on: {}", Digest.from(r.getView()), this.context.getId(),
-                     m.getId(), node.getId());
+            log.info("Redirected to view: {} context: {} from: {} on: {}", Digest.from(r.getView()),
+                     this.context.getId(), m.getId(), node.getId());
+            return false;
         }
-        return false;
+        return true;
     }
 
     private boolean completeGateway(Participant member, CompletableFuture<Bound> gateway,
@@ -180,25 +179,29 @@ class Binding {
     }
 
     private void gatewaySRE(Digest v, Entrance link, StatusRuntimeException sre, AtomicInteger abandon) {
-        if (sre.getStatus().getCode().equals(Status.OUT_OF_RANGE.getCode())) {
+        switch (sre.getStatus().getCode()) {
+        case OUT_OF_RANGE -> {
             log.info("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
                      node.getId());
             abandon.incrementAndGet();
-        } else if (sre.getStatus().getCode().equals(Status.FAILED_PRECONDITION.getCode())) {
+        }
+        case FAILED_PRECONDITION -> {
             log.info("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
                      node.getId());
             abandon.incrementAndGet();
-        } else if (sre.getStatus().getCode().equals(Status.PERMISSION_DENIED.getCode())) {
+        }
+        case PERMISSION_DENIED -> {
             log.info("Gateway view: {} permission denied: {} from: {} on: {}", v, sre.getMessage(),
                      link.getMember().getId(), node.getId());
             abandon.incrementAndGet();
-        } else if (sre.getStatus().getCode().equals(Status.RESOURCE_EXHAUSTED.getCode())) {
+        }
+        case RESOURCE_EXHAUSTED -> {
             log.info("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
                      node.getId());
             abandon.incrementAndGet();
-        } else {
-            log.info("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                     node.getId());
+        }
+        default -> log.info("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                            node.getId());
         }
     }
 
@@ -206,8 +209,7 @@ class Binding {
         return Join.newBuilder().setView(v.toDigeste()).setNote(node.getNote().getWrapped()).build();
     }
 
-    private BiConsumer<? super Redirect, ? super Throwable> join(Duration duration, ScheduledExecutorService scheduler,
-                                                                 Timer.Context timer) {
+    private BiConsumer<? super Redirect, ? super Throwable> join(Duration duration, Timer.Context timer) {
         return (r, t) -> {
             if (t != null) {
                 log.error("Failed seeding on: {}", node.getId(), t);
@@ -228,11 +230,11 @@ class Binding {
             if (timer != null) {
                 timer.close();
             }
-            join(r, view, duration, scheduler);
+            join(r, view, duration);
         };
     }
 
-    private void join(Redirect redirect, Digest v, Duration duration, ScheduledExecutorService scheduler) {
+    private void join(Redirect redirect, Digest v, Duration duration) {
         var sample = redirect.getSampleList()
                              .stream()
                              .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
@@ -242,7 +244,7 @@ class Binding {
                  node.getId());
         var gateway = new CompletableFuture<Bound>();
         var timer = metrics == null ? null : metrics.joinDuration().time();
-        gateway.whenComplete(view.join(scheduler, duration, timer));
+        gateway.whenComplete(view.join(duration, timer));
 
         var regate = new AtomicReference<Runnable>();
         var retries = new AtomicInteger();
@@ -261,6 +263,7 @@ class Binding {
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
         final var abandon = new AtomicInteger();
+        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         regate.set(() -> {
             redirecting.iterate((link, m) -> {
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());

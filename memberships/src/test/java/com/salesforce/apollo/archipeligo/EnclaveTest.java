@@ -51,9 +51,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class EnclaveTest {
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
-    private static final Executor                                  executor    = Executors.newCachedThreadPool(
-    Thread.ofVirtual().factory());
-    private final        TestItService                             local       = new TestItService() {
+    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+
+    private final TestItService  local = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -69,7 +69,7 @@ public class EnclaveTest {
             return null;
         }
     };
-    private              EventLoopGroup                            eventLoopGroup;
+    private       EventLoopGroup eventLoopGroup;
 
     @AfterEach
     public void after() throws Exception {
