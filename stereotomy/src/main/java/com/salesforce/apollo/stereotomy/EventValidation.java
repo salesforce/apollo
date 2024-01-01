@@ -78,6 +78,10 @@ public interface EventValidation {
             return delegate().keyState(id, sequenceNumber);
         }
 
+        public void setDelegate(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
         @Override
         public boolean validate(EventCoordinates coordinates) {
             return delegate().validate(coordinates);

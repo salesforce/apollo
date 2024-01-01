@@ -89,6 +89,33 @@ public interface Verifiers {
 
     Optional<Verifier> verifierFor(Identifier identifier);
 
+    class DelegatedVerifiers implements Verifiers {
+        private volatile Verifiers delegate;
+
+        public DelegatedVerifiers(Verifiers delegate) {
+            this.delegate = delegate;
+        }
+
+        public void setDelegate(Verifiers delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<Verifier> verifierFor(Identifier identifier) {
+            return delegate().verifierFor(identifier);
+        }
+
+        @Override
+        public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
+            return delegate().verifierFor(coordinates);
+        }
+
+        private Verifiers delegate() {
+            final var current = delegate;
+            return current;
+        }
+    }
+
     class FixedVerifiers implements Verifiers {
         private final Map<EventCoordinates, Verifier> verifiersByCoordinates;
         private final Map<Identifier, Verifier>       verifiersByIdentifer;
