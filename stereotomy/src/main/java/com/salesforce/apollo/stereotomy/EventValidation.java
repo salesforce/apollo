@@ -17,7 +17,7 @@ import org.joou.ULong;
  */
 public interface EventValidation {
 
-    EventValidation NONE = new EventValidation() {
+    EventValidation NONE          = new EventValidation() {
 
         @Override
         public KeyState keyState(Identifier id, ULong sequenceNumber) {
@@ -34,7 +34,6 @@ public interface EventValidation {
             return true;
         }
     };
-
     EventValidation NO_VALIDATION = new EventValidation() {
 
         @Override
@@ -66,4 +65,32 @@ public interface EventValidation {
      * trusted validators.
      */
     boolean validate(EstablishmentEvent event);
+
+    class DelegatedEventValidation implements EventValidation {
+        private volatile EventValidation delegate;
+
+        public DelegatedEventValidation(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return delegate().keyState(id, sequenceNumber);
+        }
+
+        @Override
+        public boolean validate(EventCoordinates coordinates) {
+            return delegate().validate(coordinates);
+        }
+
+        @Override
+        public boolean validate(EstablishmentEvent event) {
+            return delegate().validate(event);
+        }
+
+        private EventValidation delegate() {
+            final var current = delegate;
+            return current;
+        }
+    }
 }

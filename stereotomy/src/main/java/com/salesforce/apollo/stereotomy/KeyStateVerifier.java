@@ -33,14 +33,6 @@ public abstract class KeyStateVerifier<D extends Identifier> implements Verifier
         return identifier;
     }
 
-    public Optional<Verifier> verifierFor(EventCoordinates coordinates) {
-        KeyState keyState = getKeyState(coordinates);
-        if (keyState == null) {
-            return Optional.empty();
-        }
-        return Optional.of(new DefaultVerifier(keyState.getKeys()));
-    }
-
     @Override
     public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
         var verifier = verifierFor(signature.getSequenceNumber());
@@ -54,8 +46,6 @@ public abstract class KeyStateVerifier<D extends Identifier> implements Verifier
     }
 
     protected abstract KeyState getKeyState(ULong sequenceNumber);
-
-    protected abstract KeyState getKeyState(EventCoordinates coordinates);
 
     protected Optional<Verifier> verifierFor(ULong sequenceNumber) {
         KeyState keyState = getKeyState(sequenceNumber);

@@ -21,9 +21,4 @@ public class KerlVerifier<D extends Identifier> extends KeyStateVerifier<D> {
     protected KeyState getKeyState(ULong sequenceNumber) {
         return kerl.getKeyState(identifier, sequenceNumber);
     }
-
-    @Override
-    protected KeyState getKeyState(EventCoordinates coordinates) {
-        return kerl.getKeyState(coordinates);
-    }
 }
