@@ -7,16 +7,17 @@
 package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
-import com.salesforce.apollo.choam.proto.*;
-import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
+import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -150,7 +151,8 @@ public class ViewAssembly {
                   proposals.keySet().stream().toList(), nextAssembly.size(), delay, params().member().getId());
         if (!cancelSlice.get()) {
             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
-                     .schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);
+                     .schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reiterate.get(), log)), delay.toMillis(),
+                               TimeUnit.MILLISECONDS);
         }
     }
 

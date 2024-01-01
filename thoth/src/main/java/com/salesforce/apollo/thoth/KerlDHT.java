@@ -47,6 +47,7 @@ import com.salesforce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 import liquibase.Liquibase;
 import liquibase.Scope;
 import liquibase.Scope.Attr;
@@ -948,7 +949,8 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         if (started.get()) {
-            scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(scheduler, duration), log)),
+                               duration.toMillis(), TimeUnit.MILLISECONDS);
         }
     }
 

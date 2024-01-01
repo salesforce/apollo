@@ -21,6 +21,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Verifier;
+import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,7 +170,7 @@ public class Session {
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmittedSuccess();
                 }
-                var futureTimeout = scheduler.schedule(() -> {
+                var futureTimeout = scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
                     if (result.isDone()) {
                         return;
                     }
@@ -179,7 +180,7 @@ public class Session {
                     if (params.metrics() != null) {
                         params.metrics().transactionComplete(to);
                     }
-                }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+                }, log)), timeout.toMillis(), TimeUnit.MILLISECONDS);
 
                 return result.whenComplete((r, t) -> {
                     futureTimeout.cancel(true);

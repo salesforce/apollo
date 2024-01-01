@@ -32,9 +32,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
 /**
- * Verifiers that delegate to the joining member's successors in the full context for key state retrieval
- * <p>
- * This is used to bootstrap the node via delegated key state resolution of the joined group
+ * Verifiers that delegate to a majority of the sample for event validation and verification
  * </p>
  *
  * @author hal.hildebrand

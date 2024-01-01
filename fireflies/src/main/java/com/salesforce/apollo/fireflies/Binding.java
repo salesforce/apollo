@@ -100,8 +100,8 @@ class Binding {
                 return link.seed(registration);
             }, (futureSailor, link, m) -> complete(redirect, futureSailor, m), () -> {
                 if (!redirect.isDone()) {
-                    scheduler.schedule(Utils.wrapped(reseed.get(), log), params.retryDelay().toNanos(),
-                                       TimeUnit.NANOSECONDS);
+                    scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reseed.get(), log)),
+                                       params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
                 }
             }, scheduler, params.retryDelay());
         });
@@ -299,7 +299,7 @@ class Binding {
                                  params.joinRetries(), node.getId());
                         trusts.clear();
                         initialSeedSet.clear();
-                        scheduler.schedule(Utils.wrapped(regate.get(), log),
+                        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
                                            Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
                                            TimeUnit.NANOSECONDS);
                     } else {

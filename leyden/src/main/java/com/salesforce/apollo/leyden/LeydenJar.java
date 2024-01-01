@@ -20,6 +20,7 @@ import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Hex;
+import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
@@ -380,7 +381,8 @@ public class LeydenJar {
                       member.getId());
         }
         if (started.get()) {
-            scheduler.schedule(() -> reconcile(scheduler, duration), duration.toNanos(), TimeUnit.NANOSECONDS);
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> reconcile(scheduler, duration), log)),
+                               duration.toNanos(), TimeUnit.NANOSECONDS);
         }
     }
 

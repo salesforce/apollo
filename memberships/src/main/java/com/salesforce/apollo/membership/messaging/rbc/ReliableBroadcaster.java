@@ -10,8 +10,6 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
-import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.messaging.proto.*;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
@@ -20,13 +18,16 @@ import com.salesforce.apollo.bloomFilters.BloomWindow;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
+import com.salesforce.apollo.messaging.proto.*;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,7 +188,8 @@ public class ReliableBroadcaster {
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
         var scheduler = Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory());
-        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
+                           initialDelay, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -251,7 +253,9 @@ public class ReliableBroadcaster {
             }
             if (started.get()) {
                 try {
-                    scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+                    scheduler.schedule(
+                    () -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
+                    duration.toMillis(), TimeUnit.MILLISECONDS);
                 } catch (RejectedExecutionException e) {
                     return;
                 }

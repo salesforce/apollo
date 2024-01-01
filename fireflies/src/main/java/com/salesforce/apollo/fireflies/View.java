@@ -108,8 +108,8 @@ public class View {
     private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);
     private final        ViewManagement                              viewManagement;
-    private final        EventValidation.DelegatedEventValidation    validation;
-    private final        Verifiers.DelegatedVerifiers                verifiers;
+    private final        EventValidation                             validation;
+    private final        Verifiers                                   verifiers;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
@@ -138,8 +138,8 @@ public class View {
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
-        this.validation = new EventValidation.DelegatedEventValidation(validation);
-        this.verifiers = new Verifiers.DelegatedVerifiers(verifiers);
+        this.validation = validation;
+        this.verifiers = verifiers;
     }
 
     /**
@@ -222,9 +222,10 @@ public class View {
 
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         var initial = Entropy.nextBitsStreamLong(d.toNanos());
-        scheduler.schedule(Utils.wrapped(
-                           () -> new Binding(this, seeds, d, context, approaches, node, params, metrics, digestAlgo).seeding(), log),
-                           initial, TimeUnit.NANOSECONDS);
+        scheduler.schedule(() -> Thread.ofVirtual()
+                                       .start(Utils.wrapped(
+                                       () -> new Binding(this, seeds, d, context, approaches, node, params, metrics,
+                                                         digestAlgo).seeding(), log)), initial, TimeUnit.NANOSECONDS);
 
         log.info("{} started on: {}", context.getId(), node.getId());
     }
@@ -495,8 +496,9 @@ public class View {
 
     void schedule(final Duration duration) {
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        futureGossip = scheduler.schedule(Utils.wrapped(() -> gossip(duration, scheduler), log),
-                                          Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
+        futureGossip = scheduler.schedule(
+        () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration, scheduler), log)),
+        Entropy.nextBitsStreamLong(duration.toNanos()), TimeUnit.NANOSECONDS);
     }
 
     void scheduleFinalizeViewChange() {
@@ -1083,8 +1085,9 @@ public class View {
             }
 
         } finally {
-            futureGossip = scheduler.schedule(Utils.wrapped(() -> gossip(duration, scheduler), log), duration.toNanos(),
-                                              TimeUnit.NANOSECONDS);
+            futureGossip = scheduler.schedule(
+            () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(duration, scheduler), log)), duration.toNanos(),
+            TimeUnit.NANOSECONDS);
         }
     }
 

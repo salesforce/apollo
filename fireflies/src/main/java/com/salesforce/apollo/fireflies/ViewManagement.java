@@ -380,7 +380,8 @@ public class ViewManagement {
                 return !joined();
             }, () -> {
                 if (!joined()) {
-                    scheduler.schedule(Utils.wrapped(() -> repopulate.get(), log), 500, TimeUnit.MILLISECONDS);
+                    scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
+                                       TimeUnit.MILLISECONDS);
                 }
             }, scheduler, Duration.ofMillis(500));
         });

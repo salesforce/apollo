@@ -25,6 +25,7 @@ import com.salesforce.apollo.model.comms.DelegationServer;
 import com.salesforce.apollo.model.comms.DelegationService;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -106,7 +107,8 @@ public class SubDomain extends Domain {
         super.start();
         Duration initialDelay = gossipInterval.plusMillis(Entropy.nextBitsStreamLong(gossipInterval.toMillis()));
         log.trace("Starting SubDomain[{}:{}]", params.context().getId(), member.getId());
-        scheduler.schedule(() -> oneRound(), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(), log)),
+                           initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -171,7 +173,8 @@ public class SubDomain extends Domain {
                 timer.stop();
             }
             if (started.get()) {
-                scheduler.schedule(() -> oneRound(), gossipInterval.toMillis(), TimeUnit.MILLISECONDS);
+                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(), log)),
+                                   gossipInterval.toMillis(), TimeUnit.MILLISECONDS);
             }
         }
     }
