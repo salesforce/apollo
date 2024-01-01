@@ -36,8 +36,10 @@ import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Entropy;
@@ -45,6 +47,7 @@ import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1895,6 +1898,21 @@ public class View {
                 return;
             }
             viewManagement.join(join, from, responseObserver, timer);
+        }
+
+        @Override
+        public KeyState_ keyState(IdentAndSeq request, Digest from) {
+            var identifier = Identifier.from(request.getIdentifier());
+            var seq = ULong.valueOf(request.getSequenceNumber());
+
+            if (!viewManagement.joined()) {
+                log.info("Not yet joined!, ignoring key state request: {}:{} from: {} on: {}", identifier, seq, from,
+                         node.getId());
+                return KeyState_.getDefaultInstance();
+            }
+
+            var keyState = validation.keyState(identifier, seq);
+            return keyState == null ? KeyState_.getDefaultInstance() : keyState.toKeyState_();
         }
 
         /**

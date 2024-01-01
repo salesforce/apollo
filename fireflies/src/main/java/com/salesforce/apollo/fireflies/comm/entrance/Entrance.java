@@ -11,6 +11,8 @@ import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -38,6 +40,11 @@ public interface Entrance extends Link {
             }
 
             @Override
+            public KeyState_ keyState(IdentAndSeq idAndSeq) {
+                return null;
+            }
+
+            @Override
             public Redirect seed(Registration registration) {
                 return null;
             }
@@ -50,6 +57,8 @@ public interface Entrance extends Link {
     }
 
     Gateway join(Join join, Duration timeout);
+
+    KeyState_ keyState(IdentAndSeq idAndSeq);
 
     Redirect seed(Registration registration);
 

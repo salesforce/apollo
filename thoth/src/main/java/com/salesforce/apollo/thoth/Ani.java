@@ -18,6 +18,7 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +50,11 @@ public class Ani {
 
     public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
+
+            @Override
+            public KeyState keyState(Identifier id, ULong sequenceNumber) {
+                return kerl.getKeyState(id, sequenceNumber);
+            }
 
             @Override
             public boolean validate(EstablishmentEvent event) {

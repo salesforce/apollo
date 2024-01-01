@@ -15,6 +15,8 @@ import com.salesforce.apollo.fireflies.proto.EntranceGrpc.EntranceImplBase;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -50,6 +52,36 @@ public class EntranceServer extends EntranceImplBase {
                 s.join(request, from, responseObserver, timer);
             } catch (Throwable t) {
                 responseObserver.onError(t);
+            }
+        });
+    }
+
+    @Override
+    public void keyState(IdentAndSeq request, StreamObserver<KeyState_> responseObserver) {
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundSeed().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, s -> {
+            KeyState_ r;
+            try {
+                r = s.keyState(request, from);
+            } catch (Throwable t) {
+                responseObserver.onError(t);
+                return;
+            }
+            responseObserver.onNext(r);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                var serializedSize = r.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundRedirect().update(serializedSize);
             }
         });
     }

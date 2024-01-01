@@ -117,7 +117,11 @@ message Update {
 service Entrance {
   rpc seed (Registration) returns (Redirect) {}
   rpc join (Join) returns (Gateway) {}
+
+  // Bootstrap validation
   rpc validate(stereotomy.EventCoords) returns (Validation) {}
+  // Bootstrap verification key state
+  rpc keyState(stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
 }
 
 message Validation {

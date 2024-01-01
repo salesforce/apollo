@@ -7,6 +7,8 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 /**
  * The EventValidation provides validation predicates for EstablishmentEvents
@@ -16,6 +18,11 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 public interface EventValidation {
 
     EventValidation NONE = new EventValidation() {
+
+        @Override
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return null;
+        }
 
         @Override
         public boolean validate(EstablishmentEvent event) {
@@ -31,6 +38,11 @@ public interface EventValidation {
     EventValidation NO_VALIDATION = new EventValidation() {
 
         @Override
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return null;
+        }
+
+        @Override
         public boolean validate(EstablishmentEvent event) {
             return false;
         }
@@ -41,15 +53,17 @@ public interface EventValidation {
         }
     };
 
-    /**
-     * Answer true if the event is validated. This means that thresholds have been met from indicated witnesses and
-     * trusted validators.
-     */
-    boolean validate(EstablishmentEvent event);
+    KeyState keyState(Identifier id, ULong sequenceNumber);
 
     /**
      * Answer true if the event indicated by the coordinates is validated. This means that thresholds have been met from
      * indicated witnesses and trusted validators.
      */
     boolean validate(EventCoordinates coordinates);
+
+    /**
+     * Answer true if the event is validated. This means that thresholds have been met from indicated witnesses and
+     * trusted validators.
+     */
+    boolean validate(EstablishmentEvent event);
 }
