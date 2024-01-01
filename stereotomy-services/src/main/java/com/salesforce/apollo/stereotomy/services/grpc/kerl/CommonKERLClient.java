@@ -8,8 +8,8 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;

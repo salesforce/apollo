@@ -6,12 +6,11 @@
  */
 package com.salesforce.apollo.model.demesnes.comm;
 
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.SubContext;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface OuterContextService {
     void deregister(Digeste context);

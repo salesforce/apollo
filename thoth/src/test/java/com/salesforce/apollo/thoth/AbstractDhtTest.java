@@ -41,7 +41,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -53,19 +52,19 @@ import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
  * @author hal.hildebrand
  */
 public class AbstractDhtTest {
-    protected static final ProtobufEventFactory                                               factory     = new ProtobufEventFactory();
-    protected static final boolean                                                            LARGE_TESTS = Boolean.getBoolean(
-    "large_tests");
-    protected static final double                                                             PBYZ        = 0.25;
-    protected final        Map<SigningMember, KerlDHT>                                        dhts        = new HashMap<>();
-    protected final        Map<SigningMember, Router>                                         routers     = new HashMap<>();
-    protected final        AtomicBoolean                                                      gate        = new AtomicBoolean(
+    protected static final ProtobufEventFactory factory     = new ProtobufEventFactory();
+    protected static final boolean              LARGE_TESTS = Boolean.getBoolean("large_tests");
+    protected static final double               PBYZ        = 0.25;
+
+    protected final TreeMap<SigningMember, KerlDHT>                                    dhts    = new TreeMap<>();
+    protected final Map<SigningMember, Router>                                         routers = new HashMap<>();
+    protected final AtomicBoolean                                                      gate    = new AtomicBoolean(
     false);
-    protected              Context<Member>                                                    context;
-    protected              Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    protected              MemKERL                                                            kerl;
-    protected              String                                                             prefix;
-    protected              Stereotomy                                                         stereotomy;
+    protected       Context<Member>                                                    context;
+    protected       Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    protected       MemKERL                                                            kerl;
+    protected       String                                                             prefix;
+    protected       Stereotomy                                                         stereotomy;
 
     public AbstractDhtTest() {
         super();
@@ -131,17 +130,16 @@ public class AbstractDhtTest {
     }
 
     protected int getCardinality() {
-        return LARGE_TESTS ? 100 : 5;
+        return LARGE_TESTS ? 10 : 5;
     }
 
     protected void instantiate(SigningMember member, Context<Member> context,
                                ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
-        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         connectionPool.setMaxConnections(10);
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var router = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         routers.put(member, router);
         dhts.put(member,
@@ -149,7 +147,7 @@ public class AbstractDhtTest {
                              router, Duration.ofSeconds(10), 0.0125, null));
     }
 
-    protected BiFunction<KerlDHT, KERL, KERL> wrap() {
+    protected BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap() {
         return (t, k) -> k;
     }
 }

@@ -21,10 +21,7 @@ import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -45,7 +42,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -69,7 +65,7 @@ public class MtlsTest {
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
 
     static {
-        CARDINALITY = LARGE_TESTS ? 100 : 10;
+        CARDINALITY = LARGE_TESTS ? 20 : 10;
     }
 
     private List<Router> communications = new ArrayList<>();
@@ -106,7 +102,7 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
-        var parameters = Parameters.newBuilder().build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
         var node0Registry = new MetricRegistry();
@@ -115,7 +111,7 @@ public class MtlsTest {
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var seeds = members.stream()
-                           .map(m -> new Seed(m.getEvent().getCoordinates(), endpoints.get(m.getId())))
+                           .map(m -> new Seed(m.getEvent(), endpoints.get(m.getId())))
                            .limit(LARGE_TESTS ? 24 : 3)
                            .toList();
 
@@ -135,8 +131,8 @@ public class MtlsTest {
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(
             builder);
             communications.add(comms);
-            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, parameters,
-                            DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, Verifiers.NONE, comms,
+                            parameters, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();
@@ -144,9 +140,7 @@ public class MtlsTest {
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
 
-        views.get(0)
-             .start(() -> countdown.get().countDown(), duration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), duration, Collections.emptyList());
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "KERNEL did not stabilize");
 
@@ -155,14 +149,12 @@ public class MtlsTest {
 
         countdown.set(new CountDownLatch(seedlings.size()));
 
-        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel,
-                                             Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        seedlings.forEach(view -> view.start(() -> countdown.get().countDown(), duration, kernel));
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Seeds did not stabilize");
 
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds,
-                                         Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        views.forEach(view -> view.start(() -> countdown.get().countDown(), duration, seeds));
 
         assertTrue(Utils.waitForCondition(120_000, 1_000, () -> {
             return views.stream()

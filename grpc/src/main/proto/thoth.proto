@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.thoth.proto";
+option java_package = "com.salesforce.apollo.thoth.proto";
 option java_outer_classname = "ThothProto";
 option objc_class_prefix = "Tp";
 
@@ -39,6 +39,13 @@ service Delegated {
 service Reconciliation {
   rpc reconcile (Intervals) returns (Update) {}
   rpc update (Updating) returns (google.protobuf.Empty) {}
+}
+
+service Thoth_ {
+  rpc commit (stereotomy.EventCoords) returns (google.protobuf.Empty) {}
+  rpc identifier(google.protobuf.Empty) returns (stereotomy.Ident) {}
+  rpc inception(stereotomy.Ident) returns (stereotomy.InceptionEvent) {}
+  rpc rotate(google.protobuf.Empty) returns (stereotomy.RotationEvent) {}
 }
 
 message Update {

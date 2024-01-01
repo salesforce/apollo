@@ -6,12 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesforce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegatedRotationEventImpl extends RotationEventImpl implements DelegatedRotationEvent {
 

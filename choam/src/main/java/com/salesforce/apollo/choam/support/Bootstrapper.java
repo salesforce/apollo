@@ -8,13 +8,13 @@ package com.salesforce.apollo.choam.support;
 
 import com.google.common.collect.Multiset;
 import com.google.common.collect.TreeMultiset;
-import com.salesfoce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.ULongBloomFilter;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.HexBloom;
@@ -23,6 +23,7 @@ import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
+import com.salesforce.apollo.utils.Utils;
 import org.joou.ULong;
 import org.joou.Unsigned;
 import org.slf4j.Logger;
@@ -377,14 +378,14 @@ public class Bootstrapper {
         }
         log.info("Scheduling Anchor completion ({} to {}) duration: {} on: {}", start, anchorTo,
                  params.gossipDuration(), params.member().getId());
-        scheduler.schedule(() -> {
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
             try {
                 anchor(start, anchorTo);
             } catch (Throwable e) {
                 log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
-        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
+        }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void scheduleSample() {
@@ -392,7 +393,7 @@ public class Bootstrapper {
             return;
         }
         log.info("Scheduling state sample on: {}", params.member().getId());
-        scheduler.schedule(() -> {
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
             final HashedCertifiedBlock established = genesis;
             if (sync.isDone() || established != null) {
                 log.trace("Synchronization isDone: {} genesis: {} on: {}", sync.isDone(),
@@ -406,7 +407,7 @@ public class Bootstrapper {
                 sync.completeExceptionally(e);
                 e.printStackTrace();
             }
-        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
+        }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void scheduleViewChainCompletion(AtomicReference<ULong> start, ULong to) {
@@ -418,14 +419,14 @@ public class Bootstrapper {
         }
         log.info("Scheduling view chain completion ({} to {}) duration: {} on: {}", start, to, params.gossipDuration(),
                  params.member().getId());
-        scheduler.schedule(() -> {
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
             try {
                 completeViewChain(start, to);
             } catch (Throwable e) {
                 log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
-        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
+        }, log)), params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private boolean synchronize(Optional<Initial> futureSailor, HashMap<Digest, Initial> votes,

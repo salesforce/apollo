@@ -13,21 +13,20 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class RotationEventImpl extends EstablishmentEventImpl implements RotationEvent {
 
-    final com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event;
+    final com.salesforce.apollo.stereotomy.event.proto.RotationEvent event;
 
-    public RotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event) {
+    public RotationEventImpl(com.salesforce.apollo.stereotomy.event.proto.RotationEvent event) {
         super(event.getSpecification().getHeader(), event.getCommon(), event.getSpecification().getEstablishment());
         this.event = event;
     }
@@ -84,7 +83,7 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
         return KeyEvent_.newBuilder().setRotation(event).build();
     }
 
-    public com.salesfoce.apollo.stereotomy.event.proto.RotationEvent toRotationEvent_() {
+    public com.salesforce.apollo.stereotomy.event.proto.RotationEvent toRotationEvent_() {
         return event;
     }
 

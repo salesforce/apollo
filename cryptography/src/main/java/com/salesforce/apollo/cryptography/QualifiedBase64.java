@@ -1,9 +1,9 @@
 package com.salesforce.apollo.cryptography;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.cryptography.proto.PubKey;
-import com.salesfoce.apollo.cryptography.proto.Sig;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.cryptography.proto.Sig;
 
 import java.security.PublicKey;
 import java.util.Arrays;

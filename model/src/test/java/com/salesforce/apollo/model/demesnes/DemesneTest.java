@@ -8,18 +8,14 @@ package com.salesforce.apollo.model.demesnes;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.test.proto.ByteMessage;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.SubContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -38,6 +34,10 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.test.proto.ByteMessage;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.*;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
@@ -77,7 +77,8 @@ public class DemesneTest {
     private final static Class<? extends io.netty.channel.Channel>  clientChannelType = IMPL.getChannelType();
     private static final Class<? extends ServerDomainSocketChannel> serverChannelType = IMPL.getServerDomainSocketChannelClass();
     private final static Executor                                   executor          = Executors.newVirtualThreadPerTaskExecutor();
-    private final        TestItService                              local             = new TestItService() {
+
+    private final TestItService  local = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -93,7 +94,7 @@ public class DemesneTest {
             return null;
         }
     };
-    private              EventLoopGroup                             eventLoopGroup;
+    private       EventLoopGroup eventLoopGroup;
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
         return new ClientInterceptor() {
@@ -273,7 +274,7 @@ public class DemesneTest {
         assertNotNull(attached);
         assertEquals(1, attached.seals().size());
         final var extracted = attached.seals().get(0);
-        assertTrue(extracted instanceof Seal.DigestSeal);
+        assertTrue(extracted instanceof Seal.EventSeal);
         //        assertEquals(1, attached.endorsements().size());
     }
 

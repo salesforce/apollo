@@ -6,12 +6,13 @@
  */
 package com.salesforce.apollo.delphinius;
 
-import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
-import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
-import static com.salesforce.apollo.delphinius.schema.tables.Namespace.NAMESPACE;
-import static com.salesforce.apollo.delphinius.schema.tables.Object.OBJECT;
-import static com.salesforce.apollo.delphinius.schema.tables.Relation.RELATION;
-import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
+import com.salesforce.apollo.delphinius.schema.tables.Edge;
+import org.jooq.Record;
+import org.jooq.*;
+import org.jooq.exception.DataAccessException;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -19,27 +20,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.jooq.DSLContext;
-import org.jooq.Field;
-import org.jooq.Name;
-import org.jooq.Record;
-import org.jooq.Record1;
-import org.jooq.Record2;
-import org.jooq.SQLDialect;
-import org.jooq.SelectJoinStep;
-import org.jooq.Table;
-import org.jooq.exception.DataAccessException;
-import org.jooq.impl.DSL;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.delphinius.schema.tables.Edge;
+import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
+import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
+import static com.salesforce.apollo.delphinius.schema.tables.Namespace.NAMESPACE;
+import static com.salesforce.apollo.delphinius.schema.tables.Object.OBJECT;
+import static com.salesforce.apollo.delphinius.schema.tables.Relation.RELATION;
+import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
 
 /**
  * An Access Control Oracle
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 abstract public class AbstractOracle implements Oracle {
 
@@ -50,25 +41,34 @@ abstract public class AbstractOracle implements Oracle {
     protected static final Field<Long>            cParent    = DSL.field(DSL.name("CANDIDATES", "PARENT"), Long.class);
     protected static final Edge                   E          = EDGE.as("E");
     protected static final Logger                 log        = LoggerFactory.getLogger(AbstractOracle.class);
-    protected static final Name                   ROWZ       = DSL.name("ROZ");
+    protected static final Name                   ROWZ       = DSL.name("ROWZ");
     protected static final Table<Record>          rowzTable  = DSL.table(ROWZ);
     protected static final Table<Record>          s1         = rowzTable.as("S1");
+    protected static final Table<Record>          s2         = rowzTable.as("S2");
+    protected static final Table<Record>          s3         = rowzTable.as("S3");
     protected static final Field<Long>            s1Child    = DSL.field(DSL.name("S1", "CHILD"), Long.class);
     protected static final Field<Long>            s1Parent   = DSL.field(DSL.name("S1", "PARENT"), Long.class);
-    protected static final Table<Record>          s2         = rowzTable.as("S2");
     protected static final Field<Long>            s2Child    = DSL.field(DSL.name("S2", "CHILD"), Long.class);
     protected static final Field<Long>            s2Parent   = DSL.field(DSL.name("S2", "PARENT"), Long.class);
-    protected static final Table<Record>          s3         = rowzTable.as("S3");
     protected static final Field<Long>            s3Child    = DSL.field(DSL.name("S3", "CHILD"), Long.class);
     protected static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "PARENT"), Long.class);
     protected static final Field<Long>            sChild     = DSL.field(DSL.name("SUSPECT", "CHILD"), Long.class);
     protected static final Field<Long>            sParent    = DSL.field(DSL.name("SUSPECT", "PARENT"), Long.class);
     protected static final Name                   suspect    = DSL.name("SUSPECT");
+    private final          DSLContext             dslCtx;
+
+    public AbstractOracle(Connection connection) {
+        this(DSL.using(connection, SQLDialect.H2));
+    }
+
+    public AbstractOracle(DSLContext dslCtx) {
+        this.dslCtx = dslCtx;
+    }
 
     public static void addAssertion(Connection connection, String subjectNamespace, String subjectName,
                                     String subjectRelationNamespace, String subjectRelationName, String objectNamespace,
-                                    String objectName, String objectRelationNamespace,
-                                    String objectRelationName) throws SQLException {
+                                    String objectName, String objectRelationNamespace, String objectRelationName)
+    throws SQLException {
         var subject = new Subject(new Namespace(subjectNamespace), subjectName,
                                   new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
         var object = new Object(new Namespace(objectNamespace), objectName,
@@ -92,8 +92,8 @@ abstract public class AbstractOracle implements Oracle {
         add(DSL.using(connection, SQLDialect.H2), object);
     }
 
-    public static void addRelation(Connection connection, String relationNamespace,
-                                   String relationName) throws SQLException {
+    public static void addRelation(Connection connection, String relationNamespace, String relationName)
+    throws SQLException {
         var relation = new Relation(new Namespace(relationNamespace), relationName);
 
         add(DSL.using(connection, SQLDialect.H2), relation);
@@ -134,8 +134,8 @@ abstract public class AbstractOracle implements Oracle {
         delete(DSL.using(connection, SQLDialect.H2), object);
     }
 
-    public static void deleteRelation(Connection connection, String relationNamespace,
-                                      String relationName) throws SQLException {
+    public static void deleteRelation(Connection connection, String relationNamespace, String relationName)
+    throws SQLException {
         var relation = new Relation(new Namespace(relationNamespace), relationName);
 
         delete(DSL.using(connection, SQLDialect.H2), relation);
@@ -151,8 +151,8 @@ abstract public class AbstractOracle implements Oracle {
 
     public static void mapObject(Connection connection, String parentNamespace, String parentName,
                                  String parentRelationNamespace, String parentRelationName, String childNamespace,
-                                 String childName, String childRelationNamespace,
-                                 String childRelationName) throws SQLException {
+                                 String childName, String childRelationNamespace, String childRelationName)
+    throws SQLException {
         var parent = new Object(new Namespace(parentNamespace), parentName,
                                 new Relation(new Namespace(parentRelationNamespace), parentRelationName));
         var child = new Object(new Namespace(childNamespace), childName,
@@ -171,8 +171,8 @@ abstract public class AbstractOracle implements Oracle {
 
     public static void mapSubject(Connection connection, String parentNamespace, String parentName,
                                   String parentRelationNamespace, String parentRelationName, String childNamespace,
-                                  String childName, String childRelationNamespace,
-                                  String childRelationName) throws SQLException {
+                                  String childName, String childRelationNamespace, String childRelationName)
+    throws SQLException {
         var parent = new Subject(new Namespace(parentNamespace), parentName,
                                  new Relation(new Namespace(parentRelationNamespace), parentRelationName));
         var child = new Subject(new Namespace(childNamespace), childName,
@@ -183,8 +183,8 @@ abstract public class AbstractOracle implements Oracle {
 
     public static void removeObject(Connection connection, String parentNamespace, String parentName,
                                     String parentRelationNamespace, String parentRelationName, String childNamespace,
-                                    String childName, String childRelationNamespace,
-                                    String childRelationName) throws SQLException {
+                                    String childName, String childRelationNamespace, String childRelationName)
+    throws SQLException {
         var parent = new Object(new Namespace(parentNamespace), parentName,
                                 new Relation(new Namespace(parentRelationNamespace), parentRelationName));
         var child = new Object(new Namespace(childNamespace), childName,
@@ -203,8 +203,8 @@ abstract public class AbstractOracle implements Oracle {
 
     public static void removeSubject(Connection connection, String parentNamespace, String parentName,
                                      String parentRelationNamespace, String parentRelationName, String childNamespace,
-                                     String childName, String childRelationNamespace,
-                                     String childRelationName) throws SQLException {
+                                     String childName, String childRelationNamespace, String childRelationName)
+    throws SQLException {
         var parent = new Subject(new Namespace(parentNamespace), parentName,
                                  new Relation(new Namespace(parentRelationNamespace), parentRelationName));
         var child = new Subject(new Namespace(childNamespace), childName,
@@ -397,10 +397,10 @@ abstract public class AbstractOracle implements Oracle {
                                                          .from(EDGE)
                                                          .where(EDGE.CHILD.eq(parent))
 
-                                                         .union(context.select(DSL.val(parent),
-                                                                               EDGE.CHILD.as(EDGE.CHILD))
-                                                                       .from(EDGE)
-                                                                       .where(EDGE.PARENT.eq(child)))
+                                                         .union(
+                                                         context.select(DSL.val(parent), EDGE.CHILD.as(EDGE.CHILD))
+                                                                .from(EDGE)
+                                                                .where(EDGE.PARENT.eq(child)))
 
                                                          .union(context.select(A.PARENT, B.CHILD)
                                                                        .from(A)
@@ -409,8 +409,7 @@ abstract public class AbstractOracle implements Oracle {
                                                                        .and(B.PARENT.eq(child)))
                                                          .asTable(suspect))
                                             .on(sParent.eq(EDGE.PARENT))
-                                            .and(sChild.eq(EDGE.CHILD)))
-                                 .and(EDGE.TRANSITIVE.isTrue()))
+                                            .and(sChild.eq(EDGE.CHILD))).and(EDGE.TRANSITIVE.isTrue()))
                    .execute();
 
             context.with(ROWZ)
@@ -448,22 +447,22 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     static SelectJoinStep<Record2<Long, Long>> grants(Long s, DSLContext ctx, Long o) throws SQLException {
-        Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("SUBJECT_ID"))
-                                          .from(EDGE)
-                                          .where(EDGE.TYPE.eq(SUBJECT_TYPE))
-                                          .and(EDGE.PARENT.eq(s))
-                                          .union(ctx.select(DSL.val(s).as("SUBJECT_ID")))
-                                          .asTable();
-        Field<Long> subjectId = subject.field("SUBJECT_ID", Long.class);
+        var subject = ctx.select(EDGE.CHILD.as("SUBJECT_ID"))
+                         .from(EDGE)
+                         .where(EDGE.TYPE.eq(SUBJECT_TYPE))
+                         .and(EDGE.PARENT.eq(s))
+                         .union(ctx.select(DSL.val(s).as("SUBJECT_ID")))
+                         .asTable();
+        var subjectId = subject.field("SUBJECT_ID", Long.class);
 
-        Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("OBJECT_ID"))
-                                         .from(EDGE)
-                                         .where(EDGE.TYPE.eq(OBJECT_TYPE))
-                                         .and(EDGE.PARENT.eq(o))
-                                         .union(DSL.select(DSL.val(o).as("OBJECT_ID")))
-                                         .asTable();
+        var object = ctx.select(EDGE.CHILD.as("OBJECT_ID"))
+                        .from(EDGE)
+                        .where(EDGE.TYPE.eq(OBJECT_TYPE))
+                        .and(EDGE.PARENT.eq(o))
+                        .union(DSL.select(DSL.val(o).as("OBJECT_ID")))
+                        .asTable();
 
-        Field<Long> objectId = object.field("OBJECT_ID", Long.class);
+        var objectId = object.field("OBJECT_ID", Long.class);
 
         return ctx.select(subjectId, objectId)
                   .from(subject.crossJoin(object)
@@ -520,10 +519,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     static Long resolve(DSLContext context, Namespace namespace) throws SQLException {
-        Record1<Long> resolved = context.select(NAMESPACE.ID)
-                                        .from(NAMESPACE)
-                                        .where(NAMESPACE.NAME.eq(namespace.name()))
-                                        .fetchOne();
+        var resolved = context.select(NAMESPACE.ID)
+                              .from(NAMESPACE)
+                              .where(NAMESPACE.NAME.eq(namespace.name()))
+                              .fetchOne();
         if (resolved == null) {
             return null;
         }
@@ -661,19 +660,9 @@ abstract public class AbstractOracle implements Oracle {
         return new NamespacedId(namespace, resolved.value1(), relation.id());
     }
 
-    private final DSLContext dslCtx;
-
-    public AbstractOracle(Connection connection) {
-        this(DSL.using(connection, SQLDialect.H2));
-    }
-
-    public AbstractOracle(DSLContext dslCtx) {
-        this.dslCtx = dslCtx;
-    }
-
     /**
      * Check the assertion.
-     * 
+     *
      * @return true if the assertion is made, false if not
      */
     public boolean check(Assertion assertion) throws SQLException {
@@ -686,10 +675,9 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive Subjects that map to the supplied
-     * object. The query only considers subjects with assertions that match the
-     * object completely - i.e. {namespace, name, relation}
-     * 
+     * Answer the list of direct and transitive Subjects that map to the supplied object. The query only considers
+     * subjects with assertions that match the object completely - i.e. {namespace, name, relation}
+     *
      * @throws SQLException
      */
     public List<Subject> expand(Object object) throws SQLException {
@@ -697,11 +685,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive Subjects that map to the object from
-     * subjects that have the supplied predicate as their relation. The query only
-     * considers assertions that match the object completely - i.e. {namespace,
-     * name, relation}
-     * 
+     * Answer the list of direct and transitive Subjects that map to the object from subjects that have the supplied
+     * predicate as their relation. The query only considers assertions that match the object completely - i.e.
+     * {namespace, name, relation}
+     *
      * @throws SQLException
      */
     public List<Subject> expand(Relation predicate, Object object) throws SQLException {
@@ -709,11 +696,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive Objects that map to the subject from
-     * objects that have the supplied predicate as their relation. The query only
-     * considers assertions that match the subject completely - i.e. {namespace,
-     * name, relation}
-     * 
+     * Answer the list of direct and transitive Objects that map to the subject from objects that have the supplied
+     * predicate as their relation. The query only considers assertions that match the subject completely - i.e.
+     * {namespace, name, relation}
+     *
      * @throws SQLException
      */
     @Override
@@ -722,10 +708,9 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive Objects that map to the supplied
-     * subject. The query only considers objects with assertions that match the
-     * subject completely - i.e. {namespace, name, relation}
-     * 
+     * Answer the list of direct and transitive Objects that map to the supplied subject. The query only considers
+     * objects with assertions that match the subject completely - i.e. {namespace, name, relation}
+     *
      * @throws SQLException
      */
     @Override
@@ -734,10 +719,9 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct Subjects that map to the supplied objects. The
-     * query only considers subjects with assertions that match the objects
-     * completely - i.e. {namespace, name, relation}
-     * 
+     * Answer the list of direct Subjects that map to the supplied objects. The query only considers subjects with
+     * assertions that match the objects completely - i.e. {namespace, name, relation}
+     *
      * @throws SQLException
      */
     public List<Subject> read(Object... objects) throws SQLException {
@@ -752,11 +736,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct Subjects that map to the supplied objects. The
-     * query only considers subjects with assertions that match the objects
-     * completely - i.e. {namespace, name, relation} and only the subjects that have
+     * Answer the list of direct Subjects that map to the supplied objects. The query only considers subjects with
+     * assertions that match the objects completely - i.e. {namespace, name, relation} and only the subjects that have
      * the matching predicate
-     * 
+     *
      * @throws SQLException
      */
     public List<Subject> read(Relation predicate, Object... objects) throws SQLException {
@@ -771,11 +754,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct Objects that map to the supplied subjects. The
-     * query only considers objects with assertions that match the subjects
-     * completely - i.e. {namespace, name, relation} and only the objects that have
+     * Answer the list of direct Objects that map to the supplied subjects. The query only considers objects with
+     * assertions that match the subjects completely - i.e. {namespace, name, relation} and only the objects that have
      * the matching predicate
-     * 
+     *
      * @throws SQLException
      */
     @Override
@@ -791,10 +773,9 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct Objects that map to the supplied subjects. The
-     * query only considers objects with assertions that match the subjects
-     * completely - i.e. {namespace, name, relation}
-     * 
+     * Answer the list of direct Objects that map to the supplied subjects. The query only considers objects with
+     * assertions that match the subjects completely - i.e. {namespace, name, relation}
+     *
      * @throws SQLException
      */
     @Override
@@ -810,11 +791,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive subjects that map to the object.
-     * These subjects may be further filtered by the predicate Relation, if not
-     * null. The query only considers assertions that match the object completely -
+     * Answer the list of direct and transitive subjects that map to the object. These subjects may be further filtered
+     * by the predicate Relation, if not null. The query only considers assertions that match the object completely -
      * i.e. {namespace, name, relation}
-     * 
+     *
      * @throws SQLException
      */
     @Override
@@ -942,11 +922,10 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive objects that map to the subject.
-     * These object may further filtered by the predicate Relation, if not null. The
-     * query only considers assertions that match the subject completely - i.e.
+     * Answer the list of direct and transitive objects that map to the subject. These object may further filtered by
+     * the predicate Relation, if not null. The query only considers assertions that match the subject completely - i.e.
      * {namespace, name, relation}
-     * 
+     *
      * @throws SQLException
      */
     private Stream<Object> objects(Relation predicate, Subject subject) throws SQLException {

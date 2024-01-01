@@ -10,7 +10,6 @@ import com.salesforce.apollo.archipelago.Link;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface DelegationService extends Link {
 

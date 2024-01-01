@@ -8,10 +8,10 @@ package com.salesforce.apollo.membership.messaging.rbc.comms;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.messaging.proto.MessageBff;
-import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
-import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.ReconcileContext;
+import com.salesforce.apollo.messaging.proto.MessageBff;
+import com.salesforce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
+import com.salesforce.apollo.messaging.proto.Reconcile;
+import com.salesforce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
@@ -22,12 +22,11 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class RbcServer extends RBCImplBase {
-    private ClientIdentity                 identity;
     private final RbcMetrics               metrics;
     private final RoutableService<Service> routing;
+    private       ClientIdentity           identity;
 
     public RbcServer(ClientIdentity identity, RbcMetrics metrics, RoutableService<Service> r) {
         this.metrics = metrics;

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesforce.apollo.leyden.proto";
+option java_outer_classname = "LeydenProto";
+option objc_class_prefix = "Ley";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
+
+import "stereotomy.proto";
+import "stereotomy-services.proto";
+import "crypto.proto";
+
+package leyden;
+
+service Binder {
+  rpc bind(Binding) returns(google.protobuf.Empty) {}
+  rpc unbind(KeyAndToken) returns(google.protobuf.Empty) {}
+  rpc get(KeyAndToken) returns(Bound) {}
+}
+
+service Reconciliation {
+  rpc reconcile (Intervals) returns (Update) {}
+  rpc update (Updating) returns (google.protobuf.Empty) {}
+}
+
+message KeyAndToken {
+  bytes key = 1;
+  bytes token = 2;
+}
+
+message Update {
+  repeated Bound bindings = 1;
+  repeated Interval intervals = 2;
+  crypto.Biff have = 3;
+}
+
+message Updating {
+  int32 ring = 1;
+  repeated Bound bindings = 2;
+}
+
+message Intervals {
+  int32 ring = 1;
+  repeated Interval intervals = 2;
+  crypto.Biff have = 3;
+}
+
+message Interval {
+  crypto.Digeste start = 1;
+  crypto.Digeste end = 2;
+}
+
+message Binding {
+  Bound bound = 1;
+  bytes token = 2;
+}
+
+message Bound {
+  bytes key = 1;
+  bytes value = 2;
+}

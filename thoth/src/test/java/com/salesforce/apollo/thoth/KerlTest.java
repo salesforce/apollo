@@ -12,7 +12,7 @@ import com.salesforce.apollo.cryptography.SigningThreshold.Unweighted;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -49,7 +49,7 @@ public class KerlTest extends AbstractDhtTest {
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
-        KERL kerl = dhts.values().stream().findFirst().get().asKERL();
+        var kerl = dhts.firstEntry().getValue().asKERL();
 
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
@@ -114,8 +114,7 @@ public class KerlTest extends AbstractDhtTest {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kerl.getKeyEvent(delegated.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         delegated.rotate();
         delegated.seal(InteractionSpecification.newBuilder());
@@ -128,7 +127,7 @@ public class KerlTest extends AbstractDhtTest {
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(Duration.ofSeconds(1)));
 
-        KERL kerl = dhts.values().stream().findFirst().get().asKERL();
+        var kerl = dhts.firstEntry().getValue().asKERL();
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
@@ -136,8 +135,7 @@ public class KerlTest extends AbstractDhtTest {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         i.rotate();
         i.seal(InteractionSpecification.newBuilder());

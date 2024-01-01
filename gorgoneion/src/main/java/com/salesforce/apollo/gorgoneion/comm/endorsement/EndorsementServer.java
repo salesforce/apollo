@@ -7,12 +7,12 @@
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementImplBase;
-import com.salesfoce.apollo.gorgoneion.proto.MemberSignature;
-import com.salesfoce.apollo.gorgoneion.proto.Nonce;
-import com.salesfoce.apollo.gorgoneion.proto.Notarization;
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.EndorsementGrpc.EndorsementImplBase;
+import com.salesforce.apollo.gorgoneion.proto.MemberSignature;
+import com.salesforce.apollo.gorgoneion.proto.Nonce;
+import com.salesforce.apollo.gorgoneion.proto.Notarization;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
@@ -23,8 +23,8 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  */
 public class EndorsementServer extends EndorsementImplBase {
-    private final ClientIdentity identity;
-    private final GorgoneionMetrics metrics;
+    private final ClientIdentity                      identity;
+    private final GorgoneionMetrics                   metrics;
     private final RoutableService<EndorsementService> router;
 
     public EndorsementServer(ClientIdentity identity, RoutableService<EndorsementService> r,

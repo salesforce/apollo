@@ -8,10 +8,10 @@ package com.salesforce.apollo.archipeligo;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.test.proto.ByteMessage;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.test.proto.ByteMessage;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;

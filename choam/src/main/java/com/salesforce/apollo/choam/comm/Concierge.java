@@ -6,18 +6,17 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesfoce.apollo.choam.proto.BlockReplication;
-import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.CheckpointReplication;
-import com.salesfoce.apollo.choam.proto.CheckpointSegments;
-import com.salesfoce.apollo.choam.proto.Initial;
-import com.salesfoce.apollo.choam.proto.Synchronize;
-import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.choam.proto.BlockReplication;
+import com.salesforce.apollo.choam.proto.Blocks;
+import com.salesforce.apollo.choam.proto.CheckpointReplication;
+import com.salesforce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.choam.proto.Initial;
+import com.salesforce.apollo.choam.proto.Synchronize;
+import com.salesforce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Concierge {
 

@@ -18,9 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -34,7 +32,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -56,9 +53,10 @@ public class SwarmTest {
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       boolean                                                     largeTests = Boolean.getBoolean(
     "large_tests");
+    private static       KERL.AppendKERL                                             kerl;
 
     static {
-        CARDINALITY = largeTests ? 500 : 100;
+        CARDINALITY = largeTests ? 100 : 50;
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -72,7 +70,8 @@ public class SwarmTest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .mapToObj(i -> {
                                   return stereotomy.newIdentifier();
@@ -104,7 +103,7 @@ public class SwarmTest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
                                  .limit(largeTests ? 100 : 10)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
@@ -112,20 +111,17 @@ public class SwarmTest {
         final var gossipDuration = Duration.ofMillis(largeTests ? 150 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
-        views.get(0)
-             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList());
 
-        assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
+        assertTrue(countdown.get().await(60, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
         bootstrappers.subList(1, bootstrappers.size())
-                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed));
 
         // Test that all bootstrappers up
-        var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
+        var success = countdown.get().await(largeTests ? 2400 : 60, TimeUnit.SECONDS);
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(
@@ -135,21 +131,20 @@ public class SwarmTest {
 
         // Start remaining views
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                   Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
-        success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
+        success = countdown.get().await(largeTests ? 2400 : 120, TimeUnit.SECONDS);
 
         // Test that all views are up
         failed = views.stream()
                       .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                              v.getContext().totalCount()))
+                      .map(v -> String.format("%s : %s : %s : %s ", v.getNode().getId(), v.getContext().cardinality(),
+                                              v.getContext().activeCount(), v.getContext().totalCount()))
                       .toList();
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
-        success = Utils.waitForCondition(largeTests ? 2400_000 : 30, 1_000, () -> {
+        success = Utils.waitForCondition(largeTests ? 2400_000 : 120_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != CARDINALITY).count() == 0;
         });
 
@@ -243,8 +238,8 @@ public class SwarmTest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
+                            parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 }

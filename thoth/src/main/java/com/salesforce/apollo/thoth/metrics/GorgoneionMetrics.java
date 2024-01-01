@@ -8,7 +8,6 @@ package com.salesforce.apollo.thoth.metrics;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface GorgoneionMetrics {
 

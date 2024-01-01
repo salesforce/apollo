@@ -1,7 +1,7 @@
 package com.salesforce.apollo.ring;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.membership.Member;
 
@@ -10,9 +10,9 @@ import java.io.IOException;
 /**
  * @author hal.hildebrand
  **/
-public class TestItClient  implements TestItService {
+public class TestItClient implements TestItService {
     private final TestItGrpc.TestItBlockingStub client;
-    private final ManagedServerChannel connection;
+    private final ManagedServerChannel          connection;
 
     public TestItClient(ManagedServerChannel c) {
         this.connection = c;

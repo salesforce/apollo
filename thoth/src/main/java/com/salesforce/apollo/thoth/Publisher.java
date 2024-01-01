@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
@@ -30,16 +30,17 @@ import java.util.List;
 public class Publisher implements ProtoEventObserver {
 
     private final CommonCommunications<EventObserverService, EventObserver> comms;
-    private final Digest context;
-    private final ProtoKERLAdapter kerl;
-    private final EventObserver service;
+    private final Digest                                                    context;
+    private final ProtoKERLAdapter                                          kerl;
+    private final EventObserver                                             service;
+
     public Publisher(SigningMember member, ProtoKERLAdapter kerl, Router router, Digest context) {
         this.kerl = kerl;
         this.context = context;
         service = new Service();
         comms = router.create(member, context, service, service.getClass().getSimpleName(),
-                r -> new EventObserverServer(r, router.getClientIdentityProvider(), null), null,
-                EventObserverClient.getLocalLoopback(this, member));
+                              r -> new EventObserverServer(r, router.getClientIdentityProvider(), null), null,
+                              EventObserverClient.getLocalLoopback(this, member));
     }
 
     @Override
@@ -78,8 +79,7 @@ public class Publisher implements ProtoEventObserver {
         }
 
         @Override
-        public void publishEvents(List<KeyEvent_> events, List<Validations> validations,
-                                  Digest from) {
+        public void publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from) {
             Publisher.this.publishEvents(events, validations);
         }
     }

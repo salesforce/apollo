@@ -1,32 +1,25 @@
 package com.netflix.concurrency.limits.limiter;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.limit.SettableLimit;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import com.netflix.concurrency.limits.Limiter;
-import com.netflix.concurrency.limits.limit.SettableLimit;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class LifoBlockingLimiterTest {
 
-    private LifoBlockingLimiter<Integer> blockingLimiter;
-    private final Executor               executor = Executors.newVirtualThreadPerTaskExecutor();
-    private SettableLimit                limit;
-    private SimpleLimiter<Integer>       simpleLimiter;
+    private final Executor                     executor = Executors.newVirtualThreadPerTaskExecutor();
+    private       LifoBlockingLimiter<Integer> blockingLimiter;
+    private       SettableLimit                limit;
+    private       SimpleLimiter<Integer>       simpleLimiter;
 
     @Test
     public void adaptWhenLimitDecreases() {
@@ -125,24 +118,27 @@ public class LifoBlockingLimiterTest {
         // Kick off 5 requests with a small delay to ensure futures are created in the
         // correct order
         List<Integer> values = new CopyOnWriteArrayList<>();
-        List<CompletableFuture<Integer>> futures = IntStream.range(0, 5).peek(i -> {
-            try {
-                TimeUnit.MILLISECONDS.sleep(50);
-            } catch (InterruptedException e) {
-            }
-        }).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-            Optional<Limiter.Listener> listener = blockingLimiter.acquire(i + 4);
-            if (!listener.isPresent()) {
-                return -1;
-            }
-            try {
-                return i;
-            } finally {
-                listener.get().onSuccess();
-            }
-        }, executor))
-                                                            .peek(future -> future.whenComplete((value,
-                                                                                                 error) -> values.add(value)))
+        List<CompletableFuture<Integer>> futures = IntStream.range(0, 5)
+                                                            .peek(i -> {
+                                                                try {
+                                                                    TimeUnit.MILLISECONDS.sleep(50);
+                                                                } catch (InterruptedException e) {
+                                                                }
+                                                            })
+                                                            .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
+                                                                Optional<Limiter.Listener> listener = blockingLimiter.acquire(
+                                                                i + 4);
+                                                                if (!listener.isPresent()) {
+                                                                    return -1;
+                                                                }
+                                                                try {
+                                                                    return i;
+                                                                } finally {
+                                                                    listener.get().onSuccess();
+                                                                }
+                                                            }, executor))
+                                                            .peek(future -> future.whenComplete(
+                                                            (value, error) -> values.add(value)))
                                                             .collect(Collectors.toList());
 
         // Release the first batch of tokens

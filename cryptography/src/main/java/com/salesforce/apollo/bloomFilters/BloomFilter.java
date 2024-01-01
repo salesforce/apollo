@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
-import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.cryptography.Digest;
 import org.joou.ULong;
 
 import java.util.BitSet;
 
-import static com.salesfoce.apollo.cryptography.proto.Biff.Type.*;
+import static com.salesforce.apollo.cryptography.proto.Biff.Type.*;
 
 /**
  * Simplified Bloom filter for multiple types, with setable seeds and other parameters.

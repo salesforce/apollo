@@ -7,8 +7,10 @@
 
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.cryptography.*;
-import com.salesforce.apollo.cryptography.Verifier.Filtered;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.KEL.KeyStateWithAttachments;
@@ -16,10 +18,10 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.HashMap;
@@ -34,11 +36,11 @@ public class Ani {
 
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
-    private final Digest id;
+    private final Digest member;
     private final KERL   kerl;
 
-    public Ani(Digest id, KERL kerl) {
-        this.id = id;
+    public Ani(Digest member, KERL kerl) {
+        this.member = member;
         this.kerl = kerl;
     }
 
@@ -48,44 +50,23 @@ public class Ani {
 
     public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
-            @Override
-            public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                     InputStream message) {
-
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.filtered(threshold, signature, message);
-            }
 
             @Override
-            public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-                return Optional.of(kerl.getKeyState(coordinates));
+            public KeyState keyState(Identifier id, ULong sequenceNumber) {
+                return kerl.getKeyState(id, sequenceNumber);
             }
 
             @Override
             public boolean validate(EstablishmentEvent event) {
+                log.trace("Validate event: {} on: {}", event, member);
                 return Ani.this.validateKerl(event, timeout);
             }
 
             @Override
             public boolean validate(EventCoordinates coordinates) {
+                log.trace("Validating coordinates: {} on: {}", coordinates, member);
                 KeyEvent ke = kerl.getKeyEvent(coordinates);
                 return Ani.this.validateKerl(ke, timeout);
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.verify(signature, message);
-            }
-
-            @Override
-            public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                  InputStream message) {
-                KeyState ks = kerl.getKeyState(coordinates);
-                var v = new Verifier.DefaultVerifier(ks.getKeys());
-                return v.verify(threshold, signature, message);
             }
         };
     }
@@ -134,6 +115,7 @@ public class Ani {
                                                                                             event.toKeyEvent_()
                                                                                                  .toByteString()));
         }
+        log.trace("Kerl validation: {} for: {} on: {}", witnessed, ksa.state().getCoordinates(), member);
         return witnessed;
     }
 
@@ -146,5 +128,4 @@ public class Ani {
     private boolean validateKerl(KeyEvent event, Duration timeout) {
         return performKerlValidation(event.getCoordinates(), timeout);
     }
-
 }

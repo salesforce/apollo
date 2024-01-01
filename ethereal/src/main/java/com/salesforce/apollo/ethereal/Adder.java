@@ -23,14 +23,14 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.ethereal.proto.Commit;
-import com.salesfoce.apollo.ethereal.proto.Have;
-import com.salesfoce.apollo.ethereal.proto.Missing;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesfoce.apollo.ethereal.proto.PreVote;
-import com.salesfoce.apollo.ethereal.proto.SignedCommit;
-import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
-import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.ethereal.proto.Commit;
+import com.salesforce.apollo.ethereal.proto.Have;
+import com.salesforce.apollo.ethereal.proto.Missing;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.ethereal.proto.PreVote;
+import com.salesforce.apollo.ethereal.proto.SignedCommit;
+import com.salesforce.apollo.ethereal.proto.SignedPreVote;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -41,29 +41,38 @@ import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * Implements the chain Reliable Broadcast of Aleph.
- * 
- * The public methods of the Adder correspond to the gossip replication protocol
- * actions.
- * 
- * @author hal.hildebrand
  *
+ * The public methods of the Adder correspond to the gossip replication protocol actions.
+ *
+ * @author hal.hildebrand
  */
 public class Adder {
 
-    /**
-     * PROPOSED -> WAITING_ON_ROUND -> PREVOTED -> WAITING_FOR_PARENTS -> COMMITTED
-     * -> OUTPUT
-     * 
-     * FAILED can occur at each state transition
-     *
-     */
-    public enum State {
-        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS, WAITING_ON_ROUND;
-    }
-
-    public record Signed<T> (Digest hash, T signed) {}
-
     private static final Logger log = LoggerFactory.getLogger(Adder.class);
+    private final    Map<Digest, Set<Short>>    commits         = new TreeMap<>();
+    private final    Config                     conf;
+    private final    Dag                        dag;
+    private final    int                        epoch;
+    private final    Set<Digest>                failed;
+    private final    ReentrantLock              lock            = new ReentrantLock(true);
+    private final    int                        maxSize;
+    private final    Map<Long, List<Waiting>>   missing         = new TreeMap<>();
+    private final    Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
+    private final    Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
+    private final    Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
+    private final    int                        threshold;
+    private final    Map<Digest, Waiting>       waiting         = new TreeMap<>();
+    private final    Map<Long, Waiting>         waitingById     = new TreeMap<>();
+    private final    Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
+    private volatile int                        round           = 0;
+    public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
+        this.epoch = epoch;
+        this.dag = dag;
+        this.conf = conf;
+        this.failed = failed;
+        this.threshold = Dag.threshold(conf.nProc());
+        this.maxSize = maxSize;
+    }
 
     public static Signed<SignedCommit> commit(final Long id, final Digest hash, final short pid, Signer signer,
                                               DigestAlgorithm algo) {
@@ -81,32 +90,6 @@ public class Adder {
         JohnHancock signature = signer.sign(prevote.toByteString());
         return new Signed<>(signature.toDigest(algo),
                             SignedPreVote.newBuilder().setVote(prevote).setSignature(signature.toSig()).build());
-    }
-
-    private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
-    private final Config                     conf;
-    private final Dag                        dag;
-    private final int                        epoch;
-    private final Set<Digest>                failed;
-    private final ReentrantLock              lock            = new ReentrantLock(true);
-    private final int                        maxSize;
-    private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
-    private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
-    private volatile int                     round           = 0;
-    private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
-    private final Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
-    private final int                        threshold;
-    private final Map<Digest, Waiting>       waiting         = new TreeMap<>();
-    private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
-    private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
-
-    public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
-        this.epoch = epoch;
-        this.dag = dag;
-        this.conf = conf;
-        this.failed = failed;
-        this.threshold = Dag.threshold(conf.nProc());
-        this.maxSize = maxSize;
     }
 
     public void close() {
@@ -181,7 +164,7 @@ public class Adder {
 
     /**
      * Answer the Have state of the receiver - commits, prevotes, and proposed units
-     * 
+     *
      * @return the Have state of the receiver
      */
     public Have have() {
@@ -224,9 +207,8 @@ public class Adder {
 
     /**
      * Provide the missing state from the receiver state from the supplied update.
-     * 
+     *
      * @param haves - the have state of the partner
-     * 
      * @return Missing based on the current state and the haves of the receiver
      */
     public Missing updateFor(Have haves) {
@@ -299,7 +281,7 @@ public class Adder {
 
     /**
      * A commit was received
-     * 
+     *
      * @param digest - the digest of the unit
      * @param member - the index of the member
      */
@@ -386,7 +368,7 @@ public class Adder {
 
     /**
      * A preVote was received
-     * 
+     *
      * @param digest - the digest of the unit
      * @param member - the index of the member
      */
@@ -441,7 +423,7 @@ public class Adder {
 
     /**
      * A unit has been proposed.
-     * 
+     *
      * @param digest - the digest identifying the unit
      * @param u      - the serialized preUnit
      */
@@ -521,8 +503,7 @@ public class Adder {
     }
 
     /**
-     * checkIfMissing sets the children() attribute of a newly created
-     * waitingPreunit, depending on if it was missing
+     * checkIfMissing sets the children() attribute of a newly created waitingPreunit, depending on if it was missing
      */
     private void checkIfMissing(Waiting wp) {
         log.trace("Checking if missing: {} on: {}", wp, conf.logLabel());
@@ -541,9 +522,9 @@ public class Adder {
     }
 
     /**
-     * finds out which parents of a newly created WaitingPreUnit are in the dag,
-     * which are waiting, and which are missing. Sets values of waitingParents() and
-     * missingParents accordingly. Additionally, returns maximal heights of dag.
+     * finds out which parents of a newly created WaitingPreUnit are in the dag, which are waiting, and which are
+     * missing. Sets values of waitingParents() and missingParents accordingly. Additionally, returns maximal heights of
+     * dag.
      */
     private int[] checkParents(Waiting wp) {
         var epoch = wp.epoch();
@@ -690,8 +671,8 @@ public class Adder {
     }
 
     /**
-     * Update the gossip builder with the missing units filtered by the supplied
-     * bloom filter indicating units already known
+     * Update the gossip builder with the missing units filtered by the supplied bloom filter indicating units already
+     * known
      */
     private void missing(BloomFilter<Digest> have, Missing.Builder builder) {
         var pus = new TreeMap<Digest, PreUnit_s>();
@@ -744,8 +725,7 @@ public class Adder {
     }
 
     /**
-     * registerMissing registers the fact that the given WaitingPreUnit needs an
-     * unknown unit with the given id.
+     * registerMissing registers the fact that the given WaitingPreUnit needs an unknown unit with the given id.
      */
     private void registerMissing(long id, Waiting wp) {
         missing.computeIfAbsent(id, i -> new ArrayList<>()).add(wp);
@@ -819,5 +799,17 @@ public class Adder {
                       wp.pu().view().heights(), conf.logLabel());
         }
         return result;
+    }
+
+    /**
+     * PROPOSED -> WAITING_ON_ROUND -> PREVOTED -> WAITING_FOR_PARENTS -> COMMITTED -> OUTPUT
+     *
+     * FAILED can occur at each state transition
+     */
+    public enum State {
+        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS, WAITING_ON_ROUND;
+    }
+
+    public record Signed<T>(Digest hash, T signed) {
     }
 }

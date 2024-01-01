@@ -7,9 +7,6 @@
 package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Timer;
-import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -18,11 +15,15 @@ import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperService;
+import com.salesforce.apollo.ethereal.proto.ContextUpdate;
+import com.salesforce.apollo.ethereal.proto.Gossip;
+import com.salesforce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,13 +85,13 @@ public class ChRbcGossip {
         log.trace("Starting GossipService[{}] on: {}", context.getId(), member.getId());
         comm.register(context.getId(), new Terminal());
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        scheduler.schedule(() -> {
+        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
             try {
                 oneRound(duration, scheduler);
             } catch (Throwable e) {
                 log.error("Error in gossip on: {}", member.getId(), e);
             }
-        }, initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        }, log)), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -175,8 +176,9 @@ public class ChRbcGossip {
                 timer.stop();
             }
             if (started.get()) {
-                scheduled = scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
-                                               TimeUnit.MILLISECONDS);
+                scheduled = scheduler.schedule(
+                () -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
+                duration.toMillis(), TimeUnit.MILLISECONDS);
             }
         }
     }

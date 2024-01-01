@@ -8,8 +8,8 @@ package com.salesforce.apollo.state;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.state.proto.*;
-import com.salesfoce.apollo.state.proto.ChangeLog.Builder;
+import com.salesforce.apollo.state.proto.*;
+import com.salesforce.apollo.state.proto.ChangeLog.Builder;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.state.SqlStateMachine.CallResult;

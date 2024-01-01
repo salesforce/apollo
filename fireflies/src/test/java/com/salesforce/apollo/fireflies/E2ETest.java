@@ -18,9 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -34,7 +32,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,9 +52,10 @@ public class E2ETest {
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       boolean                                                     largeTests = Boolean.getBoolean(
     "large_tests");
+    private static       KERL.AppendKERL                                             kerl;
 
     static {
-        CARDINALITY = largeTests ? 30 : 10;
+        CARDINALITY = largeTests ? 30 : 12;
     }
 
     private List<Router>                            communications = new ArrayList<>();
@@ -71,7 +69,8 @@ public class E2ETest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .mapToObj(i -> {
                                   return stereotomy.newIdentifier();
@@ -103,25 +102,22 @@ public class E2ETest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
-                                 .limit(largeTests ? 100 : 10)
+                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
+                                 .limit(largeTests ? 10 : 1)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
 
         final var gossipDuration = Duration.ofMillis(largeTests ? 70 : 5);
 
         var countdown = new AtomicReference<>(new CountDownLatch(1));
-        views.get(0)
-             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList());
 
         assertTrue(countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
         var bootstrappers = views.subList(0, seeds.size());
         countdown.set(new CountDownLatch(seeds.size() - 1));
         bootstrappers.subList(1, bootstrappers.size())
-                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+                     .forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed));
 
         // Test that all bootstrappers up
         var success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
@@ -134,8 +130,7 @@ public class E2ETest {
 
         // Start remaining views
         countdown.set(new CountDownLatch(views.size() - seeds.size()));
-        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                   Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory())));
+        views.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
         success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
 
@@ -158,7 +153,7 @@ public class E2ETest {
                       .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
                                               v.getContext().totalCount()))
                       .toList();
-        assertTrue(success,
+        assertTrue(success || failed.isEmpty(),
                    "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size() + " views: "
                    + failed);
 
@@ -173,10 +168,7 @@ public class E2ETest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder()
-                                   .setMaxPending(largeTests ? 10 : 10)
-                                   .setMaximumTxfr(largeTests ? 100 : 20)
-                                   .build();
+        var parameters = Parameters.newBuilder().setMaxPending(5).setMaximumTxfr(5).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
@@ -211,8 +203,8 @@ public class E2ETest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
+                            parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 

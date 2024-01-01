@@ -8,10 +8,10 @@ package com.salesforce.apollo.ethereal.memberships.comm;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperImplBase;
-import com.salesfoce.apollo.ethereal.proto.Update;
+import com.salesforce.apollo.ethereal.proto.ContextUpdate;
+import com.salesforce.apollo.ethereal.proto.Gossip;
+import com.salesforce.apollo.ethereal.proto.GossiperGrpc.GossiperImplBase;
+import com.salesforce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -20,12 +20,11 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class GossiperServer extends GossiperImplBase {
-    private ClientIdentity                         identity;
     private final EtherealMetrics                  metrics;
     private final RoutableService<GossiperService> routing;
+    private       ClientIdentity                   identity;
 
     public GossiperServer(ClientIdentity identity, EtherealMetrics metrics, RoutableService<GossiperService> r) {
         this.metrics = metrics;

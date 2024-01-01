@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;

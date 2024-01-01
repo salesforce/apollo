@@ -14,12 +14,10 @@ import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
- * Bindings may be made between non transferable identifiers and any of the
- * available Bound value types. Bindings are the signed Bound value by the key
- * of the identifier of the binding.
- * 
+ * Bindings may be made between non transferable identifiers and any of the available Bound value types. Bindings are
+ * the signed Bound value by the key of the identifier of the binding.
+ *
  * @author hal.hildebrand
- * 
  */
 public interface Binder {
     interface BinderService {
@@ -28,15 +26,15 @@ public interface Binder {
         void unbind(Identifier identifier) throws TimeoutException;
     }
 
-    public record Bound(InceptionEvent identifier, String host, int port) {}
+    public record Bound(InceptionEvent identifier, String host, int port) {
+    }
 
     public record Binding(Bound value, JohnHancock signature) {
-        public static Binding from(com.salesfoce.apollo.stereotomy.event.proto.Binding binding) {
-            var isEmpty = binding.equals(com.salesfoce.apollo.stereotomy.event.proto.Binding.getDefaultInstance());
-            return isEmpty ? null
-                           : new Binding(new Bound(new InceptionEventImpl(binding.getValue().getIdentifier()),
-                                                   binding.getValue().getHost(), binding.getValue().getPort()),
-                                         JohnHancock.from(binding.getSignature()));
+        public static Binding from(com.salesforce.apollo.stereotomy.event.proto.Binding binding) {
+            var isEmpty = binding.equals(com.salesforce.apollo.stereotomy.event.proto.Binding.getDefaultInstance());
+            return isEmpty ? null : new Binding(
+            new Bound(new InceptionEventImpl(binding.getValue().getIdentifier()), binding.getValue().getHost(),
+                      binding.getValue().getPort()), JohnHancock.from(binding.getSignature()));
         }
     }
 }

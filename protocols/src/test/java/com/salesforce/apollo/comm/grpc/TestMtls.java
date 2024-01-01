@@ -6,7 +6,21 @@
  */
 package com.salesforce.apollo.comm.grpc;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import com.google.protobuf.Any;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
+import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.cryptography.cert.Certificates;
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
+import com.salesforce.apollo.utils.Utils;
+import io.grpc.stub.StreamObserver;
+import io.grpc.util.MutableHandlerRegistry;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -16,29 +30,11 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.concurrent.ForkJoinPool;
 
-import org.junit.jupiter.api.Test;
-
-import com.google.protobuf.Any;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.SignatureAlgorithm;
-import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.cryptography.cert.Certificates;
-import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
-import com.salesforce.apollo.utils.Utils;
-
-import io.grpc.stub.StreamObserver;
-import io.grpc.util.MutableHandlerRegistry;
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TestMtls {
 
@@ -47,10 +43,9 @@ public class TestMtls {
         var notBefore = Instant.now();
         var notAfter = Instant.now().plusSeconds(10_000);
         String localhost = InetAddress.getLoopbackAddress().getHostName();
-        X509Certificate generated = Certificates.selfSign(false,
-                                                          Utils.encode(id, localhost, Utils.allocatePort(),
-                                                                       keyPair.getPublic()),
-                                                          keyPair, notBefore, notAfter, Collections.emptyList());
+        X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, localhost, Utils.allocatePort(),
+                                                                              keyPair.getPublic()), keyPair, notBefore,
+                                                          notAfter, Collections.emptyList());
         return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
     }
 
@@ -85,7 +80,7 @@ public class TestMtls {
         CertificateWithPrivateKey clientCert = clientIdentity();
 
         MtlsClient client = new MtlsClient(serverAddress, ClientAuth.REQUIRE, "foo", clientCert.getX509Certificate(),
-                                           clientCert.getPrivateKey(), validator(), r -> r.run());
+                                           clientCert.getPrivateKey(), validator());
         return client;
     }
 
@@ -120,7 +115,7 @@ public class TestMtls {
             public Digest getMemberId(X509Certificate key) {
                 return Digest.NONE;
             }
-        }, validator(), new MutableHandlerRegistry(), ForkJoinPool.commonPool());
+        }, validator(), new MutableHandlerRegistry());
         return server;
     }
 

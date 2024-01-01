@@ -10,32 +10,18 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyCoords;
+import com.salesforce.apollo.stereotomy.event.proto.KeyCoords;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 
 /**
  * The coordinates of a key in the KEL
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public class KeyCoordinates {
 
-    public static KeyCoordinates of(EstablishmentEvent establishmentEvent, int keyIndex) {
-        EventCoordinates coordinates = EventCoordinates.of(establishmentEvent);
-        return new KeyCoordinates(coordinates, keyIndex);
-    }
-
     private final EventCoordinates establishmentEvent;
     private final int              keyIndex;
-
-    public KeyCoords toKeyCoords() {
-        return KeyCoords.newBuilder()
-                        .setEstablishment(establishmentEvent.toEventCoords())
-                        .setKeyIndex(keyIndex)
-                        .build();
-    }
-
     public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
         if (keyIndex < 0) {
             throw new IllegalArgumentException("keyIndex must be >= 0");
@@ -48,6 +34,11 @@ public class KeyCoordinates {
     public KeyCoordinates(KeyCoords coordinates) {
         establishmentEvent = new EventCoordinates(coordinates.getEstablishment());
         keyIndex = coordinates.getKeyIndex();
+    }
+
+    public static KeyCoordinates of(EstablishmentEvent establishmentEvent, int keyIndex) {
+        EventCoordinates coordinates = EventCoordinates.of(establishmentEvent);
+        return new KeyCoordinates(coordinates, keyIndex);
     }
 
     @Override
@@ -73,6 +64,13 @@ public class KeyCoordinates {
     @Override
     public int hashCode() {
         return Objects.hash(establishmentEvent, keyIndex);
+    }
+
+    public KeyCoords toKeyCoords() {
+        return KeyCoords.newBuilder()
+                        .setEstablishment(establishmentEvent.toEventCoords())
+                        .setKeyIndex(keyIndex)
+                        .build();
     }
 
     @Override

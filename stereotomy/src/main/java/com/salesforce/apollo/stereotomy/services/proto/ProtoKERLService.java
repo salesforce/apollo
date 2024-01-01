@@ -7,7 +7,7 @@
 package com.salesforce.apollo.stereotomy.services.proto;
 
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 
 import java.util.List;
 

@@ -7,9 +7,9 @@
 package com.salesforce.apollo.stereotomy.db;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.cryptography.proto.Sig;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
+import com.salesforce.apollo.cryptography.proto.Sig;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -237,7 +237,7 @@ abstract public class UniKERL implements DigestKERL {
             AttachmentEvent event;
             try {
                 event = new AttachmentEventImpl(
-                com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.parseFrom(bytes));
+                com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent.parseFrom(bytes));
             } catch (InvalidProtocolBufferException e) {
                 log.error("Error deserializing attachment event", e);
                 return;

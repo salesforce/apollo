@@ -26,14 +26,14 @@ import java.util.function.Function;
 /**
  * @author hal.hildebrand
  */
-public class CachingKERL extends CachingKEL<KERL> implements KERL {
+public class CachingKERL extends CachingKEL<KERL.AppendKERL> implements KERL.AppendKERL {
     private static final Logger log = LoggerFactory.getLogger(CachingKERL.class);
 
-    public CachingKERL(Function<Function<KERL, ?>, ?> kelSupplier) {
+    public CachingKERL(Function<Function<AppendKERL, ?>, ?> kelSupplier) {
         super(kelSupplier);
     }
 
-    public CachingKERL(Function<Function<KERL, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
+    public CachingKERL(Function<Function<AppendKERL, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
                        Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
         super(kelSupplier, builder, eventBuilder);
     }
@@ -60,6 +60,11 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        return complete(kerl -> kerl.getKeyState(identifier, sequenceNumber));
+    }
+
+    @Override
     public Map<EventCoordinates, JohnHancock> getValidations(EventCoordinates coordinates) {
         try {
             return complete(kerl -> kerl.getValidations(coordinates));
@@ -77,10 +82,5 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
             log.error("Cannot complete kerl", e);
             return null;
         }
-    }
-
-    @Override
-    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
-        return complete(kerl -> kerl.getKeyState(identifier, sequenceNumber));
     }
 }

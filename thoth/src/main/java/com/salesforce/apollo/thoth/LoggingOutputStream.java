@@ -7,25 +7,19 @@
 
 package com.salesforce.apollo.thoth;
 
+import org.slf4j.Logger;
+
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 
-import org.slf4j.Logger;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class LoggingOutputStream extends OutputStream {
 
-    public enum LogLevel {
-        DEBUG, ERROR, INFO, TRACE, WARN,
-    }
-
     private final ByteArrayOutputStream baos = new ByteArrayOutputStream(1000);
     private final LogLevel              level;
-
-    private final Logger logger;
+    private final Logger                logger;
 
     public LoggingOutputStream(Logger logger, LogLevel level) {
         this.logger = logger;
@@ -58,6 +52,10 @@ public class LoggingOutputStream extends OutputStream {
         } else {
             baos.write(b);
         }
+    }
+
+    public enum LogLevel {
+        DEBUG, ERROR, INFO, TRACE, WARN,
     }
 
 }

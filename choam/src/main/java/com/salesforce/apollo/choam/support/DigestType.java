@@ -6,16 +6,14 @@ no * Copyright (c) 2021, salesforce.com, inc.
  */
 package com.salesforce.apollo.choam.support;
 
-import java.nio.ByteBuffer;
-
+import com.salesforce.apollo.cryptography.Digest;
 import org.h2.mvstore.WriteBuffer;
 import org.h2.mvstore.type.BasicDataType;
 
-import com.salesforce.apollo.cryptography.Digest;
+import java.nio.ByteBuffer;
 
 /**
  * @author hal.hildebrand
- *
  */
 
 public class DigestType extends BasicDataType<Digest> {
@@ -41,8 +39,7 @@ public class DigestType extends BasicDataType<Digest> {
     }
 
     @Override
-    public void write(WriteBuffer buff, Digest obj) {
-        Digest digest = (Digest) obj;
+    public void write(WriteBuffer buff, Digest digest) {
         buff.put(digest.getAlgorithm().digestCode());
         for (long l : digest.getLongs()) {
             buff.putLong(l);

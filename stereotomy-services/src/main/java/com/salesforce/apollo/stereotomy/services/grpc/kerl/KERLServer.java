@@ -8,9 +8,9 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
@@ -20,7 +20,7 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  */
 public class KERLServer extends KERLServiceImplBase {
-    private final StereotomyMetrics metrics;
+    private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
 
     public KERLServer(RoutableService<ProtoKERLService> router, StereotomyMetrics metrics) {
@@ -45,7 +45,7 @@ public class KERLServer extends KERLServiceImplBase {
                     timer.stop();
                 }
                 var states = result == null ? KeyStates.getDefaultInstance()
-                        : KeyStates.newBuilder().addAllKeyStates(result).build();
+                                            : KeyStates.newBuilder().addAllKeyStates(result).build();
                 responseObserver.onNext(states);
                 responseObserver.onCompleted();
                 if (metrics != null) {
@@ -86,8 +86,8 @@ public class KERLServer extends KERLServiceImplBase {
             if (timer != null) {
                 timer.stop();
             }
-            var results = result == null ? KeyStates.getDefaultInstance()
-                    : KeyStates.newBuilder().addAllKeyStates(result).build();
+            var results =
+            result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
             responseObserver.onNext(results);
             responseObserver.onCompleted();
             if (metrics != null) {
@@ -128,8 +128,8 @@ public class KERLServer extends KERLServiceImplBase {
             if (timer != null) {
                 timer.stop();
             }
-            var states = result == null ? KeyStates.getDefaultInstance()
-                    : KeyStates.newBuilder().addAllKeyStates(result).build();
+            var states =
+            result == null ? KeyStates.getDefaultInstance() : KeyStates.newBuilder().addAllKeyStates(result).build();
             responseObserver.onNext(states);
             responseObserver.onCompleted();
             if (metrics != null) {

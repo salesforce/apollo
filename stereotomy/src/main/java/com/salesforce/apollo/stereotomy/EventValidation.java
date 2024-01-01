@@ -6,34 +6,22 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.io.InputStream;
-import java.util.Optional;
-
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.SigningThreshold;
-import com.salesforce.apollo.cryptography.Verifier.Filtered;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import org.joou.ULong;
 
 /**
  * The EventValidation provides validation predicates for EstablishmentEvents
- * 
- * @author hal.hildebrand
  *
+ * @author hal.hildebrand
  */
 public interface EventValidation {
 
-    EventValidation NONE = new EventValidation() {
-        @Override
-        public Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                                 InputStream message) {
-            return null;
-        }
+    EventValidation NONE          = new EventValidation() {
 
         @Override
-        public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-            return Optional.empty();
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return null;
         }
 
         @Override
@@ -45,43 +33,68 @@ public interface EventValidation {
         public boolean validate(EventCoordinates coordinates) {
             return true;
         }
+    };
+    EventValidation NO_VALIDATION = new EventValidation() {
 
         @Override
-        public boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message) {
-            return true;
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return null;
         }
 
         @Override
-        public boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                              InputStream message) {
-            return true;
+        public boolean validate(EstablishmentEvent event) {
+            return false;
+        }
+
+        @Override
+        public boolean validate(EventCoordinates coordinates) {
+            return false;
         }
     };
 
-    Filtered filtered(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                      InputStream message);
-
-    Optional<KeyState> getKeyState(EventCoordinates coordinates);
+    KeyState keyState(Identifier id, ULong sequenceNumber);
 
     /**
-     * Answer true if the event is validated. This means that thresholds have been
-     * met from indicated witnesses and trusted validators.
-     */
-    boolean validate(EstablishmentEvent event);
-
-    /**
-     * Answer true if the event indicated by the coordinates is validated. This
-     * means that thresholds have been met from indicated witnesses and trusted
-     * validators.
+     * Answer true if the event indicated by the coordinates is validated. This means that thresholds have been met from
+     * indicated witnesses and trusted validators.
      */
     boolean validate(EventCoordinates coordinates);
 
-    default boolean verify(EventCoordinates coordinates, JohnHancock signature, ByteString byteString) {
-        return verify(coordinates, signature, BbBackedInputStream.aggregate(byteString));
+    /**
+     * Answer true if the event is validated. This means that thresholds have been met from indicated witnesses and
+     * trusted validators.
+     */
+    boolean validate(EstablishmentEvent event);
+
+    class DelegatedEventValidation implements EventValidation {
+        private volatile EventValidation delegate;
+
+        public DelegatedEventValidation(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public KeyState keyState(Identifier id, ULong sequenceNumber) {
+            return delegate().keyState(id, sequenceNumber);
+        }
+
+        public void setDelegate(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean validate(EventCoordinates coordinates) {
+            return delegate().validate(coordinates);
+        }
+
+        @Override
+        public boolean validate(EstablishmentEvent event) {
+            return delegate().validate(event);
+        }
+
+        private EventValidation delegate() {
+            final var current = delegate;
+            return current;
+        }
     }
-
-    boolean verify(EventCoordinates coordinates, JohnHancock signature, InputStream message);
-
-    boolean verify(EventCoordinates coordinates, SigningThreshold threshold, JohnHancock signature,
-                   InputStream message);
 }

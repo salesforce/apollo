@@ -10,7 +10,6 @@ import java.time.Duration;
 
 /**
  * @author hal.hildebrand
- *
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
@@ -40,10 +39,9 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Maximum number of elements to transfer per type per update
          */
-        private int      maximumTxfr            = 10;
+        private int      maximumTxfr            = 1024;
         /**
          * Maximum pending joins
-         * 
          */
         private int      maxPending             = 15;
         /**
@@ -81,53 +79,13 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return crowns;
         }
 
-        public int getFinalizeViewRounds() {
-            return finalizeViewRounds;
-        }
-
-        public double getFpr() {
-            return fpr;
-        }
-
-        public int getJoinRetries() {
-            return joinRetries;
-        }
-
-        public int getMaximumTxfr() {
-            return maximumTxfr;
-        }
-
-        public int getMaxPending() {
-            return maxPending;
-        }
-
-        public int getMinimumBiffCardinality() {
-            return minimumBiffCardinality;
-        }
-
-        public int getRebuttalTimeout() {
-            return rebuttalTimeout;
-        }
-
-        public Duration getRetryDelay() {
-            return retryDelay;
-        }
-
-        public Duration getSeedingTimout() {
-            return seedingTimout;
-        }
-
-        public int getValidationRetries() {
-            return validationRetries;
-        }
-
-        public int getViewChangeRounds() {
-            return viewChangeRounds;
-        }
-
         public Builder setCrowns(int crowns) {
             this.crowns = crowns;
             return this;
+        }
+
+        public int getFinalizeViewRounds() {
+            return finalizeViewRounds;
         }
 
         public Builder setFinalizeViewRounds(int finalizeViewRounds) {
@@ -135,9 +93,17 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
+        public double getFpr() {
+            return fpr;
+        }
+
         public Builder setFpr(double fpr) {
             this.fpr = fpr;
             return this;
+        }
+
+        public int getJoinRetries() {
+            return joinRetries;
         }
 
         public Builder setJoinRetries(int joinRetries) {
@@ -145,9 +111,8 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
-        public Builder setMaximumTxfr(int maximumTxfr) {
-            this.maximumTxfr = maximumTxfr;
-            return this;
+        public int getMaxPending() {
+            return maxPending;
         }
 
         public Builder setMaxPending(int maxPending) {
@@ -155,9 +120,26 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
+        public int getMaximumTxfr() {
+            return maximumTxfr;
+        }
+
+        public Builder setMaximumTxfr(int maximumTxfr) {
+            this.maximumTxfr = maximumTxfr;
+            return this;
+        }
+
+        public int getMinimumBiffCardinality() {
+            return minimumBiffCardinality;
+        }
+
         public Builder setMinimumBiffCardinality(int minimumBiffCardinality) {
             this.minimumBiffCardinality = minimumBiffCardinality;
             return this;
+        }
+
+        public int getRebuttalTimeout() {
+            return rebuttalTimeout;
         }
 
         public Builder setRebuttalTimeout(int rebuttalTimeout) {
@@ -165,9 +147,17 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
+        public Duration getRetryDelay() {
+            return retryDelay;
+        }
+
         public Builder setRetryDelay(Duration retryDelay) {
             this.retryDelay = retryDelay;
             return this;
+        }
+
+        public Duration getSeedingTimout() {
+            return seedingTimout;
         }
 
         public Builder setSeedingTimout(Duration seedingTimout) {
@@ -175,9 +165,17 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
             return this;
         }
 
+        public int getValidationRetries() {
+            return validationRetries;
+        }
+
         public Builder setValidationRetries(int validationRetries) {
             this.validationRetries = validationRetries;
             return this;
+        }
+
+        public int getViewChangeRounds() {
+            return viewChangeRounds;
         }
 
         public Builder setViewChangeRounds(int viewChangeRounds) {

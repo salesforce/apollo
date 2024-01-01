@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;

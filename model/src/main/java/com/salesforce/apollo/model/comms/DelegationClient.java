@@ -7,9 +7,9 @@
 package com.salesforce.apollo.model.comms;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.demesne.proto.DelegationGrpc;
-import com.salesfoce.apollo.demesne.proto.DelegationUpdate;
-import com.salesfoce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.demesne.proto.DelegationGrpc;
+import com.salesforce.apollo.demesne.proto.DelegationUpdate;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.membership.Member;
 
@@ -19,9 +19,9 @@ import java.io.IOException;
  * @author hal.hildebrand
  */
 public class DelegationClient implements Delegation {
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel                  channel;
     private final DelegationGrpc.DelegationBlockingStub client;
-    private final OuterServerMetrics metrics;
+    private final OuterServerMetrics                    metrics;
 
     public DelegationClient(ManagedServerChannel channel, OuterServerMetrics metrics) {
         this.metrics = metrics;

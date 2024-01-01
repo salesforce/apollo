@@ -7,9 +7,8 @@
 package com.salesforce.apollo.gorgoneion.client;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.gorgoneion.Gorgoneion;
@@ -18,13 +17,16 @@ import com.salesforce.apollo.gorgoneion.client.client.comm.Admissions;
 import com.salesforce.apollo.gorgoneion.client.client.comm.AdmissionsClient;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
+import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
@@ -40,17 +42,21 @@ import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 /**
  * @author hal.hildebrand
  */
 public class GorgoneionClientTest {
 
+    private Router gorgonRouter;
+    private Router clientRouter;
+
     @Test
     public void clientSmoke() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
@@ -59,9 +65,7 @@ public class GorgoneionClientTest {
         context.activate(member);
 
         // Gorgoneion service comms
-        var gorgonRouter = new LocalServer(prefix, member)
-                .router(ServerConnectionCache.newBuilder()
-                                .setTarget(2));
+        gorgonRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(2));
         gorgonRouter.start();
 
         // The kerl observer to publish admitted client KERLs to
@@ -69,20 +73,19 @@ public class GorgoneionClientTest {
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         @SuppressWarnings("unused")
         var gorgon = new Gorgoneion(parameters, member, context, observer, gorgonRouter,
-                Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), null);
+                                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2)
-                );
+        clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         var admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
-                r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
-                        r, null),
-                AdmissionsClient.getCreate(null),
-                Admissions.getLocalLoopback(client));
+                                                       r -> new AdmissionsServer(
+                                                       clientRouter.getClientIdentityProvider(), r, null),
+                                                       AdmissionsClient.getCreate(null),
+                                                       Admissions.getLocalLoopback(client));
         clientRouter.start();
 
         // Admin client link
@@ -105,17 +108,29 @@ public class GorgoneionClientTest {
         // Verify client KERL published
 
         // Because this is a minimal test, the notarization is not published
-//        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation));
+        //        verify(observer, times(3)).publish(client.kerl().get(), Collections.singletonList(invitation));
+    }
+
+    @AfterEach
+    public void closeRouters() {
+        if (gorgonRouter != null) {
+            gorgonRouter.close(Duration.ofSeconds(3));
+        }
+        if (clientRouter != null) {
+            clientRouter.close(Duration.ofSeconds(3));
+        }
     }
 
     @Test
     public void multiSmoke() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
-        final var members = IntStream.range(0, 10).mapToObj(i -> new ControlledIdentifierMember(stereotomy.newIdentifier())).toList();
+        final var members = IntStream.range(0, 10)
+                                     .mapToObj(i -> new ControlledIdentifierMember(stereotomy.newIdentifier()))
+                                     .toList();
 
         var countdown = new CountDownLatch(3);
         // The kerl observer to publish admitted client KERLs to
@@ -132,33 +147,31 @@ public class GorgoneionClientTest {
             context.activate(member);
         }
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
-        final var exec = Executors.newVirtualThreadPerTaskExecutor();
-        members.stream().map(m -> {
-                    final var router = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(2)
-                            );
-                    router.start();
-                    return router;
-                })
-                .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getFrom(),
-                        context, observer, r,
-                        Executors.newScheduledThreadPool(2,
-                                Thread.ofVirtual()
-                                        .factory()),
-                        null))
-                .toList();
+        final var gorgoneions = members.stream()
+                                       .map(m -> {
+                                           final var router = new LocalServer(prefix, m).router(
+                                           ServerConnectionCache.newBuilder().setTarget(2));
+                                           router.start();
+                                           return router;
+                                       })
+                                       .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getFrom(),
+                                                                context, observer, r,
+                                                                Executors.newScheduledThreadPool(2, Thread.ofVirtual()
+                                                                                                          .factory()),
+                                                                null))
+                                       .toList();
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         // Registering client comms
-        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2)
-                );
+        var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         AdmissionsService admissions = mock(AdmissionsService.class);
         var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
-                r -> new AdmissionsServer(clientRouter.getClientIdentityProvider(),
-                        r, null),
-                AdmissionsClient.getCreate(null),
-                Admissions.getLocalLoopback(client));
+                                                       r -> new AdmissionsServer(
+                                                       clientRouter.getClientIdentityProvider(), r, null),
+                                                       AdmissionsClient.getCreate(null),
+                                                       Admissions.getLocalLoopback(client));
         clientRouter.start();
 
         // Admin client link

@@ -8,15 +8,14 @@ package com.salesforce.apollo.choam.comm;
 
 import java.io.IOException;
 
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface TxnSubmission extends Link {
     static TxnSubmission getLocalLoopback(SigningMember member, Submitter service) {

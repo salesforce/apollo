@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.cryptography;
 
-import com.salesfoce.apollo.cryptography.proto.HexBloome;
+import com.salesforce.apollo.cryptography.proto.HexBloome;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.Primes;
 
@@ -520,11 +520,14 @@ public class HexBloom {
             this(cardinality, crowns, initial, DEFAULT_FPR);
         }
 
-        /**
-         * @return the hash digest of the wrapped crowns
-         */
-        public Digest compactWrapped() {
-            return compactWrapped(hashWraps(accumulators.size()));
+        public void add(Digest digest) {
+            if (currentCount == cardinality) {
+                throw new IllegalArgumentException("Current count already equal to cardinality: " + cardinality);
+            }
+            currentCount++;
+            for (int i = 0; i < accumulators.size(); i++) {
+                accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), (a, b) -> a.xor(b));
+            }
         }
 
         /**
@@ -544,6 +547,17 @@ public class HexBloom {
                             .reduce(algorithm.getOrigin(), (a, b) -> a.xor(b));
         }
 
+        /**
+         * @return the hash digest of the wrapped crowns
+         */
+        public Digest compactWrapped() {
+            return compactWrapped(hashWraps(accumulators.size()));
+        }
+
+        public List<Digest> crowns() {
+            return accumulators.stream().map(ar -> ar.get()).toList();
+        }
+
         public List<Digest> wrappedCrowns() {
             return wrappedCrowns(hashWraps(accumulators.size()));
         }
@@ -552,20 +566,6 @@ public class HexBloom {
             return IntStream.range(0, accumulators.size())
                             .mapToObj(i -> wrapingHash.get(i).apply(accumulators.get(i).get()))
                             .toList();
-        }
-
-        public void add(Digest digest) {
-            if (currentCount == cardinality) {
-                throw new IllegalArgumentException("Current count already equal to cardinality: " + cardinality);
-            }
-            currentCount++;
-            for (int i = 0; i < accumulators.size(); i++) {
-                accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), (a, b) -> a.xor(b));
-            }
-        }
-
-        public List<Digest> crowns() {
-            return accumulators.stream().map(ar -> ar.get()).toList();
         }
     }
 

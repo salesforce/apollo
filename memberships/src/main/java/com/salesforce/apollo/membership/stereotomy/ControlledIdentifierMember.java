@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.membership.stereotomy;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;

@@ -6,14 +6,12 @@
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.membership.Context.minMajority;
+import com.salesforce.apollo.cryptography.Digest;
+import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -21,94 +19,29 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.cryptography.Digest;
+import static com.salesforce.apollo.membership.Context.minMajority;
 
 /**
- * Provides a Context for Membership and is uniquely identified by a Digest;.
- * Members may be either active or offline. The Context maintains a number of
- * Rings (may be zero) that the Context provides for Firefly type consistent
- * hash ring ordering operators. Each ring has a unique hash of each individual
- * member, and thus each ring has a different ring order of the same membership
- * set. Hashes for Context level operators include the ID of the ring. Hashes
- * computed for each member, per ring include the ID of the enclosing Context.
+ * Provides a Context for Membership and is uniquely identified by a Digest;. Members may be either active or offline.
+ * The Context maintains a number of Rings (may be zero) that the Context provides for Firefly type consistent hash ring
+ * ordering operators. Each ring has a unique hash of each individual member, and thus each ring has a different ring
+ * order of the same membership set. Hashes for Context level operators include the ID of the ring. Hashes computed for
+ * each member, per ring include the ID of the enclosing Context.
  *
  * @author hal.hildebrand
- *
  */
 public class ContextImpl<T extends Member> implements Context<T> {
 
-    public static class Tracked<M extends Member> {
-        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
-
-        private final AtomicBoolean active = new AtomicBoolean(false);
-        private Digest[]            hashes;
-        private final M             member;
-
-        public Tracked(M member, Supplier<Digest[]> hashes) {
-            this.member = member;
-            this.hashes = hashes.get();
-        }
-
-        public boolean activate() {
-            var activated = active.compareAndSet(false, true);
-            if (activated) {
-                log.trace("Activated: {}", member.getId());
-            }
-            return activated;
-        }
-
-        public Digest hash(int index) {
-            return hashes[index];
-        }
-
-        public boolean isActive() {
-            return active.get();
-        }
-
-        public M member() {
-            return member;
-        }
-
-        public boolean offline() {
-            var offlined = active.compareAndSet(true, false);
-            if (offlined) {
-                log.trace("Offlined: {}", member.getId());
-            }
-            return offlined;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
-        }
-
-        private void rebalance(int ringCount, ContextImpl<M> contextImpl) {
-            final var newHashes = new Digest[ringCount];
-            for (int i = 0; i < Math.min(ringCount, hashes.length); i++) {
-                newHashes[i] = hashes[i];
-            }
-            for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
-                newHashes[i] = contextImpl.hashFor(member.getId(), i);
-            }
-            hashes = newHashes;
-        }
-    }
-
-    private static final Logger log = LoggerFactory.getLogger(Context.class);
-
-    private final int                                 bias;
-    private volatile int                              cardinality;
-    private final double                              epsilon;
-    private final Digest                              id;
-    private final Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
-    private final Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
-    private final double                              pByz;
-
-    private final List<Ring<T>> rings = new ArrayList<>();
+    private static final Logger                              log                 = LoggerFactory.getLogger(
+    Context.class);
+    private final        int                                 bias;
+    private final        double                              epsilon;
+    private final        Digest                              id;
+    private final        Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
+    private final        Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
+    private final        double                              pByz;
+    private final        List<Ring<T>>                       rings               = new ArrayList<>();
+    private volatile     int                                 cardinality;
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
@@ -149,6 +82,29 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
+     * Mark a member identified by the digest ID as active in the context
+     *
+     * @return true if the member was previously inactive, false if currently active
+     */
+    public boolean activate(Digest id) {
+        var m = members.get(id);
+        if (m == null) {
+            throw new NoSuchElementException("No member known: " + id);
+        }
+        if (m.activate()) {
+            membershipListeners.values().stream().forEach(l -> {
+                try {
+                    l.active(m.member);
+                } catch (Throwable e) {
+                    log.error("error recovering member in listener: " + l, e);
+                }
+            });
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Mark a member as active in the context
      */
     @Override
@@ -159,7 +115,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
                 try {
                     l.active(m);
                 } catch (Throwable e) {
-                    log.error("error recoving member in listener: " + l, e);
+                    log.error("error recovering member in listener: " + l, e);
                 }
             });
             return true;
@@ -236,8 +192,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * Answer the aproximate diameter of the receiver, assuming the rings were built
-     * with FF parameters, with the rings forming random graph connections segments.
+     * Answer the aproximate diameter of the receiver, assuming the rings were built with FF parameters, with the rings
+     * forming random graph connections segments.
      */
     @Override
     public int diameter() {
@@ -444,8 +400,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * @return the predecessor on each ring for the provided key that pass the
-     *         provided predicate
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
      */
     @Override
     public List<T> predecessors(Digest key, Predicate<T> test) {
@@ -468,8 +423,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * @return the predecessor on each ring for the provided key that pass the
-     *         provided predicate
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
      */
     @Override
     public List<T> predecessors(T key, Predicate<T> test) {
@@ -567,18 +521,31 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * Answer a random sample of at least range size from the active members of the
-     * context
+     * Answer a random sample of at least range size from the active members of the context
      *
      * @param range    - the desired range
      * @param entropy  - source o randomness
-     * @param excluded - the member to exclude from sample
-     * @return a random sample set of the view's live members. May be limited by the
-     *         number of active members.
+     * @param excluded - predicate to test for exclusion
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
+     */
+    @Override
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
+        return rings.get(entropy.nextInt(rings.size()))
+                    .stream()
+                    .collect(new ReservoirSampler<T>(excluded, range, entropy));
+    }
+
+    /**
+     * Answer a random sample of at least range size from the active members of the context
+     *
+     * @param range   - the desired range
+     * @param entropy - source o randomness
+     * @param exc     - the member to exclude from sample
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
-        Member excluded = getMember(exc);
+        Member excluded = exc == null ? null : getMember(exc);
         return rings.get(entropy.nextInt(rings.size()))
                     .stream()
                     .collect(new ReservoirSampler<T>(excluded, range, entropy));
@@ -598,8 +565,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided
-     *         predicate test
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
     @Override
     public List<T> successors(Digest key, Predicate<T> test) {
@@ -622,8 +588,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided
-     *         predicate test
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
     @Override
     public List<T> successors(T key, Predicate<T> test) {
@@ -638,26 +603,26 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * The number of iterations until a given message has been distributed to all
-     * members in the context, using the rings of the receiver as a gossip graph
+     * The number of iterations until a given message has been distributed to all members in the context, using the
+     * rings of the receiver as a gossip graph
      */
     @Override
     public int timeToLive() {
         return (rings.size() * diameter()) + 1;
     }
 
+    @Override
+    public String toString() {
+        return "Context [" + id + "]";
+    }
+
     /**
-     * Answer the tolerance level of the context to byzantine members, assuming this
-     * context has been constructed from FF parameters
+     * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
+     * FF parameters
      */
     @Override
     public int toleranceLevel() {
         return (rings.size() - 1) / bias;
-    }
-
-    @Override
-    public String toString() {
-        return "Context [" + id + "]";
     }
 
     @Override
@@ -687,5 +652,62 @@ public class ContextImpl<T extends Member> implements Context<T> {
             return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
         });
         return tracking;
+    }
+
+    public static class Tracked<M extends Member> {
+        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
+
+        private final AtomicBoolean active = new AtomicBoolean(false);
+        private final M             member;
+        private       Digest[]      hashes;
+
+        public Tracked(M member, Supplier<Digest[]> hashes) {
+            this.member = member;
+            this.hashes = hashes.get();
+        }
+
+        public boolean activate() {
+            var activated = active.compareAndSet(false, true);
+            if (activated) {
+                log.trace("Activated: {}", member.getId());
+            }
+            return activated;
+        }
+
+        public Digest hash(int index) {
+            return hashes[index];
+        }
+
+        public boolean isActive() {
+            return active.get();
+        }
+
+        public M member() {
+            return member;
+        }
+
+        public boolean offline() {
+            var offlined = active.compareAndSet(true, false);
+            if (offlined) {
+                log.trace("Offlined: {}", member.getId());
+            }
+            return offlined;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+        }
+
+        private void rebalance(int ringCount, ContextImpl<M> contextImpl) {
+            final var newHashes = new Digest[ringCount];
+            for (int i = 0; i < Math.min(ringCount, hashes.length); i++) {
+                newHashes[i] = hashes[i];
+            }
+            for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
+                newHashes[i] = contextImpl.hashFor(member.getId(), i);
+            }
+            hashes = newHashes;
+        }
     }
 }

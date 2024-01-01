@@ -7,10 +7,10 @@
 package com.salesforce.apollo.demesnes.isolate;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
-import com.salesfoce.apollo.demesne.proto.DemesneParameters;
-import com.salesfoce.apollo.demesne.proto.ViewChange;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.DemesneParameters;
+import com.salesforce.apollo.demesne.proto.ViewChange;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;

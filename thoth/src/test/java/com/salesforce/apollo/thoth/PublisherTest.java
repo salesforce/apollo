@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -38,8 +38,6 @@ public class PublisherTest {
 
     @Test
     public void smokin() throws Exception {
-
-        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);

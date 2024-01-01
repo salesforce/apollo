@@ -35,9 +35,9 @@ import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL
  * @author hal.hildebrand
  */
 public class Portal<To extends Member> {
-    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
 
+    private final Executor       executor       = Executors.newVirtualThreadPerTaskExecutor();
     private final String         agent;
     private final EventLoopGroup eventLoopGroup = IMPL.getEventLoopGroup();
     private final Demultiplexer  inbound;

@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
-import com.salesfoce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -15,6 +14,7 @@ import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * @author hal.hildebrand
  */
-public class KERLAdapter implements KERL {
+public class KERLAdapter implements KERL.AppendKERL {
 
     private final DigestAlgorithm  algorithm;
     private final ProtoKERLService kerl;
@@ -81,7 +81,7 @@ public class KERLAdapter implements KERL {
 
     @Override
     public Attachment getAttachment(EventCoordinates coordinates) {
-        com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment = kerl.getAttachment(
+        com.salesforce.apollo.stereotomy.event.proto.Attachment attachment = kerl.getAttachment(
         coordinates.toEventCoords());
         return Attachment.of(attachment);
     }
@@ -110,6 +110,12 @@ public class KERLAdapter implements KERL {
     }
 
     @Override
+    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
+        var keyState = kerl.getKeyState(identifier.toIdent(), sequenceNumber.longValue());
+        return keyState == null ? null : new KeyStateImpl(keyState);
+    }
+
+    @Override
     public KeyStateWithAttachments getKeyStateWithAttachments(EventCoordinates coordinates) {
         KeyStateWithAttachments_ ksa = kerl.getKeyStateWithAttachments(coordinates.toEventCoords());
         return KeyStateWithAttachments.from(ksa);
@@ -131,11 +137,5 @@ public class KERLAdapter implements KERL {
                    .stream()
                    .map(kwa -> ProtobufEventFactory.from(kwa))
                    .toList();
-    }
-
-    @Override
-    public KeyState getKeyState(Identifier identifier, ULong sequenceNumber) {
-        var keyState = kerl.getKeyState(identifier.toIdent(), sequenceNumber.longValue());
-        return keyState == null ? null : new KeyStateImpl(keyState);
     }
 }

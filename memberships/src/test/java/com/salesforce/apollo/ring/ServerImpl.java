@@ -1,7 +1,7 @@
 package com.salesforce.apollo.ring;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc;
 import com.salesforce.apollo.archipelago.RoutableService;
 import io.grpc.stub.StreamObserver;
 

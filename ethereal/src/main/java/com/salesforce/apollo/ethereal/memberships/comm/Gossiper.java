@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.ethereal.memberships.comm;
 
-import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Update;
+import com.salesforce.apollo.ethereal.proto.ContextUpdate;
+import com.salesforce.apollo.ethereal.proto.Gossip;
+import com.salesforce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 

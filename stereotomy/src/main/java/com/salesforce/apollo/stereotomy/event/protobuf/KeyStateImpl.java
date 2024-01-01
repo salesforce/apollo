@@ -20,7 +20,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SigningThreshold;
@@ -36,49 +36,8 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class KeyStateImpl implements KeyState {
-
-    public static KeyState initialState(InceptionEvent event, DigestAlgorithm digestAlgo) {
-        var delegatingPrefix = event instanceof DelegatedInceptionEvent ? ((DelegatedInceptionEvent) event).getDelegatingPrefix()
-                                                                        : null;
-
-        return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),
-                           event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(), event.getWitnesses(),
-                           event.getConfigurationTraits(), event, event, delegatingPrefix,
-                           digestAlgo.digest(event.getBytes()));
-    }
-
-    public static KeyState newKeyState(Identifier identifier,
-                                       SigningThreshold signingThreshold,
-                                       List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
-                                       List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-                                       KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
-                                       Identifier delegatingPrefix, Digest digest) {
-        final var builder = KeyState_.newBuilder();
-        return new KeyStateImpl(builder.addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
-                                       .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
-                                                                                                   : nextKeyConfiguration.toDigeste())
-                                       .setSigningThreshold(toSigningThreshold(signingThreshold))
-                                       .addAllWitnesses(witnesses.stream()
-                                                                 .map(e -> e.toIdent())
-                                                                 .collect(Collectors.toList()))
-                                       .setWitnessThreshold(witnessThreshold)
-                                       .setDigest(digest.toDigeste())
-                                       .addAllConfigurationTraits(configurationTraits.stream()
-                                                                                     .map(e -> e.name())
-                                                                                     .collect(Collectors.toList()))
-                                       .setCoordinates(event.getCoordinates().toEventCoords())
-                                       .setDelegatingIdentifier(delegatingPrefix == null ? Identifier.NONE_IDENT
-                                                                                         : delegatingPrefix.toIdent())
-
-                                       .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
-                                                                                        .toEventCoords())
-                                       .setLastEvent(event.getPrevious().toEventCoords())
-
-                                       .build());
-    }
 
     private final KeyState_ state;
 
@@ -88,6 +47,44 @@ public class KeyStateImpl implements KeyState {
 
     public KeyStateImpl(KeyState_ state) {
         this.state = state;
+    }
+
+    public static KeyState initialState(InceptionEvent event, DigestAlgorithm digestAlgo) {
+        var delegatingPrefix =
+        event instanceof DelegatedInceptionEvent ? ((DelegatedInceptionEvent) event).getDelegatingPrefix() : null;
+
+        return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),
+                           event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(), event.getWitnesses(),
+                           event.getConfigurationTraits(), event, event, delegatingPrefix,
+                           digestAlgo.digest(event.getBytes()));
+    }
+
+    public static KeyState newKeyState(Identifier identifier, SigningThreshold signingThreshold, List<PublicKey> keys,
+                                       Digest nextKeyConfiguration, int witnessThreshold,
+                                       List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
+                                       KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
+                                       Identifier delegatingPrefix, Digest digest) {
+        final var builder = KeyState_.newBuilder();
+        return new KeyStateImpl(builder.addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
+                                       .setNextKeyConfigurationDigest(
+                                       nextKeyConfiguration == null ? Digest.NONE.toDigeste()
+                                                                    : nextKeyConfiguration.toDigeste())
+                                       .setSigningThreshold(toSigningThreshold(signingThreshold))
+                                       .addAllWitnesses(
+                                       witnesses.stream().map(e -> e.toIdent()).collect(Collectors.toList()))
+                                       .setWitnessThreshold(witnessThreshold)
+                                       .setDigest(digest.toDigeste())
+                                       .addAllConfigurationTraits(
+                                       configurationTraits.stream().map(e -> e.name()).collect(Collectors.toList()))
+                                       .setCoordinates(event.getCoordinates().toEventCoords())
+                                       .setDelegatingIdentifier(
+                                       delegatingPrefix == null ? Identifier.NONE_IDENT : delegatingPrefix.toIdent())
+
+                                       .setLastEstablishmentEvent(
+                                       lastEstablishmentEvent.getCoordinates().toEventCoords())
+                                       .setLastEvent(event.getPrevious().toEventCoords())
+
+                                       .build());
     }
 
     @Override
@@ -157,6 +154,11 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
+    public int getWitnessThreshold() {
+        return state.getWitnessThreshold();
+    }
+
+    @Override
     public List<BasicIdentifier> getWitnesses() {
         return state.getWitnessesList()
                     .stream()
@@ -165,11 +167,6 @@ public class KeyStateImpl implements KeyState {
                     .filter(i -> i != null)
                     .map(i -> (BasicIdentifier) i)
                     .collect(Collectors.toList());
-    }
-
-    @Override
-    public int getWitnessThreshold() {
-        return state.getWitnessThreshold();
     }
 
     @Override

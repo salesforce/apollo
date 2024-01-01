@@ -36,13 +36,13 @@ import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFacto
  * @author hal.hildebrand
  */
 public class Maat extends DelegatedKERL {
-    private static Logger log = LoggerFactory.getLogger(Maat.class);
+    private static final Logger log = LoggerFactory.getLogger(Maat.class);
 
     private final Context<Member> context;
 
     private final KERL validators;
 
-    public Maat(Context<Member> context, KERL delegate, KERL validators) {
+    public Maat(Context<Member> context, AppendKERL delegate, KERL validators) {
         super(delegate);
         this.context = context;
         this.validators = validators;
@@ -50,6 +50,7 @@ public class Maat extends DelegatedKERL {
 
     @Override
     public KeyState append(KeyEvent event) {
+        log.trace("Append: {}", event);
         var l = append(Collections.singletonList(event), Collections.emptyList());
         return l.isEmpty() ? null : l.get(0);
     }

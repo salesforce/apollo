@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.choam.proto.TransactionSubmissionGrpc;
-import com.salesfoce.apollo.choam.proto.TransactionSubmissionGrpc.TransactionSubmissionBlockingStub;
+import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.TransactionSubmissionGrpc;
+import com.salesforce.apollo.choam.proto.TransactionSubmissionGrpc.TransactionSubmissionBlockingStub;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -17,22 +17,20 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class TxnSubmitClient implements TxnSubmission {
 
-    public static CreateClientCommunications<TxnSubmission> getCreate(ChoamMetrics metrics) {
-        return (c) -> new TxnSubmitClient(c, metrics);
-
-    }
-
     private final ManagedServerChannel channel;
-
     private final TransactionSubmissionBlockingStub client;
 
     public TxnSubmitClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;
         this.client = TransactionSubmissionGrpc.newBlockingStub(channel).withCompression("gzip");
+    }
+
+    public static CreateClientCommunications<TxnSubmission> getCreate(ChoamMetrics metrics) {
+        return (c) -> new TxnSubmitClient(c, metrics);
+
     }
 
     @Override

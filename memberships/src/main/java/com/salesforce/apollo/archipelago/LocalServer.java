@@ -34,9 +34,9 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class LocalServer implements RouterSupplier {
-    private final static Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
     private static final Logger   log           = LoggerFactory.getLogger(LocalServer.class);
     private static final String   NAME_TEMPLATE = "%s-%s";
+    private final        Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ClientInterceptor clientInterceptor;
     private final Member            from;
@@ -74,7 +74,7 @@ public class LocalServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
-                                                               .executor(executor)
+                                                               .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(

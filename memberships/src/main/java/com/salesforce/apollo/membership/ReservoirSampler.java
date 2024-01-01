@@ -6,31 +6,32 @@
  */
 package com.salesforce.apollo.membership;
 
+import org.apache.commons.math3.random.BitsStreamGenerator;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.BinaryOperator;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 import java.util.stream.Collector;
-
-import org.apache.commons.math3.random.BitsStreamGenerator;
 
 public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
 
-    private AtomicInteger             c = new AtomicInteger();
-    private final Object              exclude;
+    private final Predicate<T>        exclude;
     private final BitsStreamGenerator rand;
     private final int                 sz;
+    private       AtomicInteger       c = new AtomicInteger();
 
     public ReservoirSampler(int size, BitsStreamGenerator entropy) {
         this(null, size, entropy);
     }
 
     public ReservoirSampler(Object excluded, int size, BitsStreamGenerator entropy) {
+        this(t -> excluded == null ? false : excluded.equals(t), size, entropy);
+    }
+
+    public ReservoirSampler(Predicate<T> excluded, int size, BitsStreamGenerator entropy) {
         assert size >= 0;
         this.exclude = excluded;
         this.sz = size;
@@ -66,7 +67,7 @@ public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
     }
 
     private void addIt(final List<T> in, T s) {
-        if (exclude != null && exclude.equals(s)) {
+        if (exclude != null && exclude.test(s)) {
             return;
         }
         if (in.size() < sz) {

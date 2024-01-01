@@ -6,11 +6,10 @@
  */
 package com.salesforce.apollo.thoth.grpc.delegation;
 
-import com.salesfoce.apollo.thoth.proto.DelegatedGrpc.DelegatedImplBase;
+import com.salesforce.apollo.thoth.proto.DelegatedGrpc.DelegatedImplBase;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegationServer extends DelegatedImplBase {
 

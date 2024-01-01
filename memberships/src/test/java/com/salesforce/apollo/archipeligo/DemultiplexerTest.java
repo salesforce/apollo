@@ -9,14 +9,14 @@ package com.salesforce.apollo.archipeligo;
 import com.google.common.primitives.Ints;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.test.proto.ByteMessage;
-import com.salesfoce.apollo.test.proto.PeerCreds;
-import com.salesfoce.apollo.test.proto.TestItGrpc;
-import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.archipelago.Demultiplexer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.test.proto.ByteMessage;
+import com.salesforce.apollo.test.proto.PeerCreds;
+import com.salesforce.apollo.test.proto.TestItGrpc;
+import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.Status;
@@ -56,13 +56,14 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class DemultiplexerTest {
 
-    private static final Class<? extends io.netty.channel.Channel> channelType    = IMPL.getChannelType();
-    private static final Executor                                  executor       = Executors.newVirtualThreadPerTaskExecutor();
-    private final        EventLoopGroup                            eventLoopGroup = IMPL.getEventLoopGroup();
-    private final        List<ManagedChannel>                      opened         = new ArrayList<>();
-    private              Server                                    serverA;
-    private              Server                                    serverB;
-    private              Demultiplexer                             terminus;
+    private static final Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
+    private static final Executor                                  executor    = Executors.newVirtualThreadPerTaskExecutor();
+
+    private final EventLoopGroup       eventLoopGroup = IMPL.getEventLoopGroup();
+    private final List<ManagedChannel> opened         = new ArrayList<>();
+    private       Server               serverA;
+    private       Server               serverB;
+    private       Demultiplexer        terminus;
 
     @AfterEach
     public void after() throws InterruptedException {

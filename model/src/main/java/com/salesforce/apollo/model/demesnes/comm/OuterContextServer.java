@@ -8,20 +8,19 @@ package com.salesforce.apollo.model.demesnes.comm;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.demesne.proto.OuterContextGrpc.OuterContextImplBase;
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.OuterContextGrpc.OuterContextImplBase;
+import com.salesforce.apollo.demesne.proto.SubContext;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.model.comms.OuterServerMetrics;
 
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class OuterContextServer extends OuterContextImplBase {
 
-    private final OuterServerMetrics      metrics;
+    private final OuterServerMetrics  metrics;
     private final OuterContextService service;
 
     public OuterContextServer(OuterContextService service, OuterServerMetrics metrics) {

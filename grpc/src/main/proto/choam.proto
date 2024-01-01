@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.choam.proto";
+option java_package = "com.salesforce.apollo.choam.proto";
 option java_outer_classname = "ChoamProto";
 option objc_class_prefix = "Chp";
 import "crypto.proto";
@@ -88,13 +88,8 @@ message Assemble {
   crypto.Digeste nextView = 1;
 }
 
-message Foundation {
-  repeated crypto.Digeste membership = 1;
-  stereotomy.KeyEvent_ authority = 2;
-}
-
 message FoundationSeal {
-  Foundation foundation = 1;
+  stereotomy.KeyEvent_ foundation = 1;
   crypto.Sig signature = 2;
 }
 

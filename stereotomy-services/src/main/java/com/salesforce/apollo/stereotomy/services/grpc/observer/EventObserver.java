@@ -8,21 +8,20 @@ package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import java.util.List;
 
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface EventObserver {
 
-   void publish(KERL_ kerl, List<Validations> validations, Digest from);
+    void publish(KERL_ kerl, List<Validations> validations, Digest from);
 
     void publishAttachments(List<AttachmentEvent> attachments, Digest from);
 
-   void publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from);
+    void publishEvents(List<KeyEvent_> events, List<Validations> validations, Digest from);
 }

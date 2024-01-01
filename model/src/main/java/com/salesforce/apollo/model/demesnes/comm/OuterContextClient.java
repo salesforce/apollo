@@ -7,16 +7,15 @@
 package com.salesforce.apollo.model.demesnes.comm;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.demesne.proto.OuterContextGrpc;
-import com.salesfoce.apollo.demesne.proto.OuterContextGrpc.OuterContextBlockingStub;
-import com.salesfoce.apollo.demesne.proto.SubContext;
-import com.salesfoce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.demesne.proto.OuterContextGrpc;
+import com.salesforce.apollo.demesne.proto.OuterContextGrpc.OuterContextBlockingStub;
+import com.salesforce.apollo.demesne.proto.SubContext;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 
 import io.grpc.ManagedChannel;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class OuterContextClient implements OuterContextService {
     private final OuterContextBlockingStub client;

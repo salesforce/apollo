@@ -8,35 +8,14 @@ package com.salesforce.apollo.choam.support;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesforce.apollo.choam.proto.CertifiedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class HashedCertifiedBlock extends HashedBlock {
-    public static class NullBlock extends HashedCertifiedBlock {
-
-        public NullBlock(DigestAlgorithm algo) {
-            super(algo.getOrigin());
-        }
-
-        @Override
-        public int compareTo(HashedBlock o) {
-            if (this == o) {
-                return 0;
-            }
-            return -1;
-        }
-
-        @Override
-        public ULong height() {
-            return null;
-        }
-    }
-
     public final CertifiedBlock certifiedBlock;
 
     public HashedCertifiedBlock(DigestAlgorithm digestAlgorithm, CertifiedBlock block) {
@@ -56,5 +35,25 @@ public class HashedCertifiedBlock extends HashedBlock {
     @Override
     public String toString() {
         return "cb" + hash.toString() + " height: " + height();
+    }
+
+    public static class NullBlock extends HashedCertifiedBlock {
+
+        public NullBlock(DigestAlgorithm algo) {
+            super(algo.getOrigin());
+        }
+
+        @Override
+        public int compareTo(HashedBlock o) {
+            if (this == o) {
+                return 0;
+            }
+            return -1;
+        }
+
+        @Override
+        public ULong height() {
+            return null;
+        }
     }
 }

@@ -13,7 +13,7 @@ import java.nio.ByteBuffer;
 import java.security.PublicKey;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
@@ -21,38 +21,37 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Identifier {
-    final ByteString          EMPTY      = ByteString.copyFrom(new byte[] { 0 });
-    Identifier                NONE       = new Identifier() {
-
-                                             @Override
-                                             public byte identifierCode() {
-                                                 return 0;
-                                             }
-
-                                             @Override
-                                             public boolean isNone() {
-                                                 return true;
-                                             }
-
-                                             @Override
-                                             public boolean isTransferable() {
-                                                 return false;
-                                             }
-
-                                             @Override
-                                             public Ident toIdent() {
-                                                 return NONE_IDENT;
-                                             }
-
-                                             @Override
-                                             public String toString() {
-                                                 return "<NONE>";
-                                             }
-                                         };
+    final ByteString EMPTY = ByteString.copyFrom(new byte[] { 0 });
     public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();
+    Identifier NONE = new Identifier() {
+
+        @Override
+        public byte identifierCode() {
+            return 0;
+        }
+
+        @Override
+        public boolean isNone() {
+            return true;
+        }
+
+        @Override
+        public boolean isTransferable() {
+            return false;
+        }
+
+        @Override
+        public Ident toIdent() {
+            return NONE_IDENT;
+        }
+
+        @Override
+        public String toString() {
+            return "<NONE>";
+        }
+    };
 
     public static Identifier from(Ident identifier) {
         if (identifier.hasBasic()) {

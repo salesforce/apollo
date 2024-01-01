@@ -11,10 +11,10 @@ import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.netflix.concurrency.limits.limiter.LifoBlockingLimiter;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
-import com.salesfoce.apollo.choam.proto.FoundationSeal;
-import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.choam.proto.Join;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
@@ -60,6 +60,26 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return new Builder();
     }
 
+    public Function<ULong, File> checkpointer() {
+        return runtime.checkpointer;
+    }
+
+    public Router communications() {
+        return runtime.communications;
+    }
+
+    public Context<Member> context() {
+        return runtime.context;
+    }
+
+    public Function<Map<Member, Join>, List<Transaction>> genesisData() {
+        return runtime.genesisData;
+    }
+
+    public Supplier<KERL_> kerl() {
+        return runtime.kerl;
+    }
+
     public int majority() {
         return runtime.context.majority();
     }
@@ -68,24 +88,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.member;
     }
 
-    public Context<Member> context() {
-        return runtime.context;
-    }
-
-    public Router communications() {
-        return runtime.communications;
-    }
-
     public ChoamMetrics metrics() {
         return runtime.metrics;
-    }
-
-    public Function<ULong, File> checkpointer() {
-        return runtime.checkpointer;
-    }
-
-    public Function<Map<Member, Join>, List<Transaction>> genesisData() {
-        return runtime.genesisData;
     }
 
     public TransactionExecutor processor() {
@@ -94,10 +98,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public BiConsumer<HashedBlock, CheckpointState> restorer() {
         return runtime.restorer;
-    }
-
-    public Supplier<KERL_> kerl() {
-        return runtime.kerl;
     }
 
     public static class MvStoreBuilder implements Cloneable {
@@ -580,10 +580,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                       .build();
         }
 
-        public Duration getbacklogDuration() {
-            return backlogDuration;
-        }
-
         public int getBacklogSize() {
             return backlogSize;
         }
@@ -638,6 +634,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public Duration getbacklogDuration() {
+            return backlogDuration;
+        }
+
         public LimiterBuilder setBacklogDuration(Duration backlogDuration) {
             this.backlogDuration = backlogDuration;
             return this;
@@ -678,14 +678,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
         private int                              crowns                = 2;
-
-        public int getCrowns() {
-            return crowns;
-        }
-
-        public void setCrowns(int crowns) {
-            this.crowns = crowns;
-        }
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
@@ -737,6 +729,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         public Builder setCombine(ReliableBroadcaster.Parameters combine) {
             this.combine = combine;
             return this;
+        }
+
+        public int getCrowns() {
+            return crowns;
+        }
+
+        public void setCrowns(int crowns) {
+            this.crowns = crowns;
         }
 
         public DigestAlgorithm getDigestAlgorithm() {

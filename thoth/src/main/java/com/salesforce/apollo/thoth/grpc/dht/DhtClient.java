@@ -8,9 +8,9 @@ package com.salesforce.apollo.thoth.grpc.dht;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.event.proto.*;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
+import com.salesforce.apollo.stereotomy.event.proto.*;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
+import com.salesforce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
@@ -99,6 +99,11 @@ public class DhtClient implements DhtService {
             }
 
             @Override
+            public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
+                return null;
+            }
+
+            @Override
             public KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates) {
                 return service.getKeyStateWithAttachments(coordinates);
             }
@@ -117,11 +122,6 @@ public class DhtClient implements DhtService {
             @Override
             public Validations getValidations(EventCoords coordinates) {
                 return service.getValidations(coordinates);
-            }
-
-            @Override
-            public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
-                return null;
             }
         };
     }
@@ -313,6 +313,27 @@ public class DhtClient implements DhtService {
     }
 
     @Override
+    public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
+        Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
+        if (metrics != null) {
+            final var bs = identAndSeq.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateRequest().mark(bs);
+        }
+        var result = client.getKeyStateSeqNum(identAndSeq);
+        if (timer != null) {
+            timer.stop();
+        }
+        if (timer != null) {
+            final var serializedSize = result.getSerializedSize();
+            timer.stop();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+        }
+        return result;
+    }
+
+    @Override
     public KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
         if (metrics != null) {
@@ -376,26 +397,5 @@ public class DhtClient implements DhtService {
             metrics.inboundGetAttachmentResponse().mark(serializedSize);
         }
         return complete;
-    }
-
-    @Override
-    public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
-        Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
-        if (metrics != null) {
-            final var bs = identAndSeq.getSerializedSize();
-            metrics.outboundBandwidth().mark(bs);
-            metrics.outboundGetKeyStateRequest().mark(bs);
-        }
-        var result = client.getKeyStateSeqNum(identAndSeq);
-        if (timer != null) {
-            timer.stop();
-        }
-        if (timer != null) {
-            final var serializedSize = result.getSerializedSize();
-            timer.stop();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
-        }
-        return result;
     }
 }

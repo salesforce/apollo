@@ -9,16 +9,15 @@ package com.salesforce.apollo.membership.messaging.rbc.comms;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.messaging.proto.MessageBff;
-import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.ReconcileContext;
+import com.salesforce.apollo.messaging.proto.MessageBff;
+import com.salesforce.apollo.messaging.proto.Reconcile;
+import com.salesforce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface ReliableBroadcast extends Link {
 

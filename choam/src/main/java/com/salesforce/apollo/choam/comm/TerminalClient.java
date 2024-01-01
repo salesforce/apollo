@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesfoce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -18,10 +18,10 @@ import com.salesforce.apollo.membership.Member;
  */
 public class TerminalClient implements Terminal {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel              channel;
     private final TerminalGrpc.TerminalBlockingStub client;
     @SuppressWarnings("unused")
-    private final ChoamMetrics metrics;
+    private final ChoamMetrics                      metrics;
 
     public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;

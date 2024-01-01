@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.QualifiedBase64;

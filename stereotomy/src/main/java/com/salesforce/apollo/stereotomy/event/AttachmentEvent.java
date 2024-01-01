@@ -18,9 +18,22 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface AttachmentEvent {
+    static Attachment of(Seal... seals) {
+        return new AttachmentImpl(Arrays.asList(seals));
+    }
+
+    Attachment attachments();
+
+    EventCoordinates coordinates();
+
+    byte[] getBytes();
+
+    com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_();
+
+    Version version();
+
     interface Attachment {
 
         Attachment EMPTY = new Attachment() {
@@ -36,26 +49,26 @@ public interface AttachmentEvent {
             }
         };
 
-        static Attachment of(com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment) {
+        static Attachment of(com.salesforce.apollo.stereotomy.event.proto.Attachment attachment) {
             return new AttachmentImpl(attachment.getSealsList().stream().map(s -> Seal.from(s)).toList(),
                                       attachment.getEndorsementsMap()
                                                 .entrySet()
                                                 .stream()
-                                                .collect(Collectors.toMap(e -> e.getKey(),
-                                                                          e -> JohnHancock.of(e.getValue()))));
+                                                .collect(
+                                                Collectors.toMap(e -> e.getKey(), e -> JohnHancock.of(e.getValue()))));
         }
 
         Map<Integer, JohnHancock> endorsements();
 
         List<Seal> seals();
 
-        default com.salesfoce.apollo.stereotomy.event.proto.Attachment toAttachemente() {
-            var builder = com.salesfoce.apollo.stereotomy.event.proto.Attachment.newBuilder();
+        default com.salesforce.apollo.stereotomy.event.proto.Attachment toAttachemente() {
+            var builder = com.salesforce.apollo.stereotomy.event.proto.Attachment.newBuilder();
             builder.addAllSeals(seals().stream().map(s -> s.toSealed()).toList())
                    .putAllEndorsements(endorsements().entrySet()
                                                      .stream()
-                                                     .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> e.getValue().toSig())));
+                                                     .collect(
+                                                     Collectors.toMap(e -> e.getKey(), e -> e.getValue().toSig())));
             return builder.build();
         }
     }
@@ -95,18 +108,4 @@ public interface AttachmentEvent {
         }
 
     }
-
-    static Attachment of(Seal... seals) {
-        return new AttachmentImpl(Arrays.asList(seals));
-    }
-
-    Attachment attachments();
-
-    EventCoordinates coordinates();
-
-    byte[] getBytes();
-
-    com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_();
-
-    Version version();
 }

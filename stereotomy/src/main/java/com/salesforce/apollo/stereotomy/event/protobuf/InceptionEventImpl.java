@@ -12,22 +12,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class InceptionEventImpl extends EstablishmentEventImpl implements InceptionEvent {
 
-    final com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent event;
+    final com.salesforce.apollo.stereotomy.event.proto.InceptionEvent event;
 
-    public InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
+    public InceptionEventImpl(com.salesforce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
         super(inceptionEvent.getSpecification().getHeader(), inceptionEvent.getCommon(),
               inceptionEvent.getSpecification().getEstablishment());
         event = inceptionEvent;
@@ -80,7 +79,7 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
         builder.setInception(event);
     }
 
-    public com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent toInceptionEvent_() {
+    public com.salesforce.apollo.stereotomy.event.proto.InceptionEvent toInceptionEvent_() {
         return event;
     }
 

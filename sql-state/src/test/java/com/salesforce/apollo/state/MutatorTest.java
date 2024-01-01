@@ -22,9 +22,9 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.Migration;
-import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.state.proto.Migration;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -32,7 +32,6 @@ import com.salesforce.apollo.state.SqlStateMachine.CallResult;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class MutatorTest {
     public static final Path   MUT_RESOURCE_PATH = Path.of("src", "test", "resources", "mutator-testing");
@@ -57,21 +56,19 @@ public class MutatorTest {
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(0, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(0, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
         migration = Migration.newBuilder().setUpdate(Mutator.changeLog(MUT_RESOURCE_PATH, MUT_SCHEMA_ROOT)).build();
         success = new CompletableFuture<>();
-        executor.execute(1, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(1, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setMigration(migration).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         success.get(1, TimeUnit.SECONDS);
 
@@ -91,11 +88,9 @@ public class MutatorTest {
         var call = mutator.call(sql, Collections.singletonList(JDBCType.INTEGER));
 
         success = new CompletableFuture<>();
-        executor.execute(1, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setCall(call).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(1, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(Txn.newBuilder().setCall(call).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         CallResult result = (CallResult) success.get(1, TimeUnit.SECONDS);
         assertNotNull(result);
@@ -108,11 +103,10 @@ public class MutatorTest {
         batch.build();
 
         success = new CompletableFuture<>();
-        executor.execute(2, Digest.NONE,
-                         Transaction.newBuilder()
-                                    .setContent(Txn.newBuilder().setBatched(batch.build()).build().toByteString())
-                                    .build(),
-                         success, r -> r.run());
+        executor.execute(2, Digest.NONE, Transaction.newBuilder()
+                                                    .setContent(
+                                                    Txn.newBuilder().setBatched(batch.build()).build().toByteString())
+                                                    .build(), success, r -> r.run());
 
         var batchResult = (List<?>) success.get(1, TimeUnit.SECONDS);
         assertNotNull(batchResult);

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.gorgoneion;
 
-import com.salesfoce.apollo.gorgoneion.proto.SignedAttestation;
+import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KERL;
 
@@ -17,9 +17,8 @@ import java.util.function.Predicate;
 /**
  * @author hal.hildebrand
  */
-public record Parameters(Predicate<SignedAttestation> verifier, Clock clock,
-                         Duration registrationTimeout, Duration frequency, DigestAlgorithm digestAlgorithm,
-                         Duration maxDuration, KERL kerl) {
+public record Parameters(Predicate<SignedAttestation> verifier, Clock clock, Duration registrationTimeout,
+                         Duration frequency, DigestAlgorithm digestAlgorithm, Duration maxDuration, KERL kerl) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -32,12 +31,12 @@ public record Parameters(Predicate<SignedAttestation> verifier, Clock clock,
             defaultVerifier = x -> true;
         }
 
-        private Clock clock = Clock.systemUTC();
-        private DigestAlgorithm digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private Duration frequency = Duration.ofMillis(5);
-        private KERL kerl;
-        private Duration maxDuration = Duration.ofSeconds(30);
-        private Duration registrationTimeout = Duration.ofSeconds(30);
+        private Clock           clock               = Clock.systemUTC();
+        private DigestAlgorithm digestAlgorithm     = DigestAlgorithm.DEFAULT;
+        private Duration        frequency           = Duration.ofMillis(5);
+        private KERL            kerl;
+        private Duration        maxDuration         = Duration.ofSeconds(30);
+        private Duration        registrationTimeout = Duration.ofSeconds(30);
 
         private Predicate<SignedAttestation> verifier = defaultVerifier;
 

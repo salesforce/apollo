@@ -8,7 +8,6 @@ package com.salesforce.apollo.thoth.grpc.delegation;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class DelegationClient {
 

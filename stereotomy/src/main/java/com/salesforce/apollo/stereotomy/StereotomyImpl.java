@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
@@ -18,6 +17,7 @@ import com.salesforce.apollo.stereotomy.event.*;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.Seal.EventSeal;
+import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -50,15 +50,16 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 public class StereotomyImpl implements Stereotomy {
     private static final Logger             log = LoggerFactory.getLogger(StereotomyImpl.class);
     final                EventFactory       eventFactory;
-    final                KERL               kerl;
+    final                KERL.AppendKERL    kerl;
     private final        SecureRandom       entropy;
     private final        StereotomyKeyStore keyStore;
 
-    public StereotomyImpl(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
+    public StereotomyImpl(StereotomyKeyStore keyStore, KERL.AppendKERL kerl, SecureRandom entropy) {
         this(keyStore, kerl, entropy, new ProtobufEventFactory());
     }
 
-    public StereotomyImpl(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy, EventFactory eventFactory) {
+    public StereotomyImpl(StereotomyKeyStore keyStore, KERL.AppendKERL kerl, SecureRandom entropy,
+                          EventFactory eventFactory) {
         this.keyStore = keyStore;
         this.entropy = entropy;
         this.eventFactory = eventFactory;
@@ -99,7 +100,7 @@ public class StereotomyImpl implements Stereotomy {
     @Override
     public Verifier getVerifier(KeyCoordinates coordinates) {
         KeyState state = getKeyState(coordinates);
-        return new Verifier.DefaultVerifier(state.getKeys().get(coordinates.getKeyIndex()));
+        return new Verifier.DefaultVerifier(state.getKeys());
     }
 
     @Override
@@ -389,13 +390,13 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public List<BasicIdentifier> getWitnesses() {
-            return getState().getWitnesses();
+        public int getWitnessThreshold() {
+            return getState().getWitnessThreshold();
         }
 
         @Override
-        public int getWitnessThreshold() {
-            return getState().getWitnessThreshold();
+        public List<BasicIdentifier> getWitnesses() {
+            return getState().getWitnesses();
         }
 
         @Override

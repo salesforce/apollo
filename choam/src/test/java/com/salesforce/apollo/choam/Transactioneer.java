@@ -7,8 +7,8 @@
 package com.salesforce.apollo.choam;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

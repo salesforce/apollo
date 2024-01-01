@@ -8,10 +8,10 @@ package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverImplBase;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverImplBase;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -23,8 +23,8 @@ import io.grpc.stub.StreamObserver;
  */
 public class EventObserverServer extends EventObserverImplBase {
 
-    private final ClientIdentity identity;
-    private final StereotomyMetrics metrics;
+    private final ClientIdentity                 identity;
+    private final StereotomyMetrics              metrics;
     private final RoutableService<EventObserver> routing;
 
     public EventObserverServer(RoutableService<EventObserver> router, ClientIdentity identity,

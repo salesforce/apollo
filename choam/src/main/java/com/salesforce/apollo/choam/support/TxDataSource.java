@@ -17,39 +17,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.Reassemble;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.choam.proto.UnitData;
-import com.salesfoce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.choam.proto.Reassemble;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.UnitData;
+import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
 
 /**
- * 
- * The data source for CHOAM. Provides back pressure to the caller when the
- * capacity of the receiver is exceeded. This data source has a fixed capacity
- * and produces a data packet up to the maximum byte size allowed, if the
- * receiver has available data. Each time the data is pulled from the receiver,
- * the remaining capacity is reduced by the max buffer size. The receiver will
- * not accept any more data after the capacity has been used, regardless of
- * whether there is space available.
- * 
- * @author hal.hildebrand
+ * The data source for CHOAM. Provides back pressure to the caller when the capacity of the receiver is exceeded. This
+ * data source has a fixed capacity and produces a data packet up to the maximum byte size allowed, if the receiver has
+ * available data. Each time the data is pulled from the receiver, the remaining capacity is reduced by the max buffer
+ * size. The receiver will not accept any more data after the capacity has been used, regardless of whether there is
+ * space available.
  *
+ * @author hal.hildebrand
  */
 public class TxDataSource implements DataSource {
 
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
-    private final Duration                   batchInterval;
-    private volatile Thread                  blockingThread;
-    private final AtomicBoolean              draining     = new AtomicBoolean();
-    private final ExponentialBackoffPolicy   drainPolicy;
-    private final Member                     member;
-    private final ChoamMetrics               metrics;
-    private final BatchingQueue<Transaction> processing;
-    private final BlockingQueue<Reassemble>  reassemblies = new LinkedBlockingQueue<>();
-    private final BlockingQueue<Validate>    validations  = new LinkedBlockingQueue<>();
+    private final    Duration                   batchInterval;
+    private final    AtomicBoolean              draining     = new AtomicBoolean();
+    private final    ExponentialBackoffPolicy   drainPolicy;
+    private final    Member                     member;
+    private final    ChoamMetrics               metrics;
+    private final    BatchingQueue<Transaction> processing;
+    private final    BlockingQueue<Reassemble>  reassemblies = new LinkedBlockingQueue<>();
+    private final    BlockingQueue<Validate>    validations  = new LinkedBlockingQueue<>();
+    private volatile Thread                     blockingThread;
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount, ExponentialBackoffPolicy drainPolicy) {
@@ -91,8 +87,8 @@ public class TxDataSource implements DataSource {
 
             if (draining.get()) {
                 var target = Instant.now().plus(drainPolicy.nextBackoff());
-                while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0 &&
-                       builder.getValidationsCount() == 0) {
+                while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0
+                && builder.getValidationsCount() == 0) {
                     // rinse and repeat
                     r = new ArrayList<Reassemble>();
                     reassemblies.drainTo(r);

@@ -12,7 +12,7 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 /**
  * @author hal.hildebrand
  */
-public interface DigestKERL extends KERL {
+public interface DigestKERL extends KERL.AppendKERL {
 
     KeyEvent getKeyEvent(Digest digest);
 

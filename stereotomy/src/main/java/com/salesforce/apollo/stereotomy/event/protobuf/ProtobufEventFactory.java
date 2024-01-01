@@ -16,18 +16,18 @@ import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
-import com.salesfoce.apollo.stereotomy.event.proto.Header;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
-import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
-import com.salesfoce.apollo.stereotomy.event.proto.Version;
-import com.salesfoce.apollo.stereotomy.event.proto.Weights;
+import com.salesforce.apollo.stereotomy.event.proto.Establishment;
+import com.salesforce.apollo.stereotomy.event.proto.EventCommon;
+import com.salesforce.apollo.stereotomy.event.proto.Header;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.IdentifierSpec;
+import com.salesforce.apollo.stereotomy.event.proto.InteractionEvent;
+import com.salesforce.apollo.stereotomy.event.proto.InteractionSpec;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.RotationSpec;
+import com.salesforce.apollo.stereotomy.event.proto.Version;
+import com.salesforce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SigningThreshold;
@@ -47,23 +47,22 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ProtobufEventFactory implements EventFactory {
 
     public static final EventFactory INSTANCE = new ProtobufEventFactory();
 
-    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent event,
+    public static Digest digestOf(com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent event,
                                   DigestAlgorithm algo) {
         return algo.digest(event.getCoordinates().getIdentifier().toByteString());
     }
 
-    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent event,
+    public static Digest digestOf(com.salesforce.apollo.stereotomy.event.proto.InceptionEvent event,
                                   DigestAlgorithm algo) {
         return algo.digest(event.getIdentifier().toByteString());
     }
 
-    public static Digest digestOf(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent event,
+    public static Digest digestOf(com.salesforce.apollo.stereotomy.event.proto.RotationEvent event,
                                   DigestAlgorithm algo) {
         return algo.digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
@@ -78,40 +77,40 @@ public class ProtobufEventFactory implements EventFactory {
 
     public static Digest digestOf(final KeyEvent_ event, DigestAlgorithm algo) {
         return switch (event.getEventCase()) {
-        case INCEPTION -> digestOf(event.getInception(), algo);
-        case INTERACTION -> digestOf(event.getInteraction(), algo);
-        case ROTATION -> digestOf(event.getRotation(), algo);
-        default -> null;
+            case INCEPTION -> digestOf(event.getInception(), algo);
+            case INTERACTION -> digestOf(event.getInteraction(), algo);
+            case ROTATION -> digestOf(event.getRotation(), algo);
+            default -> null;
         };
     }
 
     public static Digest digestOf(final KeyEventWithAttachments event, DigestAlgorithm algo) {
         return switch (event.getEventCase()) {
-        case INCEPTION -> digestOf(event.getInception(), algo);
-        case INTERACTION -> digestOf(event.getInteraction(), algo);
-        case ROTATION -> digestOf(event.getRotation(), algo);
-        default -> null;
+            case INCEPTION -> digestOf(event.getInception(), algo);
+            case INTERACTION -> digestOf(event.getInteraction(), algo);
+            case ROTATION -> digestOf(event.getRotation(), algo);
+            default -> null;
         };
     }
 
     public static KeyEvent from(KeyEvent_ ke) {
         return switch (ke.getEventCase()) {
-        case EVENT_NOT_SET -> null;
-        case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-        case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-        case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-        default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
+            case EVENT_NOT_SET -> null;
+            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+            default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
         };
     }
 
     public static EventWithAttachments from(KeyEventWithAttachments ke) {
 
         var event = switch (ke.getEventCase()) {
-        case EVENT_NOT_SET -> null;
-        case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-        case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-        case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-        default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
+            case EVENT_NOT_SET -> null;
+            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+            default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
         };
         return new EventWithAttachments(event, AttachmentEvent.Attachment.of(ke.getAttachment()));
     }
@@ -119,37 +118,42 @@ public class ProtobufEventFactory implements EventFactory {
     public static KeyEvent toKeyEvent(byte[] event, String ilk) {
         try {
             return switch (ilk) {
-            case ROTATION_TYPE -> new RotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
-            case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
-            case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
-            case INCEPTION_TYPE -> new InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
-            case INTERACTION_TYPE -> new InteractionEventImpl(InteractionEvent.parseFrom(event));
-            default -> null;
+                case ROTATION_TYPE ->
+                new RotationEventImpl(com.salesforce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+                case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(
+                com.salesforce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+                case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(
+                com.salesforce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+                case INCEPTION_TYPE ->
+                new InceptionEventImpl(com.salesforce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+                case INTERACTION_TYPE -> new InteractionEventImpl(InteractionEvent.parseFrom(event));
+                default -> null;
             };
         } catch (Throwable e) {
             return null;
         }
     }
 
-    public static InceptionEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inception) {
+    public static InceptionEvent toKeyEvent(com.salesforce.apollo.stereotomy.event.proto.InceptionEvent inception) {
         return switch (inception.getSpecification().getHeader().getIlk()) {
-        case INCEPTION_TYPE -> new InceptionEventImpl(inception);
-        case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(inception);
-        default -> throw new IllegalArgumentException("Unexpected value: "
-        + inception.getSpecification().getHeader().getIlk());
+            case INCEPTION_TYPE -> new InceptionEventImpl(inception);
+            case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(inception);
+            default -> throw new IllegalArgumentException(
+            "Unexpected value: " + inception.getSpecification().getHeader().getIlk());
         };
     }
 
-    public static RotationEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent rotation) {
+    public static RotationEvent toKeyEvent(com.salesforce.apollo.stereotomy.event.proto.RotationEvent rotation) {
         return switch (rotation.getSpecification().getHeader().getIlk()) {
-        case ROTATION_TYPE -> new RotationEventImpl(rotation);
-        case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(rotation);
-        default -> throw new IllegalArgumentException("Unexpected value: "
-        + rotation.getSpecification().getHeader().getIlk());
+            case ROTATION_TYPE -> new RotationEventImpl(rotation);
+            case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(rotation);
+            default ->
+            throw new IllegalArgumentException("Unexpected value: " + rotation.getSpecification().getHeader().getIlk());
         };
     }
 
-    public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
+    public static SigningThreshold toSigningThreshold(
+    com.salesforce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
         if (signingThreshold.getWeightsCount() == 0) {
             return new SigningThreshold.Unweighted() {
                 @Override
@@ -176,8 +180,9 @@ public class ProtobufEventFactory implements EventFactory {
         }
     }
 
-    public static com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold.Builder toSigningThreshold(SigningThreshold signingThreshold) {
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold.newBuilder();
+    public static com.salesforce.apollo.stereotomy.event.proto.SigningThreshold.Builder toSigningThreshold(
+    SigningThreshold signingThreshold) {
+        var builder = com.salesforce.apollo.stereotomy.event.proto.SigningThreshold.newBuilder();
         if (signingThreshold instanceof SigningThreshold.Unweighted) {
             builder.setThreshold(((SigningThreshold.Unweighted) signingThreshold).getThreshold());
         } else if (signingThreshold instanceof SigningThreshold.Weighted) {
@@ -185,10 +190,10 @@ public class ProtobufEventFactory implements EventFactory {
             for (Weight[] wa : weights) {
                 Weights.Builder wb = Weights.newBuilder();
                 for (Weight w : wa) {
-                    wb.addWeights(com.salesfoce.apollo.stereotomy.event.proto.Weight.newBuilder()
-                                                                                    .setNumerator(w.numerator())
-                                                                                    .setDenominator(w.denominator()
-                                                                                                     .orElse(0)));
+                    wb.addWeights(com.salesforce.apollo.stereotomy.event.proto.Weight.newBuilder()
+                                                                                     .setNumerator(w.numerator())
+                                                                                     .setDenominator(
+                                                                                     w.denominator().orElse(0)));
                 }
                 builder.addWeights(wb);
             }
@@ -204,7 +209,7 @@ public class ProtobufEventFactory implements EventFactory {
         return weights;
     }
 
-    private static Weight weightFrom(com.salesfoce.apollo.stereotomy.event.proto.Weight w) {
+    private static Weight weightFrom(com.salesforce.apollo.stereotomy.event.proto.Weight w) {
         return new Weight() {
 
             @Override
@@ -222,7 +227,7 @@ public class ProtobufEventFactory implements EventFactory {
 
     @Override
     public AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment) {
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
+        var builder = com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
         builder.setAttachment(attachment.toAttachemente()).setCoordinates(event.getCoordinates().toEventCoords());
         return new AttachmentEventImpl(builder.build());
     }
@@ -239,7 +244,7 @@ public class ProtobufEventFactory implements EventFactory {
 
         var common = EventCommon.newBuilder().setAuthentication(specification.getSigner().sign(bs).toSig());
 
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
+        var builder = com.salesforce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
         if (delegated) {
             builder.setDelegatingPrefix(identifier.toIdent());
         }
@@ -258,7 +263,7 @@ public class ProtobufEventFactory implements EventFactory {
         var common = EventCommon.newBuilder()
                                 .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
+        var builder = com.salesforce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
 
@@ -272,12 +277,13 @@ public class ProtobufEventFactory implements EventFactory {
         var common = EventCommon.newBuilder()
                                 .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
+        var builder = com.salesforce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         var event = builder.setSpecification(rotationSpec).setCommon(common).build();
         return delegated ? new DelegatedRotationEventImpl(event) : new RotationEventImpl(event);
     }
 
-    com.salesfoce.apollo.stereotomy.event.proto.Version.Builder toVersion(com.salesforce.apollo.stereotomy.event.Version version) {
+    com.salesforce.apollo.stereotomy.event.proto.Version.Builder toVersion(
+    com.salesforce.apollo.stereotomy.event.Version version) {
         return Version.newBuilder().setMajor(version.getMajor()).setMinor(version.getMinor());
     }
 
@@ -286,10 +292,8 @@ public class ProtobufEventFactory implements EventFactory {
                                                                  boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
-                                                                  .collect(Collectors.toList()))
+                                         .addAllKeys(
+                                         specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
@@ -333,10 +337,8 @@ public class ProtobufEventFactory implements EventFactory {
     private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification, boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
-                                                                  .collect(Collectors.toList()))
+                                         .addAllKeys(
+                                         specification.getKeys().stream().map(k -> bs(k)).collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());

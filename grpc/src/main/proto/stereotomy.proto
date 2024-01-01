@@ -1,10 +1,11 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
+option java_package = "com.salesforce.apollo.stereotomy.event.proto";
 option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
 import "crypto.proto";
+import "google/protobuf/any.proto";
 
 package stereotomy;
 
@@ -52,6 +53,7 @@ message Sealed {
     EventLoc event = 3;
     bytes bits = 4;
   }
+  google.protobuf.Any value = 5;
 }
 
 // Common header for events

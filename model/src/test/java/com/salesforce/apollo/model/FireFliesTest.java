@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesfoce.apollo.choam.proto.Foundation;
-import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -15,6 +13,7 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -25,9 +24,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -42,7 +39,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -71,10 +67,6 @@ public class FireFliesTest {
 
     @BeforeEach
     public void before() throws Exception {
-
-        final var commsDirectory = Path.of("target/comms");
-        commsDirectory.toFile().mkdirs();
-
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -89,20 +81,21 @@ public class FireFliesTest {
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
-        var foundation = Foundation.newBuilder();
-        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
-        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        var sealed = FoundationSeal.newBuilder().build();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
-            var node = new ProcessDomain(group, member, params, "jdbc:h2:mem:", checkpointDirBase,
-                                         RuntimeParameters.newBuilder()
-                                                          .setFoundation(sealed)
-                                                          .setContext(context)
-                                                          .setCommunications(localRouter), new InetSocketAddress(0),
-                                         commsDirectory, ffParams, EventValidation.NONE,
-                                         IdentifierSpecification.newBuilder());
+            var dbUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5), checkpointDirBase,
+                                                                     Duration.ofMillis(10), 0.00125,
+                                                                     Duration.ofSeconds(5), 3, 10, 0.1);
+            var node = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
+                                                                                           .setFoundation(sealed)
+                                                                                           .setContext(context)
+                                                                                           .setCommunications(
+                                                                                           localRouter),
+                                         new InetSocketAddress(0), ffParams, null);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();
@@ -115,15 +108,9 @@ public class FireFliesTest {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.get(0).getMember().getEvent().getCoordinates(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getEvent(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
-
-                @Override
-                public void update(EventCoordinates update) {
-                    // TODO Auto-generated method stub
-
-                }
 
                 @Override
                 public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
@@ -145,19 +132,17 @@ public class FireFliesTest {
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
-        domains.get(0)
+        domains.getFirst()
                .getFoundation()
-               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList(),
-                      Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()));
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList());
         assertTrue(started.get().await(10, TimeUnit.SECONDS), "Cannot start up kernel");
 
         started.set(new CountDownLatch(CARDINALITY - 1));
-        domains.subList(1, domains.size()).forEach(d -> {
-            d.getFoundation()
-             .start(() -> started.get().countDown(), gossipDuration, seeds,
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
-        });
-        assertTrue(started.get().await(10, TimeUnit.SECONDS), "could not start views");
+        domains.subList(1, domains.size())
+               .forEach(d -> Thread.ofVirtual()
+                                   .start(() -> d.getFoundation()
+                                                 .start(() -> started.get().countDown(), gossipDuration, seeds)));
+        assertTrue(started.get().await(30, TimeUnit.SECONDS), "could not start views");
 
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
 

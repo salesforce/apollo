@@ -14,31 +14,28 @@ import org.joou.ULong;
 import org.joou.Unsigned;
 
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.Block;
-import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Header;
+import com.salesforce.apollo.choam.proto.Block;
+import com.salesforce.apollo.choam.proto.CertifiedBlock;
+import com.salesforce.apollo.choam.proto.Header;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 
 public class HashedBlock implements Comparable<HashedBlock> {
-    public static class NullBlock extends HashedBlock {
+    public final Block  block;
+    public final Digest hash;
 
-        public NullBlock(DigestAlgorithm algo) {
-            super(algo.getOrigin(), null);
-        }
+    public HashedBlock(DigestAlgorithm digestAlgorithm, Block block) {
+        this(digestAlgorithm.digest(block.toByteString()), block);
+    }
 
-        @Override
-        public int compareTo(HashedBlock o) {
-            if (this == o) {
-                return 0;
-            }
-            return -1;
-        }
+    HashedBlock(Digest hash) {
+        this.hash = hash;
+        block = null;
+    }
 
-        @Override
-        public ULong height() {
-            return null;
-        }
+    HashedBlock(Digest hash, Block block) {
+        this.hash = hash;
+        this.block = block;
     }
 
     public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, ULong height,
@@ -96,23 +93,6 @@ public class HashedBlock implements Comparable<HashedBlock> {
         return height(cb.getBlock());
     }
 
-    public final Block  block;
-    public final Digest hash;
-
-    public HashedBlock(DigestAlgorithm digestAlgorithm, Block block) {
-        this(digestAlgorithm.digest(block.toByteString()), block);
-    }
-
-    HashedBlock(Digest hash) {
-        this.hash = hash;
-        block = null;
-    }
-
-    HashedBlock(Digest hash, Block block) {
-        this.hash = hash;
-        this.block = block;
-    }
-
     @Override
     public int compareTo(HashedBlock o) {
         return hash.equals(o.hash) ? 0 : height().compareTo(o.height());
@@ -129,5 +109,25 @@ public class HashedBlock implements Comparable<HashedBlock> {
     @Override
     public String toString() {
         return "hb" + hash.toString() + " height: " + height();
+    }
+
+    public static class NullBlock extends HashedBlock {
+
+        public NullBlock(DigestAlgorithm algo) {
+            super(algo.getOrigin(), null);
+        }
+
+        @Override
+        public int compareTo(HashedBlock o) {
+            if (this == o) {
+                return 0;
+            }
+            return -1;
+        }
+
+        @Override
+        public ULong height() {
+            return null;
+        }
     }
 }

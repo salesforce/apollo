@@ -7,9 +7,9 @@
 package com.salesforce.apollo.ethereal;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Missing;
-import com.salesfoce.apollo.ethereal.proto.Update;
+import com.salesforce.apollo.ethereal.proto.Gossip;
+import com.salesforce.apollo.ethereal.proto.Missing;
+import com.salesforce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
@@ -32,22 +32,24 @@ import java.util.function.Consumer;
  */
 public class Ethereal {
 
-    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
-    private final Config               config;
-    private final ThreadPoolExecutor   consumer;
-    private final Creator              creator;
-    private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
-    private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
-    private final Set<Digest>          failed       = new ConcurrentSkipListSet<>();
-    private final Queue<Unit>          lastTiming;
-    private final int                  maxSerializedSize;
-    private final Consumer<Integer>    newEpochAction;
-    private final AtomicBoolean        started      = new AtomicBoolean();
-    private final Consumer<List<Unit>> toPreblock;
+    private static final Logger               log          = LoggerFactory.getLogger(Ethereal.class);
+    private final        Config               config;
+    private final        ThreadPoolExecutor   consumer;
+    private final        Creator              creator;
+    private final        AtomicInteger        currentEpoch = new AtomicInteger(-1);
+    private final        Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
+    private final        Set<Digest>          failed       = new ConcurrentSkipListSet<>();
+    private final        Queue<Unit>          lastTiming;
+    private final        int                  maxSerializedSize;
+    private final        Consumer<Integer>    newEpochAction;
+    private final        AtomicBoolean        started      = new AtomicBoolean();
+    private final        Consumer<List<Unit>> toPreblock;
+
     public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<List<ByteString>, Boolean> blocker,
                     Consumer<Integer> newEpochAction, String label) {
         this(config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction, label);
     }
+
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
                     Consumer<Integer> newEpochAction, String label) {
         if (!Dag.validate(conf.nProc())) {

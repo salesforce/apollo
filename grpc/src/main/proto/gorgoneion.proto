@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "com.salesfoce.apollo.gorgoneion.proto";
+option java_package = "com.salesforce.apollo.gorgoneion.proto";
 option java_outer_classname = "GorgoneionProto";
 option objc_class_prefix = "Gp";
 
@@ -15,51 +15,51 @@ import "crypto.proto";
 package gorgoneion;
 
 service Admissions {
-    rpc apply (stereotomy.KERL_) returns (SignedNonce) {}
-    rpc register (Credentials) returns (stereotomy.Validations) {}
+  rpc apply (stereotomy.KERL_) returns (SignedNonce) {}
+  rpc register (Credentials) returns (stereotomy.Validations) {}
 }
 
 service Endorsement {
-    rpc endorse (Nonce)returns (MemberSignature) {}
-    rpc validate (Credentials)returns (stereotomy.Validation_) {}
-    rpc enroll (Notarization) returns (google.protobuf.Empty) {}
+  rpc endorse (Nonce)returns (MemberSignature) {}
+  rpc validate (Credentials)returns (stereotomy.Validation_) {}
+  rpc enroll (Notarization) returns (google.protobuf.Empty) {}
 }
 
 message MemberSignature {
-    crypto.Digeste id = 1;
-    crypto.Sig signature = 2;
+  crypto.Digeste id = 1;
+  crypto.Sig signature = 2;
 }
 
 message SignedNonce {
-    Nonce nonce = 1;
-    repeated MemberSignature signatures = 2;
+  Nonce nonce = 1;
+  repeated MemberSignature signatures = 2;
 }
 
 message Nonce {
-    stereotomy.Ident member = 1;
-    crypto.Digeste issuer = 2;
-    crypto.Digeste noise = 3;
-    google.protobuf.Timestamp timestamp = 4;
+  stereotomy.Ident member = 1;
+  crypto.Digeste issuer = 2;
+  crypto.Digeste noise = 3;
+  google.protobuf.Timestamp timestamp = 4;
 }
 
-message Credentials { 
-    SignedNonce nonce = 1;
-    SignedAttestation attestation = 2;
+message Credentials {
+  SignedNonce nonce = 1;
+  SignedAttestation attestation = 2;
 }
 
 message Attestation {
-    stereotomy.KERL_ kerl = 1;
-    crypto.Sig nonce = 2;
-    google.protobuf.Timestamp timestamp = 3;
-    google.protobuf.Any attestation = 4;
+  stereotomy.KERL_ kerl = 1;
+  crypto.Sig nonce = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  google.protobuf.Any attestation = 4;
 }
 
 message SignedAttestation {
-    Attestation attestation = 1;
-    crypto.Sig signature = 2;
+  Attestation attestation = 1;
+  crypto.Sig signature = 2;
 }
 
 message Notarization {
-    stereotomy.KERL_ kerl = 1; 
-    stereotomy.Validations validations = 2;
+  stereotomy.KERL_ kerl = 1;
+  stereotomy.Validations validations = 2;
 }

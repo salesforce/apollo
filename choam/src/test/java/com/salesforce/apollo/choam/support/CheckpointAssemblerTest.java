@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.salesfoce.apollo.choam.proto.Checkpoint;
-import com.salesfoce.apollo.choam.proto.CheckpointReplication;
-import com.salesfoce.apollo.choam.proto.CheckpointSegments;
-import com.salesfoce.apollo.choam.proto.Slice;
+import com.salesforce.apollo.choam.proto.Checkpoint;
+import com.salesforce.apollo.choam.proto.CheckpointReplication;
+import com.salesforce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.CHOAM;

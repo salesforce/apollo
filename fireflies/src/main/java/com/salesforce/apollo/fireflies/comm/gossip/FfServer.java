@@ -8,10 +8,10 @@ package com.salesforce.apollo.fireflies.comm.gossip;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
-import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.SayWhat;
-import com.salesfoce.apollo.fireflies.proto.State;
+import com.salesforce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
+import com.salesforce.apollo.fireflies.proto.Gossip;
+import com.salesforce.apollo.fireflies.proto.SayWhat;
+import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -23,7 +23,6 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class FfServer extends FirefliesImplBase {
 

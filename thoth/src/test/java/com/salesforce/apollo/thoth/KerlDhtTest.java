@@ -35,7 +35,7 @@ public class KerlDhtTest extends AbstractDhtTest {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
-        var dht = dhts.values().stream().findFirst().get();
+        var dht = dhts.firstEntry().getValue();
 
         dht.append(Collections.singletonList(inception.toKeyEvent_()));
         var lookup = dht.getKeyEvent(inception.getCoordinates().toEventCoords());

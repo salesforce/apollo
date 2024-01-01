@@ -18,9 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventValidation;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -34,7 +32,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,6 +48,7 @@ public class ChurnTest {
     private static final int                                                         CARDINALITY    = 100;
     private static final double                                                      P_BYZ          = 0.3;
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static       KERL.AppendKERL                                             kerl;
     private              List<Router>                                                communications = new ArrayList<>();
     private              List<Router>                                                gateways       = new ArrayList<>();
     private              Map<Digest, ControlledIdentifierMember>                     members;
@@ -62,7 +60,8 @@ public class ChurnTest {
     public static void beforeClass() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+        kerl = new MemKERL(DigestAlgorithm.DEFAULT).cached();
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .mapToObj(i -> {
                                   return stereotomy.newIdentifier();
@@ -97,7 +96,7 @@ public class ChurnTest {
 
         var seeds = members.values()
                            .stream()
-                           .map(m -> new Seed(m.getEvent().getCoordinates(), new InetSocketAddress(0)))
+                           .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
                            .limit(25)
                            .toList();
 
@@ -109,9 +108,7 @@ public class ChurnTest {
         var countdown = new AtomicReference<>(new CountDownLatch(1));
         long then = System.currentTimeMillis();
 
-        views.get(0)
-             .start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList(),
-                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+        views.get(0).start(() -> countdown.get().countDown(), gossipDuration, Collections.emptyList());
 
         assertTrue(countdown.get().await(30, TimeUnit.SECONDS), "Kernel did not bootstrap");
 
@@ -120,8 +117,7 @@ public class ChurnTest {
         var bootstrappers = views.subList(1, seeds.size());
         countdown.set(new CountDownLatch(bootstrappers.size()));
 
-        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed,
-                                           Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+        bootstrappers.forEach(v -> v.start(() -> countdown.get().countDown(), gossipDuration, bootstrapSeed));
 
         // Test that all seeds up
         var success = countdown.get().await(30, TimeUnit.SECONDS);
@@ -137,7 +133,7 @@ public class ChurnTest {
         "Seeds have stabilized in " + (System.currentTimeMillis() - then) + " Ms across all " + testViews.size()
         + " members");
 
-        // Bring up the remaining members step wise
+        // Bring up the remaining members stepwise
         for (int i = 0; i < 3; i++) {
             int start = testViews.size();
             var toStart = new ArrayList<View>();
@@ -149,8 +145,7 @@ public class ChurnTest {
             then = System.currentTimeMillis();
             countdown.set(new CountDownLatch(toStart.size()));
 
-            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds,
-                                               Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())));
+            toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
             failed = testViews.stream()
@@ -222,8 +217,8 @@ public class ChurnTest {
             final var expected = c;
             //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
-            success = Utils.waitForCondition(30_000, 1_000, () -> {
-                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() < 3;
+            success = Utils.waitForCondition(60_000, 1_000, () -> {
+                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() == 0;
             });
             failed = expected.stream()
                              .filter(e -> e.getContext().activeCount() != testViews.size())
@@ -259,7 +254,7 @@ public class ChurnTest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder().build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 
@@ -294,8 +289,8 @@ public class ChurnTest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, parameters, gateway,
-                            DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
+                            parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 }

@@ -7,39 +7,33 @@
 package com.salesforce.apollo.model;
 
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.Migration;
-import com.salesfoce.apollo.state.proto.Txn;
-import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
-import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.choam.proto.Join;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
-import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
+import com.salesforce.apollo.state.proto.Migration;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.proto.Attachment;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import org.jooq.DSLContext;
-import org.jooq.SQLDialect;
-import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,8 +51,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
-import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
-import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static java.nio.file.Path.of;
 
 /**
@@ -68,16 +60,16 @@ import static java.nio.file.Path.of;
  * @author hal.hildebrand
  */
 abstract public class Domain {
-    protected static final Executor                   executor = Executors.newVirtualThreadPerTaskExecutor();
-    private static final   Logger                     log      = LoggerFactory.getLogger(Domain.class);
-    protected final        CHOAM                      choam;
-    protected final        KERL                       commonKERL;
-    protected final        ControlledIdentifierMember member;
-    protected final        Mutator                    mutator;
-    protected final        Oracle                     oracle;
-    protected final        Parameters                 params;
-    protected final        SqlStateMachine            sqlStateMachine;
-    protected final        Connection                 stateConnection;
+    private static final Logger log = LoggerFactory.getLogger(Domain.class);
+
+    protected final Executor                   executor = Executors.newVirtualThreadPerTaskExecutor();
+    protected final CHOAM                      choam;
+    protected final ControlledIdentifierMember member;
+    protected final Mutator                    mutator;
+    protected final Oracle                     oracle;
+    protected final Parameters                 params;
+    protected final SqlStateMachine            sqlStateMachine;
+    protected final Connection                 stateConnection;
 
     public Domain(ControlledIdentifierMember member, Parameters.Builder params, String dbURL, Path checkpointBaseDir,
                   RuntimeParameters.Builder runtime) {
@@ -101,31 +93,15 @@ abstract public class Domain {
                                                     .setProcessor(sqlStateMachine.getExecutor())
                                                     .setMember(member)
                                                     .setRestorer(sqlStateMachine.getBootstrapper())
-                                                    .setKerl(() -> kerl())
-                                                    .setGenesisData(members -> genesisOf(members))
+                                                    .setKerl(this::kerl)
+                                                    .setGenesisData(this::genesisOf)
                                                     .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
         this.oracle = new ShardedOracle(stateConnection, mutator, params.getSubmitTimeout());
-        this.commonKERL = new ShardedKERL(stateConnection, mutator, params.getSubmitTimeout(),
-                                          params.getDigestAlgorithm());
         log.info("Domain: {} member: {} db URL: {} checkpoint base dir: {}", this.params.context().getId(),
                  member.getId(), dbURL, checkpointBaseDir);
-    }
-
-    public static void addMembers(Connection connection, List<byte[]> members, String state) {
-        var context = DSL.using(connection, SQLDialect.H2);
-        for (var m : members) {
-            var id = context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX)
-                            .values(m)
-                            .onDuplicateKeyIgnore()
-                            .returning(IDENTIFIER.ID)
-                            .fetchOne();
-            if (id != null) {
-                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
-            }
-        }
     }
 
     public static Txn boostrapMigration() {
@@ -145,15 +121,6 @@ abstract public class Domain {
                   .build();
     }
 
-    public static boolean isMember(DSLContext context, SelfAddressingIdentifier id) {
-        final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-        return context.fetchExists(context.select(MEMBER.IDENTIFIER)
-                                          .from(MEMBER)
-                                          .join(idTable)
-                                          .on(idTable.ID.eq(MEMBER.IDENTIFIER))
-                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes())));
-    }
-
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
         Path dir;
         try {
@@ -169,20 +136,20 @@ abstract public class Domain {
         return Domain.class.getResource(resource);
     }
 
-    public boolean activate(Member m) {
-        if (!active()) {
-            return params.runtime()
-                         .foundation()
-                         .getFoundation()
-                         .getMembershipList()
-                         .stream()
-                         .map(d -> Digest.from(d))
-                         .anyMatch(d -> m.getId().equals(d));
-        }
-        final var context = DSL.using(stateConnection, SQLDialect.H2);
-        final var activeMember = isMember(context, new SelfAddressingIdentifier(m.getId()));
-
-        return activeMember;
+    private static Transaction transactionOf(Message message, SignatureAlgorithm signatureAlgorithm,
+                                             DigestAlgorithm digestAlgorithm) {
+        ByteBuffer buff = ByteBuffer.allocate(4);
+        buff.putInt(0);
+        buff.flip();
+        var signer = new Signer.MockSigner(signatureAlgorithm, ULong.MIN);
+        var digeste = digestAlgorithm.getOrigin().toDigeste();
+        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
+                              message.toByteString().asReadOnlyByteBuffer());
+        return Transaction.newBuilder()
+                          .setSource(digeste)
+                          .setContent(message.toByteString())
+                          .setSignature(sig.toSig())
+                          .build();
     }
 
     public boolean active() {
@@ -207,13 +174,6 @@ abstract public class Domain {
         return member.getIdentifier().getIdentifier();
     }
 
-    /**
-     * @return the adapter that provides raw Protobuf access to the underlying KERI resolution
-     */
-    public ProtoKERLAdapter getKERLService() {
-        return new ProtoKERLAdapter(commonKERL);
-    }
-
     public ControlledIdentifierMember getMember() {
         return member;
     }
@@ -235,32 +195,35 @@ abstract public class Domain {
         return getClass().getSimpleName() + "[" + getIdentifier() + "]";
     }
 
+    protected Transaction migrations() {
+        return null;
+    }
+
+    protected Transaction transactionOf(Message message) {
+        var signatureAlgorithm = params.viewSigAlgorithm();
+        var digestAlgorithm = params.digestAlgorithm();
+        return transactionOf(message, signatureAlgorithm, digestAlgorithm);
+    }
+
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        log.info("Genesis joins: {} on: {}", members.keySet().stream().map(m -> m.getId()).toList(), params.member());
-        var sorted = new ArrayList<Member>(members.keySet());
+        log.info("Genesis joins: {} on: {}", members.keySet().stream().map(Member::getId).toList(), params.member());
+        var sorted = new ArrayList<>(members.keySet());
         sorted.sort(Comparator.naturalOrder());
         List<Transaction> transactions = new ArrayList<>();
         // Schemas
         transactions.add(transactionOf(boostrapMigration()));
+        var migrations = migrations();
+        if (migrations != null) {
+            // additional SQL migrations
+            transactions.add(migrations);
+        }
         sorted.stream()
               .map(e -> manifest(members.get(e)))
               .filter(Objects::nonNull)
               .flatMap(Collection::stream)
               .forEach(transactions::add);
-        transactions.add(initalMembership(
-        params.runtime().foundation().getFoundation().getMembershipList().stream().map(d -> Digest.from(d)).toList()));
         return transactions;
-    }
-
-    private Transaction initalMembership(List<Digest> digests) {
-        var call = mutator.call("{ call apollo_kernel.add_members(?, ?) }", digests.stream()
-                                                                                   .map(
-                                                                                   d -> new SelfAddressingIdentifier(d))
-                                                                                   .map(
-                                                                                   id -> id.toIdent().toByteArray())
-                                                                                   .toList(), "active");
-        return transactionOf(Txn.newBuilder().setCall(call).build());
     }
 
     // Answer the KERL of this node
@@ -271,7 +234,7 @@ abstract public class Domain {
             return KERL_.getDefaultInstance();
         }
         var b = KERL_.newBuilder();
-        kerl.stream().map(ewa -> ewa.toKeyEvente()).forEach(ke -> b.addEvents(ke));
+        kerl.stream().map(EventWithAttachments::toKeyEvente).forEach(b::addEvents);
         return b.build();
     }
 
@@ -302,20 +265,5 @@ abstract public class Domain {
                          attach.toByteArray()));
         }
         return transactionOf(Txn.newBuilder().setBatched(batch.build()).build());
-    }
-
-    private Transaction transactionOf(Message message) {
-        ByteBuffer buff = ByteBuffer.allocate(4);
-        buff.putInt(0);
-        buff.flip();
-        var signer = new Signer.MockSigner(params.viewSigAlgorithm(), ULong.MIN);
-        var digeste = params.digestAlgorithm().getOrigin().toDigeste();
-        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
-                              message.toByteString().asReadOnlyByteBuffer());
-        return Transaction.newBuilder()
-                          .setSource(digeste)
-                          .setContent(message.toByteString())
-                          .setSignature(sig.toSig())
-                          .build();
     }
 }

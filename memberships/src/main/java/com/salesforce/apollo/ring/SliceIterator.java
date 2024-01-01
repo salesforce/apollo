@@ -47,15 +47,14 @@ public class SliceIterator<Comm extends Link> {
         this.comm = comm;
         Entropy.secureShuffle(slice);
         this.currentIteration = slice.iterator();
-        log.debug("Slice: {}", slice.stream().map(m -> m.getId()).toList());
+        log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(m -> m.getId()).toList(), member.getId());
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
                             Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
+        log.trace("Starting iteration of: <{}> on: {}", label, member.getId());
         Thread.ofVirtual()
-              .factory()
-              .newThread(Utils.wrapped(() -> internalIterate(round, handler, onComplete, scheduler, frequency), log))
-              .start();
+              .start(Utils.wrapped(() -> internalIterate(round, handler, onComplete, scheduler, frequency), log));
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
@@ -70,16 +69,20 @@ public class SliceIterator<Comm extends Link> {
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, scheduler, frequency);
         try (Comm link = next()) {
             if (link == null) {
+                log.trace("No link for iteration of: <{}> on: {}", label, member.getId());
                 allowed.accept(handler.handle(Optional.empty(), link, slice.get(slice.size() - 1)));
                 return;
             }
-            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.getId(), link.getMember(),
-                      member.getId());
+            log.trace("Iteration of: <{}> to: {} on: {}", label, link.getMember().getId(), member.getId());
             T result = null;
             try {
                 result = round.apply(link, link.getMember());
             } catch (StatusRuntimeException e) {
-                log.trace("Error applying round", e);
+                log.trace("Error: {} applying: <{}> slice to: {} on: {}", e, label, link.getMember().getId(),
+                          member.getId());
+            } catch (Throwable e) {
+                log.error("Unhandled: {} applying: <{}> slice to: {} on: {}", e, label, link.getMember().getId(),
+                          member.getId());
             }
             allowed.accept(handler.handle(Optional.ofNullable(result), link, link.getMember()));
         } catch (IOException e) {
@@ -91,8 +94,8 @@ public class SliceIterator<Comm extends Link> {
         try {
             return comm.connect(m);
         } catch (Throwable e) {
-            log.error("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
+            log.error("error opening connection of: <{}> to {}: {} on: {}", label, m.getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());
         }
         return null;
     }
@@ -108,19 +111,20 @@ public class SliceIterator<Comm extends Link> {
 
     private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, ScheduledExecutorService scheduler,
                          Duration frequency) {
-        log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, !currentIteration.hasNext(),
-                  allow, member.getId());
+        log.trace("Determining continuation for: <{}> final itr: {} allow: {} on: {}", label,
+                  !currentIteration.hasNext(), allow, member.getId());
         if (!currentIteration.hasNext() && allow) {
-            log.trace("Final iteration of: {} on: {}", label, member.getId());
+            log.trace("Final iteration of: <{}> on: {}", label, member.getId());
             if (onComplete != null) {
                 log.trace("Completing iteration for: {} on: {}", label, member.getId());
                 onComplete.run();
             }
         } else if (allow) {
-            log.trace("Proceeding for: {} on: {}", label, member.getId());
-            scheduler.schedule(Utils.wrapped(proceed, log), frequency.toNanos(), TimeUnit.NANOSECONDS);
+            log.trace("Proceeding for: <{}> on: {}", label, member.getId());
+            scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(proceed, log)), frequency.toNanos(),
+                               TimeUnit.NANOSECONDS);
         } else {
-            log.trace("Termination for: {} on: {}", label, member.getId());
+            log.trace("Termination for: <{}> on: {}", label, member.getId());
         }
     }
 

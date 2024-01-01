@@ -8,14 +8,13 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
-import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
+import com.salesforce.apollo.fireflies.proto.SignedAccusation;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class AccusationWrapper {
 

@@ -7,10 +7,10 @@
 package com.salesforce.apollo.fireflies.comm.gossip;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
-import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.SayWhat;
-import com.salesfoce.apollo.fireflies.proto.State;
+import com.salesforce.apollo.fireflies.proto.FirefliesGrpc;
+import com.salesforce.apollo.fireflies.proto.Gossip;
+import com.salesforce.apollo.fireflies.proto.SayWhat;
+import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
@@ -22,9 +22,9 @@ import com.salesforce.apollo.membership.Member;
  */
 public class FfClient implements Fireflies {
 
-    private final ManagedServerChannel channel;
+    private final ManagedServerChannel                channel;
     private final FirefliesGrpc.FirefliesBlockingStub client;
-    private final FireflyMetrics metrics;
+    private final FireflyMetrics                      metrics;
 
     public FfClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;

@@ -15,12 +15,12 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
-import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.choam.proto.Certification;
+import com.salesforce.apollo.choam.proto.Reconfigure;
+import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.SubmitResult.Result;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -33,7 +33,6 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Committee {
 
@@ -41,13 +40,12 @@ public interface Committee {
         return reconfigure.getJoinsList()
                           .stream()
                           .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
-                                                    e -> new DefaultVerifier(publicKey(e.getMember()
-                                                                                        .getConsensusKey()))));
+                                                    e -> new DefaultVerifier(
+                                                    publicKey(e.getMember().getConsensusKey()))));
     }
 
     /**
-     * Create a view based on the cut of the supplied hash across the rings of the
-     * base context
+     * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
         Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),

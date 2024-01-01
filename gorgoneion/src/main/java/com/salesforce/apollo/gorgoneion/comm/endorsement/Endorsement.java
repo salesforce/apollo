@@ -8,11 +8,11 @@ package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
-import com.salesfoce.apollo.gorgoneion.proto.Credentials;
-import com.salesfoce.apollo.gorgoneion.proto.MemberSignature;
-import com.salesfoce.apollo.gorgoneion.proto.Nonce;
-import com.salesfoce.apollo.gorgoneion.proto.Notarization;
-import com.salesfoce.apollo.stereotomy.event.proto.Validation_;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.MemberSignature;
+import com.salesforce.apollo.gorgoneion.proto.Nonce;
+import com.salesforce.apollo.gorgoneion.proto.Notarization;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
 

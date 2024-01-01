@@ -14,7 +14,7 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -43,8 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class TestKerlService {
     final StereotomyKeyStore ks = new MemKeyStore();
-    KERL         kel;
-    SecureRandom secureRandom;
+    KERL.AppendKERL kel;
+    SecureRandom    secureRandom;
     private Router clientRouter;
     private Router serverRouter;
 
@@ -79,8 +79,7 @@ public class TestKerlService {
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()));
-        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
-                            CoordinatesSeal.construct(event));
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), Seal.construct(event));
 
         i.rotate();
         i.seal(InteractionSpecification.newBuilder());
