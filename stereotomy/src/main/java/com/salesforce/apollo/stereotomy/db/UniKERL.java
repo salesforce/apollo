@@ -7,12 +7,10 @@
 package com.salesforce.apollo.stereotomy.db;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.cryptography.proto.Sig;
-import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.stereotomy.DigestKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -21,6 +19,8 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
+import com.salesforce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -42,6 +42,7 @@ import java.sql.Connection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
@@ -74,7 +75,7 @@ abstract public class UniKERL implements DigestKERL {
     }
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
-        if (attachment.attachments().seals().size() == 0 && attachment.attachments().endorsements().size() == 0) {
+        if (attachment.attachments().seals().isEmpty() && attachment.attachments().endorsements().isEmpty()) {
             return;
         }
         var coordinates = attachment.coordinates();
@@ -116,7 +117,7 @@ abstract public class UniKERL implements DigestKERL {
                                       .whenNotMatchedThenInsert()
                                       .set(ATTACHMENT.FOR, id.value1())
                                       .set(ATTACHMENT.SEAL, bytes)
-                                      .execute(), (a, b) -> a + b);
+                                      .execute(), Integer::sum);
         }
         log.info("appended: {} seals out of: {} coords: {}", count.get(), attachment.attachments().seals().size(),
                  coordinates);
@@ -130,7 +131,7 @@ abstract public class UniKERL implements DigestKERL {
                                       .set(RECEIPT.FOR, id.value1())
                                       .set(RECEIPT.WITNESS, entry.getKey())
                                       .set(RECEIPT.SIGNATURE, entry.getValue().toSig().toByteArray())
-                                      .execute(), (a, b) -> a + b);
+                                      .execute(), Integer::sum);
         }
         log.info("appended: {} endorsements out of: {} coords: {}", count.get(),
                  attachment.attachments().endorsements().size(), coordinates);
@@ -255,7 +256,7 @@ abstract public class UniKERL implements DigestKERL {
 
     public static void appendValidations(DSLContext dsl, EventCoordinates coordinates,
                                          Map<EventCoordinates, JohnHancock> validations) {
-        if (validations.size() == 0) {
+        if (validations.isEmpty()) {
             return;
         }
         final var identBytes = coordinates.getIdentifier().toIdent().toByteArray();
@@ -300,7 +301,7 @@ abstract public class UniKERL implements DigestKERL {
             vRec.setFor(l);
             vRec.setValidator(coords.toEventCoords().toByteArray());
             vRec.setSignature(signature.toSig().toByteArray());
-            result.accumulateAndGet(vRec.merge(), (a, b) -> a + b);
+            result.accumulateAndGet(vRec.merge(), Integer::sum);
         });
         log.info("Inserted validations: {} out of : {} for event: {}", result.get(), validations.size(), coordinates);
     }
@@ -308,7 +309,7 @@ abstract public class UniKERL implements DigestKERL {
     public static byte[] compress(byte[] input) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (GZIPOutputStream gzos = new GZIPOutputStream(baos);
-             ByteArrayInputStream bais = new ByteArrayInputStream(input);) {
+             ByteArrayInputStream bais = new ByteArrayInputStream(input)) {
             bais.transferTo(gzos);
             gzos.finish();
             gzos.flush();
@@ -322,7 +323,7 @@ abstract public class UniKERL implements DigestKERL {
     public static byte[] decompress(byte[] input) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ByteArrayInputStream bais = new ByteArrayInputStream(input);
-             GZIPInputStream gis = new GZIPInputStream(bais);) {
+             GZIPInputStream gis = new GZIPInputStream(bais)) {
             gis.transferTo(baos);
             baos.flush();
         } catch (IOException e) {
@@ -394,7 +395,7 @@ abstract public class UniKERL implements DigestKERL {
                                return null;
                            }
                        })
-                       .filter(s -> s != null)
+                       .filter(Objects::nonNull)
                        .toList();
 
         record receipt(int witness, Sig signature) {
@@ -412,7 +413,7 @@ abstract public class UniKERL implements DigestKERL {
                                   return null;
                               }
                           })
-                          .filter(s -> s != null)
+                          .filter(Objects::nonNull)
                           .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
         return new AttachmentImpl(seals, receipts);
     }
@@ -563,7 +564,7 @@ abstract public class UniKERL implements DigestKERL {
                                      return null;
                                  }
                              })
-                             .filter(s -> s != null)
+                             .filter(Objects::nonNull)
                              .collect(Collectors.toMap(v -> EventCoordinates.from(v.coordinates),
                                                        v -> JohnHancock.from(v.signature)));
         log.trace("Resolve validations: {} result: {}", coordinates, validations);

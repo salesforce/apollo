@@ -42,7 +42,7 @@ import static com.salesforce.apollo.cryptography.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 /**
- * Direct mode implementation of a Stereotomy controller. This controller keeps it's own KEL/KERL and does not cooperate
+ * Direct mode implementation of a Stereotomy controller. This controller keeps its own KEL/KERL and does not cooperate
  * with other controllers
  *
  * @author hal.hildebrand
@@ -69,14 +69,14 @@ public class StereotomyImpl implements Stereotomy {
     @Override
     public <D extends Identifier> BoundIdentifier<D> bindingOf(EventCoordinates coordinates) {
         KeyState lookup = kerl.getKeyState(coordinates);
-        return new ControlledIdentifierImpl<D>(lookup);
+        return new ControlledIdentifierImpl<>(lookup);
     }
 
     @Override
     public ControlledIdentifier<SelfAddressingIdentifier> commit(DelegatedInceptionEvent delegation,
                                                                  AttachmentEvent commitment) {
-        List<KeyState> ks = kerl.append(Arrays.asList(delegation), Arrays.asList(commitment));
-        var cid = new ControlledIdentifierImpl<SelfAddressingIdentifier>(ks.get(0));
+        List<KeyState> ks = kerl.append(Collections.singletonList(delegation), Collections.singletonList(commitment));
+        var cid = new ControlledIdentifierImpl<SelfAddressingIdentifier>(ks.getFirst());
         log.info("New delegated identifier: {} coordinates: {}", cid.getIdentifier(), cid.getCoordinates());
         return cid;
     }
@@ -84,7 +84,7 @@ public class StereotomyImpl implements Stereotomy {
     @Override
     public <D extends Identifier> ControlledIdentifier<D> controlOf(D identifier) {
         KeyState lookup = kerl.getKeyState(identifier);
-        return new ControlledIdentifierImpl<D>(lookup);
+        return new ControlledIdentifierImpl<>(lookup);
     }
 
     @Override
@@ -134,7 +134,7 @@ public class StereotomyImpl implements Stereotomy {
         return keyStore.getKey(keyCoords);
     }
 
-    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex, EstablishmentEvent lastEstablishmentEvent) {
+    private Optional<KeyPair> getKeyPair(int keyIndex, EstablishmentEvent lastEstablishmentEvent) {
         if (lastEstablishmentEvent == null) {
             return Optional.empty();
         }
@@ -152,7 +152,7 @@ public class StereotomyImpl implements Stereotomy {
         var signers = new PrivateKey[state.getKeys().size()];
         EstablishmentEvent e = getLastEstablishingEvent(state);
         for (int i = 0; i < signers.length; i++) {
-            Optional<KeyPair> keyPair = getKeyPair(state, i, e);
+            Optional<KeyPair> keyPair = getKeyPair(i, e);
             if (keyPair.isEmpty()) {
                 log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
                          state.getCoordinates(), state.getLastEstablishmentEvent());
@@ -168,9 +168,7 @@ public class StereotomyImpl implements Stereotomy {
         IdentifierSpecification.Builder<D> specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        KeyPair nextKeyPair = null;
-
-        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        KeyPair nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
         specification.addKey(initialKeyPair.getPublic())
                      .setSigningThreshold(unweighted(1))
@@ -212,7 +210,6 @@ public class StereotomyImpl implements Stereotomy {
         return eventFactory.interaction(specification.build());
     }
 
-    @SuppressWarnings("unchecked")
     private <I extends Identifier> ControlledIdentifier<I> newIdentifier(
     ControlledIdentifier<? extends Identifier> delegator, IdentifierSpecification.Builder<I> spec) {
         log.warn("New identifier, controller: {}", delegator.getIdentifier());
@@ -222,20 +219,17 @@ public class StereotomyImpl implements Stereotomy {
         // Seal we need to verify the inception, based on the delegated inception
         // location
         var seals = InteractionSpecification.newBuilder()
-                                            .addAllSeals(Arrays.asList(EventSeal.construct(event.getIdentifier(),
-                                                                                           event.hash(
-                                                                                           kerl.getDigestAlgorithm()),
-                                                                                           event.getSequenceNumber()
-                                                                                                .longValue())));
+                                            .addAllSeals(List.of(EventSeal.construct(event.getIdentifier(), event.hash(
+                                            kerl.getDigestAlgorithm()), event.getSequenceNumber().longValue())));
 
         // Interaction event with the seal
-        KeyState ks = kerl.append(event);
+        kerl.append(event);
         var interaction = interaction(delegator, seals);
         // Attachment of the interaction event, verifying the delegated inception
         var attachment = eventFactory.attachment(event, new AttachmentImpl(
         EventSeal.construct(interaction.getIdentifier(), interaction.hash(kerl.getDigestAlgorithm()),
                             interaction.getSequenceNumber().longValue())));
-        var s = kerl.append(Collections.singletonList(interaction), Collections.singletonList(attachment));
+        kerl.append(Collections.singletonList(interaction), Collections.singletonList(attachment));
         var delegatedState = kerl.append(event);
         if (delegatedState == null) {
             log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
@@ -243,7 +237,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         // Finally, the new delegated identifier
-        ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
+        ControlledIdentifier<I> cid = new ControlledIdentifierImpl<>(delegatedState);
 
         log.info("New {} delegator: {} identifier: {} coordinates: {}",
                  spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier().get(),
@@ -330,11 +324,6 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public boolean equals(Object o) {
-            return getState().equals(o);
-        }
-
-        @Override
         public byte[] getBytes() {
             return getState().getBytes();
         }
@@ -400,11 +389,6 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public int hashCode() {
-            return getState().hashCode();
-        }
-
-        @Override
         public boolean isDelegated() {
             return getState().isDelegated();
         }
@@ -451,7 +435,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new KerlVerifier<D>(getIdentifier(), kerl));
+            return Optional.of(new KerlVerifier<>(getIdentifier(), kerl));
         }
 
         @Override
@@ -470,7 +454,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         KeyState getState() {
-            KeyState current = state;
+            final var current = state;
             return current;
         }
 
@@ -493,7 +477,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public BoundIdentifier<D> bind() {
-            return new BoundControllableIdentifier<D>(getState());
+            return new BoundControllableIdentifier<>(getState());
         }
 
         @Override

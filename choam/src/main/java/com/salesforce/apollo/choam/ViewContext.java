@@ -6,45 +6,35 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
-
-import java.util.HashMap;
-import java.util.Map;
-
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
+import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.choam.proto.Assemble;
-import com.salesforce.apollo.choam.proto.Block;
-import com.salesforce.apollo.choam.proto.Certification;
-import com.salesforce.apollo.choam.proto.Executions;
-import com.salesforce.apollo.choam.proto.Join;
-import com.salesforce.apollo.choam.proto.Validate;
-import com.salesforce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.choam.CHOAM.BlockProducer;
-import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.Signer;
-import com.salesforce.apollo.cryptography.Verifier;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
 /**
  * @author hal.hildebrand
  */
 public class ViewContext {
 
-    private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
-    private final BlockProducer         blockProducer;
-    private final Context<Member>       context;
-    private final Parameters            params;
-    private final Map<Digest, Short>    roster;
-    private final Signer                signer;
-    private final Map<Member, Verifier> validators;
+    private final static Logger                log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer         blockProducer;
+    private final        Context<Member>       context;
+    private final        Parameters            params;
+    private final        Map<Digest, Short>    roster;
+    private final        Signer                signer;
+    private final        Map<Member, Verifier> validators;
+
     public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
                        BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
@@ -158,8 +148,8 @@ public class ViewContext {
 
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
-        return v == null ? false : v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                            block.block.getHeader().toByteString());
+        return v != null && v.verify(JohnHancock.from(validate.getWitness().getSignature()),
+                                     block.block.getHeader().toByteString());
     }
 
     public boolean validate(ViewMember vm, Validate validate) {

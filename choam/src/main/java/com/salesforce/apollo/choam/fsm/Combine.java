@@ -13,12 +13,27 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Combine {
+    String AWAIT_REGEN = "AWAIT_REGEN";
+    String AWAIT_SYNC  = "AWAIT_SYNC";
+
+    void anchor();
+
+    void awaitRegeneration();
+
+    void awaitSynchronization();
+
+    void cancelTimer(String timer);
+
+    void combine();
+
+    void recover(HashedCertifiedBlock anchor);
+
+    void regenerate();
+
     enum Merchantile implements Transitions {
         AWAITING_REGENERATION {
-
             @Exit
             public void cancelTimer() {
                 context().cancelTimer(Combine.AWAIT_REGEN);
@@ -40,8 +55,7 @@ public interface Combine {
             public void synchronizeContext() {
                 context().awaitRegeneration();
             }
-        },
-        BOOTSTRAPPING {
+        }, BOOTSTRAPPING {
             @Override
             public Transitions combine() {
                 return null; // Just queue up any blocks
@@ -51,9 +65,7 @@ public interface Combine {
             public Transitions synchronizing() {
                 return SYNCHRONIZING;
             }
-        },
-        CHECKPOINTING {
-
+        }, CHECKPOINTING {
             @Override
             public Transitions combine() {
                 return null; // Just queue up any blocks
@@ -64,15 +76,12 @@ public interface Combine {
                 fsm().pop().combine();
                 return null;
             }
-        },
-        INITIAL {
+        }, INITIAL {
             @Override
             public Transitions start() {
                 return RECOVERING;
             }
-        },
-        OPERATIONAL {
-
+        }, OPERATIONAL {
             @Override
             public Transitions beginCheckpoint() {
                 fsm().push(CHECKPOINTING);
@@ -85,8 +94,7 @@ public interface Combine {
                 return null;
             }
 
-        },
-        PROTOCOL_FAILURE, RECOVERING {
+        }, PROTOCOL_FAILURE, RECOVERING {
             @Override
             public Transitions bootstrap(HashedCertifiedBlock anchor) {
                 context().recover(anchor);
@@ -118,9 +126,7 @@ public interface Combine {
             public void synchronizeContext() {
                 context().awaitSynchronization();
             }
-        },
-        REGENERATING {
-
+        }, REGENERATING {
             @Override
             public Transitions combine() {
                 context().combine();
@@ -131,8 +137,7 @@ public interface Combine {
             public void regenerateView() {
                 context().regenerate();
             }
-        },
-        SYNCHRONIZING {
+        }, SYNCHRONIZING {
             @Override
             public Transitions combine() {
                 return null; // Just queue up any blocks
@@ -186,21 +191,4 @@ public interface Combine {
             throw fsm().invalidTransitionOn();
         }
     }
-
-    static final String AWAIT_REGEN = "AWAIT_REGEN";
-    static final String AWAIT_SYNC  = "AWAIT_SYNC";
-
-    void anchor();
-
-    void awaitRegeneration();
-
-    void awaitSynchronization();
-
-    void cancelTimer(String timer);
-
-    void combine();
-
-    void recover(HashedCertifiedBlock anchor);
-
-    void regenerate();
 }

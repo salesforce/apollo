@@ -38,6 +38,7 @@ import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -245,7 +246,7 @@ public class KerlSpace {
                      .filter(d -> !biff.contains(d))
                      .peek(d -> log.trace("filtered reconcile digest: {}", d))
                      .map(d -> event(d, dsl, kerl))
-                     .filter(ke -> ke != null)
+                     .filter(Objects::nonNull)
                      .forEach(update::addEvents);
         } catch (SQLException e) {
             log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);

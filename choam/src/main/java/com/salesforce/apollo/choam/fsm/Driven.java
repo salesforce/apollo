@@ -20,8 +20,8 @@ import java.util.List;
  * @author hal.hildebrand
  */
 public interface Driven {
-    public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
-    public static String SYNC                 = "SYNC";
+    String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
+    String SYNC                 = "SYNC";
 
     void assembled();
 
@@ -161,7 +161,7 @@ public interface Driven {
 
     /** Transition events for the Producer FSM */
     interface Transitions extends FsmExecutor<Driven, Transitions> {
-        static Logger log = LoggerFactory.getLogger(Transitions.class);
+        Logger log = LoggerFactory.getLogger(Transitions.class);
 
         default Transitions assembled() {
             return null;

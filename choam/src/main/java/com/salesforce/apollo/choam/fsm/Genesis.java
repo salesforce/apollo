@@ -14,9 +14,22 @@ import java.util.List;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Genesis {
+    void certify();
+
+    void certify(List<ByteString> preblock, boolean last);
+
+    void gather();
+
+    void gather(List<ByteString> preblock, boolean last);
+
+    void nominate();
+
+    void nominations(List<ByteString> preblock, boolean last);
+
+    void publish();
+
     enum BrickLayer implements Transitions {
 
         CERTIFICATION {
@@ -30,10 +43,8 @@ public interface Genesis {
                 context().certify(preblock, last);
                 return last ? PUBLISH : null;
             }
-        },
-        FAIL {
-        },
-        INITIAL {
+        }, FAIL {
+        }, INITIAL {
             @Entry
             public void gather() {
                 context().gather();
@@ -50,8 +61,7 @@ public interface Genesis {
                 context().gather(preblock, last);
                 return null;
             }
-        },
-        NOMINATION {
+        }, NOMINATION {
             @Override
             public Transitions nextEpoch(Integer epoch) {
                 return CERTIFICATION;
@@ -67,13 +77,12 @@ public interface Genesis {
                 context().nominations(preblock, last);
                 return null;
             }
-        },
-        PUBLISH {
+        }, PUBLISH {
             @Entry
             public void publish() {
                 context().publish();
             }
-        };
+        }
 
     }
 
@@ -87,18 +96,4 @@ public interface Genesis {
             throw fsm().invalidTransitionOn();
         }
     }
-
-    public void certify();
-
-    public void certify(List<ByteString> preblock, boolean last);
-
-    public void gather();
-
-    public void gather(List<ByteString> preblock, boolean last);
-
-    public void nominate();
-
-    public void nominations(List<ByteString> preblock, boolean last);
-
-    public void publish();
 }

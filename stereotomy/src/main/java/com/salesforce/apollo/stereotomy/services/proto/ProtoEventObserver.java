@@ -6,13 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.Validations;
+
+import java.util.List;
 
 /**
  * @author hal.hildebrand

@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.Link;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;

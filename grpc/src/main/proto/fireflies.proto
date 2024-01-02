@@ -143,7 +143,7 @@ message Redirect {
 
 message Seed_ {
   SignedNote note = 1;
-  stereotomy.KeyEvent_ establishment = 5;
+  stereotomy.KeyState_ keyState = 2;
 }
 
 message Join {

@@ -32,7 +32,7 @@ public class DirectPublisher implements ProtoEventObserver {
     @Override
     public void publish(KERL_ kerl_, List<Validations> validations) {
         log.info("publishing KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
-        validations.stream().forEach(v -> kerl.appendValidations(v));
+        validations.forEach(kerl::appendValidations);
         log.info("published KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
         kerl.append(kerl_);
     }
@@ -47,7 +47,7 @@ public class DirectPublisher implements ProtoEventObserver {
     @Override
     public void publishEvents(List<KeyEvent_> events, List<Validations> validations) {
         log.info("Publishing events[{}], validations[{}]", events.size(), validations.size());
-        validations.forEach(v -> kerl.appendValidations(v));
+        validations.forEach(kerl::appendValidations);
         kerl.append(events);
         log.info("Published events[{}], validations[{}]", events.size(), validations.size());
     }

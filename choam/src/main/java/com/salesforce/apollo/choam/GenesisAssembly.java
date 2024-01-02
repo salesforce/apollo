@@ -9,16 +9,16 @@ package com.salesforce.apollo.choam;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.choam.proto.*;
-import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Genesis;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -31,10 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.PublicKey;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -70,7 +67,7 @@ public class GenesisAssembly implements Genesis {
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
                                 .stream()
-                                .collect(Collectors.toMap(m -> m.getId(), m -> m));
+                                .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
             log.error("Invalid cardinality: {} for: {} on: {}", nextAssembly.size(), view.context().getId(),
                       params().member().getId());
@@ -80,9 +77,9 @@ public class GenesisAssembly implements Genesis {
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().memberCount(),
-                                                            view.context().getProbabilityByzantine(),
-                                                            view.context().getBias());
+        Context<Member> reContext = new ContextImpl<>(reconPrefixed, view.context().memberCount(),
+                                                      view.context().getProbabilityByzantine(),
+                                                      view.context().getBias());
         reContext.activate(view.context().activeMembers());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
@@ -101,8 +98,7 @@ public class GenesisAssembly implements Genesis {
         config.setEpochLength(7).setNumberOfEpochs(3);
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
-                                  (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch), label);
+                                  transitions::process, transitions::nextEpoch, label);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
@@ -133,7 +129,7 @@ public class GenesisAssembly implements Genesis {
             } catch (InvalidProtocolBufferException e) {
                 return null;
             }
-        }).filter(v -> v != null).filter(v -> !v.equals(Validate.getDefaultInstance())).forEach(v -> certify(v));
+        }).filter(Objects::nonNull).filter(v -> !v.equals(Validate.getDefaultInstance())).forEach(this::certify);
     }
 
     @Override
@@ -162,7 +158,7 @@ public class GenesisAssembly implements Genesis {
             } catch (InvalidProtocolBufferException e) {
                 return null;
             }
-        }).filter(j -> j != null).filter(j -> !j.equals(Join.getDefaultInstance())).forEach(j -> join(j));
+        }).filter(Objects::nonNull).filter(j -> !j.equals(Join.getDefaultInstance())).forEach(this::join);
     }
 
     @Override
@@ -173,7 +169,7 @@ public class GenesisAssembly implements Genesis {
                  .stream()
                  .filter(p -> !p.member.equals(params().member()))
                  .map(p -> view.generateValidation(p.join.getMember()))
-                 .forEach(v -> validations.addValidations(v));
+                 .forEach(validations::addValidations);
         ds.setValue(validations.build().toByteString());
     }
 
@@ -187,10 +183,10 @@ public class GenesisAssembly implements Genesis {
                         return null;
                     }
                 })
-                .filter(v -> v != null)
+                .filter(Objects::nonNull)
                 .flatMap(vs -> vs.getValidationsList().stream())
                 .filter(v -> !v.equals(Validate.getDefaultInstance()))
-                .forEach(v -> validate(v));
+                .forEach(this::validate);
     }
 
     @Override
@@ -199,7 +195,7 @@ public class GenesisAssembly implements Genesis {
         witnesses.entrySet()
                  .stream()
                  .sorted(Comparator.comparing(e -> e.getKey().getId()))
-                 .map(e -> e.getValue())
+                 .map(Map.Entry::getValue)
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
         log.debug("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
@@ -247,19 +243,16 @@ public class GenesisAssembly implements Genesis {
     }
 
     private DataSource dataSource() {
-        return new DataSource() {
-            @Override
-            public ByteString getData() {
-                if (!started.get()) {
-                    return ByteString.EMPTY;
-                }
-                try {
-                    blockingThread = Thread.currentThread();
-                    final var take = ds.get();
-                    return take;
-                } finally {
-                    blockingThread = null;
-                }
+        return () -> {
+            if (!started.get()) {
+                return ByteString.EMPTY;
+            }
+            try {
+                blockingThread = Thread.currentThread();
+                final var take = ds.get();
+                return take;
+            } finally {
+                blockingThread = null;
             }
         };
     }

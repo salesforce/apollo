@@ -142,7 +142,7 @@ public class CHOAM {
             length = state.length();
         }
         int count = (int) (length / segmentSize);
-        if (length != 0 && count * segmentSize < length) {
+        if (length != 0 && (long) count * segmentSize < length) {
             count++;
         }
         var accumulator = new HexBloom.HexAccumulator(count, crowns, initial);
@@ -190,15 +190,8 @@ public class CHOAM {
     }
 
     public static String print(Join join, DigestAlgorithm da) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("J[view: ")
-               .append(Digest.from(join.getView()))
-               .append(" member: ")
-               .append(ViewContext.print(join.getMember(), da))
-               .append("certifications: ")
-               .append(join.getEndorsementsList().stream().map(c -> ViewContext.print(c, da)).toList())
-               .append("]");
-        return builder.toString();
+        return "J[view: " + Digest.from(join.getView()) + " member: " + ViewContext.print(join.getMember(), da)
+        + "certifications: " + join.getEndorsementsList().stream().map(c -> ViewContext.print(c, da)).toList() + "]";
     }
 
     public static Reconfigure reconfigure(Digest nextViewId, Map<Member, Join> joins, Context<Member> context,
@@ -208,7 +201,7 @@ public class CHOAM {
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
 
-        remapped.keySet().stream().sorted().map(d -> remapped.get(d)).forEach(m -> builder.addJoins(joins.get(m)));
+        remapped.keySet().stream().sorted().map(remapped::get).forEach(m -> builder.addJoins(joins.get(m)));
 
         var reconfigure = builder.build();
         return reconfigure;
@@ -234,7 +227,7 @@ public class CHOAM {
 
         // Canonical labeling of the view members for Ethereal
         var ring0 = baseContext.ring(0);
-        return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
+        return members.stream().collect(Collectors.toMap(ring0::hash, m -> m));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
@@ -444,7 +437,7 @@ public class CHOAM {
     }
 
     private void combine(List<Msg> messages) {
-        messages.forEach(m -> combine(m));
+        messages.forEach(this::combine);
         transitions.combine();
     }
 
@@ -600,10 +593,7 @@ public class CHOAM {
             return true;
         }
         final Digest prev = next.getPrevious();
-        if (h.hash.equals(prev)) {
-            return true;
-        }
-        return false;
+        return h.hash.equals(prev);
     }
 
     private ViewMember join(Digest nextView, Digest from) {
@@ -785,7 +775,7 @@ public class CHOAM {
                  .stream()
                  .map(cert -> JohnHancock.from(cert.getSignature()))
                  .map(sig -> sig.toDigest(params.digestAlgorithm()))
-                 .reduce(Digest.from(cb.getBlock().getHeader().getBodyHash()), (a, b) -> a.xor(b));
+                 .reduce(Digest.from(cb.getBlock().getHeader().getBodyHash()), Digest::xor);
     }
 
     /**
@@ -875,7 +865,7 @@ public class CHOAM {
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
                  params.member().getId());
         try {
-            linear.execute(() -> transitions.regenerated());
+            linear.execute(transitions::regenerated);
         } catch (RejectedExecutionException e) {
             // ignore
         }
@@ -982,7 +972,6 @@ public class CHOAM {
             if (anchor != null) {
                 log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member().getId());
                 transitions.bootstrap(anchor);
-                return;
             }
         }
 
@@ -1161,10 +1150,6 @@ public class CHOAM {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member().getId());
                     return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
                 }
-                //                if (log.isTraceEnabled()) {
-                //                    log.trace("Submitting received txn: {} to: {} in: {} on: {}",
-                //                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member().getId());
-                //                }
                 return link.submit(transaction);
             } catch (StatusRuntimeException e) {
                 log.trace("Failed submitting txn: {} status:{} to: {} in: {} on: {}",
@@ -1191,8 +1176,7 @@ public class CHOAM {
     /** a member of the current committee */
     private class Associate extends Administration {
 
-        private final Producer    producer;
-        private final ViewContext viewContext;
+        private final Producer producer;
 
         Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
             super(validators, new Digest(
@@ -1204,8 +1188,8 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate(), ULong.MIN);
-            viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, getLabel());
+            producer = new Producer(new ViewContext(context, params, signer, validators, constructBlock()), head.get(),
+                                    checkpoint.get(), comm, getLabel());
             producer.start();
         }
 
@@ -1221,8 +1205,6 @@ public class CHOAM {
 
         @Override
         public SubmitResult submit(Transaction request) {
-            //            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
-            //                      params().member());
             return producer.submit(request);
         }
     }

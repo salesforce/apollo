@@ -7,8 +7,8 @@
 package com.salesforce.apollo.choam.support;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import org.h2.mvstore.MVMap;

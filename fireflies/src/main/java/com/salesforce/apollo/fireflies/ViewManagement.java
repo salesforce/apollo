@@ -106,10 +106,6 @@ public class ViewManagement {
         }
     }
 
-    Digest bootstrapView() {
-        return bootstrapView;
-    }
-
     void clear() {
         joins.clear();
         resetBootstrapView();
@@ -131,7 +127,7 @@ public class ViewManagement {
     BloomFilter<Digest> getJoinsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    joins.size() * 2), p);
-        joins.keySet().forEach(d -> bff.add(d));
+        joins.keySet().forEach(bff::add);
         return bff;
     }
 
@@ -149,7 +145,7 @@ public class ViewManagement {
                   context.offlineCount(), node.getId());
         attempt.set(0);
 
-        ballot.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(p -> view.remove(p));
+        ballot.leaving.stream().filter(d -> !node.getId().equals(d)).forEach(view::remove);
 
         final var seedSet = context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
                                    .stream()
@@ -160,21 +156,21 @@ public class ViewManagement {
         var joining = new ArrayList<EventCoordinates>();
         var pending = ballot.joining()
                             .stream()
-                            .map(d -> joins.remove(d))
-                            .filter(sn -> sn != null)
+                            .map(joins::remove)
+                            .filter(java.util.Objects::nonNull)
                             .peek(nw -> joining.add(nw.getCoordinates()))
-                            .peek(nw -> view.addToView(nw))
+                            .peek(view::addToView)
                             .peek(nw -> {
                                 if (metrics != null) {
                                     metrics.joins().mark();
                                 }
                             })
                             .map(nw -> pendingJoins.remove(nw.getId()))
-                            .filter(p -> p != null)
+                            .filter(java.util.Objects::nonNull)
                             .toList();
 
         setDiadem(
-        HexBloom.construct(context.memberCount(), context.allMembers().map(p -> p.getId()), view.bootstrapView(),
+        HexBloom.construct(context.memberCount(), context.allMembers().map(Participant::getId), view.bootstrapView(),
                            params.crowns()));
         view.reset();
         // complete all pending joins
@@ -210,7 +206,7 @@ public class ViewManagement {
             var current = currentView();
             log.info("Joining view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
                      context.totalCount(), node.getId());
-            var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(p -> p.getId()),
+            var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(Participant::getId),
                                                 view.bootstrapView(), params.crowns());
 
             if (!current.equals(calculated.compactWrapped())) {
@@ -292,45 +288,43 @@ public class ViewManagement {
     }
 
     BiConsumer<? super Bound, ? super Throwable> join(Duration duration, Timer.Context timer) {
-        return (bound, t) -> {
-            view.viewChange(() -> {
-                final var hex = bound.view();
-                if (t != null) {
-                    log.error("Failed to join view on: {}", node.getId(), t);
-                    view.stop();
-                    return;
-                }
+        return (bound, t) -> view.viewChange(() -> {
+            final var hex = bound.view();
+            if (t != null) {
+                log.error("Failed to join view on: {}", node.getId(), t);
+                view.stop();
+                return;
+            }
 
-                log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
-                         hex.compact(), context.getId(), node.getId());
-                context.rebalance(hex.getCardinality());
-                context.activate(node);
-                diadem.set(hex);
-                currentView.set(hex.compact());
+            log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
+                     hex.compact(), context.getId(), node.getId());
+            context.rebalance(hex.getCardinality());
+            context.activate(node);
+            diadem.set(hex);
+            currentView.set(hex.compact());
 
-                bound.successors().forEach(nw -> view.addToView(nw));
-                bound.initialSeedSet().forEach(nw -> view.addToView(nw));
+            bound.successors().forEach(view::addToView);
+            bound.initialSeedSet().forEach(view::addToView);
 
-                view.reset();
+            view.reset();
 
-                context.allMembers().forEach(p -> p.clearAccusations());
+            context.allMembers().forEach(Participant::clearAccusations);
 
-                view.schedule(duration);
+            view.schedule(duration);
 
-                if (timer != null) {
-                    timer.stop();
-                }
+            if (timer != null) {
+                timer.stop();
+            }
 
-                view.introduced();
-                log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
-                         bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
-                if (context.totalCount() == context.cardinality()) {
-                    join();
-                } else {
-                    populate(new ArrayList<Participant>(context.activeMembers()));
-                }
-            });
-        };
+            view.introduced();
+            log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
+                     bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
+            if (context.totalCount() == context.cardinality()) {
+                join();
+            } else {
+                populate(new ArrayList<>(context.activeMembers()));
+            }
+        });
     }
 
     void joinUpdatesFor(BloomFilter<Digest> joinBff, Builder builder) {
@@ -349,7 +343,7 @@ public class ViewManagement {
      * start a view change if there's any offline members or joining members
      */
     void maybeViewChange() {
-        if (context.offlineCount() > 0 || joins.size() > 0) {
+        if (context.offlineCount() > 0 || !joins.isEmpty()) {
             initiateViewChange();
         } else {
             view.scheduleViewChange();
@@ -360,31 +354,28 @@ public class ViewManagement {
         var populate = new SliceIterator<Fireflies>("Populate: " + context.getId(), node, sample, view.comm);
         var repopulate = new AtomicReference<Runnable>();
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        repopulate.set(() -> {
-            populate.iterate((link, m) -> {
-                log.debug("Populating: {} contacting: {} on: {}", context.getId(), link.getMember().getId(),
-                          node.getId());
-                view.tick();
-                return view.gossip(link, 0);
-            }, (futureSailor, link, m) -> {
-                futureSailor.ifPresent(g -> {
+        repopulate.set(() -> populate.iterate((link, m) -> {
+            log.debug("Populating: {} contacting: {} on: {}", context.getId(), link.getMember().getId(), node.getId());
+            view.tick();
+            return view.gossip(link, 0);
+        }, (futureSailor, link, m) -> {
+            futureSailor.ifPresent(g -> {
+                if (g.hasRedirect()) {
+                    final Participant member = (Participant) link.getMember();
                     if (g.hasRedirect()) {
-                        final Participant member = (Participant) link.getMember();
-                        if (g.hasRedirect()) {
-                            view.stable(() -> view.redirect(member, g, 0));
-                        }
-                    } else {
-                        view.stable(() -> view.processUpdates(g));
+                        view.stable(() -> view.redirect(member, g, 0));
                     }
-                });
-                return !joined();
-            }, () -> {
-                if (!joined()) {
-                    scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
-                                       TimeUnit.MILLISECONDS);
+                } else {
+                    view.stable(() -> view.processUpdates(g));
                 }
-            }, scheduler, Duration.ofMillis(500));
-        });
+            });
+            return !joined();
+        }, () -> {
+            if (!joined()) {
+                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
+                                   TimeUnit.MILLISECONDS);
+            }
+        }, scheduler, Duration.ofMillis(500)));
         repopulate.get().run();
     }
 
@@ -395,7 +386,7 @@ public class ViewManagement {
         joins.entrySet()
              .stream()
              .filter(m -> !bff.contains(m.getKey()))
-             .map(m -> m.getValue())
+             .map(Map.Entry::getValue)
              .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
              .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
@@ -433,7 +424,8 @@ public class ViewManagement {
             return Redirect.getDefaultInstance();
         }
         if (!bootstrapView.equals(requestView)) {
-            log.warn("Invalid bootstrap view: {} expected: {} from: {} on: {}", requestView, from, node.getId());
+            log.warn("Invalid bootstrap view: {} expected: {} from: {} on: {}", bootstrapView, requestView, from,
+                     node.getId());
             return Redirect.getDefaultInstance();
         }
         var note = new NoteWrapper(registration.getNote(), digestAlgo);
@@ -450,7 +442,8 @@ public class ViewManagement {
                      context.getId(), sample.size(), node.getId());
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
-                           .addAllSample(sample.stream().filter(p -> p != null).map(p -> p.getSeed()).toList())
+                           .addAllSample(
+                           sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSeed).toList())
                            .setCardinality(context.cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())
@@ -484,8 +477,8 @@ public class ViewManagement {
                                           .setCurrent(currentView().toDigeste())
                                           .setAttempt(attempt.getAndIncrement())
                                           .addAllLeaves(
-                                          view.streamShunned().map(id -> id.toDigeste()).collect(Collectors.toSet()))
-                                          .addAllJoins(joins.keySet().stream().map(id -> id.toDigeste()).toList());
+                                          view.streamShunned().map(Digest::toDigeste).collect(Collectors.toSet()))
+                                          .addAllJoins(joins.keySet().stream().map(Digest::toDigeste).toList());
             ViewChange change = builder.build();
             vote.set(change);
             var signature = node.sign(change.toByteString());
@@ -501,11 +494,11 @@ public class ViewManagement {
 
     private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
                         Timer.Context timer) {
-        var unique = new HashSet<SignedNote>(seedSet);
-        final var initialSeeds = new ArrayList<SignedNote>(seedSet);
+        var unique = new HashSet<>(seedSet);
+        final var initialSeeds = new ArrayList<>(seedSet);
         final var successors = new HashSet<SignedNote>();
 
-        context.successors(from, m -> context.isActive(m)).forEach(p -> {
+        context.successors(from, context::isActive).forEach(p -> {
             var sn = p.getNote().getWrapped();
             if (unique.add(sn)) {
                 initialSeeds.add(sn);
@@ -538,19 +531,18 @@ public class ViewManagement {
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
 
         Ballot(Digest view, List<Digest> leaving, List<Digest> joining, DigestAlgorithm algo) {
-            this(view, leaving, joining, view.xor(joining.stream().reduce((a, b) -> a.xor(b)).orElse(algo.getOrigin()))
+            this(view, leaving, joining, view.xor(joining.stream().reduce(Digest::xor).orElse(algo.getOrigin()))
                                              .xor(leaving.stream()
-                                                         .reduce((a, b) -> a.xor(b))
+                                                         .reduce(Digest::xor)
                                                          .orElse(algo.getOrigin())
-                                                         .xor(joining.stream()
-                                                                     .reduce((a, b) -> a.xor(b))
-                                                                     .orElse(algo.getOrigin())))
+                                                         .xor(
+                                                         joining.stream().reduce(Digest::xor).orElse(algo.getOrigin())))
                                              .hashCode());
         }
 
         @Override
         public boolean equals(Object obj) {
-            if (obj != null && obj instanceof Ballot b) {
+            if (obj instanceof Ballot b) {
                 return Objects.equal(view, b.view) && Objects.equal(leaving, b.leaving) && Objects.equal(joining,
                                                                                                          b.joining);
             }

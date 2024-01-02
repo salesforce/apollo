@@ -10,14 +10,13 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface DelegatedInceptionEvent extends InceptionEvent, DelegatedEstablishmentEvent {
+
+    Identifier getDelegatingPrefix();
 
     @Override
     default String getIlk() {
         return DELEGATED_INCEPTION_TYPE;
     }
-
-    public Identifier getDelegatingPrefix();
 }

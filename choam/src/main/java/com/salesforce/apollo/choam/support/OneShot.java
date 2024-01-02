@@ -6,14 +6,14 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import com.google.protobuf.ByteString;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 
-import com.google.protobuf.ByteString;
-
 public class OneShot implements Supplier<ByteString> {
-    private CountDownLatch      latch = new CountDownLatch(1);
-    private volatile ByteString value;
+    private final    CountDownLatch latch = new CountDownLatch(1);
+    private volatile ByteString     value;
 
     @Override
     public ByteString get() {

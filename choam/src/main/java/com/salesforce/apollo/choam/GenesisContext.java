@@ -6,14 +6,14 @@
  */
 package com.salesforce.apollo.choam;
 
-import java.util.Collections;
-
-import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
+import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+
+import java.util.Collections;
 
 /**
  * @author hal.hildebrand

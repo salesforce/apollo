@@ -37,7 +37,6 @@ import com.salesforce.apollo.stereotomy.Verifiers;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -235,9 +234,7 @@ public class View {
      */
     public void start(Runnable onJoin, Duration d, List<Seed> seedpods) {
         final var futureSailor = new CompletableFuture<Void>();
-        futureSailor.whenComplete((v, t) -> {
-            onJoin.run();
-        });
+        futureSailor.whenComplete((v, t) -> onJoin.run());
         start(futureSailor, d, seedpods);
     }
 
@@ -251,16 +248,14 @@ public class View {
         roundTimers.reset();
         comm.deregister(context.getId());
         pendingRebuttals.clear();
-        context.active().forEach(m -> {
-            context.offline(m);
-        });
+        context.active().forEach(context::offline);
         final var current = futureGossip;
         futureGossip = null;
         if (current != null) {
             current.cancel(true);
         }
         observations.clear();
-        timers.values().forEach(t -> t.cancel());
+        timers.values().forEach(RoundScheduler.Timer::cancel);
         timers.clear();
         viewManagement.clear();
     }
@@ -359,9 +354,9 @@ public class View {
             HashMultiset<Ballot> ballots = HashMultiset.create();
             observations.values().forEach(vc -> {
                 final var leaving = new ArrayList<>(
-                vc.getChange().getLeavesList().stream().map(d -> Digest.from(d)).collect(Collectors.toSet()));
+                vc.getChange().getLeavesList().stream().map(Digest::from).collect(Collectors.toSet()));
                 final var joining = new ArrayList<>(
-                vc.getChange().getJoinsList().stream().map(d -> Digest.from(d)).collect(Collectors.toSet()));
+                vc.getChange().getJoinsList().stream().map(Digest::from).collect(Collectors.toSet()));
                 leaving.sort(Ordering.natural());
                 joining.sort(Ordering.natural());
                 ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
@@ -509,7 +504,7 @@ public class View {
         //        log.trace("View change finalization scheduled: {} rounds for: {} joining: {} leaving: {} on: {}",
         //                  finalizeViewRounds, currentView(), joins.size(), context.getOffline().size(), node.getId());
         timers.put(FINALIZE_VIEW_CHANGE,
-                   roundTimers.schedule(FINALIZE_VIEW_CHANGE, () -> finalizeViewChange(), finalizeViewRounds));
+                   roundTimers.schedule(FINALIZE_VIEW_CHANGE, this::finalizeViewChange, finalizeViewRounds));
     }
 
     void scheduleViewChange() {
@@ -520,8 +515,7 @@ public class View {
         //        log.trace("Schedule view change: {} rounds for: {}   on: {}", viewChangeRounds, currentView(),
         //                  node.getId());
         timers.put(SCHEDULED_VIEW_CHANGE,
-                   roundTimers.schedule(SCHEDULED_VIEW_CHANGE, () -> viewManagement.maybeViewChange(),
-                                        viewChangeRounds));
+                   roundTimers.schedule(SCHEDULED_VIEW_CHANGE, viewManagement::maybeViewChange, viewChangeRounds));
     }
 
     <T> T stable(Callable<T> call) {
@@ -588,7 +582,6 @@ public class View {
      * @param ring - the index of the gossip ring the gossip is originating from in this view
      * @param link - the outbound communications to the paired member
      * @param ring
-     * @throws Exception
      */
     protected Gossip gossip(Fireflies link, int ring) {
         tick();
@@ -900,8 +893,8 @@ public class View {
      */
     private void amplify(Participant target) {
         context.rings()
-               .filter(ring -> !target.isDisabled(ring.getIndex()) && target.equals(
-               ring.successor(node, m -> context.isActive(m))))
+               .filter(
+               ring -> !target.isDisabled(ring.getIndex()) && target.equals(ring.successor(node, context::isActive)))
                .forEach(ring -> {
                    log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
                    accuse(target, ring.getIndex(), new IllegalStateException("Amplifying accusation"));
@@ -982,12 +975,11 @@ public class View {
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality() * 2), p);
-        context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
+        context.allMembers()
+               .flatMap(Participant::getAccusations)
+               .filter(Objects::nonNull)
+               .forEach(m -> bff.add(m.getHash()));
         return bff;
-    }
-
-    private KeyEvent getEvent(EventCoordinates coordinates) {
-        return null;
     }
 
     /**
@@ -1537,12 +1529,8 @@ public class View {
         public Seed_ getSeed() {
             return Seed_.newBuilder()
                         .setNote(note.getWrapped())
-                        .setEstablishment(wrapped.getEvent().toKeyEvent_())
+                        .setKeyState(wrapped.getIdentifier().toKeyState_())
                         .build();
-        }
-
-        public JohnHancock sign(byte[] message) {
-            return wrapped.sign(message);
         }
 
         @Override
@@ -1589,7 +1577,6 @@ public class View {
             for (int i = 0; i < context.getRingCount() && i < accusations.length; i++) {
                 if (accusations[i] != null) {
                     mask.set(i, false);
-                    continue;
                 }
             }
             // clear masks from previous note
@@ -1735,7 +1722,7 @@ public class View {
         }
 
         public Iterable<? extends SignedAccusation> getEncodedAccusations() {
-            return getAccusations().map(w -> w.getWrapped()).toList();
+            return getAccusations().map(AccusationWrapper::getWrapped).toList();
         }
 
         @Override
@@ -1748,11 +1735,11 @@ public class View {
         }
 
         public Seed_ getSeed() {
-            final var establishment = getEvent(getNote().getCoordinates());
+            EventCoordinates coordinates = getNote().getCoordinates();
+            final var ks = validation.keyState(coordinates.getIdentifier(), coordinates.getSequenceNumber());
             return Seed_.newBuilder()
                         .setNote(note.getWrapped())
-                        .setEstablishment(
-                        establishment == null ? KeyEvent_.getDefaultInstance() : establishment.toKeyEvent_())
+                        .setKeyState(ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_())
                         .build();
         }
 
@@ -1837,7 +1824,7 @@ public class View {
         }
 
         Stream<AccusationWrapper> getAccusations() {
-            return Arrays.asList(validAccusations).stream().filter(a -> a != null);
+            return Arrays.stream(validAccusations).filter(Objects::nonNull);
         }
 
         long getEpoch() {
@@ -2011,8 +1998,7 @@ public class View {
                 validate(from, request);
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
-                    log.debug("invalid ring: {} current: {} from: {} on: {}", ring, currentView(), ring, from,
-                              node.getId());
+                    log.debug("invalid ring: {} current: {} from: {} on: {}", ring, currentView(), from, node.getId());
                     throw new StatusRuntimeException(
                     Status.INVALID_ARGUMENT.withDescription("No successor of: " + from));
                 }

@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam.support;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class ServiceUnavailable extends RuntimeException {
 

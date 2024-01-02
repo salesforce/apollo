@@ -6,19 +6,18 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.joou.ULong;
-import org.joou.Unsigned;
-
 import com.google.protobuf.Message;
 import com.salesforce.apollo.choam.proto.Block;
 import com.salesforce.apollo.choam.proto.CertifiedBlock;
 import com.salesforce.apollo.choam.proto.Header;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import org.joou.ULong;
+import org.joou.Unsigned;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HashedBlock implements Comparable<HashedBlock> {
     public final Block  block;

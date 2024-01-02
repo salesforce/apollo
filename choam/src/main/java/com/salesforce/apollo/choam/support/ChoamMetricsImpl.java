@@ -50,8 +50,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final Meter           transactionSubmissionError;
     private final Meter           transactionSubmittedInvalidResult;
     private final Meter           transactionSubmitRetriesExhausted;
-    private final  Meter transactionSubmitRateLimited;
-    private final Meter transactionCancelled;
+    private final Meter           transactionSubmitRateLimited;
+    private final Meter           transactionCancelled;
 
     public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -85,10 +85,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         name(context.shortString(), "transaction.submit.invalid.result"));
         transactionSubmitRetriesExhausted = registry.meter(
         name(context.shortString(), "transaction.submit.retries.exhausted"));
-        transactionSubmitRateLimited  = registry.meter(
-        name(context.shortString(), "transaction.submit.rate.limited"));
-        transactionCancelled = registry.meter(
-        name(context.shortString(), "transaction.submit.cancelled"));
+        transactionSubmitRateLimited = registry.meter(name(context.shortString(), "transaction.submit.rate.limited"));
+        transactionCancelled = registry.meter(name(context.shortString(), "transaction.submit.cancelled"));
     }
 
     @Override
@@ -127,6 +125,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
+    public void transactionCancelled() {
+        transactionCancelled.mark();
+    }
+
+    @Override
     public void transactionComplete(Throwable t) {
         if (t != null) {
             if (t instanceof TimeoutException) {
@@ -147,6 +150,21 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
+    public void transactionSubmissionError() {
+        transactionSubmissionError.mark();
+    }
+
+    @Override
+    public void transactionSubmitRateLimited() {
+        transactionSubmitRateLimited.mark();
+    }
+
+    @Override
+    public void transactionSubmitRetriesExhausted() {
+        transactionSubmitRetriesExhausted.mark();
+    }
+
+    @Override
     public void transactionSubmitRetry() {
         transactionSubmitRetry.mark();
     }
@@ -162,28 +180,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void transactionSubmittedSuccess() {
-        transactionSubmitSuccess.mark();
-    }
-
-    @Override
-    public void transactionTimeout() {
-        transactionTimeout.mark();
-    }
-
-    @Override
     public void transactionSubmittedInvalidCommittee() {
         transactionSubmittedInvalidCommittee.mark();
-    }
-
-    @Override
-    public void transactionSubmittedUnavailable() {
-        transactionSubmittedUnavailable.mark();
-    }
-
-    @Override
-    public void transactionSubmissionError() {
-        transactionSubmissionError.mark();
     }
 
     @Override
@@ -192,17 +190,17 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void transactionSubmitRetriesExhausted() {
-        transactionSubmitRetriesExhausted.mark();
+    public void transactionSubmittedSuccess() {
+        transactionSubmitSuccess.mark();
     }
 
     @Override
-    public void transactionSubmitRateLimited() {
-        transactionSubmitRateLimited.mark();
+    public void transactionSubmittedUnavailable() {
+        transactionSubmittedUnavailable.mark();
     }
 
     @Override
-    public void transactionCancelled() {
-        transactionCancelled.mark();
+    public void transactionTimeout() {
+        transactionTimeout.mark();
     }
 }

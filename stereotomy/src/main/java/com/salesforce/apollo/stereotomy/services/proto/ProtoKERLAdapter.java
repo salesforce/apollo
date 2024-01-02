@@ -44,7 +44,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public List<KeyState_> append(KERL_ k) {
         List<KeyEvent> events = new ArrayList<>();
         List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments = new ArrayList<>();
-        k.getEventsList().stream().map(e -> ProtobufEventFactory.from(e)).forEach(ewa -> {
+        k.getEventsList().stream().map(ProtobufEventFactory::from).forEach(ewa -> {
             events.add(ewa.event());
             attachments.add(
             ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(), ewa.attachments()));
@@ -59,7 +59,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public List<KeyState_> append(List<KeyEvent_> keyEventList) {
         KeyEvent[] events = new KeyEvent[keyEventList.size()];
         int i = 0;
-        for (KeyEvent event : keyEventList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList()) {
+        for (KeyEvent event : keyEventList.stream().map(ProtobufEventFactory::from).toList()) {
             events[i++] = event;
         }
         List<KeyState> keyStates = kerl.append(events);
@@ -72,17 +72,21 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public List<KeyState_> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
-        return kerl.append(eventsList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList(),
-                           attachmentsList.stream()
-                                          .map(ae -> new AttachmentEventImpl(ae))
-                                          .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
-                                          .toList()).stream().map(ks -> ks == null ? null : ks.toKeyState_()).toList();
+        return kerl.append(eventsList.stream().map(ProtobufEventFactory::from).toList(), attachmentsList.stream()
+                                                                                                        .map(
+                                                                                                        AttachmentEventImpl::new)
+                                                                                                        .map(
+                                                                                                        e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
+                                                                                                        .toList())
+                   .stream()
+                   .map(ks -> ks == null ? null : ks.toKeyState_())
+                   .toList();
     }
 
     @Override
     public Empty appendAttachments(List<AttachmentEvent> attachments) {
         kerl.append(attachments.stream()
-                               .map(e -> new AttachmentEventImpl(e))
+                               .map(AttachmentEventImpl::new)
                                .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
                                .toList());
         return Empty.getDefaultInstance();

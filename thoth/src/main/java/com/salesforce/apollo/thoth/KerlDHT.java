@@ -229,7 +229,7 @@ public class KerlDHT implements ProtoKERLService {
         if (kerl.getEventsList().isEmpty()) {
             return completeIt(Collections.emptyList());
         }
-        final var event = kerl.getEventsList().get(0);
+        final var event = kerl.getEventsList().getFirst();
         Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
             return completeIt(Collections.emptyList());
@@ -282,7 +282,7 @@ public class KerlDHT implements ProtoKERLService {
                                                                                                               gathered));
         try {
             var ks = result.get();
-            return ks.getKeyStatesCount() == 0 ? KeyState_.getDefaultInstance() : ks.getKeyStatesList().get(0);
+            return ks.getKeyStatesCount() == 0 ? KeyState_.getDefaultInstance() : ks.getKeyStatesList().getFirst();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
@@ -297,9 +297,7 @@ public class KerlDHT implements ProtoKERLService {
             return completeIt(Collections.emptyList());
         }
         List<KeyState_> states = new ArrayList<>();
-        events.stream().map(e -> append(e)).forEach(ks -> {
-            states.add(ks);
-        });
+        events.stream().map(this::append).forEach(states::add);
         return states;
     }
 
@@ -309,9 +307,7 @@ public class KerlDHT implements ProtoKERLService {
             return completeIt(Collections.emptyList());
         }
         List<KeyState_> states = new ArrayList<>();
-        events.stream().map(e -> append(e)).forEach(ks -> {
-            states.add(ks);
-        });
+        events.stream().map(this::append).forEach(states::add);
 
         attachments.forEach(this::append);
         return states;
@@ -322,7 +318,7 @@ public class KerlDHT implements ProtoKERLService {
         if (events.isEmpty()) {
             return completeIt(Empty.getDefaultInstance());
         }
-        final var event = events.get(0);
+        final var event = events.getFirst();
         Digest identifier = digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
             return completeIt(Empty.getDefaultInstance());
@@ -602,10 +598,10 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyState_ getKeyState(Ident identifier) {
-        log.info("Get key state: {} on: {}", Identifier.from(identifier), member.getId());
         if (identifier == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
+        log.info("Get key state: {} on: {}", Identifier.from(identifier), member.getId());
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
             return completeIt(KeyState_.getDefaultInstance());
@@ -766,7 +762,7 @@ public class KerlDHT implements ProtoKERLService {
 
             @Override
             public Optional<Verifier> verifierFor(Identifier identifier) {
-                return Optional.of(new KerlVerifier<Identifier>(identifier, asKERL()));
+                return Optional.of(new KerlVerifier<>(identifier, asKERL()));
             }
         };
     }
@@ -777,7 +773,7 @@ public class KerlDHT implements ProtoKERLService {
 
     public int maxCount(HashMultiset<?> gathered) {
         final var max = gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount));
-        return max.isEmpty() ? 0 : max.get().getCount();
+        return max.map(Entry::getCount).orElse(0);
     }
 
     public void start(Duration duration) {
@@ -878,55 +874,43 @@ public class KerlDHT implements ProtoKERLService {
                                Supplier<Boolean> isTimedOut, AtomicInteger tally,
                                RingCommunications.Destination<Member, DhtService> destination, String action) {
         if (futureSailor.isEmpty()) {
-            return !isTimedOut.get();
-        }
-        T content = futureSailor.get();
-        if (content != null) {
-            log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
-            gathered.add(content);
-            var max = gathered.entrySet()
-                              .stream()
-                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
-                              .orElse(null);
-            if (max != null) {
-                tally.set(max.getCount());
-            }
-            return !isTimedOut.get();
-        } else {
             log.debug("Failed {}: {} from: {}  on: {}", action, identifier, destination.member().getId(),
                       member.getId());
             return !isTimedOut.get();
         }
+        T content = futureSailor.get();
+        log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
+        gathered.add(content);
+        gathered.entrySet()
+                .stream()
+                .max(Ordering.natural().onResultOf(Entry::getCount))
+                .ifPresent(max -> tally.set(max.getCount()));
+        return !isTimedOut.get();
     }
 
     private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<T> futureSailor, Digest identifier, Supplier<Boolean> isTimedOut,
                              RingCommunications.Destination<Member, DhtService> destination, String action, T empty) {
         if (futureSailor.isEmpty()) {
-            return !isTimedOut.get();
-        }
-        T content = futureSailor.get();
-        if (content != null) {
-            log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
-            gathered.add(content);
-            var max = max(gathered);
-            if (max != null) {
-                tally.set(max.getCount());
-                // If there is only one active member in our context, it's us.
-                final var majority = tally.get() >= (context.activeCount() == 1 ? 1 : context.majority());
-                if (majority) {
-                    result.complete(max.getElement());
-                    log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier,
-                              member.getId());
-                    return false;
-                }
-            }
-            return !isTimedOut.get();
-        } else {
             log.debug("Failed {}: {} from: {}  on: {}", action, identifier, destination.member().getId(),
                       member.getId());
             return !isTimedOut.get();
         }
+        T content = futureSailor.get();
+        log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
+        gathered.add(content);
+        var max = max(gathered);
+        if (max != null) {
+            tally.set(max.getCount());
+            // If there is only one active member in our context, it's us.
+            final var majority = tally.get() >= (context.activeCount() == 1 ? 1 : context.majority());
+            if (majority) {
+                result.complete(max.getElement());
+                log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier, member.getId());
+                return false;
+            }
+        }
+        return !isTimedOut.get();
     }
 
     private void reconcile(Optional<Update> result,
@@ -935,7 +919,7 @@ public class KerlDHT implements ProtoKERLService {
         if (!started.get()) {
             return;
         }
-        if (!result.isEmpty()) {
+        if (result.isPresent()) {
             try {
                 Update update = result.get();
                 if (update.getEventsCount() > 0) {
@@ -973,7 +957,7 @@ public class KerlDHT implements ProtoKERLService {
             return;
         }
         Thread.ofVirtual()
-              .start(() -> reconcile.execute((link, ring) -> reconcile(link, ring),
+              .start(() -> reconcile.execute(this::reconcile,
                                              (futureSailor, destination) -> reconcile(futureSailor, destination,
                                                                                       scheduler, duration)));
 
@@ -1021,8 +1005,8 @@ public class KerlDHT implements ProtoKERLService {
             @Override
             public List<KeyState> append(KeyEvent... events) {
                 List<KeyState> lks = super.append(events);
-                if (lks.size() > 0) {
-                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                if (!lks.isEmpty()) {
+                    updateLocationHash(lks.getFirst().getCoordinates().getIdentifier());
                 }
                 return lks;
             }
@@ -1031,8 +1015,8 @@ public class KerlDHT implements ProtoKERLService {
             public List<KeyState> append(List<KeyEvent> events,
                                          List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments) {
                 List<KeyState> lks = super.append(events, attachments);
-                if (lks.size() > 0) {
-                    updateLocationHash(lks.get(0).getCoordinates().getIdentifier());
+                if (!lks.isEmpty()) {
+                    updateLocationHash(lks.getFirst().getCoordinates().getIdentifier());
                 }
                 return lks;
             }
@@ -1130,9 +1114,7 @@ public class KerlDHT implements ProtoKERLService {
         @Override
         public KeyEvent_ getKeyEvent(EventCoords coordinates) {
             log.trace("get key event for coordinates on: {}", member.getId());
-            final Function<ProtoKERLAdapter, KeyEvent_> func = k -> {
-                return k.getKeyEvent(coordinates);
-            };
+            final Function<ProtoKERLAdapter, KeyEvent_> func = k -> k.getKeyEvent(coordinates);
             return complete(func);
         }
 
