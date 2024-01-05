@@ -9,12 +9,6 @@ package com.salesforce.apollo.gorgoneion;
 import com.codahale.metrics.Timer;
 import com.google.protobuf.Empty;
 import com.google.protobuf.Timestamp;
-import com.salesforce.apollo.gorgoneion.proto.*;
-import com.salesforce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -22,6 +16,7 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
@@ -29,6 +24,7 @@ import com.salesforce.apollo.gorgoneion.comm.endorsement.Endorsement;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementClient;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementServer;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementService;
+import com.salesforce.apollo.gorgoneion.proto.*;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -36,6 +32,10 @@ import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -51,10 +51,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
+import java.util.function.Predicate;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
 
@@ -62,30 +60,32 @@ import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFacto
  * @author hal.hildebrand
  */
 public class Gorgoneion {
-    public static final Logger                                                log = LoggerFactory.getLogger(
-    Gorgoneion.class);
-    @SuppressWarnings("unused")
-    private final       CommonCommunications<?, AdmissionsService>            admissionsComm;
-    private final       Context<Member>                                       context;
-    private final       CommonCommunications<Endorsement, EndorsementService> endorsementComm;
-    private final       ControlledIdentifierMember                            member;
-    private final       ProtoEventObserver                                    observer;
-    private final       Parameters                                            parameters;
-    private final       ScheduledExecutorService                              scheduler;
+    public static final Logger log = LoggerFactory.getLogger(Gorgoneion.class);
 
-    public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
-                      ProtoEventObserver observer, Router router, ScheduledExecutorService scheduler,
-                      GorgoneionMetrics metrics) {
-        this(parameters, member, context, observer, router, scheduler, metrics, router);
+    @SuppressWarnings("unused")
+    private final CommonCommunications<?, AdmissionsService>            admissionsComm;
+    private final Context<Member>                                       context;
+    private final CommonCommunications<Endorsement, EndorsementService> endorsementComm;
+    private final ControlledIdentifierMember                            member;
+    private final ProtoEventObserver                                    observer;
+    private final Parameters                                            parameters;
+    private final ScheduledExecutorService                              scheduler = Executors.newScheduledThreadPool(1,
+                                                                                                                     Thread.ofVirtual()
+                                                                                                                           .factory());
+    private final Predicate<SignedAttestation>                          verifier;
+
+    public Gorgoneion(Predicate<SignedAttestation> verifier, Parameters parameters, ControlledIdentifierMember member,
+                      Context<Member> context, ProtoEventObserver observer, Router router, GorgoneionMetrics metrics) {
+        this(verifier, parameters, member, context, observer, router, metrics, router);
     }
 
-    public Gorgoneion(Parameters parameters, ControlledIdentifierMember member, Context<Member> context,
-                      ProtoEventObserver observer, Router admissionsRouter, ScheduledExecutorService scheduler,
+    public Gorgoneion(Predicate<SignedAttestation> verifier, Parameters parameters, ControlledIdentifierMember member,
+                      Context<Member> context, ProtoEventObserver observer, Router admissionsRouter,
                       GorgoneionMetrics metrics, Router endorsementRouter) {
+        this.verifier = verifier;
         this.member = member;
         this.context = context;
         this.parameters = parameters;
-        this.scheduler = scheduler;
         this.observer = observer;
 
         admissionsComm = admissionsRouter.create(member, context.getId(), new Admit(), ":admissions",
@@ -145,7 +145,7 @@ public class Gorgoneion {
         if (identifier == null) {
             throw new IllegalArgumentException("No identifier");
         }
-        log.debug("Generating nonce for: {} contacting: {} on: {}", identifier, identifier, member.getId());
+        log.info("Generating nonce for: {} contacting: {} on: {}", identifier, identifier, member.getId());
         var now = parameters.clock().instant();
         final var ident = identifier.toIdent();
         var nonce = Nonce.newBuilder()
@@ -220,7 +220,7 @@ public class Gorgoneion {
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
-            log.debug("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
+            log.info("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
             link.enroll(notarization, parameters.registrationTimeout());
             return Empty.getDefaultInstance();
         }, (futureSailor, link, m) -> completeEnrollment(futureSailor, m, completed), () -> {
@@ -292,7 +292,7 @@ public class Gorgoneion {
     }
 
     private Validation_ verificationOf(Credentials credentials) {
-        if (parameters.verifier().test(credentials.getAttestation())) {
+        if (verifier.test(credentials.getAttestation())) {
             return validate(credentials);
         }
         return null;

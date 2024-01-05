@@ -19,7 +19,6 @@ import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.proto.Validations;
@@ -36,7 +35,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.IntStream;
@@ -61,7 +59,7 @@ public class GorgoneionClientTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var context = Context.<Member>newBuilder().setCardinality(1).build();
+        var context = Context.newBuilder().setCardinality(1).build();
         context.activate(member);
 
         // Gorgoneion service comms
@@ -72,8 +70,7 @@ public class GorgoneionClientTest {
         var observer = mock(ProtoEventObserver.class);
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(parameters, member, context, observer, gorgonRouter,
-                                    Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), null);
+        var gorgon = new Gorgoneion(t -> true, parameters, member, context, observer, gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -142,7 +139,7 @@ public class GorgoneionClientTest {
             }
         }).when(observer).publish(Mockito.any(), Mockito.anyList());
 
-        var context = Context.<Member>newBuilder().setCardinality(members.size()).build();
+        var context = Context.newBuilder().setCardinality(members.size()).build();
         for (ControlledIdentifierMember member : members) {
             context.activate(member);
         }
@@ -154,11 +151,9 @@ public class GorgoneionClientTest {
                                            router.start();
                                            return router;
                                        })
-                                       .map(r -> new Gorgoneion(parameters, (ControlledIdentifierMember) r.getFrom(),
-                                                                context, observer, r,
-                                                                Executors.newScheduledThreadPool(2, Thread.ofVirtual()
-                                                                                                          .factory()),
-                                                                null))
+                                       .map(r -> new Gorgoneion(t -> true, parameters,
+                                                                (ControlledIdentifierMember) r.getFrom(), context,
+                                                                observer, r, null))
                                        .toList();
 
         // The registering client
