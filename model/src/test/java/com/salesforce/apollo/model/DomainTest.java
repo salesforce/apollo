@@ -215,9 +215,9 @@ public class DomainTest {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
-            var dbUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
-            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1), checkpointDirBase,
-                                                                     Duration.ofMillis(10), 0.00125,
+            var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1), null,
+                                                                     checkpointDirBase, Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofMinutes(1), 3, 10, 0.1);
             var domain = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
                                                                                              .setFoundation(sealed)

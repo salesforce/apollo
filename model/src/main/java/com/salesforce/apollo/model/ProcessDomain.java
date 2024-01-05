@@ -43,10 +43,12 @@ import java.util.concurrent.RejectedExecutionException;
  */
 public class ProcessDomain extends Domain {
 
-    private final static Logger  log = LoggerFactory.getLogger(ProcessDomain.class);
-    protected final      KerlDHT dht;
-    protected final      View    foundation;
-    private final        UUID    listener;
+    private final static String DEFAULT_DHT_DB_URL_TEMPLATE = "jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1";
+    private final static Logger log                         = LoggerFactory.getLogger(ProcessDomain.class);
+
+    protected final KerlDHT dht;
+    protected final View    foundation;
+    private final   UUID    listener;
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
@@ -57,9 +59,10 @@ public class ProcessDomain extends Domain {
                           .setpByz(parameters.dhtPbyz)
                           .setId(group)
                           .build();
-        final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
+        var template = parameters.dhtDbUrlTemplate == null ? DEFAULT_DHT_DB_URL_TEMPLATE : parameters.dhtDbUrlTemplate;
+        final var dhtUrl = String.format(template, member.getId(), UUID.randomUUID());
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
-        connectionPool.setMaxConnections(10);
+        connectionPool.setMaxConnections(parameters.jdbcMaxConnections());
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
                           parameters.dhtFpr, stereotomyMetrics);
@@ -124,8 +127,9 @@ public class ProcessDomain extends Domain {
         dht.stop();
     }
 
-    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, Path checkpointBaseDir,
-                                          Duration dhtOpsFrequency, double dhtFpr, Duration dhtEventValidTO,
-                                          int dhtBias, int jdbcMaxConnections, double dhtPbyz) {
+    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrlTemplate,
+                                          Path checkpointBaseDir, Duration dhtOpsFrequency, double dhtFpr,
+                                          Duration dhtEventValidTO, int dhtBias, int jdbcMaxConnections,
+                                          double dhtPbyz) {
     }
 }
