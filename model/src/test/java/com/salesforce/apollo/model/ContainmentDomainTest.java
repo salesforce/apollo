@@ -86,7 +86,8 @@ public class ContainmentDomainTest {
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
-            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1), null,
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1),
+                                                                     "jdbc:h2:mem:%s-state".formatted(d),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofMinutes(1), 3, 10, 0.1);
             var domain = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()

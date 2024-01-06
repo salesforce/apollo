@@ -87,7 +87,8 @@ public class FireFliesTest {
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
-            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5), null,
+            var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5),
+                                                                     "jdbc:h2:mem:%s-state".formatted(digest),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofSeconds(5), 3, 10, 0.1);
             var node = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()

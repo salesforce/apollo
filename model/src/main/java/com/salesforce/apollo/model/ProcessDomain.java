@@ -42,9 +42,7 @@ import java.util.concurrent.RejectedExecutionException;
  * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
-
-    private final static String DEFAULT_DHT_DB_URL_TEMPLATE = "jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1";
-    private final static Logger log                         = LoggerFactory.getLogger(ProcessDomain.class);
+    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
 
     protected final KerlDHT dht;
     protected final View    foundation;
@@ -59,9 +57,7 @@ public class ProcessDomain extends Domain {
                           .setpByz(parameters.dhtPbyz)
                           .setId(group)
                           .build();
-        var template = parameters.dhtDbUrlTemplate == null ? DEFAULT_DHT_DB_URL_TEMPLATE : parameters.dhtDbUrlTemplate;
-        final var dhtUrl = String.format(template, member.getId(), UUID.randomUUID());
-        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(parameters.dhtDbUrl, "", "");
         connectionPool.setMaxConnections(parameters.jdbcMaxConnections());
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
@@ -127,7 +123,7 @@ public class ProcessDomain extends Domain {
         dht.stop();
     }
 
-    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrlTemplate,
+    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrl,
                                           Path checkpointBaseDir, Duration dhtOpsFrequency, double dhtFpr,
                                           Duration dhtEventValidTO, int dhtBias, int jdbcMaxConnections,
                                           double dhtPbyz) {
