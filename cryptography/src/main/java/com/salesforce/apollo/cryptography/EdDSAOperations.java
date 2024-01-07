@@ -72,7 +72,7 @@ public class EdDSAOperations {
         }
     }
 
-    private static void reverse(byte[] arr) {
+    public static void reverse(byte[] arr) {
         var i = 0;
         var j = arr.length - 1;
 
@@ -83,7 +83,7 @@ public class EdDSAOperations {
         }
     }
 
-    private static void swap(byte[] arr, int i, int j) {
+    public static void swap(byte[] arr, int i, int j) {
         var tmp = arr[i];
         arr[i] = arr[j];
         arr[j] = tmp;

@@ -10,13 +10,14 @@ import java.security.KeyPair;
 import java.util.Optional;
 
 /**
- * The interface for a keystore that tracks KeyPairs by keyCoordinates, and
- * knows about current and next keypairs associated with those coordinates
- * 
- * @author hal.hildebrand
+ * The interface for a keystore that tracks KeyPairs by keyCoordinates, and knows about current and next keypairs
+ * associated with those coordinates
  *
+ * @author hal.hildebrand
  */
 public interface StereotomyKeyStore {
+
+    Optional<KeyPair> getKey(String alias);
 
     Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
 
@@ -24,7 +25,11 @@ public interface StereotomyKeyStore {
 
     void removeKey(KeyCoordinates keyCoordinates);
 
+    void removeKey(String alias);
+
     void removeNextKey(KeyCoordinates keyCoordinates);
+
+    void storeKey(String alias, KeyPair keyPair);
 
     void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
 

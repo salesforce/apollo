@@ -83,8 +83,8 @@
                 <artifactId>build-helper-maven-plugin</artifactId>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
-                <version>2.5</version>
                 <executions>
                     <execution>
                         <id>clean-db</id>

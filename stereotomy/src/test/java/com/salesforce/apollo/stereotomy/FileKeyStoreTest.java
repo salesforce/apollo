@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import com.salesforce.apollo.stereotomy.jks.FileKeyStore;
+
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyStore;
@@ -14,11 +16,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.function.Supplier;
 
-import com.salesforce.apollo.stereotomy.jks.FileKeyStore;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class FileKeyStoreTest extends StereotomyTests {
 
@@ -28,7 +27,7 @@ public class FileKeyStoreTest extends StereotomyTests {
         file.delete();
         final Supplier<char[]> passwordProvider = () -> new char[] { 'f', 'o', 'o' };
         try {
-            final var ks = KeyStore.getInstance("JKS");
+            final var ks = KeyStore.getInstance("jceks");
             ks.load(null, passwordProvider.get());
             return new FileKeyStore(ks, passwordProvider, file);
         } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {

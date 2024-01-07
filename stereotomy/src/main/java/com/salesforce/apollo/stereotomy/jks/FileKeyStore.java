@@ -6,6 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.jks;
 
+import com.salesforce.apollo.stereotomy.KeyCoordinates;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -16,12 +20,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.function.Supplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class FileKeyStore extends JksKeyStore {
     private static final Logger log = LoggerFactory.getLogger(FileKeyStore.class);
@@ -37,8 +37,30 @@ public class FileKeyStore extends JksKeyStore {
     }
 
     @Override
-    protected void store(String alias, KeyPair keyPair) {
-        super.store(alias, keyPair);
+    public void removeKey(String alias) {
+        super.removeKey(alias);
+        save();
+    }
+
+    @Override
+    public void removeKey(KeyCoordinates keyCoordinates) {
+        super.removeKey(keyCoordinates);
+        save();
+    }
+
+    @Override
+    public void removeNextKey(KeyCoordinates keyCoordinates) {
+        super.removeNextKey(keyCoordinates);
+        save();
+    }
+
+    @Override
+    public void storeKey(String alias, KeyPair keyPair) {
+        super.storeKey(alias, keyPair);
+        save();
+    }
+
+    private void save() {
         try (var fos = new FileOutputStream(file)) {
             keyStore.store(fos, passwordProvider.get());
         } catch (IOException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
