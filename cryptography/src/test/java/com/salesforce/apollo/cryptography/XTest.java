@@ -40,7 +40,7 @@ public class XTest {
         var encapsulated = algorithm.encapsulated(pair2.getPublic());
         assertNotNull(encapsulated);
 
-        var secretKey = algorithm.decapsulate(pair2.getPrivate(), encapsulated.encapsulation(), "AES");
+        var secretKey = algorithm.decapsulate(pair2.getPrivate(), encapsulated.encapsulation(), "Generic");
 
         assertNotNull(secretKey);
         assertEquals(encapsulated.key(), secretKey);
