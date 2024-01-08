@@ -27,7 +27,27 @@ public class XTest {
     }
 
     @Test
-    public void testRoundTrip() throws Exception {
+    public void testKEM() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+
+        var algorithm = EncryptionAlgorithm.X_25519;
+        var pair1 = algorithm.generateKeyPair(entropy);
+        assertNotNull(pair1);
+        var pair2 = algorithm.generateKeyPair(entropy);
+        assertNotNull(pair2);
+
+        var encapsulated = algorithm.encapsulated(pair2.getPublic());
+        assertNotNull(encapsulated);
+
+        var secretKey = algorithm.decapsulate(pair2.getPrivate(), encapsulated.encapsulation(), "AES");
+
+        assertNotNull(secretKey);
+        assertEquals(encapsulated.key(), secretKey);
+    }
+
+    @Test
+    public void testKeyAgreement() throws Exception {
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
