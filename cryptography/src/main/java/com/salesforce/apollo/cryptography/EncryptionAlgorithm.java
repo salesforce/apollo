@@ -105,7 +105,7 @@ public enum EncryptionAlgorithm {
             var kem = KEM.getInstance(DHKEM);
             return kem.newDecapsulator(privateKey).decapsulate(encapsulated, 0, encapsulated.length, algorithm);
         } catch (NoSuchAlgorithmException | InvalidKeyException | DecapsulateException e) {
-            throw new IllegalArgumentException("Invalid public key", e);
+            throw new IllegalArgumentException("error decapsulating", e);
         }
     }
 
@@ -114,7 +114,7 @@ public enum EncryptionAlgorithm {
             var kem = KEM.getInstance(DHKEM);
             return kem.newEncapsulator(publicKey).encapsulate();
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new IllegalArgumentException("Invalid public key", e);
+            throw new IllegalArgumentException("error encapsulating", e);
         }
     }
 
