@@ -216,7 +216,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.activeCount() == 1 ? 0 : context.majority();
+        final var majority = context.totalCount() == 1 ? 0 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
@@ -243,7 +243,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.activeCount() == 1 ? 0 : context.majority();
+        final var majority = context.totalCount() == 1 ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
@@ -458,12 +458,13 @@ public class Gorgoneion {
                     }
                 }
                 // If there is only one active member in our context, it's us.
-                final var majority = count >= (context.activeCount() == 1 ? 1 : context.majority());
-                if (!majority) {
+                var majority = context.totalCount() == 1 ? 1 : context.majority();
+                if (count < majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
-                             context.majority(), identifier, from, member.getId());
+                             majority, identifier, from, member.getId());
+                    return false;
                 }
-                return majority;
+                return true;
             } else {
                 log.warn("Invalid notarization, invalid kerl for: {} from: {} on: {}", identifier, from,
                          member.getId());
@@ -516,9 +517,10 @@ public class Gorgoneion {
                 count++;
             }
 
-            if (count < context.majority()) {
-                log.warn("Invalid credential nonce, no majority signature: {} required > {} from: {} on: {}", count,
-                         context.majority(), from, member.getId());
+            var majority = context.totalCount() == 1 ? 1 : context.majority();
+            if (count < majority) {
+                log.warn("Invalid credential nonce, no majority signature: {} required >= {} from: {} on: {}", count,
+                         majority, from, member.getId());
                 return false;
             }
 
