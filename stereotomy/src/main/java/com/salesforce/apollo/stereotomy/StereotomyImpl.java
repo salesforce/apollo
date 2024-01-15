@@ -546,8 +546,8 @@ public class StereotomyImpl implements Stereotomy {
 
             var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", Base64.getUrlEncoder()
                                                                                .encodeToString(
-                                                                               (getState().getCoordinates()
-                                                                                          .toEventCoords()
+                                                                               (getState().getIdentifier()
+                                                                                          .toIdent()
                                                                                           .toByteArray())),
                                                         Base64.getUrlEncoder()
                                                               .encodeToString(signature.toSig().toByteArray())));

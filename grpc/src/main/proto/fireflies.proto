@@ -46,7 +46,7 @@ message SignedAccusation {
 message Note {
   int64 epoch = 1;
   crypto.Digeste currentView = 2;
-  stereotomy.EventCoords coordinates = 3;
+  stereotomy.Ident identifier = 3;
   bytes mask = 4;
   string host = 5;
   int32 port = 6;
@@ -117,11 +117,6 @@ message Update {
 service Entrance {
   rpc seed (Registration) returns (Redirect) {}
   rpc join (Join) returns (Gateway) {}
-
-  // Bootstrap validation
-  rpc validate(stereotomy.EventCoords) returns (Validation) {}
-  // Bootstrap verification key state
-  rpc keyState(stereotomy.IdentAndSeq) returns (stereotomy.KeyState_) {}
 }
 
 message Validation {
@@ -138,12 +133,7 @@ message Redirect {
   int32 cardinality = 2;
   int32 rings = 3;
   bool bootstrap = 4;
-  repeated Seed_ sample = 6;
-}
-
-message Seed_ {
-  SignedNote note = 1;
-  stereotomy.KeyState_ keyState = 2;
+  repeated SignedNote sample = 6;
 }
 
 message Join {

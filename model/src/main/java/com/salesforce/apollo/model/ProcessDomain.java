@@ -19,7 +19,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.thoth.KerlDHT;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -102,9 +101,7 @@ public class ProcessDomain extends Domain {
     protected ViewLifecycleListener listener() {
         return (context, id, join, leaving) -> {
             for (var d : join) {
-                if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
-                    params.context().activate(context.getMember(sai.getDigest()));
-                }
+                params.context().activate(context.getMember(d.getDigest()));
             }
             for (var d : leaving) {
                 params.context().remove(d);

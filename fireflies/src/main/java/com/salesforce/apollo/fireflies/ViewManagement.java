@@ -21,7 +21,7 @@ import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
@@ -61,9 +61,9 @@ public class ViewManagement {
     private final        View                                          view;
     private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
     private final        Lock                                          joinLock     = new ReentrantLock();
+    private final        AtomicReference<Digest>                       currentView  = new AtomicReference<>();
+    private final        AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private              boolean                                       bootstrap;
-    private              AtomicReference<Digest>                       currentView  = new AtomicReference<>();
-    private              AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private              CompletableFuture<Void>                       onJoined;
 
     ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
@@ -76,10 +76,6 @@ public class ViewManagement {
         this.digestAlgo = digestAlgo;
         resetBootstrapView();
         bootstrapView = currentView.get();
-    }
-
-    public boolean contains(Digest member) {
-        return diadem.get().contains(member);
     }
 
     boolean addJoin(Digest id, NoteWrapper note) {
@@ -113,6 +109,10 @@ public class ViewManagement {
 
     void clearVote() {
         vote.set(null);
+    }
+
+    boolean contains(Digest member) {
+        return diadem.get().contains(member);
     }
 
     Digest currentView() {
@@ -153,12 +153,12 @@ public class ViewManagement {
                                    .collect(Collectors.toSet());
 
         context.rebalance(context.totalCount() + ballot.joining.size());
-        var joining = new ArrayList<EventCoordinates>();
+        var joining = new ArrayList<SelfAddressingIdentifier>();
         var pending = ballot.joining()
                             .stream()
                             .map(joins::remove)
                             .filter(java.util.Objects::nonNull)
-                            .peek(nw -> joining.add(nw.getCoordinates()))
+                            .peek(nw -> joining.add(nw.getIdentifier()))
                             .peek(view::addToView)
                             .peek(nw -> {
                                 if (metrics != null) {
@@ -217,7 +217,7 @@ public class ViewManagement {
                 throw new IllegalStateException("Invalid crown");
             }
             setDiadem(calculated);
-            view.notifyListeners(context.allMembers().map(p -> p.note.getCoordinates()).toList(),
+            view.notifyListeners(context.allMembers().map(p -> p.note.getIdentifier()).toList(),
                                  Collections.emptyList());
 
             view.scheduleViewChange();
@@ -241,14 +241,22 @@ public class ViewManagement {
             "Not joined, ignored join of view: %s from: %s on: %s".formatted(joinView, from, node.getId()))));
             return;
         }
+        var note = new NoteWrapper(join.getNote(), digestAlgo);
+        if (!from.equals(note.getId())) {
+            log.info("Ignored join of view: {} from: {} does not match: {} on: {}", joinView, from, note.getId(),
+                     node.getId());
+            responseObserver.onError(
+            new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member does not match note")));
+            return;
+        }
+        if (!view.validate(note.getIdentifier())) {
+            responseObserver.onError(
+            new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid identifier")));
+            log.info("Ignored join of view: {} from: {} invalid identifier on: {}", joinView, from, node.getId());
+            return;
+        }
         view.stable(() -> {
             var thisView = currentView();
-            var note = new NoteWrapper(join.getNote(), digestAlgo);
-            if (!from.equals(note.getId())) {
-                responseObserver.onError(
-                new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member does not match note")));
-                return;
-            }
             log.debug("Join requested from: {} view: {} context: {} cardinality: {} on: {}", from, thisView,
                       context.getId(), context.cardinality(), node.getId());
             if (contains(from)) {
@@ -434,6 +442,10 @@ public class ViewManagement {
                      node.getId());
             return Redirect.getDefaultInstance();
         }
+        if (!view.validate(note.getIdentifier())) {
+            log.warn("Invalid identifier: {} from: {}  on: {}", note.getIdentifier(), from, node.getId());
+            return Redirect.getDefaultInstance();
+        }
         return view.stable(() -> {
             var newMember = view.new Participant(note.getId());
             final var sample = context.sample(params.maximumTxfr(), Entropy.bitsStream(), (Digest) null);
@@ -443,7 +455,7 @@ public class ViewManagement {
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
                            .addAllSample(
-                           sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSeed).toList())
+                           sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSignedNote).toList())
                            .setCardinality(context.cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())

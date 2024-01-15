@@ -12,7 +12,6 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.fireflies.proto.Note;
 import com.salesforce.apollo.fireflies.proto.Note.Builder;
 import com.salesforce.apollo.fireflies.proto.SignedNote;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
@@ -41,10 +40,6 @@ public class NoteWrapper {
         return currentView;
     }
 
-    public EventCoordinates getCoordinates() {
-        return EventCoordinates.from(note.getNote().getCoordinates());
-    }
-
     public long getEpoch() {
         return note.getNote().getEpoch();
     }
@@ -62,7 +57,7 @@ public class NoteWrapper {
     }
 
     public SelfAddressingIdentifier getIdentifier() {
-        return (SelfAddressingIdentifier) Identifier.from(note.getNote().getCoordinates().getIdentifier());
+        return (SelfAddressingIdentifier) Identifier.from(note.getNote().getIdentifier());
     }
 
     public BitSet getMask() {

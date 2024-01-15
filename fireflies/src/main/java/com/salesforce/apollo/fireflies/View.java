@@ -31,14 +31,9 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.*;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.ring.RingCommunications;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
 import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Entropy;
@@ -46,7 +41,6 @@ import com.salesforce.apollo.utils.Utils;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -409,7 +403,7 @@ public class View {
         return viewManagement.join(duration, timer);
     }
 
-    void notifyListeners(List<EventCoordinates> joining, List<Digest> leaving) {
+    void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
         final var current = currentView();
         lifecycleListeners.forEach((id, listener) -> {
             try {
@@ -562,6 +556,10 @@ public class View {
 
     void tick() {
         roundTimers.tick();
+    }
+
+    boolean validate(SelfAddressingIdentifier identifier) {
+        return validation.validate(identifier);
     }
 
     void viewChange(Runnable r) {
@@ -854,7 +852,7 @@ public class View {
             return false;
         }
 
-        if (!validation.validate(note.getCoordinates())) {
+        if (!validation.validate(note.getIdentifier())) {
             log.trace("Invalid join note from {} on: {}", note.getId(), node.getId());
             return false;
         }
@@ -1462,14 +1460,15 @@ public class View {
          *
          * @param context - the context for which the view change has occurred
          * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining member's establishment event
-         * @param leaves  - the list of leaving member's ids
+         * @param joins   - the list of joining member's id
+         * @param leaves  - the list of leaving member's id
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins, List<Digest> leaves);
+        void viewChange(Context<Participant> context, Digest viewId, List<SelfAddressingIdentifier> joins,
+                        List<Digest> leaves);
 
     }
 
-    public record Seed(KeyEvent establishment, InetSocketAddress endpoint) {
+    public record Seed(SelfAddressingIdentifier identifier, InetSocketAddress endpoint) {
     }
 
     public class Node extends Participant implements SigningMember {
@@ -1482,7 +1481,7 @@ public class View {
                         .setEpoch(0)
                         .setHost(endpoint.getHostName())
                         .setPort(endpoint.getPort())
-                        .setCoordinates(wrapped.getEvent().getCoordinates().toEventCoords())
+                        .setIdentifier(wrapped.getIdentifier().getIdentifier().toIdent())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             var signedNote = SignedNote.newBuilder()
@@ -1523,14 +1522,6 @@ public class View {
 
         public SelfAddressingIdentifier getIdentifier() {
             return wrapped.getIdentifier().getIdentifier();
-        }
-
-        @Override
-        public Seed_ getSeed() {
-            return Seed_.newBuilder()
-                        .setNote(note.getWrapped())
-                        .setKeyState(wrapped.getIdentifier().toKeyState_())
-                        .build();
         }
 
         @Override
@@ -1629,7 +1620,7 @@ public class View {
         void nextNote(long newEpoch, Digest view) {
             final var current = note;
             var n = current.newBuilder()
-                           .setCoordinates(note.getCoordinates().toEventCoords())
+                           .setIdentifier(note.getIdentifier().toIdent())
                            .setEpoch(newEpoch)
                            .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                            .setCurrentView(view.toDigeste())
@@ -1654,7 +1645,7 @@ public class View {
                         .setCurrentView(currentView().toDigeste())
                         .setHost(current.getHost())
                         .setPort(current.getPort())
-                        .setCoordinates(current.getCoordinates().toEventCoords())
+                        .setIdentifier(current.getIdentifier().toIdent())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
             SignedNote signedNote = SignedNote.newBuilder()
@@ -1734,13 +1725,8 @@ public class View {
             return note.getIdentifier();
         }
 
-        public Seed_ getSeed() {
-            EventCoordinates coordinates = getNote().getCoordinates();
-            final var ks = validation.keyState(coordinates.getIdentifier(), coordinates.getSequenceNumber());
-            return Seed_.newBuilder()
-                        .setNote(note.getWrapped())
-                        .setKeyState(ks == null ? KeyState_.getDefaultInstance() : ks.toKeyState_())
-                        .build();
+        public SignedNote getSignedNote() {
+            return note.getWrapped();
         }
 
         @Override
@@ -1890,21 +1876,6 @@ public class View {
             viewManagement.join(join, from, responseObserver, timer);
         }
 
-        @Override
-        public KeyState_ keyState(IdentAndSeq request, Digest from) {
-            var identifier = Identifier.from(request.getIdentifier());
-            var seq = ULong.valueOf(request.getSequenceNumber());
-
-            if (!viewManagement.joined()) {
-                log.info("Not yet joined!, ignoring key state request: {}:{} from: {} on: {}", identifier, seq, from,
-                         node.getId());
-                return KeyState_.getDefaultInstance();
-            }
-
-            var keyState = validation.keyState(identifier, seq);
-            return keyState == null ? KeyState_.getDefaultInstance() : keyState.toKeyState_();
-        }
-
         /**
          * The first message in the anti-entropy protocol. Process any digests from the inbound gossip digest. Respond
          * with the Gossip that represents the digests newer or not known in this view, as well as updates from this
@@ -2018,20 +1989,6 @@ public class View {
                                    update.getJoinsList());
                 }
             });
-        }
-
-        @Override
-        public Validation validateCoords(EventCoords request, Digest from) {
-            var coordinates = EventCoordinates.from(request);
-            if (!viewManagement.joined()) {
-                log.info("Not yet joined!, ignoring validation request: {} from: {} on: {}", from, coordinates,
-                         node.getId());
-                return Validation.newBuilder().setResult(false).build();
-            }
-            log.info("Validating event: {} for: {} on: {}", request, from, node.getId());
-            var validate = validation.validate(coordinates);
-            log.info("Returning validate: {}:{} to: {} on: {}", coordinates, validate, from, node.getId());
-            return Validation.newBuilder().setResult(validate).build();
         }
     }
 }

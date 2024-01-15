@@ -57,8 +57,8 @@ public class GorgoneionTest {
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(t -> true, Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
-                                    gorgonRouter, null);
+        var gorgon = new Gorgoneion(true, t -> true, Parameters.newBuilder().setKerl(kerl).build(), member, context,
+                                    observer, gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());

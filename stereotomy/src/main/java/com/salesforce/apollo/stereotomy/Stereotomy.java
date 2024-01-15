@@ -7,14 +7,14 @@
 package com.salesforce.apollo.stereotomy;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.cryptography.proto.Sig;
-import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
+import com.salesforce.apollo.cryptography.proto.Sig;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -76,9 +76,9 @@ public interface Stereotomy {
             getLogger().warn("Invalid certificate, missing \"DC\" of dn= {}", dn);
             return Optional.empty();
         }
-        EventCoordinates keyCoords;
+        Identifier identifier;
         try {
-            keyCoords = EventCoordinates.from(EventCoords.parseFrom(Base64.getUrlDecoder().decode(id.getBytes())));
+            identifier = Identifier.from(Ident.parseFrom(Base64.getUrlDecoder().decode(id.getBytes())));
         } catch (InvalidProtocolBufferException e) {
             getLogger().debug("Unable to deserialize key event coordinates", e);
             return Optional.empty();
@@ -90,7 +90,7 @@ public interface Stereotomy {
             getLogger().debug("Unable to deserialize signature", e);
             return Optional.empty();
         }
-        return Optional.of(new Decoded(keyCoords, JohnHancock.from(sig)));
+        return Optional.of(new Decoded(identifier, JohnHancock.from(sig)));
     }
 
     /**
@@ -186,6 +186,6 @@ public interface Stereotomy {
      */
     <T extends Identifier> ControlledIdentifier<T> newIdentifier(IdentifierSpecification.Builder<T> spec);
 
-    record Decoded(EventCoordinates coordinates, JohnHancock signature) {
+    record Decoded(Identifier identifier, JohnHancock signature) {
     }
 }

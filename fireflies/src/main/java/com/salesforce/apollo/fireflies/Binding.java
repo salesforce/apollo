@@ -238,7 +238,7 @@ class Binding {
     private void join(Redirect redirect, Digest v, Duration duration) {
         var sample = redirect.getSampleList()
                              .stream()
-                             .map(sn -> new NoteWrapper(sn.getNote(), digestAlgo))
+                             .map(sn -> new NoteWrapper(sn, digestAlgo))
                              .map(nw -> view.new Participant(nw))
                              .collect(Collectors.toList());
         log.info("Redirecting to: {} context: {} sample: {} on: {}", v, this.context.getId(), sample.size(),
@@ -321,8 +321,7 @@ class Binding {
                                         .setNote(Note.newBuilder()
                                                      .setHost(seed.endpoint().getHostName())
                                                      .setPort(seed.endpoint().getPort())
-                                                     .setCoordinates(
-                                                     seed.establishment().getCoordinates().toEventCoords())
+                                                     .setIdentifier(seed.identifier().toIdent())
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(
                                                      Node.createInitialMask(context).toByteArray())))

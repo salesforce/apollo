@@ -18,7 +18,6 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
-import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,20 +51,16 @@ public class Ani {
         return new EventValidation() {
 
             @Override
-            public KeyState keyState(Identifier id, ULong sequenceNumber) {
-                return kerl.getKeyState(id, sequenceNumber);
-            }
-
-            @Override
             public boolean validate(EstablishmentEvent event) {
                 log.trace("Validate event: {} on: {}", event, member);
                 return Ani.this.validateKerl(event, timeout);
             }
 
             @Override
-            public boolean validate(EventCoordinates coordinates) {
-                log.trace("Validating coordinates: {} on: {}", coordinates, member);
-                KeyEvent ke = kerl.getKeyEvent(coordinates);
+            public boolean validate(Identifier identifier) {
+                log.trace("Validating identifier: {} on: {}", identifier, member);
+                var ks = kerl.getKeyState(identifier);
+                var ke = kerl.getKeyEvent(ks.getLastEstablishmentEvent());
                 return Ani.this.validateKerl(ke, timeout);
             }
         };

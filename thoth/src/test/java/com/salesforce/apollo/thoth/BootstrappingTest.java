@@ -65,9 +65,9 @@ public class BootstrappingTest extends AbstractDhtTest {
         gate.set(true);
         var gorgoneions = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
-            return new Gorgoneion(t -> true, Parameters.newBuilder().setKerl(k).build(),
-                                  (ControlledIdentifierMember) r.getFrom(), context,
-                                  new DirectPublisher(new ProtoKERLAdapter(k)), r, null);
+            return new Gorgoneion(r.getFrom().equals(dhts.firstKey()), t -> true,
+                                  Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
+                                  context, new DirectPublisher(new ProtoKERLAdapter(k)), r, null);
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();

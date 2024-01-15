@@ -73,15 +73,18 @@ public class Gorgoneion {
                                                                                                                      Thread.ofVirtual()
                                                                                                                            .factory());
     private final Predicate<SignedAttestation>                          verifier;
+    private final boolean                                               bootstrap;
 
-    public Gorgoneion(Predicate<SignedAttestation> verifier, Parameters parameters, ControlledIdentifierMember member,
-                      Context<Member> context, ProtoEventObserver observer, Router router, GorgoneionMetrics metrics) {
-        this(verifier, parameters, member, context, observer, router, metrics, router);
+    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier, Parameters parameters,
+                      ControlledIdentifierMember member, Context<Member> context, ProtoEventObserver observer,
+                      Router router, GorgoneionMetrics metrics) {
+        this(bootstrap, verifier, parameters, member, context, observer, router, metrics, router);
     }
 
-    public Gorgoneion(Predicate<SignedAttestation> verifier, Parameters parameters, ControlledIdentifierMember member,
-                      Context<Member> context, ProtoEventObserver observer, Router admissionsRouter,
-                      GorgoneionMetrics metrics, Router endorsementRouter) {
+    public Gorgoneion(boolean bootstrap, Predicate<SignedAttestation> verifier, Parameters parameters,
+                      ControlledIdentifierMember member, Context<Member> context, ProtoEventObserver observer,
+                      Router admissionsRouter, GorgoneionMetrics metrics, Router endorsementRouter) {
+        this.bootstrap = bootstrap;
         this.verifier = verifier;
         this.member = member;
         this.context = context;
@@ -158,7 +161,7 @@ public class Gorgoneion {
         var successors = context.totalCount() == 1 ? Collections.singletonList(member)
                                                    : Context.uniqueSuccessors(context, digestOf(ident,
                                                                                                 parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 1 : context.majority();
+        final var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
@@ -216,7 +219,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 0 : context.majority();
+        final var majority = context.totalCount() == 1 && bootstrap ? 0 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
@@ -243,7 +246,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 0 : context.majority();
+        final var majority = context.totalCount() == 1 && bootstrap ? 0 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
@@ -458,7 +461,7 @@ public class Gorgoneion {
                     }
                 }
                 // If there is only one active member in our context, it's us.
-                var majority = context.totalCount() == 1 ? 1 : context.majority();
+                var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
                 if (count < majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
                              majority, identifier, from, member.getId());
@@ -517,7 +520,7 @@ public class Gorgoneion {
                 count++;
             }
 
-            var majority = context.totalCount() == 1 ? 1 : context.majority();
+            var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
             if (count < majority) {
                 log.warn("Invalid credential nonce, no majority signature: {} required >= {} from: {} on: {}", count,
                          majority, from, member.getId());

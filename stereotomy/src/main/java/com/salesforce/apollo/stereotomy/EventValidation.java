@@ -8,7 +8,6 @@ package com.salesforce.apollo.stereotomy;
 
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import org.joou.ULong;
 
 /**
  * The EventValidation provides validation predicates for EstablishmentEvents
@@ -20,45 +19,27 @@ public interface EventValidation {
     EventValidation NONE          = new EventValidation() {
 
         @Override
-        public KeyState keyState(Identifier id, ULong sequenceNumber) {
-            return null;
-        }
-
-        @Override
         public boolean validate(EstablishmentEvent event) {
             return true;
         }
 
         @Override
-        public boolean validate(EventCoordinates coordinates) {
+        public boolean validate(Identifier identifier) {
             return true;
         }
     };
     EventValidation NO_VALIDATION = new EventValidation() {
 
         @Override
-        public KeyState keyState(Identifier id, ULong sequenceNumber) {
-            return null;
-        }
-
-        @Override
         public boolean validate(EstablishmentEvent event) {
             return false;
         }
 
         @Override
-        public boolean validate(EventCoordinates coordinates) {
+        public boolean validate(Identifier identifier) {
             return false;
         }
     };
-
-    KeyState keyState(Identifier id, ULong sequenceNumber);
-
-    /**
-     * Answer true if the event indicated by the coordinates is validated. This means that thresholds have been met from
-     * indicated witnesses and trusted validators.
-     */
-    boolean validate(EventCoordinates coordinates);
 
     /**
      * Answer true if the event is validated. This means that thresholds have been met from indicated witnesses and
@@ -66,35 +47,5 @@ public interface EventValidation {
      */
     boolean validate(EstablishmentEvent event);
 
-    class DelegatedEventValidation implements EventValidation {
-        private volatile EventValidation delegate;
-
-        public DelegatedEventValidation(EventValidation delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public KeyState keyState(Identifier id, ULong sequenceNumber) {
-            return delegate().keyState(id, sequenceNumber);
-        }
-
-        public void setDelegate(EventValidation delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public boolean validate(EventCoordinates coordinates) {
-            return delegate().validate(coordinates);
-        }
-
-        @Override
-        public boolean validate(EstablishmentEvent event) {
-            return delegate().validate(event);
-        }
-
-        private EventValidation delegate() {
-            final var current = delegate;
-            return current;
-        }
-    }
+    boolean validate(Identifier identifier);
 }

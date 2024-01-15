@@ -70,7 +70,7 @@ public class GorgoneionClientTest {
         var observer = mock(ProtoEventObserver.class);
         final var parameters = Parameters.newBuilder().setKerl(kerl).build();
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(t -> true, parameters, member, context, observer, gorgonRouter, null);
+        var gorgon = new Gorgoneion(true, t -> true, parameters, member, context, observer, gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -151,9 +151,9 @@ public class GorgoneionClientTest {
                                            router.start();
                                            return router;
                                        })
-                                       .map(r -> new Gorgoneion(t -> true, parameters,
-                                                                (ControlledIdentifierMember) r.getFrom(), context,
-                                                                observer, r, null))
+                                       .map(r -> new Gorgoneion(r.getFrom().equals(members.getFirst()), t -> true,
+                                                                parameters, (ControlledIdentifierMember) r.getFrom(),
+                                                                context, observer, r, null))
                                        .toList();
 
         // The registering client
@@ -170,7 +170,7 @@ public class GorgoneionClientTest {
         clientRouter.start();
 
         // Admin client link
-        var admin = clientComminications.connect(members.get(0));
+        var admin = clientComminications.connect(members.getFirst());
 
         assertNotNull(admin);
         Function<SignedNonce, Any> attester = sn -> {

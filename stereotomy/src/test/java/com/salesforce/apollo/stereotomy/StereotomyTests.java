@@ -106,7 +106,7 @@ public class StereotomyTests {
         ControlledIdentifier<? extends Identifier> identifier = controller.newIdentifier();
 
         // identifier
-        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
+        assertInstanceOf(SelfAddressingIdentifier.class, identifier.getIdentifier());
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
         assertEquals("4cb6958622749694aedff3d48b8e402524562813bf2bdd11894a528edc965b4d",
@@ -167,7 +167,7 @@ public class StereotomyTests {
         IdentifierSpecification.newBuilder());
 
         // identifier
-        assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
+        assertInstanceOf(SelfAddressingIdentifier.class, identifier.getIdentifier());
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.DEFAULT, sap.getDigest().getAlgorithm());
         assertEquals("092126af01f80ca28e7a99bbdce229c029be3bbfcb791e29ccb7a64e8019a36f",
@@ -260,7 +260,7 @@ public class StereotomyTests {
         var decoded = Stereotomy.decode(cert);
         assertFalse(decoded.isEmpty());
 
-        assertEquals(identifier.getIdentifier(), decoded.get().coordinates().getIdentifier());
+        assertEquals(identifier.getIdentifier(), decoded.get().identifier());
         final var qb64Id = qb64(basicId);
 
         assertTrue(identifier.getVerifier().get().verify(decoded.get().signature(), qb64Id));

@@ -23,8 +23,8 @@ import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -109,13 +109,13 @@ public class FireFliesTest {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.getFirst().getMember().getEvent(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
-                                       List<Digest> leaves) {
+                public void viewChange(Context<Participant> context, Digest viewId,
+                                       List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
                         System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.totalCount(),
                                           d.getMember().getId());
