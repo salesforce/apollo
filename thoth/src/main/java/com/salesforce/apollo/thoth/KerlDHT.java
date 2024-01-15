@@ -220,6 +220,10 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error appending Attachment: {} on: {}", ce.getMessage(), member.getId());
+                return KeyState_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -255,6 +259,10 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error appending KERL: {} on: {}", ce.getMessage(), member.getId());
+                return Collections.emptyList();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -287,6 +295,10 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error appending Key Event: {} on: {}", ce.getMessage(), member.getId());
+                return KeyState_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -338,7 +350,19 @@ public class KerlDHT implements ProtoKERLService {
                                                                                               "append attachments"),
                                                                                               t -> completeIt(result,
                                                                                                               gathered));
-        return Empty.getDefaultInstance();
+
+        try {
+            return result.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error appending attachments: {} on: {}", ce.getMessage(), member.getId());
+                return Empty.getDefaultInstance();
+            }
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
@@ -371,6 +395,10 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error appending validations: {} on: {}", ce.getMessage(), member.getId());
+                return Empty.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -429,6 +457,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get Attachment: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
+                         member.getId());
+                return null;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -468,6 +501,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get Kerl: {} : {} on: {}", Identifier.from(identifier), ce.getMessage(),
+                         member.getId());
+                return KERL_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -508,6 +546,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyEvent: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
+                         member.getId());
+                return KeyEvent_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -548,6 +591,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyState: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
+                         member.getId());
+                return KeyState_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -592,6 +640,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyState: {}:#{} : {} on: {}", Identifier.from(identifier),
+                         ULong.valueOf(sequenceNumber), ce.getMessage(), member.getId());
+                return KeyState_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -631,13 +684,18 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyState: {} : {} on: {}", Identifier.from(identifier), ce.getMessage(),
+                         member.getId());
+                return KeyState_.getDefaultInstance();
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
 
     @Override
     public KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates) {
-        log.info("Get key state with attachements: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        log.info("Get key state with attachments: {} on: {}", EventCoordinates.from(coordinates), member.getId());
         if (coordinates == null) {
             return completeIt(KeyStateWithAttachments_.getDefaultInstance());
         }
@@ -670,6 +728,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyState With Attachments: {} on: {}", EventCoordinates.from(coordinates),
+                         member.getId(), ce);
+                return null;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -710,6 +773,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get KeyState With endorsement and validations: {} : {} on: {}",
+                         EventCoordinates.from(coordinates), ce.getMessage(), member.getId());
+                return null;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
@@ -749,6 +817,11 @@ public class KerlDHT implements ProtoKERLService {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof CompletionException ce) {
+                log.info("error get validations: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
+                         member.getId());
+                return null;
+            }
             throw new IllegalStateException(e.getCause());
         }
     }
