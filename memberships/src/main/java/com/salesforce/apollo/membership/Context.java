@@ -26,7 +26,7 @@ import java.util.stream.Stream;
 public interface Context<T extends Member> {
 
     double DEFAULT_EPSILON = 0.99999;
-    static final String RING_HASH_TEMPLATE = "%s-%s-%s";
+    String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
         return d.prefix(ctxId, ring);
@@ -279,7 +279,17 @@ public interface Context<T extends Member> {
     /**
      * Answer the majority cardinality of the context, based on the current ring count
      */
-    int majority();
+    default int majority() {
+        return majority(false);
+    }
+
+    /**
+     * Answer the majority cardinality of the context, based on the current ring count
+     *
+     * @param bootstrapped - if true, calculate correct majority for bootstrapping cases where totalCount < true
+     *                     majority
+     */
+    int majority(boolean bootstrapped);
 
     /**
      * Answer the total member count (offline + active) tracked by this context

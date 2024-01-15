@@ -117,15 +117,14 @@ public class AbstractDhtTest {
                               .mapToObj(i -> stereotomy.newIdentifier())
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
-        context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
+        context = Context.newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.keySet().forEach(member -> instantiate(member, context, serverMembers));
 
         System.out.println();
         System.out.println();
-        System.out.println(
-        String.format("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s", getCardinality(), PBYZ,
-                      context.getRingCount(), context.majority()));
+        System.out.printf("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s%n", getCardinality(), PBYZ,
+                          context.getRingCount(), context.majority(true));
         System.out.println();
     }
 

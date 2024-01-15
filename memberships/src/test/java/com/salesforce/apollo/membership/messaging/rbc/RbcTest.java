@@ -10,7 +10,6 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -27,6 +26,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.utils.Entropy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -112,12 +112,13 @@ public class RbcTest {
             view.registerHandler(receiver);
             receivers.put(view.getMember(), receiver);
         }
+        System.out.println();
         int rounds = LARGE_TESTS ? 100 : 5;
         for (int r = 0; r < rounds; r++) {
             CountDownLatch latch = new CountDownLatch(messengers.size());
             round.set(latch);
             var rnd = r;
-            System.out.print("\nround: %s ".formatted(r));
+            System.out.printf("\nround: %s ", r);
             messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
                 Entropy.nextSecureBytes(rand);

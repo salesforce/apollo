@@ -161,7 +161,7 @@ public class Gorgoneion {
         var successors = context.totalCount() == 1 ? Collections.singletonList(member)
                                                    : Context.uniqueSuccessors(context, digestOf(ident,
                                                                                                 parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
+        final var majority = context.majority(true);
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
@@ -171,8 +171,10 @@ public class Gorgoneion {
             return link.endorse(nonce, parameters.registrationTimeout());
         }, (futureSailor, link, m) -> completeEndorsement(futureSailor, m, endorsements), () -> {
             if (endorsements.size() < majority) {
-                generated.completeExceptionally(new StatusRuntimeException(
-                Status.ABORTED.withDescription("Cannot gather required nonce endorsements")));
+                generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription(
+                "Cannot gather required nonce endorsements: %s required: %s on: %s".formatted(endorsements.size(),
+                                                                                              majority,
+                                                                                              member.getId()))));
             } else {
                 generated.complete(SignedNonce.newBuilder()
                                               .addSignatures(MemberSignature.newBuilder()
@@ -193,7 +195,7 @@ public class Gorgoneion {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException(e.getCause());
         }
     }
 
@@ -219,7 +221,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 && bootstrap ? 0 : context.majority();
+        final var majority = context.majority(true);
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
@@ -246,7 +248,7 @@ public class Gorgoneion {
 
         var successors = Context.uniqueSuccessors(context,
                                                   digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 && bootstrap ? 0 : context.majority();
+        final var majority = context.majority(true);
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
@@ -461,7 +463,7 @@ public class Gorgoneion {
                     }
                 }
                 // If there is only one active member in our context, it's us.
-                var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
+                var majority = context.majority(true);
                 if (count < majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
                              majority, identifier, from, member.getId());
@@ -520,7 +522,7 @@ public class Gorgoneion {
                 count++;
             }
 
-            var majority = context.totalCount() == 1 && bootstrap ? 1 : context.majority();
+            var majority = context.majority(true);
             if (count < majority) {
                 log.warn("Invalid credential nonce, no majority signature: {} required >= {} from: {} on: {}", count,
                          majority, from, member.getId());

@@ -111,7 +111,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         final var invitation = gorgoneionClient.apply(Duration.ofSeconds(120));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidationsCount() >= context.majority());
+        assertTrue(invitation.getValidationsCount() >= context.majority(true));
         // Verify client KERL published
         Utils.waitForCondition(30_000, 1000, () -> testKerl.getKeyEvent(client.getEvent().getCoordinates()) != null);
         var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());
