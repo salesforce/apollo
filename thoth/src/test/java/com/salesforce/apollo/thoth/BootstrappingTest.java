@@ -67,7 +67,7 @@ public class BootstrappingTest extends AbstractDhtTest {
             var k = dhts.get(r.getFrom()).asKERL();
             return new Gorgoneion(r.getFrom().equals(dhts.firstKey()), t -> true,
                                   Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
-                                  context, new DirectPublisher(new ProtoKERLAdapter(k)), r, null);
+                                  context, new DirectPublisher(r.getFrom().getId(), new ProtoKERLAdapter(k)), r, null);
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
