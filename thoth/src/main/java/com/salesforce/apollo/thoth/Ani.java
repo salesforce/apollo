@@ -52,8 +52,10 @@ public class Ani {
 
             @Override
             public boolean validate(EstablishmentEvent event) {
-                log.trace("Validate event: {} on: {}", event, member);
-                return Ani.this.validateKerl(event, timeout);
+                log.trace("Validate event: {} on: {}", event.getCoordinates(), member);
+                var result = Ani.this.validateKerl(event, timeout);
+                log.info("Validate event: {}: {} on: {}", event, result, member);
+                return result;
             }
 
             @Override
@@ -61,7 +63,9 @@ public class Ani {
                 log.trace("Validating identifier: {} on: {}", identifier, member);
                 var ks = kerl.getKeyState(identifier);
                 var ke = kerl.getKeyEvent(ks.getLastEstablishmentEvent());
-                return Ani.this.validateKerl(ke, timeout);
+                var result = Ani.this.validateKerl(ke, timeout);
+                log.info("Validating identifier: {}:{} on: {}", identifier, result, member);
+                return result;
             }
         };
     }

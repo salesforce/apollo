@@ -143,7 +143,7 @@ public class KerlDHT implements ProtoKERLService {
         this.connectionPool = connectionPool;
         kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.reconcile = new RingCommunications<>(this.context, member, reconcileComms);
-        this.kerlSpace = new KerlSpace(connectionPool);
+        this.kerlSpace = new KerlSpace(connectionPool, member.getId());
 
         initializeSchema();
         kerl = new CachingKERL(f -> {
@@ -221,7 +221,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error appending Attachment: {} on: {}", ce.getMessage(), member.getId());
+                log.info("error appending event: {} on: {}", ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -435,22 +435,15 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Attachment>();
         HashMultiset<Attachment> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
-                                                                                              (link, r) -> link.getAttachment(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, identifier,
-                                                                                              isTimedOut, destination,
-                                                                                              "get attachment",
-                                                                                              Attachment.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var operation = "getAttachment(%s)".formatted(EventCoordinates.from(coordinates));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.noDuplicates()
+                .iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                    isTimedOut, destination, "get attachment",
+                                                                    Attachment.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -458,8 +451,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get Attachment: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -479,22 +471,15 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KERL_>();
         HashMultiset<KERL_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(digest, null,
-                                                                                              (link, r) -> link.getKERL(
-                                                                                              identifier),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get kerl",
-                                                                                              KERL_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var operation = "getKerl(%s)".formatted(Identifier.from(identifier));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.noDuplicates()
+                .iterate(digest, null, (link, r) -> link.getKERL(identifier),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KERL_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -502,8 +487,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get Kerl: {} : {} on: {}", Identifier.from(identifier), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KERL_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -512,7 +496,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyEvent_ getKeyEvent(EventCoords coordinates) {
-        log.trace("Get key event: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        var operation = "getKeyEvent(%s)".formatted(EventCoordinates.from(coordinates));
+        log.trace("{} on: {}", operation, member.getId());
         if (coordinates == null) {
             return completeIt(KeyEvent_.getDefaultInstance());
         }
@@ -524,22 +509,14 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyEvent_>();
         HashMultiset<KeyEvent_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyEvent(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get key event",
-                                                                                              KeyEvent_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.noDuplicates()
+                .iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyEvent_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -547,8 +524,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyEvent: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyEvent_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -557,7 +533,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyState_ getKeyState(EventCoords coordinates) {
-        log.info("Get key state: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        var operation = "getKeyState(%s)".formatted(EventCoordinates.from(coordinates));
+        log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
@@ -569,22 +546,14 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyState(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get key state for coordinates",
-                                                                                              KeyState_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.noDuplicates()
+                .iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyState_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -592,8 +561,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyState: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -602,10 +570,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
-        if (log.isInfoEnabled()) {
-            log.info("Get key state for: {} seq#: {} on: {}", Identifier.from(identifier),
-                     ULong.valueOf(sequenceNumber), member.getId());
-        }
+        var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
+        log.info("{} on: {}", operation, member.getId());
         if (identifier == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
@@ -618,22 +584,14 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyState(
-                                                                                              identAndSeq),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get key state for coordinates",
-                                                                                              KeyState_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.noDuplicates()
+                .iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyState_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -641,8 +599,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyState: {}:#{} : {} on: {}", Identifier.from(identifier),
-                         ULong.valueOf(sequenceNumber), ce.getMessage(), member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -654,7 +611,8 @@ public class KerlDHT implements ProtoKERLService {
         if (identifier == null) {
             return completeIt(KeyState_.getDefaultInstance());
         }
-        log.info("Get key state: {} on: {}", Identifier.from(identifier), member.getId());
+        var operation = "getKeyState(%s)".formatted(Identifier.from(identifier));
+        log.info("{} on: {}", operation, member.getId());
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
             return completeIt(KeyState_.getDefaultInstance());
@@ -663,21 +621,13 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyState(
-                                                                                              identifier),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get current key state",
-                                                                                              KeyState_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.iterate(digest, null, (link, r) -> link.getKeyState(identifier),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyState_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -685,8 +635,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyState: {} : {} on: {}", Identifier.from(identifier), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -695,7 +644,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyStateWithAttachments_ getKeyStateWithAttachments(EventCoords coordinates) {
-        log.info("Get key state with attachments: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        var operation = "getKeyStateWithAttachments(%s)".formatted(EventCoordinates.from(coordinates));
+        log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
             return completeIt(KeyStateWithAttachments_.getDefaultInstance());
         }
@@ -707,21 +657,13 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStateWithAttachments_>();
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyStateWithAttachments(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get key state with attachments",
-                                                                                              KeyStateWithAttachments_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyStateWithAttachments_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -729,8 +671,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyState With Attachments: {} on: {}", EventCoordinates.from(coordinates),
-                         member.getId(), ce);
+                log.info("error {} on: {}", operation, member.getId(), ce);
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -739,8 +680,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
-        log.info("Get key state with endorsements and validations: {} on: {}", EventCoordinates.from(coordinates),
-                 member.getId());
+        var operation = "getKeyStateWithEndorsementsAndValidations(%s)".formatted(EventCoordinates.from(coordinates));
+        log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
             return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
         }
@@ -752,21 +693,13 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
         HashMultiset<KeyStateWithEndorsementsAndValidations_> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(digest, null,
-                                                                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, digest,
-                                                                                              isTimedOut, destination,
-                                                                                              "get key state with endorsements",
-                                                                                              KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                    isTimedOut, destination, operation,
+                                                                    KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -774,8 +707,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get KeyState With endorsement and validations: {} : {} on: {}",
-                         EventCoordinates.from(coordinates), ce.getMessage(), member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -784,7 +716,8 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public Validations getValidations(EventCoords coordinates) {
-        log.info("Get validations: {} on: {}", EventCoordinates.from(coordinates), member.getId());
+        var operation = "getValidations(%s)".formatted(EventCoordinates.from(coordinates));
+        log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
             return completeIt(Validations.getDefaultInstance());
         }
@@ -796,21 +729,13 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Validations>();
         HashMultiset<Validations> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
-                                                                                              (link, r) -> link.getValidations(
-                                                                                              coordinates),
-                                                                                              () -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)),
-                                                                                              (tally, futureSailor, destination) -> read(
-                                                                                              result, gathered, tally,
-                                                                                              futureSailor, identifier,
-                                                                                              isTimedOut, destination,
-                                                                                              "get validations",
-                                                                                              Validations.getDefaultInstance()),
-                                                                                              t -> failedMajority(
-                                                                                              result,
-                                                                                              maxCount(gathered)));
+        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        iterator.iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
+                         () -> failedMajority(result, maxCount(gathered), operation),
+                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                    isTimedOut, destination, operation,
+                                                                    Validations.getDefaultInstance()),
+                         t -> failedMajority(result, maxCount(gathered), operation));
         try {
             return result.get();
         } catch (InterruptedException e) {
@@ -818,8 +743,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error get validations: {} : {} on: {}", EventCoordinates.from(coordinates), ce.getMessage(),
-                         member.getId());
+                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -895,12 +819,12 @@ public class KerlDHT implements ProtoKERLService {
         true) + " on: " + member.getId()));
     }
 
-    private boolean failedMajority(CompletableFuture<?> result, int maxAgree) {
-        log.error("Unable to achieve majority read, max: {} required: {} on: {}", maxAgree, context.majority(true),
-                  member.getId());
+    private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
+        log.error("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
+                  context.majority(true), member.getId());
         return result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority read, max: " + maxAgree + " required: " + context.majority(true) + " on: "
-        + member.getId()));
+        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority(true)
+        + " on: " + member.getId()));
     }
 
     private void initializeSchema() {
@@ -1002,7 +926,7 @@ public class KerlDHT implements ProtoKERLService {
                 }
             } catch (NoSuchElementException e) {
                 reconcileLog.debug("null interval reconciliation with {} : {} on: {}", destination.member().getId(),
-                                   member.getId(), e.getCause());
+                                   e.getMessage(), member.getId());
             }
         }
         if (started.get()) {
@@ -1016,8 +940,8 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         }
         CombinedIntervals keyIntervals = keyIntervals();
-        reconcileLog.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring,
-                           link.getMember().getId(), member.getId(), keyIntervals);
+        reconcileLog.trace("Interval reconciliation on ring: {} with: {} intervals: {} on: {} ", ring,
+                           link.getMember().getId(), keyIntervals, member.getId());
         return link.reconcile(Intervals.newBuilder()
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
