@@ -1123,7 +1123,11 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
-            return null;
+            if (log.isTraceEnabled()) {
+                log.trace("get key state for {}:{} on: {}", Identifier.from(identifier), ULong.valueOf(sequenceNumber),
+                          member.getId());
+            }
+            return complete(k -> k.getKeyState(identifier, sequenceNumber));
         }
 
         @Override

@@ -241,12 +241,15 @@ public class ReliableBroadcaster {
             }
             Reconcile gossip = result.get();
             buffer.receive(gossip.getUpdatesList());
-            destination.link()
-                       .update(ReconcileContext.newBuilder()
-                                               .setRing(destination.ring())
-                                               .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
-                                                                               destination.member().getId()))
-                                               .build());
+            var biff = gossip.getDigests();
+            if (!Biff.getDefaultInstance().equals(biff)) {
+                destination.link()
+                           .update(ReconcileContext.newBuilder()
+                                                   .setRing(destination.ring())
+                                                   .addAllUpdates(buffer.reconcile(BloomFilter.from(biff),
+                                                                                   destination.member().getId()))
+                                                   .build());
+            }
         } finally {
             if (timer != null) {
                 timer.stop();
@@ -403,9 +406,9 @@ public class ReliableBroadcaster {
         public Reconcile gossip(MessageBff request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.info("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
-                         context.getId(), member.getId(), from, request.getRing(),
-                         predecessor == null ? "<null>" : predecessor.getId());
+                log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
+                          context.getId(), member.getId(), from, request.getRing(),
+                          predecessor == null ? "<null>" : predecessor.getId());
                 return Reconcile.getDefaultInstance();
             }
             return Reconcile.newBuilder()
