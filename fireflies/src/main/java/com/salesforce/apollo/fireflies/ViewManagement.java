@@ -281,7 +281,7 @@ public class ViewManagement {
             if (!View.isValidMask(note.getMask(), context)) {
                 log.warn(
                 "Invalid join mask: {} majority: {} from member: {} view: {}  context: {} cardinality: {} on: {}",
-                note.getMask(), context.majority(), from, thisView, context.getId(), cardinality(), node.getId());
+                note.getMask(), context.majority(true), from, thisView, context.getId(), cardinality(), node.getId());
             }
             if (pendingJoins.size() >= params.maxPending()) {
                 responseObserver.onError(

@@ -809,7 +809,7 @@ public class KerlDHT implements ProtoKERLService {
                 try {
                     result.complete(max.getElement());
                 } catch (Throwable t) {
-                    log.error("Unable to complete it", t);
+                    log.error("Unable to complete it on {}", member.getId(), t);
                 }
                 return;
             }
@@ -899,7 +899,6 @@ public class KerlDHT implements ProtoKERLService {
         var max = max(gathered);
         if (max != null) {
             tally.set(max.getCount());
-            // If there is only one active member in our context, it's us.
             final var majority = tally.get() >= context.majority(true);
             if (majority) {
                 result.complete(max.getElement());

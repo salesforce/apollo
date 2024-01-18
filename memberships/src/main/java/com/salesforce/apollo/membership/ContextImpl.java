@@ -342,8 +342,13 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public int majority(boolean bootstrapped) {
         var majority = getRingCount() - toleranceLevel();
-        if (bootstrapped && totalCount() < 4) {
-            return Math.round(majority / 2);
+        if (bootstrapped) {
+            return switch (totalCount()) {
+                case 1, 2 -> 1;
+                case 3 -> 2;
+                case 4 -> 3;
+                default -> majority;
+            };
         } else {
             return majority;
         }

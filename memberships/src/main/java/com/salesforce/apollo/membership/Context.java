@@ -25,7 +25,7 @@ import java.util.stream.Stream;
  */
 public interface Context<T extends Member> {
 
-    double DEFAULT_EPSILON = 0.99999;
+    double DEFAULT_EPSILON    = 0.99999;
     String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
@@ -270,7 +270,7 @@ public interface Context<T extends Member> {
     /**
      * Answer true if the member is a successor of the supplied digest on any ring
      *
-     * @param member
+     * @param m
      * @param digest
      * @return
      */

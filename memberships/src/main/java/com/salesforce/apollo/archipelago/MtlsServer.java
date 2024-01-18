@@ -152,7 +152,8 @@ public class MtlsServer implements RouterSupplier {
             @Override
             public Digest getFrom() {
                 try {
-                    return cachedMembership.get(getCert());
+                    var cert = getCert();
+                    return cert == null ? null : cachedMembership.get(cert);
                 } catch (ExecutionException e) {
                     throw new IllegalStateException("Unable to derive member id from cert", e.getCause());
                 }
@@ -168,7 +169,11 @@ public class MtlsServer implements RouterSupplier {
 
     private X509Certificate getCert() {
         try {
-            return (X509Certificate) sslSessionContext.get().getPeerCertificates()[0];
+            var sslSession = sslSessionContext.get();
+            if (sslSession == null) {
+                return null;
+            }
+            return (X509Certificate) sslSession.getPeerCertificates()[0];
         } catch (SSLPeerUnverifiedException e) {
             throw new IllegalStateException(e);
         }
