@@ -65,7 +65,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     public <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler) {
         final var next = next(member.getId());
-        if (next.member == null) {
+        if (next == null || next.member == null) {
             log.debug("No member for ring: {} on: {}", next.ring, member.getId());
             handler.handle(Optional.empty(), next);
             return;
@@ -162,14 +162,18 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     private Destination<T, Comm> linkFor(Digest digest) {
         final var current = currentIndex;
-        var successor = traversalOrder.get(current);
+        iteration<T> successor = null;
         try {
+            successor = traversalOrder.get(current);
             final Comm link = comm.connect(successor.m);
             if (link == null) {
                 log.trace("No connection to {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
                           member.getId());
             }
             return new Destination<>(successor.m, link, successor.ring);
+        } catch (IndexOutOfBoundsException e) {
+            log.trace("No members to traver on: {}", member.getId());
+            return null;
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());

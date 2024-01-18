@@ -19,7 +19,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.thoth.KerlDHT;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -42,11 +41,11 @@ import java.util.concurrent.RejectedExecutionException;
  * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
+    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
 
-    private final static Logger  log = LoggerFactory.getLogger(ProcessDomain.class);
-    protected final      KerlDHT dht;
-    protected final      View    foundation;
-    private final        UUID    listener;
+    protected final KerlDHT dht;
+    protected final View    foundation;
+    private final   UUID    listener;
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
@@ -57,9 +56,8 @@ public class ProcessDomain extends Domain {
                           .setpByz(parameters.dhtPbyz)
                           .setId(group)
                           .build();
-        final var dhtUrl = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
-        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(dhtUrl, "", "");
-        connectionPool.setMaxConnections(10);
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(parameters.dhtDbUrl, "", "");
+        connectionPool.setMaxConnections(parameters.jdbcMaxConnections());
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
                           parameters.dhtFpr, stereotomyMetrics);
@@ -103,9 +101,7 @@ public class ProcessDomain extends Domain {
     protected ViewLifecycleListener listener() {
         return (context, id, join, leaving) -> {
             for (var d : join) {
-                if (d.getIdentifier() instanceof SelfAddressingIdentifier sai) {
-                    params.context().activate(context.getMember(sai.getDigest()));
-                }
+                params.context().activate(context.getMember(d.getDigest()));
             }
             for (var d : leaving) {
                 params.context().remove(d);
@@ -124,8 +120,9 @@ public class ProcessDomain extends Domain {
         dht.stop();
     }
 
-    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, Path checkpointBaseDir,
-                                          Duration dhtOpsFrequency, double dhtFpr, Duration dhtEventValidTO,
-                                          int dhtBias, int jdbcMaxConnections, double dhtPbyz) {
+    public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrl,
+                                          Path checkpointBaseDir, Duration dhtOpsFrequency, double dhtFpr,
+                                          Duration dhtEventValidTO, int dhtBias, int jdbcMaxConnections,
+                                          double dhtPbyz) {
     }
 }

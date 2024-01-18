@@ -6,18 +6,18 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The Key Event Receipt Log
@@ -29,7 +29,7 @@ public interface KERL extends KEL {
     default KeyStateWithEndorsementsAndValidations getKeyStateWithEndorsementsAndValidations(
     EventCoordinates coordinates) {
         var ks = getKeyStateWithAttachments(coordinates);
-        if (ks != null) {
+        if (ks == null) {
             return null;
         }
         return KeyStateWithEndorsementsAndValidations.create(ks.state(), ks.attachments().endorsements(),
@@ -62,7 +62,6 @@ public interface KERL extends KEL {
     }
 
     private List<EventWithAttachments> kerl(KeyEvent event) {
-        var fs = new CompletableFuture<List<EventWithAttachments>>();
         var result = new ArrayList<EventWithAttachments>();
         Attachment a = getAttachment(event.getCoordinates());
 
@@ -81,35 +80,6 @@ public interface KERL extends KEL {
     }
 
     record EventWithAttachments(KeyEvent event, Attachment attachments) {
-
-        static EventWithAttachments fromBase64(String encoded) {
-            var decoder = Base64.getUrlDecoder();
-            String[] split = encoded.split("\\|");
-            Attachment attachment = null;
-            if (split.length == 3) {
-                try {
-                    attachment = Attachment.of(
-                    com.salesforce.apollo.stereotomy.event.proto.Attachment.parseFrom(decoder.decode(split[2])));
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalArgumentException("Invalid attachment: " + encoded);
-                }
-            } else if (split.length != 2) {
-                throw new IllegalArgumentException("Invalid encoding: " + encoded);
-            }
-            return new EventWithAttachments(ProtobufEventFactory.toKeyEvent(decoder.decode(split[1]), split[0]),
-                                            attachment);
-        }
-
-        public String toBase64() {
-            var encoder = Base64.getUrlEncoder().withoutPadding();
-            var attachBytes =
-            attachments == null ? com.salesforce.apollo.stereotomy.event.proto.Attachment.getDefaultInstance()
-                                                                                         .toByteArray()
-                                : attachments.toAttachemente().toByteArray();
-            var encoded =
-            event.getIlk() + "|" + encoder.encodeToString(event.getBytes()) + "|" + encoder.encodeToString(attachBytes);
-            return encoded;
-        }
 
         public KeyEventWithAttachments toKeyEvente() {
             var builder = KeyEventWithAttachments.newBuilder();

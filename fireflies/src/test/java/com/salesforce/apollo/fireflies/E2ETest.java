@@ -49,21 +49,21 @@ public class E2ETest {
     private static final int                                                         BIAS       = 2;
     private static final int                                                         CARDINALITY;
     private static final double                                                      P_BYZ      = 0.1;
-    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static       boolean                                                     largeTests = Boolean.getBoolean(
+    private static final boolean                                                     largeTests = Boolean.getBoolean(
     "large_tests");
+    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       KERL.AppendKERL                                             kerl;
 
     static {
         CARDINALITY = largeTests ? 30 : 12;
     }
 
-    private List<Router>                            communications = new ArrayList<>();
-    private List<Router>                            gateways       = new ArrayList<>();
-    private Map<Digest, ControlledIdentifierMember> members;
-    private MetricRegistry                          node0Registry;
-    private MetricRegistry                          registry;
-    private List<View>                              views;
+    private final List<Router>                            communications = new ArrayList<>();
+    private final List<Router>                            gateways       = new ArrayList<>();
+    private       Map<Digest, ControlledIdentifierMember> members;
+    private       MetricRegistry                          node0Registry;
+    private       MetricRegistry                          registry;
+    private       List<View>                              views;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -102,7 +102,7 @@ public class E2ETest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getIdentifier().getIdentifier(), new InetSocketAddress(0)))
                                  .limit(largeTests ? 10 : 1)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);

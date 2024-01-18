@@ -29,9 +29,17 @@ public interface ChoamMetrics extends EndpointMetrics {
 
     void publishedBatch(int batchSize, int byteSize, int validations, int reassemblies);
 
+    void transactionCancelled();
+
     void transactionComplete(Throwable t);
 
     Timer transactionLatency();
+
+    void transactionSubmissionError();
+
+    void transactionSubmitRateLimited();
+
+    void transactionSubmitRetriesExhausted();
 
     void transactionSubmitRetry();
 
@@ -39,21 +47,13 @@ public interface ChoamMetrics extends EndpointMetrics {
 
     void transactionSubmittedFail();
 
-    void transactionSubmittedSuccess();
-
-    void transactionTimeout();
-
     void transactionSubmittedInvalidCommittee();
-
-    void transactionSubmittedUnavailable();
-
-    void transactionSubmissionError();
 
     void transactionSubmittedInvalidResult();
 
-    void transactionSubmitRetriesExhausted();
+    void transactionSubmittedSuccess();
 
-    void transactionSubmitRateLimited();
+    void transactionSubmittedUnavailable();
 
-    void transactionCancelled();
+    void transactionTimeout();
 }

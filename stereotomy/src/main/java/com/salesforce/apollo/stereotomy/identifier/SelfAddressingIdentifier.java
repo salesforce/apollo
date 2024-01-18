@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
-import java.util.Objects;
-
-import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
+
+import java.util.Objects;
 
 /**
  * @author hal.hildebrand
@@ -20,6 +20,7 @@ public class SelfAddressingIdentifier implements Identifier, Comparable<SelfAddr
     private final Digest digest;
 
     public SelfAddressingIdentifier(Digest digest) {
+        assert digest != null : "Digest cannot be null";
         this.digest = digest;
     }
 
@@ -33,10 +34,9 @@ public class SelfAddressingIdentifier implements Identifier, Comparable<SelfAddr
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof SelfAddressingIdentifier)) {
+        if (!(obj instanceof SelfAddressingIdentifier other)) {
             return false;
         }
-        SelfAddressingIdentifier other = (SelfAddressingIdentifier) obj;
         return Objects.equals(digest, other.digest);
     }
 

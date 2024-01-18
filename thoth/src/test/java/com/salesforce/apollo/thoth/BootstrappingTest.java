@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -66,9 +65,9 @@ public class BootstrappingTest extends AbstractDhtTest {
         gate.set(true);
         var gorgoneions = routers.values().stream().map(r -> {
             var k = dhts.get(r.getFrom()).asKERL();
-            return new Gorgoneion(Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
-                                  context, new DirectPublisher(new ProtoKERLAdapter(k)), r,
-                                  Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory()), null);
+            return new Gorgoneion(r.getFrom().equals(dhts.firstKey()), t -> true,
+                                  Parameters.newBuilder().setKerl(k).build(), (ControlledIdentifierMember) r.getFrom(),
+                                  context, new DirectPublisher(r.getFrom().getId(), new ProtoKERLAdapter(k)), r, null);
         }).toList();
 
         final var dht = (KerlDHT) dhts.values().stream().findFirst().get();
@@ -112,7 +111,7 @@ public class BootstrappingTest extends AbstractDhtTest {
         final var invitation = gorgoneionClient.apply(Duration.ofSeconds(120));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidationsCount() >= context.majority());
+        assertTrue(invitation.getValidationsCount() >= context.majority(true));
         // Verify client KERL published
         Utils.waitForCondition(30_000, 1000, () -> testKerl.getKeyEvent(client.getEvent().getCoordinates()) != null);
         var keyS = testKerl.getKeyEvent(client.getEvent().getCoordinates());

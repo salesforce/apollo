@@ -6,15 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
-
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author hal.hildebrand
@@ -50,12 +46,12 @@ public interface AttachmentEvent {
         };
 
         static Attachment of(com.salesforce.apollo.stereotomy.event.proto.Attachment attachment) {
-            return new AttachmentImpl(attachment.getSealsList().stream().map(s -> Seal.from(s)).toList(),
+            return new AttachmentImpl(attachment.getSealsList().stream().map(Seal::from).toList(),
                                       attachment.getEndorsementsMap()
                                                 .entrySet()
                                                 .stream()
-                                                .collect(
-                                                Collectors.toMap(e -> e.getKey(), e -> JohnHancock.of(e.getValue()))));
+                                                .collect(Collectors.toMap(Map.Entry::getKey,
+                                                                          e -> JohnHancock.of(e.getValue()))));
         }
 
         Map<Integer, JohnHancock> endorsements();
@@ -64,16 +60,16 @@ public interface AttachmentEvent {
 
         default com.salesforce.apollo.stereotomy.event.proto.Attachment toAttachemente() {
             var builder = com.salesforce.apollo.stereotomy.event.proto.Attachment.newBuilder();
-            builder.addAllSeals(seals().stream().map(s -> s.toSealed()).toList())
+            builder.addAllSeals(seals().stream().map(Seal::toSealed).toList())
                    .putAllEndorsements(endorsements().entrySet()
                                                      .stream()
                                                      .collect(
-                                                     Collectors.toMap(e -> e.getKey(), e -> e.getValue().toSig())));
+                                                     Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toSig())));
             return builder.build();
         }
     }
 
-    static class AttachmentImpl implements Attachment {
+    class AttachmentImpl implements Attachment {
         private final Map<Integer, JohnHancock> endorsements;
         private final List<Seal>                seals;
 

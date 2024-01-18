@@ -7,10 +7,13 @@
 
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.thoth.proto.Interval;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.thoth.proto.Interval;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -29,17 +32,10 @@ public class CombinedIntervals implements Predicate<Digest> {
         if (allIntervals.isEmpty()) {
             return;
         }
-        Collections.sort(allIntervals, new Comparator<KeyInterval>() {
-            @Override
-            public int compare(KeyInterval o1, KeyInterval o2) {
-                int comparison = o1.getBegin().compareTo(o2.getBegin());
-
-                return comparison == 0 // if both intervals begin the same
-                       ? o1.getEnd().compareTo(o2.getEnd()) // compare their ends
-                       : comparison;
-            }
-        });
-        KeyInterval current = allIntervals.get(0);
+        // if both intervals begin the same
+        // compare their ends
+        allIntervals.sort(Comparator.comparing(KeyInterval::getBegin).thenComparing(KeyInterval::getEnd));
+        KeyInterval current = allIntervals.getFirst();
         intervals.add(current);
         for (int i = 1; i < allIntervals.size(); i++) {
             KeyInterval next = allIntervals.get(i);
@@ -62,7 +58,7 @@ public class CombinedIntervals implements Predicate<Digest> {
 
     @Override
     public boolean test(Digest t) {
-        return intervals.stream().filter(i -> i.test(t)).findFirst().isPresent();
+        return intervals.stream().anyMatch(i -> i.test(t));
     }
 
     public List<Interval> toIntervals() {

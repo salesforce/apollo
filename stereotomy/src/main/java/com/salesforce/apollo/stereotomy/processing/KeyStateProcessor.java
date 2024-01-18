@@ -44,8 +44,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
         var witnessThreshold = currentState.getWitnessThreshold();
         var witnesses = currentState.getWitnesses();
 
-        if (event instanceof RotationEvent) {
-            var re = (RotationEvent) event;
+        if (event instanceof RotationEvent re) {
             signingThreshold = re.getSigningThreshold();
             keys = re.getKeys();
             nextKeyConfigugurationDigest = re.getNextKeysDigest();
@@ -55,13 +54,11 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
             witnesses.removeAll(re.getWitnessesRemovedList());
             witnesses.addAll(re.getWitnessesAddedList());
         }
-        KeyState state = KeyStateImpl.newKeyState(event.getIdentifier(), signingThreshold, keys,
-                nextKeyConfigugurationDigest.orElse(null), witnessThreshold,
-                witnesses, currentState.configurationTraits(), event,
-                lastEstablishmentEvent,
-                currentState.getDelegatingIdentifier().orElse(null),
-                events.getDigestAlgorithm().digest(event.getBytes()));
-        return state;
+        return KeyStateImpl.newKeyState(event.getIdentifier(), signingThreshold, keys,
+                                        nextKeyConfigugurationDigest.orElse(null), witnessThreshold, witnesses,
+                                        currentState.configurationTraits(), event, lastEstablishmentEvent,
+                                        currentState.getDelegatingIdentifier().orElse(null),
+                                        events.getDigestAlgorithm().digest(event.getBytes()));
     }
 
 }

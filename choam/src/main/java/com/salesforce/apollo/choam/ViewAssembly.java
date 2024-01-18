@@ -64,7 +64,7 @@ public class ViewAssembly {
         this.publisher = publisher;
         nextAssembly = Committee.viewMembersOf(nextViewId, params().context())
                                 .stream()
-                                .collect(Collectors.toMap(m -> m.getId(), m -> m));
+                                .collect(Collectors.toMap(Member::getId, m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms);
 
@@ -126,14 +126,14 @@ public class ViewAssembly {
         return lre -> {
             lre.stream()
                .flatMap(re -> re.getMembersList().stream())
-               .map(e -> join(e))
-               .filter(r -> r != null)
+               .map(this::join)
+               .filter(Objects::nonNull)
                .reduce((a, b) -> Reassemble.newBuilder(a)
                                            .addAllMembers(b.getMembersList())
                                            .addAllValidations(b.getValidationsList())
                                            .build())
                .ifPresent(publisher);
-            lre.stream().flatMap(re -> re.getValidationsList().stream()).forEach(e -> validate(e));
+            lre.stream().flatMap(re -> re.getValidationsList().stream()).forEach(this::validate);
         };
     }
 
@@ -144,7 +144,7 @@ public class ViewAssembly {
 
         final var delay = retryDelay.get();
         if (delay.compareTo(params().producer().maxGossipDelay()) < 0) {
-            retryDelay.accumulateAndGet(Duration.ofMillis(100), (a, b) -> a.plus(b));
+            retryDelay.accumulateAndGet(Duration.ofMillis(100), Duration::plus);
         }
 
         log.trace("Proposal incomplete of: {} gathered: {} desired: {}, retrying: {} on: {}", nextViewId,
@@ -232,7 +232,7 @@ public class ViewAssembly {
             }
             var validations = unassigned.remove(mid);
             if (validations != null) {
-                validations.forEach(v -> validate(v));
+                validations.forEach(this::validate);
             }
             if (proposals.size() == nextAssembly.size()) {
                 transitions.gathered();
@@ -248,7 +248,7 @@ public class ViewAssembly {
     private Join joinOf(Proposed candidate) {
         final List<Certification> witnesses = candidate.validations.values()
                                                                    .stream()
-                                                                   .map(v -> v.getWitness())
+                                                                   .map(Validate::getWitness)
                                                                    .sorted(
                                                                    Comparator.comparing(c -> new Digest(c.getId())))
                                                                    .collect(Collectors.toList());
@@ -297,9 +297,6 @@ public class ViewAssembly {
         if (newCertifier.get()) {
             transitions.validation();
         }
-    }
-
-    record AJoin(Member m, Join j) {
     }
 
     private record Proposed(ViewMember vm, Member member, Map<Member, Validate> validations) {
@@ -364,7 +361,7 @@ public class ViewAssembly {
                                                       }
                                                       log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
                                                       return term.join(nextViewId);
-                                                  }, (futureSailor, term, m) -> consider(futureSailor, term, m), () -> completeSlice(retryDelay, reiterate),
+                                                  }, ViewAssembly.this::consider, () -> completeSlice(retryDelay, reiterate),
                                                   Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
                                                   params().gossipDuration()));
             reiterate.get().run();

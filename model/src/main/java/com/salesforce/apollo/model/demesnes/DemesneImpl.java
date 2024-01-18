@@ -94,7 +94,7 @@ public class DemesneImpl implements Demesne {
         entropy.nextBytes(pwd);
         final var password = Hex.hexChars(pwd);
         final Supplier<char[]> passwordProvider = () -> password;
-        final var keystore = KeyStore.getInstance("JKS");
+        final var keystore = KeyStore.getInstance("JCEKS");
 
         keystore.load(null, password);
 

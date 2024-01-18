@@ -49,8 +49,8 @@ public class ChurnTest {
     private static final double                                                      P_BYZ          = 0.3;
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       KERL.AppendKERL                                             kerl;
-    private              List<Router>                                                communications = new ArrayList<>();
-    private              List<Router>                                                gateways       = new ArrayList<>();
+    private final        List<Router>                                                communications = new ArrayList<>();
+    private final        List<Router>                                                gateways       = new ArrayList<>();
     private              Map<Digest, ControlledIdentifierMember>                     members;
     private              MetricRegistry                                              node0Registry;
     private              MetricRegistry                                              registry;
@@ -96,7 +96,7 @@ public class ChurnTest {
 
         var seeds = members.values()
                            .stream()
-                           .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
+                           .map(m -> new Seed(m.getIdentifier().getIdentifier(), new InetSocketAddress(0)))
                            .limit(25)
                            .toList();
 

@@ -11,12 +11,11 @@ import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.netflix.concurrency.limits.limiter.LifoBlockingLimiter;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.choam.proto.Join;
 import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
@@ -29,6 +28,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.OffHeapStore;
 import org.joou.ULong;
@@ -574,7 +574,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                                                              .backoffRatio(backoffRatio)
                                                                              .build())
                                                              .build();
-            return LifoBlockingLimiter.<Void>newBuilder(limiter)
+            return LifoBlockingLimiter.newBuilder(limiter)
                                       .backlogSize(backlogSize)
                                       .backlogTimeout(backlogDuration)
                                       .build();

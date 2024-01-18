@@ -6,11 +6,10 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import org.joou.ULong;
-
 import com.salesforce.apollo.choam.proto.CertifiedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import org.joou.ULong;
 
 /**
  * @author hal.hildebrand

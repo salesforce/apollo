@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
+
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -13,11 +15,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.function.Supplier;
 
-import com.salesforce.apollo.stereotomy.jks.JksKeyStore;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class JksKeyStoreTest extends StereotomyTests {
 
@@ -25,7 +24,7 @@ public class JksKeyStoreTest extends StereotomyTests {
     protected JksKeyStore initializeKeyStore() {
         final Supplier<char[]> passwordProvider = () -> new char[] { 'f', 'o', 'o' };
         try {
-            final var ks = KeyStore.getInstance("JKS");
+            final var ks = KeyStore.getInstance("jceks");
             ks.load(null, passwordProvider.get());
             return new JksKeyStore(ks, passwordProvider);
         } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {

@@ -8,10 +8,10 @@ package com.salesforce.apollo.fireflies.comm.entrance;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.fireflies.proto.*;
-import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesforce.apollo.fireflies.proto.Gateway;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.Redirect;
+import com.salesforce.apollo.fireflies.proto.Registration;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -21,9 +21,5 @@ public interface EntranceService {
 
     void join(Join request, Digest from, StreamObserver<Gateway> responseObserver, Context timer);
 
-    KeyState_ keyState(IdentAndSeq request, Digest from);
-
     Redirect seed(Registration request, Digest from);
-
-    Validation validateCoords(EventCoords request, Digest from);
 }

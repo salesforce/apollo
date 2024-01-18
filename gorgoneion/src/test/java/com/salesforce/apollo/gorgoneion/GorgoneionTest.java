@@ -8,20 +8,19 @@ package com.salesforce.apollo.gorgoneion;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
-import com.salesforce.apollo.gorgoneion.proto.Attestation;
-import com.salesforce.apollo.gorgoneion.proto.Credentials;
-import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
+import com.salesforce.apollo.gorgoneion.proto.Attestation;
+import com.salesforce.apollo.gorgoneion.proto.Credentials;
+import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
@@ -31,7 +30,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -49,7 +47,7 @@ public class GorgoneionTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var context = Context.<Member>newBuilder().setCardinality(1).build();
+        var context = Context.newBuilder().setCardinality(1).build();
         context.activate(member);
 
         // Gorgoneion service comms
@@ -59,9 +57,8 @@ public class GorgoneionTest {
         // The kerl observer to publish admitted client KERLs to
         var observer = mock(ProtoEventObserver.class);
         @SuppressWarnings("unused")
-        var gorgon = new Gorgoneion(Parameters.newBuilder().setKerl(kerl).build(), member, context, observer,
-                                    gorgonRouter, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
-                                    null);
+        var gorgon = new Gorgoneion(true, t -> true, Parameters.newBuilder().setKerl(kerl).build(), member, context,
+                                    observer, gorgonRouter, null);
 
         // The registering client
         var client = new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -69,7 +66,7 @@ public class GorgoneionTest {
         // Registering client comms
         var clientRouter = new LocalServer(prefix, client).router(ServerConnectionCache.newBuilder().setTarget(2));
         AdmissionsService admissions = mock(AdmissionsService.class);
-        var clientComminications = clientRouter.create(client, context.getId(), admissions, ":admissions",
+        var clientCommunications = clientRouter.create(client, context.getId(), admissions, ":admissions",
                                                        r -> new AdmissionsServer(
                                                        clientRouter.getClientIdentityProvider(), r, null),
                                                        AdmissionsClient.getCreate(),
@@ -77,7 +74,7 @@ public class GorgoneionTest {
         clientRouter.start();
 
         // Admin client link
-        var admin = clientComminications.connect(member);
+        var admin = clientCommunications.connect(member);
 
         assertNotNull(admin);
 
@@ -86,9 +83,8 @@ public class GorgoneionTest {
         final KERL_ cKerl = client.kerl();
         var fs = admin.apply(cKerl, Duration.ofSeconds(1));
         assertNotNull(fs);
-        var signedNonce = fs;
-        assertNotNull(signedNonce.getNonce());
-        assertEquals(client.getIdentifier().getIdentifier().toIdent(), signedNonce.getNonce().getMember());
+        assertNotNull(fs.getNonce());
+        assertEquals(client.getIdentifier().getIdentifier().toIdent(), fs.getNonce().getMember());
 
         // Create attestation
         final var now = Instant.now();
@@ -98,7 +94,7 @@ public class GorgoneionTest {
                                            .setTimestamp(Timestamp.newBuilder()
                                                                   .setSeconds(now.getEpochSecond())
                                                                   .setNanos(now.getNano()))
-                                           .setNonce(client.sign(signedNonce.toByteString()).toSig())
+                                           .setNonce(client.sign(fs.toByteString()).toSig())
                                            .setKerl(client.kerl())
                                            .setAttestation(attestationDocument)
                                            .build();
@@ -109,7 +105,7 @@ public class GorgoneionTest {
                                                                                     .setSignature(client.sign(
                                                                                     attestation.toByteString()).toSig())
                                                                                     .build())
-                                                   .setNonce(signedNonce)
+                                                   .setNonce(fs)
                                                    .build(), Duration.ofSeconds(1));
         gorgonRouter.close(Duration.ofSeconds(1));
         clientRouter.close(Duration.ofSeconds(1));

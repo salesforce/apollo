@@ -8,12 +8,12 @@ package com.salesforce.apollo.thoth.grpc.dht;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesforce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -287,6 +287,37 @@ public class DhtServer extends KerlDhtImplBase {
         }
         routing.evaluate(responseObserver, s -> {
             var response = s.getKeyState(request);
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyState_.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+            if (timer != null) {
+                timer.stop();
+            }
+            var state = response == null ? KeyState_.getDefaultInstance() : response;
+            responseObserver.onNext(state);
+            responseObserver.onCompleted();
+            if (metrics != null) {
+                final var serializedSize = state.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        });
+    }
+
+    @Override
+    public void getKeyStateSeqNum(IdentAndSeq request, StreamObserver<KeyState_> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
+        }
+        routing.evaluate(responseObserver, s -> {
+            var response = s.getKeyState(request.getIdentifier(), request.getSequenceNumber());
             if (response == null) {
                 if (timer != null) {
                     timer.stop();

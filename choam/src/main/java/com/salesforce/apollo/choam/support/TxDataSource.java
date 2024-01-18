@@ -6,16 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.choam.proto.Reassemble;
 import com.salesforce.apollo.choam.proto.Transaction;
@@ -23,6 +13,15 @@ import com.salesforce.apollo.choam.proto.UnitData;
 import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The data source for CHOAM. Provides back pressure to the caller when the capacity of the receiver is exceeded. This

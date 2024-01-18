@@ -50,21 +50,21 @@ public class SwarmTest {
     private static final int                                                         BIAS       = 3;
     private static final int                                                         CARDINALITY;
     private static final double                                                      P_BYZ      = 0.1;
-    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static       boolean                                                     largeTests = Boolean.getBoolean(
+    private static final boolean                                                     largeTests = Boolean.getBoolean(
     "large_tests");
+    private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       KERL.AppendKERL                                             kerl;
 
     static {
         CARDINALITY = largeTests ? 100 : 50;
     }
 
-    private List<Router>                            communications = new ArrayList<>();
-    private List<Router>                            gateways       = new ArrayList<>();
-    private Map<Digest, ControlledIdentifierMember> members;
-    private MetricRegistry                          node0Registry;
-    private MetricRegistry                          registry;
-    private List<View>                              views;
+    private final List<Router>                            communications = new ArrayList<>();
+    private final List<Router>                            gateways       = new ArrayList<>();
+    private       Map<Digest, ControlledIdentifierMember> members;
+    private       MetricRegistry                          node0Registry;
+    private       MetricRegistry                          registry;
+    private       List<View>                              views;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -103,7 +103,7 @@ public class SwarmTest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getEvent(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getIdentifier().getIdentifier(), new InetSocketAddress(0)))
                                  .limit(largeTests ? 100 : 10)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
@@ -197,8 +197,8 @@ public class SwarmTest {
 
     private void initialize() {
         var parameters = Parameters.newBuilder()
-                                   .setMaxPending(largeTests ? 10 : 10)
-                                   .setMaximumTxfr(largeTests ? 20 : 20)
+                                   .setMaxPending(10)
+                                   .setMaximumTxfr(20)
                                    .setJoinRetries(30)
                                    .setFpr(0.00000125)
                                    .setSeedingTimout(Duration.ofSeconds(10))

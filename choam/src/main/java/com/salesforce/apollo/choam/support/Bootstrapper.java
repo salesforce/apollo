@@ -238,7 +238,7 @@ public class Bootstrapper {
         Map<Digest, Initial> valid = votes.entrySet()
                                           .stream()
                                           .filter(e -> e.getValue().hasGenesis()) // Has a genesis
-                                          .filter(e -> genesis == null ? true : genesis.hash.equals(e.getKey())) // If
+                                          .filter(e -> genesis == null || genesis.hash.equals(e.getKey())) // If
                                           // restoring
                                           // from
                                           // known
@@ -306,10 +306,8 @@ public class Bootstrapper {
                                   .filter(i -> genesis.hash.equals(
                                   new HashedCertifiedBlock(params.digestAlgorithm(), i.getGenesis()).hash))
                                   .filter(i -> i.hasCheckpoint())
-                                  .filter(i -> lastCheckpoint != null ? true : lastCheckpoint != null ?
-                                                                               HashedBlock.height(i.getCheckpoint())
-                                                                                          .compareTo(lastCheckpoint) > 0
-                                                                                                      : true)
+                                  .filter(i -> lastCheckpoint != null || lastCheckpoint == null
+                                  || HashedBlock.height(i.getCheckpoint()).compareTo(lastCheckpoint) > 0)
                                   .max((a, b) -> Long.compare(a.getCheckpoint().getBlock().getHeader().getHeight(),
                                                               b.getCheckpoint().getBlock().getHeader().getHeight()))
                                   .orElse(null);

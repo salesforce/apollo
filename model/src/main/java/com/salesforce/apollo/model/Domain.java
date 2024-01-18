@@ -47,8 +47,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.JDBCType;
 import java.util.*;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 import static java.nio.file.Path.of;
@@ -62,7 +60,6 @@ import static java.nio.file.Path.of;
 abstract public class Domain {
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
-    protected final Executor                   executor = Executors.newVirtualThreadPerTaskExecutor();
     protected final CHOAM                      choam;
     protected final ControlledIdentifierMember member;
     protected final Mutator                    mutator;

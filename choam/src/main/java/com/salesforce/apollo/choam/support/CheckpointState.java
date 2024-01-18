@@ -7,9 +7,9 @@
 package com.salesforce.apollo.choam.support;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.proto.Checkpoint;
 import com.salesforce.apollo.choam.proto.Slice;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.utils.Utils;

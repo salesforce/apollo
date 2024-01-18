@@ -11,18 +11,27 @@ import com.chiralbehaviors.tron.FsmExecutor;
 
 /**
  * @author hal.hildebrand
- *
  */
 public interface Reconfiguration {
+    void certify();
+
+    void complete();
+
+    void elect();
+
+    void failed();
+
+    void gather();
+
+    void nominate();
+
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
             @Override
             public Transitions assembled() {
                 return GATHER;
             }
-        },
-        CERTIFICATION {
-
+        }, CERTIFICATION {
             @Override
             public Transitions certified() {
                 return RECONFIGURE;
@@ -47,9 +56,7 @@ public interface Reconfiguration {
             public Transitions validation() {
                 return CERTIFICATION;
             }
-        },
-        GATHER {
-
+        }, GATHER {
             @Entry
             public void assembly() {
                 context().gather();
@@ -64,9 +71,7 @@ public interface Reconfiguration {
             public Transitions gathered() {
                 return NOMINATION;
             }
-        },
-        NOMINATION {
-
+        }, NOMINATION {
             @Entry
             public void nominate() {
                 context().nominate();
@@ -76,8 +81,7 @@ public interface Reconfiguration {
             public Transitions nominated() {
                 return CERTIFICATION;
             }
-        },
-        PROTOCOL_FAILURE {
+        }, PROTOCOL_FAILURE {
             @Override
             public Transitions assembled() {
                 return null;
@@ -122,8 +126,7 @@ public interface Reconfiguration {
             public Transitions validation() {
                 return null;
             }
-        },
-        RECONFIGURE {
+        }, RECONFIGURE {
             @Override
             public Transitions complete() {
                 return RECONFIGURED;
@@ -133,9 +136,7 @@ public interface Reconfiguration {
             public void elect() {
                 context().elect();
             }
-        },
-        RECONFIGURED {
-
+        }, RECONFIGURED {
             @Override
             public Transitions complete() {
                 return null;
@@ -145,7 +146,7 @@ public interface Reconfiguration {
             public void completion() {
                 context().complete();
             }
-        };
+        }
     }
 
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
@@ -181,16 +182,4 @@ public interface Reconfiguration {
             return null;
         }
     }
-
-    void certify();
-
-    void complete();
-
-    void elect();
-
-    void failed();
-
-    void gather();
-
-    void nominate();
 }

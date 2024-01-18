@@ -68,8 +68,8 @@ public class MtlsTest {
         CARDINALITY = LARGE_TESTS ? 20 : 10;
     }
 
-    private List<Router> communications = new ArrayList<>();
-    private List<View>   views;
+    private final List<Router> communications = new ArrayList<>();
+    private       List<View>   views;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -111,7 +111,7 @@ public class MtlsTest {
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var seeds = members.stream()
-                           .map(m -> new Seed(m.getEvent(), endpoints.get(m.getId())))
+                           .map(m -> new Seed(m.getIdentifier().getIdentifier(), endpoints.get(m.getId())))
                            .limit(LARGE_TESTS ? 24 : 3)
                            .toList();
 
@@ -211,10 +211,7 @@ public class MtlsTest {
 
             @Override
             public Digest getMemberId(X509Certificate key) {
-                return ((SelfAddressingIdentifier) Stereotomy.decode(key)
-                                                             .get()
-                                                             .coordinates()
-                                                             .getIdentifier()).getDigest();
+                return ((SelfAddressingIdentifier) Stereotomy.decode(key).get().identifier()).getDigest();
             }
         };
     }

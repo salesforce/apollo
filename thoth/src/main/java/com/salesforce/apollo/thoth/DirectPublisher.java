@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
@@ -24,31 +25,33 @@ public class DirectPublisher implements ProtoEventObserver {
     private final static Logger log = LoggerFactory.getLogger(DirectPublisher.class);
 
     private final ProtoKERLAdapter kerl;
+    private final Digest           member;
 
-    public DirectPublisher(ProtoKERLAdapter kerl) {
+    public DirectPublisher(Digest member, ProtoKERLAdapter kerl) {
+        this.member = member;
         this.kerl = kerl;
     }
 
     @Override
     public void publish(KERL_ kerl_, List<Validations> validations) {
-        log.info("publishing KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
-        validations.stream().forEach(v -> kerl.appendValidations(v));
-        log.info("published KERL[{}] and validations[{}]", kerl_.getEventsCount(), validations.size());
+        log.info("publishing KERL[{}] and validations[{}] on: {}", kerl_.getEventsCount(), validations.size(), member);
+        validations.forEach(kerl::appendValidations);
+        log.info("published KERL[{}] and validations[{}] on: {}", kerl_.getEventsCount(), validations.size(), member);
         kerl.append(kerl_);
     }
 
     @Override
     public void publishAttachments(List<AttachmentEvent> attachments) {
-        log.info("Publishing attachments[{}]", attachments.size());
+        log.info("Publishing attachments[{}] on: {}", attachments.size(), member);
         kerl.appendAttachments(attachments);
-        log.info("Published attachments[{}]", attachments.size());
+        log.info("Published attachments[{}] on: {}", attachments.size(), member);
     }
 
     @Override
     public void publishEvents(List<KeyEvent_> events, List<Validations> validations) {
-        log.info("Publishing events[{}], validations[{}]", events.size(), validations.size());
-        validations.forEach(v -> kerl.appendValidations(v));
+        log.info("Publishing events[{}], validations[{}] on: {}", events.size(), validations.size(), member);
+        validations.forEach(kerl::appendValidations);
         kerl.append(events);
-        log.info("Published events[{}], validations[{}]", events.size(), validations.size());
+        log.info("Published events[{}], validations[{}] on: {}", events.size(), validations.size(), member);
     }
 }

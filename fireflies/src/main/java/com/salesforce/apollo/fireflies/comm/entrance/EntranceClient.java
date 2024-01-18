@@ -11,9 +11,6 @@ import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommu
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesforce.apollo.stereotomy.event.proto.IdentAndSeq;
-import com.salesforce.apollo.stereotomy.event.proto.KeyState_;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -70,11 +67,6 @@ public class EntranceClient implements Entrance {
     }
 
     @Override
-    public KeyState_ keyState(IdentAndSeq idAndSeq) {
-        return client.keyState(idAndSeq);
-    }
-
-    @Override
     public Redirect seed(Registration registration) {
         if (metrics != null) {
             var serializedSize = registration.getSerializedSize();
@@ -92,11 +84,6 @@ public class EntranceClient implements Entrance {
             }
         }
         return result;
-    }
-
-    @Override
-    public Validation validate(EventCoords coords) {
-        return client.validate(coords);
     }
 
 }

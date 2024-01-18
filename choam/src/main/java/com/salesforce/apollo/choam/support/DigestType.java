@@ -20,7 +20,7 @@ public class DigestType extends BasicDataType<Digest> {
 
     @Override
     public int compare(Digest a, Digest b) {
-        return ((Digest) a).compareTo(((Digest) b));
+        return a.compareTo(b);
     }
 
     @Override
@@ -30,7 +30,7 @@ public class DigestType extends BasicDataType<Digest> {
 
     @Override
     public int getMemory(Digest obj) {
-        return ((Digest) obj).getAlgorithm().digestLength() + 1;
+        return obj.getAlgorithm().digestLength() + 1;
     }
 
     @Override

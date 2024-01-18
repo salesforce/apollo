@@ -128,10 +128,10 @@ public class Maat extends DelegatedKERL {
                           r.validating.getIdentifier());
             }
         }
-        var validated = verified >= context.majority();
+        var validated = verified >= context.majority(true);
 
         log.trace("Validated: {} valid: {} out of: {} required: {} for: {}  ", validated, verified, mapped.size(),
-                  ctx.majority(), event.getCoordinates());
+                  ctx.majority(true), event.getCoordinates());
         return validated;
     }
 }

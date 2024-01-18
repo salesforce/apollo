@@ -26,8 +26,8 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -199,7 +199,9 @@ public class FireFliesTrace {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
-            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:", Duration.ofMinutes(1),
+            var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:%s-state".formatted(digest),
+                                                                     Duration.ofMinutes(1),
+                                                                     "jdbc:h2:mem:%s-dht".formatted(digest),
                                                                      checkpointDirBase, Duration.ofMillis(10), 0.00125,
                                                                      Duration.ofMinutes(1), 3, 10, 0.1);
             var node = new ProcessContainerDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
@@ -221,22 +223,20 @@ public class FireFliesTrace {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.get(0).getMember().getEvent(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
         domains.forEach(d -> {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Context<Participant> context, Digest viewId, List<EventCoordinates> joins,
-                                       List<Digest> leaves) {
+                public void viewChange(Context<Participant> context, Digest viewId,
+                                       List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
                     if (context.totalCount() == CARDINALITY) {
-                        System.out.println(
-                        String.format("Full view: %s members: %s on: %s", viewId, context.totalCount(),
-                                      d.getMember().getId()));
+                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.totalCount(),
+                                          d.getMember().getId());
                         countdown.countDown();
                     } else {
-                        System.out.println(
-                        String.format("Members joining: %s members: %s on: %s", viewId, context.totalCount(),
-                                      d.getMember().getId()));
+                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, context.totalCount(),
+                                          d.getMember().getId());
                     }
                 }
             };

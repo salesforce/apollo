@@ -57,16 +57,6 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public PrivateKey privateKey(byte[] bytes) {
-            return ops.privateKey(bytes);
-        }
-
-        @Override
-        public int privateKeyLength() {
-            return 32;
-        }
-
-        @Override
         public PublicKey publicKey(byte[] bytes) {
             return ops.publicKey(bytes);
         }
@@ -142,16 +132,6 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public PrivateKey privateKey(byte[] bytes) {
-            return ops.privateKey(bytes);
-        }
-
-        @Override
-        public int privateKeyLength() {
-            return 56;
-        }
-
-        @Override
         public PublicKey publicKey(byte[] bytes) {
             return ops.publicKey(bytes);
         }
@@ -220,16 +200,6 @@ public enum SignatureAlgorithm {
         @Override
         public KeyPair generateKeyPair(SecureRandom secureRandom) {
             return null;
-        }
-
-        @Override
-        public PrivateKey privateKey(byte[] bytes) {
-            return null;
-        }
-
-        @Override
-        public int privateKeyLength() {
-            return 0;
         }
 
         @Override
@@ -330,14 +300,6 @@ public enum SignatureAlgorithm {
 
     abstract public KeyPair generateKeyPair(SecureRandom secureRandom);
 
-    public KeyPair keyPair(byte[] bytes, byte[] publicKey) {
-        return new KeyPair(publicKey(publicKey), privateKey(bytes));
-    }
-
-    abstract public PrivateKey privateKey(byte[] bytes);
-
-    abstract public int privateKeyLength();
-
     abstract public PublicKey publicKey(byte[] bytes);
 
     abstract public int publicKeyLength();
@@ -374,12 +336,12 @@ public enum SignatureAlgorithm {
         return verify(publicKey, signature, BbBackedInputStream.aggregate(message));
     }
 
-    abstract protected boolean verify(PublicKey publicKey, byte[] signature, InputStream message);
-
     abstract JohnHancock sign(ULong sequenceNumber, PrivateKey[] privateKeys, InputStream message);
 
     final boolean verify(PublicKey publicKey, JohnHancock signature, InputStream message) {
         return new DefaultVerifier(new PublicKey[] { publicKey }).verify(SigningThreshold.unweighted(1), signature,
                                                                          message);
     }
+
+    abstract protected boolean verify(PublicKey publicKey, byte[] signature, InputStream message);
 }

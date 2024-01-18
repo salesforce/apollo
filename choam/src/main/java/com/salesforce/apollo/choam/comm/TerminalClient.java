@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;

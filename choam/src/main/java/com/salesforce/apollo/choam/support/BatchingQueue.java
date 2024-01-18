@@ -1,5 +1,8 @@
 package com.salesforce.apollo.choam.support;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -9,73 +12,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class BatchingQueue<T> {
-    public class Batch {
-        private int           byteSize;
-        private final List<T> events = new ArrayList<>();
-
-        public Iterator<T> iterator() {
-            return events.iterator();
-        }
-
-        @Override
-        public String toString() {
-            return String.format("Batch [bytes=%s, size=%s]", byteSize, events.size());
-        }
-
-        List<T> getEvents() {
-            return events;
-        }
-
-        private boolean addEvent(T event) {
-            if (taken == limit) {
-                return false;
-            }
-            if (events.size() == batchSize) {
-                if (!reapCurrentBatch()) {
-                    log.trace("rejecting event size: {} added: {} taken: {}", size, added, taken);
-                    return false;
-                }
-            }
-            final var eventSize = sizer.apply(event);
-            if (byteSize + eventSize > maxByteSize) {
-                if (!reapCurrentBatch()) {
-                    log.trace("rejecting event size: {} added: {} taken: {}", size, added, taken);
-                    return false;
-                }
-            }
-
-            final var add = events.add(event);
-            if (add) {
-                size = size + 1;
-                byteSize += eventSize;
-                log.trace("adding event: {} size: {} added: {} taken: {}", eventSize, size, added, taken);
-            }
-            return add;
-
-        }
-
-        private void clear() {
-            events.clear();
-            byteSize = 0;
-        }
-    }
-
-    private final static Logger log = LoggerFactory.getLogger(BatchingQueue.class);
-
-    private int                                added;
-    private final int                          batchSize;
-    private final Batch                        currentBatch;
-    private final int                          limit;
-    private final ReentrantLock                lock;
-    private final int                          maxByteSize;
-    private final LinkedBlockingQueue<List<T>> oldBatches = new LinkedBlockingQueue<>();
-    private int                                size;
-    private final Function<T, Integer>         sizer;
-    private int                                taken;
+    private final static Logger                       log        = LoggerFactory.getLogger(BatchingQueue.class);
+    private final        int                          batchSize;
+    private final        Batch                        currentBatch;
+    private final        int                          limit;
+    private final        ReentrantLock                lock;
+    private final        int                          maxByteSize;
+    private final        LinkedBlockingQueue<List<T>> oldBatches = new LinkedBlockingQueue<>();
+    private final        Function<T, Integer>         sizer;
+    private              int                          added;
+    private              int                          size;
+    private              int                          taken;
 
     public BatchingQueue(int limit, int batchSize, Function<T, Integer> sizer, int maxByteSize) {
         this.limit = limit;
@@ -191,5 +139,56 @@ public class BatchingQueue<T> {
         added++;
         currentBatch.clear();
         return added <= limit;
+    }
+
+    public class Batch {
+        private final List<T> events = new ArrayList<>();
+        private       int     byteSize;
+
+        public Iterator<T> iterator() {
+            return events.iterator();
+        }
+
+        @Override
+        public String toString() {
+            return String.format("Batch [bytes=%s, size=%s]", byteSize, events.size());
+        }
+
+        List<T> getEvents() {
+            return events;
+        }
+
+        private boolean addEvent(T event) {
+            if (taken == limit) {
+                return false;
+            }
+            if (events.size() == batchSize) {
+                if (!reapCurrentBatch()) {
+                    log.trace("rejecting event size: {} added: {} taken: {}", size, added, taken);
+                    return false;
+                }
+            }
+            final var eventSize = sizer.apply(event);
+            if (byteSize + eventSize > maxByteSize) {
+                if (!reapCurrentBatch()) {
+                    log.trace("rejecting event size: {} added: {} taken: {}", size, added, taken);
+                    return false;
+                }
+            }
+
+            final var add = events.add(event);
+            if (add) {
+                size = size + 1;
+                byteSize += eventSize;
+                log.trace("adding event: {} size: {} added: {} taken: {}", eventSize, size, added, taken);
+            }
+            return add;
+
+        }
+
+        private void clear() {
+            events.clear();
+            byteSize = 0;
+        }
     }
 }

@@ -118,50 +118,42 @@ public interface Verifiers {
 
     class FixedVerifiers implements Verifiers {
         private final Map<EventCoordinates, Verifier> verifiersByCoordinates;
-        private final Map<Identifier, Verifier>       verifiersByIdentifer;
+        private final Map<Identifier, Verifier>       verifiersByIdentifier;
 
         public FixedVerifiers(Map<EventCoordinates, Verifier> verifiersByCoordinates,
-                              Map<Identifier, Verifier> verifiersByIdentifer) {
+                              Map<Identifier, Verifier> verifiersByIdentifier) {
             this.verifiersByCoordinates = verifiersByCoordinates;
-            this.verifiersByIdentifer = verifiersByIdentifer;
+            this.verifiersByIdentifier = verifiersByIdentifier;
         }
 
         private FixedVerifiers(Pair verifiers) {
             verifiersByCoordinates = verifiers.coords;
-            verifiersByIdentifer = verifiers.ids;
+            verifiersByIdentifier = verifiers.ids;
         }
 
         private static Pair fromEvents(Collection<InceptionEvent> states) {
             Map<EventCoordinates, Verifier> coords = new HashMap<>();
             Map<Identifier, Verifier> ids = new HashMap<>();
-            states.forEach(ks -> {
-                coords.put(ks.getCoordinates(), new DefaultVerifier(ks.getKeys()));
-            });
-            states.forEach(ks -> {
-                ids.put(ks.getIdentifier(), new DefaultVerifier(ks.getKeys()));
-            });
+            states.forEach(ks -> coords.put(ks.getCoordinates(), new DefaultVerifier(ks.getKeys())));
+            states.forEach(ks -> ids.put(ks.getIdentifier(), new DefaultVerifier(ks.getKeys())));
             return new Pair(coords, ids);
         }
 
         private static Pair fromEventState(
         Collection<com.salesforce.apollo.stereotomy.event.proto.InceptionEvent> states) {
-            return fromEvents(states.stream().map(ks -> ProtobufEventFactory.toKeyEvent(ks)).toList());
+            return fromEvents(states.stream().map(ProtobufEventFactory::toKeyEvent).toList());
         }
 
         private static Pair fromKeyState(Collection<KeyState> states) {
             Map<EventCoordinates, Verifier> coords = new HashMap<>();
             Map<Identifier, Verifier> ids = new HashMap<>();
-            states.forEach(ks -> {
-                coords.put(ks.getCoordinates(), new DefaultVerifier(ks.getKeys()));
-            });
-            states.forEach(ks -> {
-                ids.put(ks.getIdentifier(), new DefaultVerifier(ks.getKeys()));
-            });
+            states.forEach(ks -> coords.put(ks.getCoordinates(), new DefaultVerifier(ks.getKeys())));
+            states.forEach(ks -> ids.put(ks.getIdentifier(), new DefaultVerifier(ks.getKeys())));
             return new Pair(coords, ids);
         }
 
         private static Pair fromKeyState_(Collection<KeyState_> states) {
-            return fromKeyState(states.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList());
+            return fromKeyState(states.stream().map(KeyStateImpl::new).map(ks -> (KeyState) ks).toList());
         }
 
         @Override
@@ -171,7 +163,7 @@ public interface Verifiers {
 
         @Override
         public Optional<Verifier> verifierFor(Identifier identifier) {
-            return Optional.ofNullable(verifiersByIdentifer.get(identifier));
+            return Optional.ofNullable(verifiersByIdentifier.get(identifier));
         }
 
         record Pair(Map<EventCoordinates, Verifier> coords, Map<Identifier, Verifier> ids) {

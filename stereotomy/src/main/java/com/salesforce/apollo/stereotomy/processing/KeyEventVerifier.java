@@ -23,7 +23,7 @@ import java.util.Map;
  * @author hal.hildebrand
  */
 public interface KeyEventVerifier {
-    static final Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
+    Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
 
     default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
         KeyEvent lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
@@ -32,7 +32,7 @@ public interface KeyEventVerifier {
         }
         var kee = (EstablishmentEvent) lookup;
         var filtered = new DefaultVerifier(kee.getKeys()).filtered(kee.getSigningThreshold(), signatures,
-                event.getBytes());
+                                                                   event.getBytes());
         if (!filtered.verified()) {
             throw new UnmetSigningThresholdException(event);
         }

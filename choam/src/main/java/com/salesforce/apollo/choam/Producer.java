@@ -6,38 +6,16 @@
  */
 package com.salesforce.apollo.choam;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-
-import com.google.protobuf.ByteString;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.chiralbehaviors.tron.Fsm;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.choam.proto.Assemble;
-import com.salesforce.apollo.choam.proto.Block;
-import com.salesforce.apollo.choam.proto.CertifiedBlock;
-import com.salesforce.apollo.choam.proto.Executions;
-import com.salesforce.apollo.choam.proto.Reassemble;
-import com.salesforce.apollo.choam.proto.SubmitResult;
-import com.salesforce.apollo.choam.proto.SubmitResult.Result;
-import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.proto.UnitData;
-import com.salesforce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Earner;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
+import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.TxDataSource;
@@ -47,6 +25,15 @@ import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * An "Earner"
@@ -55,23 +42,24 @@ import com.salesforce.apollo.membership.Member;
  */
 public class Producer {
 
-    private static final Logger log = LoggerFactory.getLogger(Producer.class);
-    private final    AtomicBoolean                     assembled          = new AtomicBoolean();
-    private final    AtomicReference<ViewAssembly>     assembly           = new AtomicReference<>();
-    private final    AtomicReference<HashedBlock>      checkpoint         = new AtomicReference<>();
-    private final    CommonCommunications<Terminal, ?> comms;
-    private final    Ethereal                          controller;
-    private final    ChRbcGossip                       coordinator;
-    private final    TxDataSource                      ds;
-    private final    int                               lastEpoch;
-    private final    Set<Member>                       nextAssembly       = new HashSet<>();
-    private final    Map<Digest, PendingBlock>         pending            = new ConcurrentHashMap<>();
-    private final    BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
-    private final    AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
-    private final    AtomicBoolean                     started            = new AtomicBoolean(false);
-    private final    Transitions                       transitions;
-    private final    ViewContext                       view;
-    private volatile Digest                            nextViewId;
+    private static final Logger                            log                = LoggerFactory.getLogger(Producer.class);
+    private final        AtomicBoolean                     assembled          = new AtomicBoolean();
+    private final        AtomicReference<ViewAssembly>     assembly           = new AtomicReference<>();
+    private final        AtomicReference<HashedBlock>      checkpoint         = new AtomicReference<>();
+    private final        CommonCommunications<Terminal, ?> comms;
+    private final        Ethereal                          controller;
+    private final        ChRbcGossip                       coordinator;
+    private final        TxDataSource                      ds;
+    private final        int                               lastEpoch;
+    private final        Set<Member>                       nextAssembly       = new HashSet<>();
+    private final        Map<Digest, PendingBlock>         pending            = new ConcurrentHashMap<>();
+    private final        BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
+    private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
+    private final        AtomicBoolean                     started            = new AtomicBoolean(false);
+    private final        Transitions                       transitions;
+    private final        ViewContext                       view;
+    private volatile     Digest                            nextViewId;
+
     public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms, String label) {
         assert view != null;
@@ -115,8 +103,7 @@ public class Producer {
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
-                                  (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
-                                  label);
+                                  transitions::create, this::newEpoch, label);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
@@ -179,22 +166,22 @@ public class Producer {
                 return UnitData.parseFrom(e);
             } catch (InvalidProtocolBufferException ex) {
                 log.error("Error parsing unit data on: {}", params().member().getId());
-                return (UnitData) null;
+                return null;
             }
-        }).filter(e -> e != null).toList();
+        }).filter(Objects::nonNull).toList();
 
         aggregate.stream()
                  .flatMap(e -> e.getValidationsList().stream())
-                 .map(witness -> validate(witness))
-                 .filter(p -> p != null)
+                 .map(this::validate)
+                 .filter(Objects::nonNull)
                  .filter(p -> !p.published.get())
                  .filter(p -> p.witnesses.size() >= params().majority())
-                 .forEach(p -> publish(p));
+                 .forEach(this::publish);
 
         var reass = Reassemble.newBuilder();
-        aggregate.stream().flatMap(e -> e.getReassembliesList().stream()).forEach(r -> {
-            reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList());
-        });
+        aggregate.stream()
+                 .flatMap(e -> e.getReassembliesList().stream())
+                 .forEach(r -> reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList()));
         if (reass.getMembersCount() > 0 || reass.getValidationsCount() > 0) {
             final var ass = assembly.get();
             if (ass != null) {
@@ -215,11 +202,11 @@ public class Producer {
             log.trace("transactions: {} comb hash: {} height: {} on: {}", txns.size(), txns.stream()
                                                                                            .map(t -> CHOAM.hashOf(t,
                                                                                                                   params().digestAlgorithm()))
-                                                                                           .reduce((a, b) -> a.xor(b))
+                                                                                           .reduce(Digest::xor)
                                                                                            .orElse(null),
                       lb.height().add(1), params().member().getId());
             var builder = Executions.newBuilder();
-            txns.forEach(e -> builder.addExecutions(e));
+            txns.forEach(builder::addExecutions);
 
             var next = new HashedBlock(params().digestAlgorithm(),
                                        view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
@@ -273,16 +260,13 @@ public class Producer {
     }
 
     private void publish(PendingBlock p) {
-        //        assert previousBlock.get().hash.equals(Digest.from(p.block.block.getHeader().getPrevious())) : "Pending block: "
-        //        + p.block.hash + " previous: " + Digest.from(p.block.block.getHeader().getPrevious()) + " is not: "
-        //        + previousBlock.get().hash;
         log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member().getId());
         p.published.set(true);
         pending.remove(p.block.hash);
         final var cb = CertifiedBlock.newBuilder()
                                      .setBlock(p.block.block)
                                      .addAllCertifications(
-                                     p.witnesses.values().stream().map(v -> v.getWitness()).toList())
+                                     p.witnesses.values().stream().map(Validate::getWitness).toList())
                                      .build();
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));
     }
@@ -385,7 +369,7 @@ public class Producer {
         @Override
         public void reconfigure() {
             log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
-            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
+            assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();

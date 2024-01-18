@@ -6,21 +6,8 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
-
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-
-import com.salesforce.apollo.choam.proto.Certification;
-import com.salesforce.apollo.choam.proto.Reconfigure;
-import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
-import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -30,6 +17,14 @@ import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
+import org.slf4j.Logger;
+
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
 /**
  * @author hal.hildebrand

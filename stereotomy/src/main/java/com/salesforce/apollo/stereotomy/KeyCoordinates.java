@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import static java.util.Objects.requireNonNull;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KeyCoords;
 
 import java.util.Objects;
 
-import com.salesforce.apollo.stereotomy.event.proto.KeyCoords;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import static java.util.Objects.requireNonNull;
 
 /**
  * The coordinates of a key in the KEL
@@ -22,6 +22,7 @@ public class KeyCoordinates {
 
     private final EventCoordinates establishmentEvent;
     private final int              keyIndex;
+
     public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
         if (keyIndex < 0) {
             throw new IllegalArgumentException("keyIndex must be >= 0");
@@ -46,10 +47,9 @@ public class KeyCoordinates {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof KeyCoordinates)) {
+        if (!(obj instanceof KeyCoordinates other)) {
             return false;
         }
-        KeyCoordinates other = (KeyCoordinates) obj;
         return Objects.equals(establishmentEvent, other.establishmentEvent) && keyIndex == other.keyIndex;
     }
 

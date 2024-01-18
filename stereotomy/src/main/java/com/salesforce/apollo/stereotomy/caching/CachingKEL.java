@@ -53,18 +53,18 @@ public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
                       Caffeine<EventCoordinates, KeyEvent> eventBuilder) {
-        ksCoords = builder.build(new CacheLoader<EventCoordinates, KeyState>() {
+        ksCoords = builder.build(new CacheLoader<>() {
 
             @Override
-            public @Nullable KeyState load(EventCoordinates key) throws Exception {
+            public @Nullable KeyState load(EventCoordinates key) {
                 return complete(kel -> kel.getKeyState(key));
             }
         });
         this.kelSupplier = kelSupplier;
-        this.keyCoords = eventBuilder.build(new CacheLoader<EventCoordinates, KeyEvent>() {
+        this.keyCoords = eventBuilder.build(new CacheLoader<>() {
 
             @Override
-            public @Nullable KeyEvent load(EventCoordinates key) throws Exception {
+            public @Nullable KeyEvent load(EventCoordinates key) {
                 return complete(kel -> kel.getKeyEvent(key));
             }
         });
@@ -104,9 +104,6 @@ public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
         }
         try {
             return complete(kel -> kel.append(events));
-        } catch (ClassCastException e) {
-            log.error("Cannot complete append", e);
-            return null;
         } catch (Throwable e) {
             log.error("Cannot complete append", e);
             return null;
@@ -148,7 +145,7 @@ public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
     @Override
     public DigestAlgorithm getDigestAlgorithm() {
         try {
-            return complete(kel -> kel.getDigestAlgorithm());
+            return complete(KEL::getDigestAlgorithm);
         } catch (Throwable e) {
             log.error("Cannot complete append", e);
             return null;

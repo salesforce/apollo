@@ -77,7 +77,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * is signed by this self same generated basic identifier
      * <p>
      * A new key pair is generated and this becomes the signing key of the certificate. This new public key is then
-     * signed by this identifier's current key state's key(s)..
+     * signed by this identifier's current key state's key(s).
      * <p>
      * The values are encoded into the SubjectDN of the certificate as follows:
      * <ul>

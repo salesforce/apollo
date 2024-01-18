@@ -42,9 +42,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
@@ -55,22 +53,22 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  **/
 public class ProcessContainerDomain extends ProcessDomain {
 
-    private final static Logger                                    log         = LoggerFactory.getLogger(
+    private final static Logger                                                    log                   = LoggerFactory.getLogger(
     ProcessContainerDomain.class);
-    private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
-
-    private final DomainSocketAddress                                       bridge;
-    private final EventLoopGroup                                            clientEventLoopGroup  = IMPL.getEventLoopGroup();
-    private final Path                                                      communicationsDirectory;
-    private final EventLoopGroup                                            contextEventLoopGroup = IMPL.getEventLoopGroup();
-    private final Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
-    private final DomainSocketAddress                                       outerContextEndpoint;
-    private final Server                                                    outerContextService;
-    private final Portal<Member>                                            portal;
-    private final DomainSocketAddress                                       portalEndpoint;
-    private final EventLoopGroup                                            portalEventLoopGroup  = IMPL.getEventLoopGroup();
-    private final Map<String, DomainSocketAddress>                          routes                = new HashMap<>();
-    private final IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification;
+    private final static Class<? extends io.netty.channel.Channel>                 channelType           = IMPL.getChannelType();
+    protected final      Executor                                                  executor              = Executors.newVirtualThreadPerTaskExecutor();
+    private final        DomainSocketAddress                                       bridge;
+    private final        EventLoopGroup                                            clientEventLoopGroup  = IMPL.getEventLoopGroup();
+    private final        Path                                                      communicationsDirectory;
+    private final        EventLoopGroup                                            contextEventLoopGroup = IMPL.getEventLoopGroup();
+    private final        Map<Digest, Demesne>                                      hostedDomains         = new ConcurrentHashMap<>();
+    private final        DomainSocketAddress                                       outerContextEndpoint;
+    private final        Server                                                    outerContextService;
+    private final        Portal<Member>                                            portal;
+    private final        DomainSocketAddress                                       portalEndpoint;
+    private final        EventLoopGroup                                            portalEventLoopGroup  = IMPL.getEventLoopGroup();
+    private final        Map<String, DomainSocketAddress>                          routes                = new HashMap<>();
+    private final        IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification;
 
     public ProcessContainerDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
                                   Parameters.Builder builder, Parameters.RuntimeParameters.Builder runtime,

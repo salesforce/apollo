@@ -31,17 +31,13 @@ public class UniKERLDirect extends UniKERL {
     @Override
     public KeyState append(KeyEvent event) {
         KeyState newState = processor.process(event);
-        dsl.transaction(ctx -> {
-            append(DSL.using(ctx), event, newState, digestAlgorithm);
-        });
+        dsl.transaction(ctx -> append(DSL.using(ctx), event, newState, digestAlgorithm));
         return newState;
     }
 
     @Override
     public Void append(List<AttachmentEvent> events) {
-        dsl.transaction(ctx -> {
-            events.forEach(event -> append(DSL.using(ctx), event));
-        });
+        dsl.transaction(ctx -> events.forEach(event -> append(DSL.using(ctx), event)));
         return null;
     }
 
@@ -62,9 +58,7 @@ public class UniKERLDirect extends UniKERL {
 
     @Override
     public Void appendValidations(EventCoordinates coordinates, Map<EventCoordinates, JohnHancock> validations) {
-        dsl.transaction(ctx -> {
-            appendValidations(DSL.using(ctx), coordinates, validations);
-        });
+        dsl.transaction(ctx -> appendValidations(DSL.using(ctx), coordinates, validations));
         return null;
     }
 }

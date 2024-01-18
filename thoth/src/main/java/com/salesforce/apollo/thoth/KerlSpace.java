@@ -38,6 +38,7 @@ import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -58,12 +59,14 @@ import static com.salesforce.apollo.thoth.schema.tables.PendingValidations.PENDI
 public class KerlSpace {
     private static final Logger             log = LoggerFactory.getLogger(KerlSpace.class);
     private final        JdbcConnectionPool connectionPool;
+    private final        Digest             member;
 
-    public KerlSpace(JdbcConnectionPool connectionPool) {
+    public KerlSpace(JdbcConnectionPool connectionPool, Digest member) {
         this.connectionPool = connectionPool;
+        this.member = member;
     }
 
-    public static void upsert(DSLContext dsl, EventCoords coordinates, Attachment attachment) {
+    public static void upsert(DSLContext dsl, EventCoords coordinates, Attachment attachment, Digest member) {
         final var identBytes = coordinates.getIdentifier().toByteArray();
 
         var ident = dsl.newRecord(IDENTIFIER);
@@ -100,7 +103,7 @@ public class KerlSpace {
         vRec.insert();
     }
 
-    public static void upsert(DSLContext context, KeyEvent event, DigestAlgorithm digestAlgorithm) {
+    public static void upsert(DSLContext context, KeyEvent event, DigestAlgorithm digestAlgorithm, Digest member) {
         final EventCoordinates prevCoords = event.getPrevious();
 
         final var identBytes = event.getIdentifier().toIdent().toByteArray();
@@ -148,11 +151,11 @@ public class KerlSpace {
         }
     }
 
-    public static void upsert(DSLContext dsl, Validations validations) {
+    public static void upsert(DSLContext dsl, Validations validations, Digest member) {
         final var coordinates = validations.getCoordinates();
         final var logCoords = EventCoordinates.from(coordinates);
         final var logIdentifier = Identifier.from(coordinates.getIdentifier());
-        log.trace("Upserting validations for: {}", logCoords);
+        log.trace("Upserting validations for: {} on: {}", logCoords, member);
         final var identBytes = coordinates.getIdentifier().toByteArray();
 
         try {
@@ -177,9 +180,9 @@ public class KerlSpace {
                          ULong.valueOf(coordinates.getSequenceNumber()).toBigInteger())
                     .returningResult(PENDING_COORDINATES.ID)
                     .fetchOne();
-            log.trace("Id: {} for: {}", id.value1(), logCoords);
+            log.trace("Id: {} for: {} on: {}", id.value1(), logCoords, member);
         } catch (DataAccessException e) {
-            log.trace("access exception for: {}", logCoords, e);
+            log.trace("access exception for: {} on: {}", logCoords, e, member);
             // Already exists
             id = dsl.select(PENDING_COORDINATES.ID)
                     .from(PENDING_COORDINATES)
@@ -193,7 +196,7 @@ public class KerlSpace {
                     .fetchOne();
         }
         if (id == null) {
-            log.trace("Null coordinates ID for: {}", coordinates);
+            log.trace("Null coordinates ID for: {} on: {}", coordinates, member);
             return;
         }
         var vRec = dsl.newRecord(PENDING_VALIDATIONS);
@@ -215,11 +218,11 @@ public class KerlSpace {
         try (var connection = connectionPool.getConnection()) {
             var dsl = DSL.using(connection);
             eventDigestsIn(intervals, dsl).forEach(d -> {
-                log.trace("Adding reconcile digest: {}", d);
+                log.trace("Adding reconcile digest: {} on: {}", d, member);
                 bff.add(d);
             });
         } catch (SQLException e) {
-            log.error("Unable populate bloom filter, cannot acquire JDBC connection", e);
+            log.error("Unable populate bloom filter, cannot acquire JDBC connection on: {}", member, e);
         }
         return bff.toBff();
     }
@@ -241,16 +244,16 @@ public class KerlSpace {
                      .stream()
                      .map(KeyInterval::new)
                      .flatMap(i -> eventDigestsIn(i, dsl))
-                     .peek(d -> log.trace("reconcile digest: {}", d))
+                     .peek(d -> log.trace("reconcile digest: {} on: {}", d, member))
                      .filter(d -> !biff.contains(d))
-                     .peek(d -> log.trace("filtered reconcile digest: {}", d))
+                     .peek(d -> log.trace("filtered reconcile digest: {} on: {}", d, member))
                      .map(d -> event(d, dsl, kerl))
-                     .filter(ke -> ke != null)
+                     .filter(Objects::nonNull)
                      .forEach(update::addEvents);
         } catch (SQLException e) {
-            log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);
-            throw new IllegalStateException("Unable to provide estimated cardinality, cannot acquire JDBC connection",
-                                            e);
+            log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection on: {}", member, e);
+            throw new IllegalStateException(
+            "Unable to provide estimated cardinality, cannot acquire JDBC connection on:" + member, e);
         }
         return update;
     }
@@ -263,7 +266,7 @@ public class KerlSpace {
      */
     public void update(List<KeyEventWithAttachmentAndValidations_> events, KERL.AppendKERL kerl) {
         if (events.isEmpty()) {
-            log.trace("No events to update");
+            log.trace("No events to update on: {}", member);
             return;
         }
 
@@ -277,18 +280,18 @@ public class KerlSpace {
                 for (var evente_ : events) {
                     final var event = ProtobufEventFactory.from(evente_.getEvent());
                     if (!evente_.getValidations().equals(Validations.getDefaultInstance())) {
-                        upsert(context, evente_.getValidations());
+                        upsert(context, evente_.getValidations(), member);
                     }
                     if (evente_.hasAttachment()) {
-                        upsert(context, event.getCoordinates().toEventCoords(), evente_.getAttachment());
+                        upsert(context, event.getCoordinates().toEventCoords(), evente_.getAttachment(), member);
                     }
-                    upsert(context, event, digestAlgorithm);
+                    upsert(context, event, digestAlgorithm, member);
                 }
             });
             commitPending(dsl, kerl);
         } catch (SQLException e) {
-            log.error("Unable to update events, cannot acquire JDBC connection", e);
-            throw new IllegalStateException("Unable to update events, cannot acquire JDBC connection", e);
+            log.error("Unable to update events, cannot acquire JDBC connection on: {}", member, e);
+            throw new IllegalStateException("Unable to update events, cannot acquire JDBC connection on: " + member, e);
         }
     }
 
@@ -298,13 +301,13 @@ public class KerlSpace {
             var dsl = DSL.using(connection);
             return dsl.fetchCount(dsl.selectFrom(IDENTIFIER));
         } catch (SQLException e) {
-            log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection", e);
+            log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection on: {}", member, e);
             return 0;
         }
     }
 
     private void commitPending(DSLContext context, KERL.AppendKERL kerl) {
-        log.trace("Commit pending");
+        log.trace("Commit pending on: {}", member);
         context.select(PENDING_COORDINATES.ID, PENDING_EVENT.EVENT, PENDING_COORDINATES.ILK)
                .from(PENDING_EVENT)
                .join(PENDING_COORDINATES)
@@ -330,7 +333,7 @@ public class KerlSpace {
                                                      .setAttachment(attach)
                                                      .build())));
                                   } catch (InvalidProtocolBufferException e) {
-                                      log.error("Cannot deserialize attachment", e);
+                                      log.error("Cannot deserialize attachment on: {}", member, e);
                                   }
                               });
                        context.select(PENDING_VALIDATIONS.VALIDATIONS)
@@ -348,7 +351,7 @@ public class KerlSpace {
                                                                                 v -> JohnHancock.from(
                                                                                 v.getSignature()))));
                                   } catch (InvalidProtocolBufferException e) {
-                                      log.error("Cannot deserialize validation", e);
+                                      log.error("Cannot deserialize validation on: {}", member, e);
                                   }
                               });
                        kerl.append(event);

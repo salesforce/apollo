@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.thoth.proto.Interval;
-import com.salesforce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.thoth.proto.Interval;
+import com.salesforce.apollo.thoth.proto.Intervals;
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
@@ -67,11 +67,11 @@ public class KerlSpaceTest {
         JdbcConnectionPool connectionPoolB = JdbcConnectionPool.create("jdbc:h2:mem:B;DB_CLOSE_DELAY=-1", "", "");
         connectionPoolB.setMaxConnections(10);
 
-        var spaceA = new KerlSpace(connectionPoolA);
+        var spaceA = new KerlSpace(connectionPoolA, DigestAlgorithm.DEFAULT.getOrigin());
         var stereotomyA = new StereotomyImpl(new MemKeyStore(),
                                              new UniKERLDirectPooled(connectionPoolA, digestAlgorithm).create(),
                                              entropy);
-        var spaceB = new KerlSpace(connectionPoolB);
+        var spaceB = new KerlSpace(connectionPoolB, DigestAlgorithm.DEFAULT.getLast());
         var stereotomyB = new StereotomyImpl(new MemKeyStore(),
                                              new UniKERLDirectPooled(connectionPoolB, digestAlgorithm).create(),
                                              entropy);

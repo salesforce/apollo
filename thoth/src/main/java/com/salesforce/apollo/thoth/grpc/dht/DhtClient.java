@@ -8,14 +8,14 @@ package com.salesforce.apollo.thoth.grpc.dht;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
-import com.salesforce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.proto.KerlDhtGrpc;
 
 import java.io.IOException;
 import java.util.List;
@@ -100,7 +100,7 @@ public class DhtClient implements DhtService {
 
             @Override
             public KeyState_ getKeyState(IdentAndSeq identAndSeq) {
-                return null;
+                return service.getKeyState(identAndSeq.getIdentifier(), identAndSeq.getSequenceNumber());
             }
 
             @Override
