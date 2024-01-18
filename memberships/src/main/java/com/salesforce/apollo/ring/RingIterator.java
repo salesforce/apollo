@@ -109,7 +109,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         var next = next(digest);
         log.trace("Iteration: {} tally: {} for digest: {} on: {} ring: {} complete: false on: {}", iteration(),
                   tally.get(), digest, context.getId(), next.ring(), member.getId());
-        if (next.link() == null) {
+        if (next == null || next.link() == null) {
             log.trace("No successor found for digest: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
                       context.getId(), iteration(), traversed, context.ring(currentIndex).stream().toList(),
                       member.getId());

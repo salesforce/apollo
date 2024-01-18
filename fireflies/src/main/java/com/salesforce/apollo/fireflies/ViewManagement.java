@@ -102,6 +102,11 @@ public class ViewManagement {
         }
     }
 
+    int cardinality() {
+        var hex = diadem.get();
+        return hex != null ? hex.getCardinality() : context.cardinality();
+    }
+
     void clear() {
         joins.clear();
         resetBootstrapView();
@@ -187,8 +192,8 @@ public class ViewManagement {
 
         log.info(
         "Installed view: {} from: {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
-        currentView.get(), previousView, diadem.get(), context.getId(), context.cardinality(),
-        context.allMembers().count(), pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
+        currentView.get(), previousView, diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
+        pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
 
         view.notifyListeners(joining, ballot.leaving);
     }
@@ -199,19 +204,19 @@ public class ViewManagement {
     void join() {
         joinLock.lock();
         try {
-            assert context.totalCount() == context.cardinality();
+            assert context.totalCount() == cardinality();
             if (joined()) {
                 return;
             }
             var current = currentView();
-            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
-                     context.totalCount(), node.getId());
+            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+                     node.getId());
             var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(Participant::getId),
                                                 view.bootstrapView(), params.crowns());
 
             if (!current.equals(calculated.compactWrapped())) {
                 log.error("Crown: {} does not produce view: {} cardinality: {} count: {} on: {}",
-                          calculated.compactWrapped(), currentView(), context.cardinality(), context.totalCount(),
+                          calculated.compactWrapped(), currentView(), cardinality(), context.totalCount(),
                           node.getId());
                 view.stop();
                 throw new IllegalStateException("Invalid crown");
@@ -225,8 +230,8 @@ public class ViewManagement {
             if (metrics != null) {
                 metrics.viewChanges().mark();
             }
-            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, context.cardinality(),
-                     context.totalCount(), node.getId());
+            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+                     node.getId());
             onJoined.complete(null);
         } finally {
             joinLock.unlock();
@@ -258,10 +263,10 @@ public class ViewManagement {
         view.stable(() -> {
             var thisView = currentView();
             log.debug("Join requested from: {} view: {} context: {} cardinality: {} on: {}", from, thisView,
-                      context.getId(), context.cardinality(), node.getId());
+                      context.getId(), cardinality(), node.getId());
             if (contains(from)) {
                 log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
-                          context.getId(), context.cardinality(), node.getId());
+                          context.getId(), cardinality(), node.getId());
                 joined(context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
                               .stream()
                               .map(p -> p.note.getWrapped())
@@ -276,8 +281,7 @@ public class ViewManagement {
             if (!View.isValidMask(note.getMask(), context)) {
                 log.warn(
                 "Invalid join mask: {} majority: {} from member: {} view: {}  context: {} cardinality: {} on: {}",
-                note.getMask(), context.majority(), from, thisView, context.getId(), context.cardinality(),
-                node.getId());
+                note.getMask(), context.majority(), from, thisView, context.getId(), cardinality(), node.getId());
             }
             if (pendingJoins.size() >= params.maxPending()) {
                 responseObserver.onError(
@@ -286,7 +290,7 @@ public class ViewManagement {
             }
             pendingJoins.computeIfAbsent(from, d -> seeds -> {
                 log.info("Gateway established for: {} view: {}  context: {} cardinality: {} on: {}", from,
-                         currentView(), context.getId(), context.cardinality(), node.getId());
+                         currentView(), context.getId(), cardinality(), node.getId());
                 joined(seeds, from, responseObserver, timer);
             });
             joins.put(note.getId(), note);
@@ -326,8 +330,8 @@ public class ViewManagement {
 
             view.introduced();
             log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
-                     bound.successors().size(), context.cardinality(), context.totalCount(), node.getId());
-            if (context.totalCount() == context.cardinality()) {
+                     bound.successors().size(), cardinality(), context.totalCount(), node.getId());
+            if (context.totalCount() == cardinality()) {
                 join();
             } else {
                 populate(new ArrayList<>(context.activeMembers()));
@@ -363,16 +367,12 @@ public class ViewManagement {
         var repopulate = new AtomicReference<Runnable>();
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         repopulate.set(() -> populate.iterate((link, m) -> {
-            log.debug("Populating: {} contacting: {} on: {}", context.getId(), link.getMember().getId(), node.getId());
-            view.tick();
             return view.gossip(link, 0);
         }, (futureSailor, link, m) -> {
             futureSailor.ifPresent(g -> {
                 if (g.hasRedirect()) {
                     final Participant member = (Participant) link.getMember();
-                    if (g.hasRedirect()) {
-                        view.stable(() -> view.redirect(member, g, 0));
-                    }
+                    view.stable(() -> view.redirect(member, g, 0));
                 } else {
                     view.stable(() -> view.processUpdates(g));
                 }
@@ -456,7 +456,7 @@ public class ViewManagement {
                            .setView(currentView().toDigeste())
                            .addAllSample(
                            sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSignedNote).toList())
-                           .setCardinality(context.cardinality())
+                           .setCardinality(cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())
                            .build();

@@ -206,8 +206,8 @@ public class View {
         Entropy.secureShuffle(seeds);
         viewManagement.start(onJoin, seeds.isEmpty());
 
-        log.info("Starting: {} cardinality: {} tolerance: {} seeds: {} on: {}", context.getId(), context.cardinality(),
-                 context.toleranceLevel(), seeds.size(), node.getId());
+        log.info("Starting: {} cardinality: {} tolerance: {} seeds: {} on: {}", context.getId(),
+                 viewManagement.cardinality(), context.toleranceLevel(), seeds.size(), node.getId());
         viewManagement.clear();
         roundTimers.reset();
         context.clear();
@@ -309,12 +309,14 @@ public class View {
             if (accused) {
                 checkInvalidations(member);
             }
-            if (!viewManagement.joined() && context.totalCount() == context.cardinality()) {
-                assert context.totalCount() == context.cardinality();
+            if (!viewManagement.joined() && context.totalCount() == viewManagement.cardinality()) {
+                assert context.totalCount() == viewManagement.cardinality();
                 viewManagement.join();
             } else {
-                assert context.totalCount() <= context.cardinality() : "total: " + context.totalCount() + " card: "
-                + context.cardinality();
+                // This assertion needs to accommodate invalid diadem cardinality during view installation, as the diadem
+                // is from the previous view until all joining member have... joined.
+                assert context.totalCount() <= Math.max(viewManagement.cardinality(), context.cardinality()) : "total: "
+                + context.totalCount() + " card: " + viewManagement.cardinality();
             }
             return true;
         });
@@ -361,14 +363,14 @@ public class View {
                              .orElse(null);
             if (max != null && max.getCount() >= superMajority) {
                 log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
-                         superMajority, context.cardinality(), currentView(), node.getId());
+                         superMajority, viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
                 observations.clear();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), superMajority, context.cardinality(),
+                         observations.size(), superMajority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
             }
 
@@ -1271,7 +1273,7 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), context.cardinality(),
+            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
                       context.totalCount(), node.getId());
         }
     }
