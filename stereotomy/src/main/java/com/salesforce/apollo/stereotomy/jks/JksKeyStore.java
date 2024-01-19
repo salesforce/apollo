@@ -140,14 +140,16 @@ public class JksKeyStore implements StereotomyKeyStore {
                 return Optional.empty();
             }
         } catch (KeyStoreException e) {
-            log.error("Unable to query keystore for: {}", keyCoordinates != null ? keyCoordinates : alias, e);
+            log.error("Unable to query keystore for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
+                      e.getMessage());
             return Optional.empty();
         }
         Certificate cert;
         try {
             cert = keyStore.getCertificate(alias);
         } catch (KeyStoreException e) {
-            log.error("Unable to retrieve certificate for: {}", keyCoordinates != null ? keyCoordinates : alias, e);
+            log.error("Unable to retrieve certificate for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
+                      e.getMessage());
             return Optional.empty();
         }
         var publicKey = cert.getPublicKey();
@@ -155,7 +157,8 @@ public class JksKeyStore implements StereotomyKeyStore {
         try {
             privateKey = (PrivateKey) keyStore.getKey(alias, passwordProvider.get());
         } catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException e) {
-            log.error("Unable to retrieve certificate for: {}", keyCoordinates != null ? keyCoordinates : alias, e);
+            log.error("Unable to retrieve certificate for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
+                      e.getMessage());
             return Optional.empty();
         }
         return Optional.of(new KeyPair(publicKey, privateKey));

@@ -83,6 +83,7 @@ public class View {
     View.class);
     private static final String                                      SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
     final                CommonCommunications<Fireflies, Service>    comm;
+    final                AtomicBoolean                               started               = new AtomicBoolean();
     private final        CommonCommunications<Entrance, Service>     approaches;
     private final        Context<Participant>                        context;
     private final        DigestAlgorithm                             digestAlgo;
@@ -96,7 +97,6 @@ public class View {
     private final        ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
     private final        RoundScheduler                              roundTimers;
     private final        Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
-    private final        AtomicBoolean                               started               = new AtomicBoolean();
     private final        Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
     private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);

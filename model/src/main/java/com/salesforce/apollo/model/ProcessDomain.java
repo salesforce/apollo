@@ -118,6 +118,7 @@ public class ProcessDomain extends Domain {
 
     protected void stopServices() {
         dht.stop();
+        foundation.stop();
     }
 
     public record ProcessDomainParameters(String dbURL, Duration dhtOperationsTimeout, String dhtDbUrl,

@@ -195,6 +195,9 @@ public class Gorgoneion {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof StatusRuntimeException sre) {
+                throw sre;
+            }
             throw new RuntimeException(e.getCause());
         }
     }
@@ -314,7 +317,14 @@ public class Gorgoneion {
                 new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
                 return;
             }
-            SignedNonce sn = generateNonce(request);
+            SignedNonce sn;
+            try {
+                sn = generateNonce(request);
+            } catch (StatusRuntimeException sre) {
+                responseObserver.onError(sre);
+                return;
+            }
+
             if (sn == null) {
                 responseObserver.onError(
                 new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid application")));
