@@ -48,4 +48,26 @@ public interface EventValidation {
     boolean validate(EstablishmentEvent event);
 
     boolean validate(Identifier identifier);
+
+    class DelegatedValidation implements EventValidation {
+        private volatile EventValidation delegate;
+
+        public DelegatedValidation(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
+        public void setDelegate(EventValidation delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public boolean validate(Identifier identifier) {
+            return delegate.validate(identifier);
+        }
+
+        @Override
+        public boolean validate(EstablishmentEvent event) {
+            return delegate.validate(event);
+        }
+    }
 }

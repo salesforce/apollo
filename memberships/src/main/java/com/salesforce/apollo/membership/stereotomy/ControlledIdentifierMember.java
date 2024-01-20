@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.membership.stereotomy;
 
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Member;
@@ -14,7 +13,9 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.time.Duration;
@@ -36,8 +37,7 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public SignatureAlgorithm algorithm() {
-        Signer signer = identifier.getSigner();
-        return signer.algorithm();
+        return identifier.algorithm();
     }
 
     @Override
@@ -95,6 +95,10 @@ public class ControlledIdentifierMember implements SigningMember {
     @Override
     public JohnHancock sign(InputStream message) {
         Signer signer = identifier.getSigner();
+        if (signer == null) {
+            LoggerFactory.getLogger(ControlledIdentifierMember.class).warn("Null signer for: {}", getId());
+            return algorithm().nullSignature();
+        }
         return signer.sign(message);
     }
 

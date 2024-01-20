@@ -39,6 +39,7 @@ import java.security.Provider;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -55,6 +56,7 @@ public class MtlsServer implements RouterSupplier {
     private final        Member                                  from;
     private final        Context.Key<SSLSession>                 sslSessionContext = Context.key("SSLSession");
     private final        ServerContextSupplier                   supplier;
+    private final        Executor                                executor;
 
     public MtlsServer(Member from, EndpointProvider epProvider, Function<Member, ClientContextSupplier> contextSupplier,
                       ServerContextSupplier supplier) {
@@ -62,6 +64,7 @@ public class MtlsServer implements RouterSupplier {
         this.epProvider = epProvider;
         this.contextSupplier = contextSupplier;
         this.supplier = supplier;
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
             public Digest load(X509Certificate key) throws Exception {
@@ -137,7 +140,6 @@ public class MtlsServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
-                                                             .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),

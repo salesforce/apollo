@@ -122,11 +122,12 @@ public class KerlDHT implements ProtoKERLService {
         this.fpr = falsePositiveRate;
         this.operationsFrequency = operationsFrequency;
         this.scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
+        var kerlAdapter = new KERLAdapter(this, digestAlgorithm);
         this.cache = new CachingKERL(f -> {
             try {
-                return f.apply(new KERLAdapter(this, digestAlgorithm()));
+                return f.apply(kerlAdapter);
             } catch (Throwable t) {
-                log.error("error applying cache", t);
+                log.error("error applying cache on: {}", member.getId(), t);
                 return null;
             }
         });
@@ -150,7 +151,7 @@ public class KerlDHT implements ProtoKERLService {
             try (var k = kerlPool.create()) {
                 return f.apply(wrap.apply(this, wrap(k)));
             } catch (Throwable e) {
-                log.error("Cannot apply kerl", e);
+                log.error("Cannot apply kerl on: {}", member.getId(), e);
                 return null;
             }
         });

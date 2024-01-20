@@ -83,6 +83,7 @@ public class View {
     View.class);
     private static final String                                      SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
     final                CommonCommunications<Fireflies, Service>    comm;
+    final                AtomicBoolean                               started               = new AtomicBoolean();
     private final        CommonCommunications<Entrance, Service>     approaches;
     private final        Context<Participant>                        context;
     private final        DigestAlgorithm                             digestAlgo;
@@ -96,7 +97,6 @@ public class View {
     private final        ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
     private final        RoundScheduler                              roundTimers;
     private final        Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
-    private final        AtomicBoolean                               started               = new AtomicBoolean();
     private final        Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
     private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);
@@ -338,6 +338,9 @@ public class View {
      * Finalize the view change
      */
     void finalizeViewChange() {
+        if (!started.get()) {
+            return;
+        }
         viewChange(() -> {
             final var cardinality = context.memberCount();
             final var superMajority = cardinality - ((cardinality - 1) / 4);
@@ -499,6 +502,9 @@ public class View {
     void scheduleFinalizeViewChange(final int finalizeViewRounds) {
         //        log.trace("View change finalization scheduled: {} rounds for: {} joining: {} leaving: {} on: {}",
         //                  finalizeViewRounds, currentView(), joins.size(), context.getOffline().size(), node.getId());
+        if (!started.get()) {
+            return;
+        }
         timers.put(FINALIZE_VIEW_CHANGE,
                    roundTimers.schedule(FINALIZE_VIEW_CHANGE, this::finalizeViewChange, finalizeViewRounds));
     }
@@ -510,6 +516,9 @@ public class View {
     void scheduleViewChange(final int viewChangeRounds) {
         //        log.trace("Schedule view change: {} rounds for: {}   on: {}", viewChangeRounds, currentView(),
         //                  node.getId());
+        if (!started.get()) {
+            return;
+        }
         timers.put(SCHEDULED_VIEW_CHANGE,
                    roundTimers.schedule(SCHEDULED_VIEW_CHANGE, viewManagement::maybeViewChange, viewChangeRounds));
     }
@@ -620,15 +629,18 @@ public class View {
                               node.getId());
                     break;
                 case RESOURCE_EXHAUSTED:
-                    log.trace("Unavailable for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
-                              p.getId(), node.getId());
+                    log.trace("Resource exhausted for gossip: {} view: {} from: {} on: {}", sre.getStatus(),
+                              currentView(), p.getId(), node.getId());
                     break;
                 case CANCELLED:
                     log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
                               node.getId());
                     break;
+                case UNAVAILABLE:
+                    accuse(p, ring, sre);
+                    break;
                 default:
-                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), p.getId(), currentView(),
+                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
                               node.getId());
                     accuse(p, ring, sre);
                     break;
@@ -811,10 +823,12 @@ public class View {
         }
         var currentObservation = observations.get(observer);
         if (currentObservation != null) {
-            if (observation.getChange().getAttempt() <= currentObservation.getChange().getAttempt()) {
+            if (observation.getChange().getAttempt() < currentObservation.getChange().getAttempt()) {
                 log.trace("Stale observation: {} current: {} view change: {} current: {} offline: {} on: {}",
                           observation.getChange().getAttempt(), currentObservation.getChange().getAttempt(), inView,
                           currentView(), observer, node.getId());
+                return false;
+            } else if (observation.getChange().getAttempt() < currentObservation.getChange().getAttempt()) {
                 return false;
             }
         }
@@ -1890,7 +1904,7 @@ public class View {
         @Override
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
-                log.trace("Not introduced!, ring: {} from: {} on: {}", request.getRing(), from, node.getId());
+                log.trace("Not introduced!, ring: {} on: {}", request.getRing(), node.getId());
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
                 "Not introduced!, ring: %s from: %s on: %s".formatted(request.getRing(), from, node.getId())));
             }

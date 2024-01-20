@@ -300,6 +300,10 @@ public enum SignatureAlgorithm {
 
     abstract public KeyPair generateKeyPair(SecureRandom secureRandom);
 
+    public JohnHancock nullSignature() {
+        return JohnHancock.nullSignature(this);
+    }
+
     abstract public PublicKey publicKey(byte[] bytes);
 
     abstract public int publicKeyLength();

@@ -36,13 +36,13 @@
     <properties>
         <micrometer.version>1.9.5</micrometer.version>
         <jackson.version>2.15.2</jackson.version>
-        <dropwizard.version>4.0.0-beta.3</dropwizard.version>
+        <dropwizard.version>4.0.5</dropwizard.version>
         <h2.version>2.2.220</h2.version>
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.74</bc.version>
         <logback.version>1.4.12</logback.version>
-        <grpc.version>1.60.1</grpc.version>
-        <protobuf.version>3.25.1</protobuf.version>
+        <grpc.version>1.61.0</grpc.version>
+        <protobuf.version>3.25.2</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <netty.version>4.1.100.Final</netty.version>
         <native.maven.plugin.version>0.9.27</native.maven.plugin.version>

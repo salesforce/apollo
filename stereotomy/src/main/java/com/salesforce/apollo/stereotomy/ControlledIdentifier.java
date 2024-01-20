@@ -31,6 +31,8 @@ import java.util.Optional;
  * @author hal.hildebrand
  */
 public interface ControlledIdentifier<D extends Identifier> extends BoundIdentifier<D> {
+    SignatureAlgorithm algorithm();
+
     /**
      * @return the binding of the identifier to the current key state
      */

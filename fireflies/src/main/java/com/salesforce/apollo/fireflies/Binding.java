@@ -265,47 +265,57 @@ class Binding {
         final var join = join(v);
         final var abandon = new AtomicInteger();
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        regate.set(() -> redirecting.iterate((link, m) -> {
-            log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
-            try {
-                var g = link.join(join, params.seedingTimeout());
-                if (g == null || g.equals(Gateway.getDefaultInstance())) {
-                    log.info("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
+        regate.set(() -> {
+            if (!view.started.get()) {
+                return;
+            }
+            redirecting.iterate((link, m) -> {
+                if (!view.started.get()) {
+                    return null;
+                }
+                log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
+                try {
+                    var g = link.join(join, params.seedingTimeout());
+                    if (g == null || g.equals(Gateway.getDefaultInstance())) {
+                        log.info("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
+                        abandon.incrementAndGet();
+                        return null;
+                    }
+                    return g;
+                } catch (StatusRuntimeException sre) {
+                    gatewaySRE(v, link, sre, abandon);
+                    return null;
+                } catch (Throwable t) {
+                    log.info("Gateway view: {} error: {} from: {} on: {}", v, t, link.getMember().getId(),
+                             node.getId());
                     abandon.incrementAndGet();
                     return null;
                 }
-                return g;
-            } catch (StatusRuntimeException sre) {
-                gatewaySRE(v, link, sre, abandon);
-                return null;
-            } catch (Throwable t) {
-                log.info("Gateway view: {} error: {} from: {} on: {}", v, t, link.getMember().getId(), node.getId());
-                abandon.incrementAndGet();
-                return null;
-            }
-        }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts, initialSeedSet, v,
-                                                      majority), () -> {
-            if (gateway.isDone()) {
-                return;
-            }
-            if (abandon.get() >= majority) {
-                log.info("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
-                seeding();
-            } else {
-                abandon.set(0);
-                if (retries.get() < params.joinRetries()) {
-                    log.info("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
-                             params.joinRetries(), node.getId());
-                    trusts.clear();
-                    initialSeedSet.clear();
-                    scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
-                                       Entropy.nextBitsStreamLong(params.retryDelay().toNanos()), TimeUnit.NANOSECONDS);
-                } else {
-                    log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
-                    view.stop();
+            }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts,
+                                                          initialSeedSet, v, majority), () -> {
+                if (!view.started.get() || gateway.isDone()) {
+                    return;
                 }
-            }
-        }, scheduler, params.retryDelay()));
+                if (abandon.get() >= majority) {
+                    log.info("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
+                    seeding();
+                } else {
+                    abandon.set(0);
+                    if (retries.get() < params.joinRetries()) {
+                        log.info("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
+                                 params.joinRetries(), node.getId());
+                        trusts.clear();
+                        initialSeedSet.clear();
+                        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
+                                           Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
+                                           TimeUnit.NANOSECONDS);
+                    } else {
+                        log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
+                        view.stop();
+                    }
+                }
+            }, scheduler, params.retryDelay());
+        });
         regate.get().run();
     }
 
