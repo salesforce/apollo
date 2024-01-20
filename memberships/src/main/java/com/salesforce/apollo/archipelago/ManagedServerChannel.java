@@ -7,7 +7,6 @@
 package com.salesforce.apollo.archipelago;
 
 import com.google.common.base.MoreObjects;
-import com.salesforce.apollo.archipelago.ServerConnectionCache.ReleasableManagedChannel;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import io.grpc.*;
@@ -22,10 +21,10 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 public class ManagedServerChannel extends ManagedChannel {
     private final static Logger log = LoggerFactory.getLogger(ManagedServerChannel.class);
 
-    private final Digest                   context;
-    private final ReleasableManagedChannel delegate;
+    private final Digest     context;
+    private final Releasable delegate;
 
-    ManagedServerChannel(Digest context, ReleasableManagedChannel delegate) {
+    ManagedServerChannel(Digest context, Releasable delegate) {
         this.context = context;
         this.delegate = delegate;
     }

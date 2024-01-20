@@ -42,8 +42,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -71,7 +69,6 @@ public class MtlsTest {
     }
 
     private final List<Router> communications = new ArrayList<>();
-    private final Executor     executor       = Executors.newFixedThreadPool(10);
     private       List<View>   views;
 
     @BeforeAll
@@ -131,8 +128,8 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey),
-                                          executor).router(builder);
+            Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(
+            builder);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, Verifiers.NONE, comms,
                             parameters, DigestAlgorithm.DEFAULT, metrics);

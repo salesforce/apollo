@@ -40,6 +40,7 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -58,12 +59,12 @@ public class MtlsServer implements RouterSupplier {
     private final        Executor                                executor;
 
     public MtlsServer(Member from, EndpointProvider epProvider, Function<Member, ClientContextSupplier> contextSupplier,
-                      ServerContextSupplier supplier, Executor executor) {
+                      ServerContextSupplier supplier) {
         this.from = from;
         this.epProvider = epProvider;
         this.contextSupplier = contextSupplier;
         this.supplier = supplier;
-        this.executor = executor;
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
             public Digest load(X509Certificate key) throws Exception {

@@ -100,8 +100,8 @@ public class ServerConnectionCache {
                 }
                 queue.remove(connection);
             }
-            log.trace("Borrowed channel to: {}, borrowed: {}, usage: {} on: {}", connection.member.getId(),
-                      connection.borrowed, connection.usageCount, member);
+            log.trace("Borrowed channel to: {}, borrowed: {} on: {}", connection.member.getId(), connection.borrowed,
+                      member);
             return new ManagedServerChannel(context, connection);
         });
     }
@@ -287,12 +287,11 @@ public class ServerConnectionCache {
         }
     }
 
-    class ReleasableManagedChannel implements Comparable<ReleasableManagedChannel> {
-        private final    AtomicInteger  borrowed   = new AtomicInteger();
+    class ReleasableManagedChannel implements Comparable<ReleasableManagedChannel>, Releasable {
+        private final    AtomicInteger  borrowed = new AtomicInteger();
         private final    ManagedChannel channel;
         private final    Instant        created;
         private final    Member         member;
-        private final    AtomicInteger  usageCount = new AtomicInteger();
         private final    Digest         from;
         private volatile Instant        lastUsed;
 
@@ -306,7 +305,7 @@ public class ServerConnectionCache {
 
         @Override
         public int compareTo(ReleasableManagedChannel o) {
-            return Integer.compare(usageCount.get(), o.usageCount.get());
+            return Integer.compare(borrowed.get(), o.borrowed.get());
         }
 
         @Override
@@ -318,14 +317,17 @@ public class ServerConnectionCache {
             return member.equals(((ReleasableManagedChannel) obj).member);
         }
 
+        @Override
         public ManagedChannel getChannel() {
             return channel;
         }
 
+        @Override
         public Digest getFrom() {
             return from;
         }
 
+        @Override
         public Member getMember() {
             return member;
         }
@@ -339,15 +341,18 @@ public class ServerConnectionCache {
             return lastUsed.plus(minIdle).isBefore(Instant.now(clock));
         }
 
+        @Override
         public void release() {
             log.trace("Release connection to: {} on: {}", getMember().getId(), getFrom());
             ServerConnectionCache.this.release(this);
         }
 
+        @Override
         public ManagedChannel shutdown() {
             throw new IllegalStateException("Should not be called");
         }
 
+        @Override
         public ManagedChannel shutdownNow() {
             throw new IllegalStateException("Should not be called");
         }
@@ -361,7 +366,6 @@ public class ServerConnectionCache {
         }
 
         private boolean incrementBorrow() {
-            usageCount.incrementAndGet();
             return borrowed.incrementAndGet() == 1;
         }
     }
