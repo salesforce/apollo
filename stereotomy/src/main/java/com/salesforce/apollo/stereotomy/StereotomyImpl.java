@@ -148,14 +148,12 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     private Signer getSigner(KeyState state) {
-        var identifier = state.getIdentifier();
         var signers = new PrivateKey[state.getKeys().size()];
         EstablishmentEvent e = getLastEstablishingEvent(state);
         for (int i = 0; i < signers.length; i++) {
             Optional<KeyPair> keyPair = getKeyPair(i, e);
             if (keyPair.isEmpty()) {
-                log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
-                         state.getCoordinates(), state.getLastEstablishmentEvent());
+                log.warn("Key pair: {} is unavailable: {}", state.getCoordinates(), state.getLastEstablishmentEvent());
                 return null;
             }
             signers[i] = keyPair.get().getPrivate();
@@ -473,6 +471,12 @@ public class StereotomyImpl implements Stereotomy {
 
         public ControlledIdentifierImpl(KeyState state) {
             super(state);
+        }
+
+        @Override
+        public SignatureAlgorithm algorithm() {
+            EstablishmentEvent e = getLastEstablishingEvent();
+            return SignatureAlgorithm.lookup(e.getKeys().getFirst());
         }
 
         @Override

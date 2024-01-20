@@ -41,16 +41,19 @@ import java.util.concurrent.RejectedExecutionException;
  * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
-    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
+    private final static Logger                              log = LoggerFactory.getLogger(ProcessDomain.class);
+    protected final      KerlDHT                             dht;
+    protected final      View                                foundation;
+    private final        UUID                                listener;
+    private final        EventValidation.DelegatedValidation validations;
+    private final        Verifiers.DelegatedVerifiers        verifiers;
+    private final        ProcessDomainParameters             parameters;
 
-    protected final KerlDHT dht;
-    protected final View    foundation;
-    private final   UUID    listener;
-
-    public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
+    public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
-        super(member, builder, parameters.dbURL, parameters.checkpointBaseDir, runtime);
+        super(member, builder, pdParams.dbURL, pdParams.checkpointBaseDir, runtime);
+        parameters = pdParams;
         var base = Context.<Participant>newBuilder()
                           .setBias(parameters.dhtBias)
                           .setpByz(parameters.dhtPbyz)
@@ -61,10 +64,9 @@ public class ProcessDomain extends Domain {
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
                           parameters.dhtFpr, stereotomyMetrics);
-        var mock = true;
-        var validation = mock ? EventValidation.NONE : dht.getAni().eventValidation(parameters.dhtEventValidTO);
-        var verifiers = mock ? Verifiers.NONE : dht.getVerifiers();
-        this.foundation = new View(base, getMember(), endpoint, validation, verifiers, params.communications(),
+        validations = new EventValidation.DelegatedValidation(EventValidation.NONE);
+        verifiers = new Verifiers.DelegatedVerifiers(Verifiers.NONE);
+        this.foundation = new View(base, getMember(), endpoint, validations, verifiers, params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
         listener = foundation.register(listener());
     }
@@ -79,6 +81,22 @@ public class ProcessDomain extends Domain {
 
     public CertificateWithPrivateKey provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {
         return member.getIdentifier().provision(Instant.now(), duration, signatureAlgorithm);
+    }
+
+    public void setAniValidations() {
+        validations.setDelegate(dht.getAni().eventValidation(parameters.dhtEventValidTO));
+    }
+
+    public void setDhtVerifiers() {
+        verifiers.setDelegate(dht.getVerifiers());
+    }
+
+    public void setValidationsNONE() {
+        validations.setDelegate(EventValidation.NONE);
+    }
+
+    public void setVerifiersNONE() {
+        verifiers.setDelegate(Verifiers.NONE);
     }
 
     @Override

@@ -59,15 +59,18 @@ public class JohnHancock {
         return new JohnHancock(signature);
     }
 
+    public static JohnHancock nullSignature(SignatureAlgorithm algorithm) {
+        return new JohnHancock(algorithm, new byte[0][], ULong.valueOf(0));
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof JohnHancock)) {
+        if (!(obj instanceof JohnHancock other)) {
             return false;
         }
-        JohnHancock other = (JohnHancock) obj;
         return algorithm == other.algorithm && Arrays.equals(bytes, other.bytes);
     }
 

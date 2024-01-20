@@ -43,6 +43,11 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-metrics</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Test only deps below this line -->
 

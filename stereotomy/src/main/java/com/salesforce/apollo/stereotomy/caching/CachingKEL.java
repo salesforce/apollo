@@ -48,7 +48,7 @@ public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
     private final        LoadingCache<EventCoordinates, KeyState> ksCoords;
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier) {
-        this(kelSupplier, defaultKsCoordsBuilder(), defaultEventCoordsBuilder());
+        this(kelSupplier, defaultKsCoordsBuilder(null), defaultEventCoordsBuilder(null));
     }
 
     public CachingKEL(Function<Function<K, ?>, ?> kelSupplier, Caffeine<EventCoordinates, KeyState> builder,
@@ -70,20 +70,28 @@ public class CachingKEL<K extends KEL.AppendKEL> implements KEL.AppendKEL {
         });
     }
 
-    public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((EventCoordinates coords, KeyEvent e, RemovalCause cause) -> log.trace(
-                       "KeyEvent {} was removed ({})", coords, cause));
+    public static Caffeine<EventCoordinates, KeyEvent> defaultEventCoordsBuilder(MetricsStatsCounter metrics) {
+        var builder = Caffeine.newBuilder()
+                              .maximumSize(10_000)
+                              .expireAfterWrite(Duration.ofMinutes(10))
+                              .removalListener((EventCoordinates coords, KeyEvent e, RemovalCause cause) -> log.trace(
+                              "KeyEvent {} was removed ({})", coords, cause));
+        if (metrics != null) {
+            builder.recordStats(() -> metrics);
+        }
+        return builder;
     }
 
-    public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
-        return Caffeine.newBuilder()
-                       .maximumSize(10_000)
-                       .expireAfterWrite(Duration.ofMinutes(10))
-                       .removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace(
-                       "KeyState {} was removed ({})", coords, cause));
+    public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder(MetricsStatsCounter metrics) {
+        var builder = Caffeine.newBuilder()
+                              .maximumSize(10_000)
+                              .expireAfterWrite(Duration.ofMinutes(10))
+                              .removalListener((EventCoordinates coords, KeyState ks, RemovalCause cause) -> log.trace(
+                              "KeyState {} was removed ({})", coords, cause));
+        if (metrics != null) {
+            builder.recordStats(() -> metrics);
+        }
+        return builder;
     }
 
     public KeyState append(KeyEvent event) {
