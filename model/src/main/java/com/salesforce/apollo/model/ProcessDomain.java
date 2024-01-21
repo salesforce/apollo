@@ -45,7 +45,7 @@ public class ProcessDomain extends Domain {
     protected final      KerlDHT                             dht;
     protected final      View                                foundation;
     private final        UUID                                listener;
-    private final        EventValidation.DelegatedValidation validations;
+    private final        EventValidation.DelegatedValidation validation;
     private final        Verifiers.DelegatedVerifiers        verifiers;
     private final        ProcessDomainParameters             parameters;
 
@@ -64,9 +64,9 @@ public class ProcessDomain extends Domain {
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
                           params.digestAlgorithm(), params.communications(), parameters.dhtOperationsTimeout,
                           parameters.dhtFpr, stereotomyMetrics);
-        validations = new EventValidation.DelegatedValidation(EventValidation.NONE);
+        validation = new EventValidation.DelegatedValidation(EventValidation.NONE);
         verifiers = new Verifiers.DelegatedVerifiers(Verifiers.NONE);
-        this.foundation = new View(base, getMember(), endpoint, validations, verifiers, params.communications(),
+        this.foundation = new View(base, getMember(), endpoint, validation, verifiers, params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
         listener = foundation.register(listener());
     }
@@ -83,16 +83,24 @@ public class ProcessDomain extends Domain {
         return member.getIdentifier().provision(Instant.now(), duration, signatureAlgorithm);
     }
 
-    public void setAniValidations() {
-        validations.setDelegate(dht.getAni().eventValidation(parameters.dhtEventValidTO));
+    public void setAniValidation() {
+        validation.setDelegate(dht.getAni().eventValidation(parameters.dhtEventValidTO));
     }
 
     public void setDhtVerifiers() {
         verifiers.setDelegate(dht.getVerifiers());
     }
 
-    public void setValidationsNONE() {
-        validations.setDelegate(EventValidation.NONE);
+    public void setValidation(EventValidation delegate) {
+        validation.setDelegate(delegate);
+    }
+
+    public void setValidationNONE() {
+        validation.setDelegate(EventValidation.NONE);
+    }
+
+    public void setVerifiers(Verifiers v) {
+        verifiers.setDelegate(v);
     }
 
     public void setVerifiersNONE() {

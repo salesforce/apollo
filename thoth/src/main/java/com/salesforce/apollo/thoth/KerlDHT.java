@@ -184,10 +184,6 @@ public class KerlDHT implements ProtoKERLService {
         });
     }
 
-    static <T> T completeIt(T result) {
-        return result;
-    }
-
     public KeyState_ append(AttachmentEvent event) {
         if (event == null) {
             return null;
@@ -232,12 +228,12 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public List<KeyState_> append(KERL_ kerl) {
         if (kerl.getEventsList().isEmpty()) {
-            return completeIt(Collections.emptyList());
+            return Collections.emptyList();
         }
         final var event = kerl.getEventsList().getFirst();
         Digest identifier = digestOf(event, digestAlgorithm());
         if (identifier == null) {
-            return completeIt(Collections.emptyList());
+            return Collections.emptyList();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -307,7 +303,7 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public List<KeyState_> append(List<KeyEvent_> events) {
         if (events.isEmpty()) {
-            return completeIt(Collections.emptyList());
+            return Collections.emptyList();
         }
         List<KeyState_> states = new ArrayList<>();
         events.stream().map(this::append).forEach(states::add);
@@ -317,7 +313,7 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public List<KeyState_> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
         if (events.isEmpty()) {
-            return completeIt(Collections.emptyList());
+            return Collections.emptyList();
         }
         List<KeyState_> states = new ArrayList<>();
         events.stream().map(this::append).forEach(states::add);
@@ -329,12 +325,12 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public Empty appendAttachments(List<AttachmentEvent> events) {
         if (events.isEmpty()) {
-            return completeIt(Empty.getDefaultInstance());
+            return Empty.getDefaultInstance();
         }
         final var event = events.getFirst();
         Digest identifier = digestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
-            return completeIt(Empty.getDefaultInstance());
+            return Empty.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -369,11 +365,11 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public Empty appendValidations(Validations validations) {
         if (validations.getValidationsCount() == 0) {
-            return completeIt(null);
+            return null;
         }
         Digest identifier = digestAlgorithm().digest(validations.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
-            return completeIt(null);
+            return null;
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -426,11 +422,11 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public Attachment getAttachment(EventCoords coordinates) {
         if (coordinates == null) {
-            return completeIt(Attachment.getDefaultInstance());
+            return Attachment.getDefaultInstance();
         }
         Digest identifier = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
-            return completeIt(Attachment.getDefaultInstance());
+            return Attachment.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -462,11 +458,11 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public KERL_ getKERL(Ident identifier) {
         if (identifier == null) {
-            return completeIt(KERL_.getDefaultInstance());
+            return KERL_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
-            return completeIt(KERL_.getDefaultInstance());
+            return KERL_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -497,14 +493,17 @@ public class KerlDHT implements ProtoKERLService {
 
     @Override
     public KeyEvent_ getKeyEvent(EventCoords coordinates) {
+        if (!coordinates.isInitialized()) {
+            return KeyEvent_.getDefaultInstance();
+        }
         var operation = "getKeyEvent(%s)".formatted(EventCoordinates.from(coordinates));
         log.trace("{} on: {}", operation, member.getId());
         if (coordinates == null) {
-            return completeIt(KeyEvent_.getDefaultInstance());
+            return KeyEvent_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return completeIt(KeyEvent_.getDefaultInstance());
+            return KeyEvent_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -537,11 +536,11 @@ public class KerlDHT implements ProtoKERLService {
         var operation = "getKeyState(%s)".formatted(EventCoordinates.from(coordinates));
         log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -574,11 +573,11 @@ public class KerlDHT implements ProtoKERLService {
         var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
         log.info("{} on: {}", operation, member.getId());
         if (identifier == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         var identAndSeq = IdentAndSeq.newBuilder().setIdentifier(identifier).setSequenceNumber(sequenceNumber).build();
         Instant timedOut = Instant.now().plus(operationTimeout);
@@ -610,13 +609,13 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public KeyState_ getKeyState(Ident identifier) {
         if (identifier == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         var operation = "getKeyState(%s)".formatted(Identifier.from(identifier));
         log.info("{} on: {}", operation, member.getId());
         Digest digest = digestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
-            return completeIt(KeyState_.getDefaultInstance());
+            return KeyState_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -648,11 +647,11 @@ public class KerlDHT implements ProtoKERLService {
         var operation = "getKeyStateWithAttachments(%s)".formatted(EventCoordinates.from(coordinates));
         log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
-            return completeIt(KeyStateWithAttachments_.getDefaultInstance());
+            return KeyStateWithAttachments_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return completeIt(KeyStateWithAttachments_.getDefaultInstance());
+            return KeyStateWithAttachments_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -684,11 +683,11 @@ public class KerlDHT implements ProtoKERLService {
         var operation = "getKeyStateWithEndorsementsAndValidations(%s)".formatted(EventCoordinates.from(coordinates));
         log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
-            return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
+            return KeyStateWithEndorsementsAndValidations_.getDefaultInstance();
         }
         Digest digest = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
-            return completeIt(KeyStateWithEndorsementsAndValidations_.getDefaultInstance());
+            return KeyStateWithEndorsementsAndValidations_.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -720,11 +719,11 @@ public class KerlDHT implements ProtoKERLService {
         var operation = "getValidations(%s)".formatted(EventCoordinates.from(coordinates));
         log.info("{} on: {}", operation, member.getId());
         if (coordinates == null) {
-            return completeIt(Validations.getDefaultInstance());
+            return Validations.getDefaultInstance();
         }
         Digest identifier = digestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
-            return completeIt(Validations.getDefaultInstance());
+            return Validations.getDefaultInstance();
         }
         Instant timedOut = Instant.now().plus(operationTimeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
@@ -795,7 +794,7 @@ public class KerlDHT implements ProtoKERLService {
         try {
             return func.apply(new ProtoKERLAdapter(kerl));
         } catch (Throwable t) {
-            log.error("Error completing", t);
+            log.error("Error completing on: {}", member.getId(), t);
             return null;
         }
     }
@@ -839,10 +838,12 @@ public class KerlDHT implements ProtoKERLService {
                                                      database)) {
                 liquibase.update((String) null);
             } catch (LiquibaseException e) {
+                log.error("Unable to initialize schema on: {}", member.getId(), e);
                 throw new IllegalStateException(e);
             }
-        } catch (SQLException e1) {
-            throw new IllegalStateException(e1);
+        } catch (SQLException e) {
+            log.error("Unable to initialize schema on: {}", member.getId(), e);
+            throw new IllegalStateException(e);
         }
     }
 

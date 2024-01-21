@@ -220,18 +220,21 @@ class Binding {
                 log.error("Empty seeding response on: {}", node.getId());
                 return;
             }
-            var view = Digest.from(r.getView());
-            log.info("Rebalancing to cardinality: {} (validate) for: {} context: {} on: {}", r.getCardinality(), view,
-                     context.getId(), node.getId());
-            this.context.rebalance(r.getCardinality());
-            node.nextNote(view);
 
-            log.debug("Completing redirect to view: {} context: {} sample: {} on: {}", view, this.context.getId(),
-                      r.getSampleCount(), node.getId());
-            if (timer != null) {
-                timer.close();
-            }
-            join(r, view, duration);
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                var view = Digest.from(r.getView());
+                log.info("Rebalancing to cardinality: {} (validate) for: {} context: {} on: {}", r.getCardinality(),
+                         view, context.getId(), node.getId());
+                this.context.rebalance(r.getCardinality());
+                node.nextNote(view);
+
+                log.debug("Completing redirect to view: {} context: {} sample: {} on: {}", view, this.context.getId(),
+                          r.getSampleCount(), node.getId());
+                if (timer != null) {
+                    timer.close();
+                }
+                join(r, view, duration);
+            }, log));
         };
     }
 

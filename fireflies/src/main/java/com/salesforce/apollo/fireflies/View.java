@@ -580,6 +580,8 @@ public class View {
         try {
             r.run();
             //            log.error("Exit view change on: {}", node.getId());
+        } catch (Throwable t) {
+            log.error("Error during view change on: {}", node.getId(), t);
         } finally {
             lock.unlock();
         }
