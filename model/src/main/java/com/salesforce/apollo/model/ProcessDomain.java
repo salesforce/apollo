@@ -29,7 +29,6 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
@@ -41,13 +40,13 @@ import java.util.concurrent.RejectedExecutionException;
  * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
-    private final static Logger                              log = LoggerFactory.getLogger(ProcessDomain.class);
+    private final static Logger                              log      = LoggerFactory.getLogger(ProcessDomain.class);
     protected final      KerlDHT                             dht;
     protected final      View                                foundation;
-    private final        UUID                                listener;
     private final        EventValidation.DelegatedValidation validations;
     private final        Verifiers.DelegatedVerifiers        verifiers;
     private final        ProcessDomainParameters             parameters;
+    private final        ViewLifecycleListener               listener = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
@@ -68,7 +67,7 @@ public class ProcessDomain extends Domain {
         verifiers = new Verifiers.DelegatedVerifiers(Verifiers.NONE);
         this.foundation = new View(base, getMember(), endpoint, validations, verifiers, params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
-        listener = foundation.register(listener());
+        foundation.register(listener);
     }
 
     public KerlDHT getDht() {
