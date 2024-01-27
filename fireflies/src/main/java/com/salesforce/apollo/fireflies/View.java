@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -408,11 +409,13 @@ public class View {
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
         final var current = currentView();
         viewNotificationQueue.execute(Utils.wrapped(() -> {
+            var diadem = viewManagement.diadem.get();
             lifecycleListeners.forEach(listener -> {
                 try {
-                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
-                              currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
-                    listener.viewChange(context, current, joining, leaving);
+                    log.trace("Notifying: {} view change: {} diadem: {} cardinality: {} joins: {} leaves: {} on: {} ",
+                              listener, currentView(), diadem, context.totalCount(), joining.size(), leaving.size(),
+                              node.getId());
+                    listener.viewChange(i -> context.getMember(i.getDigest()), diadem, current, joining, leaving);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
                 }
@@ -1473,13 +1476,14 @@ public class View {
         /**
          * Notification of a view change event
          *
-         * @param context - the context for which the view change has occurred
+         * @param members - the source of Members for supplied identifiers
+         * @param diadem  - the wrapped diadem of the view
          * @param viewId  - the Digest identity of the new view
          * @param joins   - the list of joining member's id
          * @param leaves  - the list of leaving member's id
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<SelfAddressingIdentifier> joins,
-                        List<Digest> leaves);
+        void viewChange(Function<SelfAddressingIdentifier, Participant> members, HexBloom diadem, Digest viewId,
+                        List<SelfAddressingIdentifier> joins, List<Digest> leaves);
 
     }
 

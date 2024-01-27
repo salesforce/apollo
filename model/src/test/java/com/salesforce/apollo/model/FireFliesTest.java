@@ -16,11 +16,10 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -41,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -114,14 +114,14 @@ public class FireFliesTest {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Context<Participant> context, Digest viewId,
-                                       List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
-                    if (context.totalCount() == CARDINALITY) {
-                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.totalCount(),
+                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, HexBloom diadem,
+                                       Digest viewId, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
+                    if (diadem.getCardinality() == CARDINALITY) {
+                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
                                           d.getMember().getId());
                         countdown.countDown();
                     } else {
-                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, context.totalCount(),
+                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
                                           d.getMember().getId());
                     }
                 }

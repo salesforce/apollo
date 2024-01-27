@@ -146,8 +146,8 @@ public class ProcessContainerDomain extends ProcessDomain {
     @Override
     protected View.ViewLifecycleListener listener() {
         var delegate = super.listener();
-        return (context, id, join, leaving) -> {
-            delegate.viewChange(context, id, join, leaving);
+        return (context, diadem, id, join, leaving) -> {
+            delegate.viewChange(context, diadem, id, join, leaving);
             log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
                      join.size(), leaving.size(), params.member().getId());
         };

@@ -116,9 +116,9 @@ public class ProcessDomain extends Domain {
     }
 
     protected ViewLifecycleListener listener() {
-        return (context, id, join, leaving) -> {
+        return (context, diadem, id, join, leaving) -> {
             for (var d : join) {
-                params.context().activate(context.getMember(d.getDigest()));
+                params.context().activate(context.apply(d));
             }
             for (var d : leaving) {
                 params.context().remove(d);
