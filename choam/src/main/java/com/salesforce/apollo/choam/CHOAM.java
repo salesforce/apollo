@@ -638,7 +638,6 @@ public class CHOAM {
                   params.member().getId());
         next.set(new nextView(ViewMember.newBuilder()
                                         .setId(params.member().getId().toDigeste())
-                                        .setDiadem(current.toHexBloome())
                                         .setConsensusKey(pubKey)
                                         .setSignature(signed.toSig())
                                         .build(), keyPair));
@@ -1160,7 +1159,7 @@ public class CHOAM {
                 log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
                           ViewContext.print(c.member, params.digestAlgorithm()), params.member().getId());
             }
-            return c.member;
+            return ViewMember.newBuilder(c.member).setDiadem(diadem.get().toIdentityHexBloome()).build();
         }
 
         @Override
@@ -1175,6 +1174,14 @@ public class CHOAM {
 
         @Override
         public SubmitResult submitTxn(Transaction transaction) {
+            if (!servers.hasNext()) {
+                log.trace("Failed submitting txn: {} no servers available in: {} on: {}",
+                          hashOf(transaction, params.digestAlgorithm()), viewId, params.member().getId());
+                return SubmitResult.newBuilder()
+                                   .setResult(Result.ERROR_SUBMITTING)
+                                   .setErrorMsg("no servers available")
+                                   .build();
+            }
             Member target = servers.next();
             try (var link = submissionComm.connect(target)) {
                 if (link == null) {
@@ -1299,11 +1306,16 @@ public class CHOAM {
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
+            var cd = diadem.get();
+            assert cd.equivalent(HexBloom.from(cd.toIdentityHexBloome())) : "Deser: {} not equal to: {}".formatted(
+            HexBloom.from(cd.toIdentityHexBloome()), cd);
             if (log.isDebugEnabled()) {
-                log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
+                log.debug("Joining view: {} diadem: {} from: {} view member: {} on: {}", nextView, cd, from,
                           ViewContext.print(c.member, params.digestAlgorithm()), params.member().getId());
             }
-            return c.member;
+            var vm = ViewMember.newBuilder(c.member).setDiadem(cd.toIdentityHexBloome()).build();
+            assert vm.hasDiadem() && vm.getDiadem().hasMembership();
+            return vm;
         }
 
         @Override

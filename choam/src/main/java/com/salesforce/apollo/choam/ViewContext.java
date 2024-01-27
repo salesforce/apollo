@@ -75,7 +75,7 @@ public class ViewContext {
     }
 
     public HexBloom diadem() {
-        return blockProducer.diadem();
+        return blockProducer == null ? new HexBloom() : blockProducer.diadem();
     }
 
     public Validate generateValidation(HashedBlock block) {

@@ -130,6 +130,7 @@ public class ViewAssemblyTest {
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     return ViewMember.newBuilder()
                                      .setId(m.getId().toDigeste())
+                                     .setDiadem(new HexBloom().toIdentityHexBloome())
                                      .setConsensusKey(consensus)
                                      .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();

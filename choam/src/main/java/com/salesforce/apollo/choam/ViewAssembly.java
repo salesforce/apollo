@@ -14,6 +14,7 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
@@ -167,6 +168,7 @@ public class ViewAssembly {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
             return !gathered();
         }
+        assert member.hasDiadem() && member.getDiadem().hasMembership();
         var vm = new Digest(member.getId());
         if (!m.getId().equals(vm)) {
             log.debug("Invalid join response from: {} expected: {} on: {}", term.getMember().getId(), vm,
@@ -198,7 +200,13 @@ public class ViewAssembly {
             }
             return null;
         }
-
+        final var hex = HexBloom.from(vm.getDiadem());
+        var diadem = view.diadem();
+        if (!diadem.equivalent(hex)) {
+            log.warn("Invalid diadem: {} not equivalent to: {} vm: {} on: {}", hex.compact(), diadem.compact(),
+                     ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+            return null;
+        }
         PubKey encoded = vm.getConsensusKey();
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {

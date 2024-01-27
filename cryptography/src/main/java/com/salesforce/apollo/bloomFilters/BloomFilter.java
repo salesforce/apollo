@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
-import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.proto.Biff;
 import org.joou.ULong;
 
 import java.util.BitSet;
@@ -116,7 +116,8 @@ abstract public class BloomFilter<T> {
     }
 
     public boolean equivalent(BloomFilter<T> other) {
-        return h.equivalent(other.h) && bits.equals(other.bits);
+        var equiv = h.equivalent(other.h) && bits.equals(other.bits);
+        return equiv;
     }
 
     public double fpp(int n) {

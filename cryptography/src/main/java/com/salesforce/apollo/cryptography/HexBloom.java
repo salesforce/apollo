@@ -57,10 +57,8 @@ public class HexBloom {
     }
 
     public HexBloom(HexBloome hb) {
-        this(hb.getCardinality(),
-             hb.getCrownsList().isEmpty() ? Collections.singletonList(DigestAlgorithm.DEFAULT.getLast())
-                                          : hb.getCrownsList().stream().map(d -> Digest.from(d)).toList(),
-             hb.hasMembership() ? BloomFilter.from(hb.getMembership()) : new BloomFilter.DigestBloomFilter(0, 1, 0.1));
+        this(hb.getCardinality(), hb.getCrownsList().stream().map(d -> Digest.from(d)).toList(),
+             BloomFilter.from(hb.getMembership()));
     }
 
     public HexBloom(int cardinality, List<Digest> crowns, BloomFilter<Digest> membership) {
@@ -246,6 +244,7 @@ public class HexBloom {
     }
 
     public static HexBloom from(HexBloome hb) {
+        assert !HexBloome.getDefaultInstance().equals(hb);
         return new HexBloom(hb);
     }
 
