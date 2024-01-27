@@ -20,6 +20,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -109,8 +110,8 @@ public class Producer {
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 
-    public void assembled() {
-        transitions.assembled();
+    public void assembled(HexBloom diadem) {
+        transitions.assembled(diadem);
     }
 
     public Digest getNextViewId() {
@@ -247,6 +248,8 @@ public class Producer {
                                                                                       Assemble.newBuilder()
                                                                                               .setNextView(
                                                                                               vlb.hash.toDigeste())
+                                                                                              .setDiadem(view.diadem()
+                                                                                                             .toHexBloome())
                                                                                               .build(),
                                                                                       checkpoint.get()));
         previousBlock.set(assemble);
@@ -367,14 +370,15 @@ public class Producer {
         }
 
         @Override
-        public void reconfigure() {
-            log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
+        public void reconfigure(HexBloom diadem) {
+            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, diadem.compact(),
+                      params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
-                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                              params().member().getId());
+                    log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
+                              diadem.compact(), getSlate().size(), params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

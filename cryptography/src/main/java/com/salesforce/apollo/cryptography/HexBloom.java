@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.cryptography;
 
-import com.salesforce.apollo.cryptography.proto.HexBloome;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.Primes;
+import com.salesforce.apollo.cryptography.proto.HexBloome;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,7 +36,7 @@ public class HexBloom {
     private final BloomFilter<Digest> membership;
 
     public HexBloom(Digest initial, int count) {
-        assert count > 0;
+        assert count >= 0;
         var hashes = hashes(count);
         crowns = new Digest[count];
         cardinality = 0;
@@ -57,8 +57,10 @@ public class HexBloom {
     }
 
     public HexBloom(HexBloome hb) {
-        this(hb.getCardinality(), hb.getCrownsList().stream().map(d -> Digest.from(d)).toList(),
-             BloomFilter.from(hb.getMembership()));
+        this(hb.getCardinality(),
+             hb.getCrownsList().isEmpty() ? Collections.singletonList(DigestAlgorithm.DEFAULT.getLast())
+                                          : hb.getCrownsList().stream().map(d -> Digest.from(d)).toList(),
+             hb.hasMembership() ? BloomFilter.from(hb.getMembership()) : new BloomFilter.DigestBloomFilter(0, 1, 0.1));
     }
 
     public HexBloom(int cardinality, List<Digest> crowns, BloomFilter<Digest> membership) {
@@ -69,6 +71,10 @@ public class HexBloom {
         }
         this.membership = membership;
         this.cardinality = cardinality;
+    }
+
+    public HexBloom() {
+        this(DigestAlgorithm.DEFAULT.getLast(), 0);
     }
 
     /**

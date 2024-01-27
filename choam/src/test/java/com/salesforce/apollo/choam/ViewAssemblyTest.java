@@ -2,9 +2,6 @@ package com.salesforce.apollo.choam;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.choam.proto.Reassemble;
-import com.salesforce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -14,7 +11,10 @@ import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
+import com.salesforce.apollo.choam.proto.Reassemble;
+import com.salesforce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.cryptography.*;
+import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -53,16 +53,16 @@ import static org.mockito.Mockito.when;
 
 public class ViewAssemblyTest {
 
-    private static short                           CARDINALITY    = 4;
-    private        Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
-    private        Map<SigningMember, Router>      communications = new HashMap<>();
-    private        CountDownLatch                  complete;
-    private        Context<Member>                 context;
-    private        List<Ethereal>                  controllers    = new ArrayList<>();
-    private        Map<SigningMember, VDataSource> dataSources;
-    private        List<ChRbcGossip>               gossipers      = new ArrayList<>();
-    private        List<SigningMember>             members;
-    private        Digest                          nextViewId;
+    private static final short                           CARDINALITY    = 4;
+    private final        Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
+    private final        Map<SigningMember, Router>      communications = new HashMap<>();
+    private final        List<Ethereal>                  controllers    = new ArrayList<>();
+    private final        List<ChRbcGossip>               gossipers      = new ArrayList<>();
+    private              CountDownLatch                  complete;
+    private              Context<Member>                 context;
+    private              Map<SigningMember, VDataSource> dataSources;
+    private              List<SigningMember>             members;
+    private              Digest                          nextViewId;
 
     @AfterEach
     public void after() {
@@ -160,10 +160,11 @@ public class ViewAssemblyTest {
                                                                                    e -> new Verifier.DefaultVerifier(
                                                                                    e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
+        HexBloom diadem = new HexBloom(DigestAlgorithm.DEFAULT.getLast(), 0);
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            ViewContext view = new ViewContext(context, params.build(
+            ViewContext view = new ViewContext(context, () -> diadem, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
                                                validators, null);
@@ -213,7 +214,7 @@ public class ViewAssemblyTest {
     }
 
     private static class VDataSource implements DataSource {
-        private BlockingQueue<Reassemble> outbound = new ArrayBlockingQueue<>(100);
+        private final BlockingQueue<Reassemble> outbound = new ArrayBlockingQueue<>(100);
 
         @Override
         public ByteString getData() {

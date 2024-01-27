@@ -9,10 +9,7 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.Verifier;
+import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
@@ -63,7 +60,7 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
-    default void assembled() {
+    default void assembled(HexBloom diadem) {
     }
 
     void complete();
