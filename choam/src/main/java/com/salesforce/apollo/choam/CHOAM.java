@@ -1313,9 +1313,7 @@ public class CHOAM {
                 log.debug("Joining view: {} diadem: {} from: {} view member: {} on: {}", nextView, cd, from,
                           ViewContext.print(c.member, params.digestAlgorithm()), params.member().getId());
             }
-            var vm = ViewMember.newBuilder(c.member).setDiadem(cd.toIdentityHexBloome()).build();
-            assert vm.hasDiadem() && vm.getDiadem().hasMembership();
-            return vm;
+            return ViewMember.newBuilder(c.member).setDiadem(cd.toIdentityHexBloome()).build();
         }
 
         @Override

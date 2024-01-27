@@ -168,7 +168,6 @@ public class ViewAssembly {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
             return !gathered();
         }
-        assert member.hasDiadem() && member.getDiadem().hasMembership();
         var vm = new Digest(member.getId());
         if (!m.getId().equals(vm)) {
             log.debug("Invalid join response from: {} expected: {} on: {}", term.getMember().getId(), vm,
