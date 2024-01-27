@@ -138,6 +138,11 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
+                public HexBloom diadem() {
+                    return new HexBloom();
+                }
+
+                @Override
                 public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
                     return CHOAM.genesis(viewId, new HexBloom(), joining, previous, committee, previous, built,
                                          previous, Collections.emptyList());
@@ -165,7 +170,7 @@ public class GenesisAssemblyTest {
                 }
             };
             HexBloom diadem = new HexBloom();
-            var view = new GenesisContext(committee, () -> diadem, built, sm, reconfigure);
+            var view = new GenesisContext(committee, built, sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());

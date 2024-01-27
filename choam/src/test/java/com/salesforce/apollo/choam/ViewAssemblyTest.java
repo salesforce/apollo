@@ -160,11 +160,11 @@ public class ViewAssemblyTest {
                                                                                    e -> new Verifier.DefaultVerifier(
                                                                                    e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
-        HexBloom diadem = new HexBloom(DigestAlgorithm.DEFAULT.getLast(), 0);
+        HexBloom diadem = new HexBloom(DigestAlgorithm.DEFAULT.getLast());
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            ViewContext view = new ViewContext(context, () -> diadem, params.build(
+            ViewContext view = new ViewContext(context, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
                                                validators, null);

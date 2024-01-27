@@ -20,7 +20,6 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -110,8 +109,8 @@ public class Producer {
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 
-    public void assembled(HexBloom diadem) {
-        transitions.assembled(diadem);
+    public void assembled() {
+        transitions.assembled();
     }
 
     public Digest getNextViewId() {
@@ -244,12 +243,14 @@ public class Producer {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
+        var diadem = view.diadem();
+        log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem.compact(), params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
                                                                                               .setNextView(
                                                                                               vlb.hash.toDigeste())
-                                                                                              .setDiadem(view.diadem()
-                                                                                                             .toHexBloome())
+                                                                                              .setDiadem(
+                                                                                              diadem.toIdentityHexBloome())
                                                                                               .build(),
                                                                                       checkpoint.get()));
         previousBlock.set(assemble);
@@ -258,8 +259,9 @@ public class Producer {
         pending.put(assemble.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.debug("View assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
-                  assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
+        log.debug("View assembly: {} diadem: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, diadem,
+                  assemble.hash, assemble.height(), assemble.block.getBodyCase(), getViewId(),
+                  params().member().getId());
     }
 
     private void publish(PendingBlock p) {
@@ -370,15 +372,15 @@ public class Producer {
         }
 
         @Override
-        public void reconfigure(HexBloom diadem) {
-            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, diadem.compact(),
+        public void reconfigure() {
+            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.diadem().compact(),
                       params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
                     log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
-                              diadem.compact(), getSlate().size(), params().member().getId());
+                              view.diadem().compact(), getSlate().size(), params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

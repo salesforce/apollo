@@ -36,7 +36,7 @@ public class HexBloom {
     private final BloomFilter<Digest> membership;
 
     public HexBloom(Digest initial, int count) {
-        assert count >= 0;
+        assert count > 0;
         var hashes = hashes(count);
         crowns = new Digest[count];
         cardinality = 0;
@@ -74,7 +74,11 @@ public class HexBloom {
     }
 
     public HexBloom() {
-        this(DigestAlgorithm.DEFAULT.getLast(), 0);
+        this(DigestAlgorithm.DEFAULT.getLast(), 1);
+    }
+
+    public HexBloom(Digest initial) {
+        this(initial, 1);
     }
 
     /**
@@ -286,6 +290,9 @@ public class HexBloom {
     }
 
     public Digest compact() {
+        if (crowns.length == 1) {
+            return crowns[0];
+        }
         return Arrays.asList(crowns).stream().reduce(crowns[0].getAlgorithm().getOrigin(), (a, b) -> a.xor(b));
     }
 

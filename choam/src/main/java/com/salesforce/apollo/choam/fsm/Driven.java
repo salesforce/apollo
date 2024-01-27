@@ -9,7 +9,6 @@ package com.salesforce.apollo.choam.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.cryptography.HexBloom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,14 +37,14 @@ public interface Driven {
 
     void produceAssemble();
 
-    void reconfigure(HexBloom diadem);
+    void reconfigure();
 
     void startProduction();
 
     enum Earner implements Driven.Transitions {
         AWAIT_VIEW {
             @Override
-            public Transitions assembled(HexBloom diadem) {
+            public Transitions assembled() {
                 context().assembled();
                 return null;
             }
@@ -94,7 +93,7 @@ public interface Driven {
             }
         }, PROTOCOL_FAILURE {
             @Override
-            public Transitions assembled(HexBloom diadem) {
+            public Transitions assembled() {
                 return null;
             }
 
@@ -130,8 +129,8 @@ public interface Driven {
             }
         }, SPICE {
             @Override
-            public Transitions assembled(HexBloom diadem) {
-                context().reconfigure(diadem);
+            public Transitions assembled() {
+                context().reconfigure();
                 return null;
             }
 
@@ -164,7 +163,7 @@ public interface Driven {
     interface Transitions extends FsmExecutor<Driven, Transitions> {
         Logger log = LoggerFactory.getLogger(Transitions.class);
 
-        default Transitions assembled(HexBloom diadem) {
+        default Transitions assembled() {
             return null;
         }
 

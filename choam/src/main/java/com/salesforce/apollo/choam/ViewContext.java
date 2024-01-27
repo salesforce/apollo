@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
@@ -35,17 +34,15 @@ public class ViewContext {
     private final        Map<Digest, Short>    roster;
     private final        Signer                signer;
     private final        Map<Member, Verifier> validators;
-    private final        Supplier<HexBloom>    diadem;
 
-    public ViewContext(Context<Member> context, Supplier<HexBloom> diadem, Parameters params, Signer signer,
-                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
+                       BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
-        this.diadem = diadem;
 
         var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
         short pid = 0;
@@ -78,7 +75,7 @@ public class ViewContext {
     }
 
     public HexBloom diadem() {
-        return diadem.get();
+        return blockProducer.diadem();
     }
 
     public Validate generateValidation(HashedBlock block) {
