@@ -16,7 +16,6 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.fireflies.View;
@@ -228,14 +227,14 @@ public class FireFliesTrace {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, HexBloom diadem,
-                                       Digest viewId, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
-                    if (diadem.getCardinality() == CARDINALITY) {
-                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
+                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, Digest viewId,
+                                       int cardinality, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
+                    if (cardinality == CARDINALITY) {
+                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, cardinality,
                                           d.getMember().getId());
                         countdown.countDown();
                     } else {
-                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
+                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, cardinality,
                                           d.getMember().getId());
                     }
                 }
@@ -245,7 +244,9 @@ public class FireFliesTrace {
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
 
-        domains.get(0).getFoundation().start(() -> started.get().countDown(), gossipDuration, Collections.emptyList());
+        domains.getFirst()
+               .getFoundation()
+               .start(() -> started.get().countDown(), gossipDuration, Collections.emptyList());
         if (!started.get().await(10, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Cannot start up kernel");
         }

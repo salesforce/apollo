@@ -69,7 +69,7 @@ message Genesis {
 
 message Reconfigure {
   crypto.Digeste id = 1;
-  crypto.HexBloome view = 2;
+  crypto.Digeste view = 2;
   int32 checkpointTarget = 3;
   repeated Join joins = 4;
 }
@@ -87,7 +87,7 @@ message Executions {
 
 message Assemble {
   crypto.Digeste nextView = 1;
-  crypto.HexBloome diadem = 2;
+  crypto.Digeste diadem = 2;
 }
 
 message FoundationSeal {
@@ -117,7 +117,7 @@ message Join {
 
 message ViewMember {
   crypto.Digeste id = 1;
-  crypto.HexBloome diadem = 2;
+  crypto.Digeste diadem = 2;
   crypto.PubKey consensusKey = 3;
   crypto.Sig signature = 4;
 }

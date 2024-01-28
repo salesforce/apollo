@@ -130,7 +130,7 @@ public class ViewAssemblyTest {
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     return ViewMember.newBuilder()
                                      .setId(m.getId().toDigeste())
-                                     .setDiadem(new HexBloom().toIdentityHexBloome())
+                                     .setDiadem(DigestAlgorithm.DEFAULT.getLast().toDigeste())
                                      .setConsensusKey(consensus)
                                      .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
@@ -161,7 +161,6 @@ public class ViewAssemblyTest {
                                                                                    e -> new Verifier.DefaultVerifier(
                                                                                    e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
-        HexBloom diadem = new HexBloom(DigestAlgorithm.DEFAULT.getLast());
         context.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);

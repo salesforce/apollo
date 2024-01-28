@@ -16,7 +16,6 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
@@ -114,14 +113,14 @@ public class FireFliesTest {
             var listener = new View.ViewLifecycleListener() {
 
                 @Override
-                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, HexBloom diadem,
-                                       Digest viewId, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
-                    if (diadem.getCardinality() == CARDINALITY) {
-                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
+                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, Digest viewId,
+                                       int cardinality, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
+                    if (cardinality == CARDINALITY) {
+                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, cardinality,
                                           d.getMember().getId());
                         countdown.countDown();
                     } else {
-                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, diadem.getCardinality(),
+                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, cardinality,
                                           d.getMember().getId());
                     }
                 }

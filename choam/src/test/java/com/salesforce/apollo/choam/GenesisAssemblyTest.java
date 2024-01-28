@@ -20,7 +20,6 @@ import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Context;
@@ -138,14 +137,14 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public HexBloom diadem() {
-                    return new HexBloom();
+                public Digest diadem() {
+                    return DigestAlgorithm.DEFAULT.getLast();
                 }
 
                 @Override
                 public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                    return CHOAM.genesis(viewId, new HexBloom(), joining, previous, committee, previous, built,
-                                         previous, Collections.emptyList());
+                    return CHOAM.genesis(viewId, DigestAlgorithm.DEFAULT.getLast(), joining, previous, committee,
+                                         previous, built, previous, Collections.emptyList());
                 }
 
                 @Override
@@ -169,7 +168,6 @@ public class GenesisAssemblyTest {
                     return null;
                 }
             };
-            HexBloom diadem = new HexBloom();
             var view = new GenesisContext(committee, built, sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();

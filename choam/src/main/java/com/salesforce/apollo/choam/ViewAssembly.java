@@ -14,7 +14,6 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
@@ -199,10 +198,10 @@ public class ViewAssembly {
             }
             return null;
         }
-        final var hex = HexBloom.from(vm.getDiadem());
+        final var hex = Digest.from(vm.getDiadem());
         var diadem = view.diadem();
-        if (!diadem.equivalent(hex)) {
-            log.warn("Invalid diadem: {} not equivalent to: {} vm: {} on: {}", hex.compact(), diadem.compact(),
+        if (!diadem.equals(hex)) {
+            log.warn("Invalid diadem: {} not equivalent to: {} vm: {} on: {}", hex, diadem,
                      ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
             return null;
         }

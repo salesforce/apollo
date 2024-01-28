@@ -244,13 +244,13 @@ public class Producer {
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
         var diadem = view.diadem();
-        log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem.compact(), params().member().getId());
+        log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
                                                                                               .setNextView(
                                                                                               vlb.hash.toDigeste())
                                                                                               .setDiadem(
-                                                                                              diadem.toIdentityHexBloome())
+                                                                                              diadem.toDigeste())
                                                                                               .build(),
                                                                                       checkpoint.get()));
         previousBlock.set(assemble);
@@ -373,14 +373,14 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.diadem().compact(),
+            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.diadem(),
                       params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
                     log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
-                              view.diadem().compact(), getSlate().size(), params().member().getId());
+                              view.diadem(), getSlate().size(), params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

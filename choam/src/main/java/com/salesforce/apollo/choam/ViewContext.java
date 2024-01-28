@@ -74,8 +74,8 @@ public class ViewContext {
         return context;
     }
 
-    public HexBloom diadem() {
-        return blockProducer == null ? new HexBloom() : blockProducer.diadem();
+    public Digest diadem() {
+        return blockProducer == null ? DigestAlgorithm.DEFAULT.getLast() : blockProducer.diadem();
     }
 
     public Validate generateValidation(HashedBlock block) {

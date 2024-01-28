@@ -116,7 +116,8 @@ public class ProcessDomain extends Domain {
     }
 
     protected ViewLifecycleListener listener() {
-        return (context, diadem, id, join, leaving) -> {
+        return (context, id, cardinality, join, leaving) -> {
+            choam.setDiadem(id);
             for (var d : join) {
                 params.context().activate(context.apply(d));
             }
