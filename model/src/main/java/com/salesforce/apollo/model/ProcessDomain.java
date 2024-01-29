@@ -117,13 +117,13 @@ public class ProcessDomain extends Domain {
 
     protected ViewLifecycleListener listener() {
         return (context, id, cardinality, join, leaving) -> {
-            choam.setDiadem(id);
             for (var d : join) {
                 params.context().activate(context.apply(d));
             }
             for (var d : leaving) {
                 params.context().remove(d);
             }
+            choam.setDiadem(id);
 
             log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
                      join.size(), leaving.size(), params.member().getId());
