@@ -8,13 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Cache local Maven repository
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
       - uses: actions/checkout@v3
       - uses: graalvm/setup-graalvm@v1
         with:
@@ -23,4 +16,4 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build with Maven
-        run: ./mvnw -T 1.5C -batch-mode clean install -Ppre --file pom.xml
+        run: ./mvnw -T 2C -batch-mode clean install -Ppre --file pom.xml
