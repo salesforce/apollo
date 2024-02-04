@@ -6,14 +6,16 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.PreUnit.decode;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
+import com.salesforce.apollo.ethereal.proto.PreUnit_s;
+import com.salesforce.apollo.membership.Context;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -24,21 +26,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import static com.salesforce.apollo.ethereal.PreUnit.decode;
 
 /**
  * @author hal.hildebrand
  */
 public interface Dag {
-    static final Logger log = LoggerFactory.getLogger(Dag.class);
+    Logger log = LoggerFactory.getLogger(Dag.class);
 
     static short threshold(int np) {
         var nProcesses = (double) np;
@@ -113,7 +107,7 @@ public interface Dag {
 
     void write(Runnable r);
 
-    public interface Decoded {
+    interface Decoded {
         default Correctness classification() {
             return Correctness.CORRECT;
         }
@@ -127,7 +121,7 @@ public interface Dag {
         }
     }
 
-    public class DagImpl implements Dag {
+    class DagImpl implements Dag {
 
         private final List<BiFunction<Unit, Dag, Correctness>> checks     = new ArrayList<>();
         private final Config                                   config;
@@ -449,7 +443,7 @@ public interface Dag {
         }
     }
 
-    public record DecodedR(Unit[] parents) implements Decoded {
+    record DecodedR(Unit[] parents) implements Decoded {
         @Override
         public boolean inError() {
             return false;
@@ -462,6 +456,7 @@ public interface Dag {
     class fiberMap {
         private final List<Unit[]> content = new ArrayList<>();
         private final short        width;
+
         fiberMap(short width) {
             this.width = width;
         }
@@ -578,7 +573,7 @@ public interface Dag {
 
         @Override
         public Correctness classification() {
-            return Correctness.ABIGUOUS_PARENTS;
+            return Correctness.AMBIGUOUS_PARENTS;
         }
     }
 

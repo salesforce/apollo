@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.cryptography;
 
-import com.salesforce.apollo.cryptography.proto.HexBloome;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.Primes;
+import com.salesforce.apollo.cryptography.proto.HexBloome;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,6 +69,14 @@ public class HexBloom {
         }
         this.membership = membership;
         this.cardinality = cardinality;
+    }
+
+    public HexBloom() {
+        this(DigestAlgorithm.DEFAULT.getLast(), 1);
+    }
+
+    public HexBloom(Digest initial) {
+        this(initial, 1);
     }
 
     /**
@@ -236,6 +244,7 @@ public class HexBloom {
     }
 
     public static HexBloom from(HexBloome hb) {
+        assert !HexBloome.getDefaultInstance().equals(hb);
         return new HexBloom(hb);
     }
 
@@ -280,6 +289,9 @@ public class HexBloom {
     }
 
     public Digest compact() {
+        if (crowns.length == 1) {
+            return crowns[0];
+        }
         return Arrays.asList(crowns).stream().reduce(crowns[0].getAlgorithm().getOrigin(), (a, b) -> a.xor(b));
     }
 

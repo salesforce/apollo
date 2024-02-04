@@ -69,8 +69,9 @@ message Genesis {
 
 message Reconfigure {
   crypto.Digeste id = 1;
-  int32 checkpointTarget = 2;
-  repeated Join joins = 3;
+  crypto.Digeste view = 2;
+  int32 checkpointTarget = 3;
+  repeated Join joins = 4;
 }
 
 message Checkpoint {
@@ -86,6 +87,7 @@ message Executions {
 
 message Assemble {
   crypto.Digeste nextView = 1;
+  crypto.Digeste diadem = 2;
 }
 
 message FoundationSeal {
@@ -115,8 +117,9 @@ message Join {
 
 message ViewMember {
   crypto.Digeste id = 1;
-  crypto.PubKey consensusKey = 2;
-  crypto.Sig signature = 3;
+  crypto.Digeste diadem = 2;
+  crypto.PubKey consensusKey = 3;
+  crypto.Sig signature = 4;
 }
 
 message Certification {

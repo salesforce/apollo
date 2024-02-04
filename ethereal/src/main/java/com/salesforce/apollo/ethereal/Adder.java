@@ -6,38 +6,26 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.Creator.parentsOnPreviousLevel;
-import static com.salesforce.apollo.ethereal.PreUnit.id;
+import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.Signer;
+import com.salesforce.apollo.cryptography.proto.Biff;
+import com.salesforce.apollo.ethereal.proto.*;
+import com.salesforce.apollo.utils.Entropy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.salesforce.apollo.ethereal.proto.Commit;
-import com.salesforce.apollo.ethereal.proto.Have;
-import com.salesforce.apollo.ethereal.proto.Missing;
-import com.salesforce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.ethereal.proto.PreVote;
-import com.salesforce.apollo.ethereal.proto.SignedCommit;
-import com.salesforce.apollo.ethereal.proto.SignedPreVote;
-import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.cryptography.Signer;
-import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import static com.salesforce.apollo.ethereal.Creator.parentsOnPreviousLevel;
+import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 /**
  * Implements the chain Reliable Broadcast of Aleph.
@@ -48,23 +36,24 @@ import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
  */
 public class Adder {
 
-    private static final Logger log = LoggerFactory.getLogger(Adder.class);
-    private final    Map<Digest, Set<Short>>    commits         = new TreeMap<>();
-    private final    Config                     conf;
-    private final    Dag                        dag;
-    private final    int                        epoch;
-    private final    Set<Digest>                failed;
-    private final    ReentrantLock              lock            = new ReentrantLock(true);
-    private final    int                        maxSize;
-    private final    Map<Long, List<Waiting>>   missing         = new TreeMap<>();
-    private final    Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
-    private final    Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
-    private final    Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
-    private final    int                        threshold;
-    private final    Map<Digest, Waiting>       waiting         = new TreeMap<>();
-    private final    Map<Long, Waiting>         waitingById     = new TreeMap<>();
-    private final    Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
-    private volatile int                        round           = 0;
+    private static final Logger                     log             = LoggerFactory.getLogger(Adder.class);
+    private final        Map<Digest, Set<Short>>    commits         = new TreeMap<>();
+    private final        Config                     conf;
+    private final        Dag                        dag;
+    private final        int                        epoch;
+    private final        Set<Digest>                failed;
+    private final        ReentrantLock              lock            = new ReentrantLock(true);
+    private final        int                        maxSize;
+    private final        Map<Long, List<Waiting>>   missing         = new TreeMap<>();
+    private final        Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
+    private final        Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
+    private final        Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
+    private final        int                        threshold;
+    private final        Map<Digest, Waiting>       waiting         = new TreeMap<>();
+    private final        Map<Long, Waiting>         waitingById     = new TreeMap<>();
+    private final        Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
+    private volatile     int                        round           = 0;
+
     public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
         this.epoch = epoch;
         this.dag = dag;
@@ -574,7 +563,7 @@ public class Adder {
             case DUPLICATE_UNIT:
             case UNKNOWN_PARENTS:
                 return false;
-            case ABIGUOUS_PARENTS:
+            case AMBIGUOUS_PARENTS:
             case COMPLIANCE_ERROR:
             case DATA_ERROR:
                 removeFailed(wp, decoded);
@@ -589,7 +578,7 @@ public class Adder {
             return false;
         }
         var parents = decoded.parents();
-        var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> e).toList();
+        var digests = Stream.of(parents).map(e -> e == null ? null : e.hash()).map(e -> e).toList();
         Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
         if (!calculated.equals(wp.pu().view().controlHash())) {
             removeFailed(wp);
@@ -807,7 +796,7 @@ public class Adder {
      * FAILED can occur at each state transition
      */
     public enum State {
-        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS, WAITING_ON_ROUND;
+        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS, WAITING_ON_ROUND
     }
 
     public record Signed<T>(Digest hash, T signed) {
