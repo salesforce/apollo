@@ -23,4 +23,4 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build with Maven
-        run: ./mvnw -batch-mode clean install -Ppre --file pom.xml
+        run: ./mvnw -T 1.5C -batch-mode clean install -Ppre --file pom.xml
