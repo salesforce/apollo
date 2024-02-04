@@ -140,7 +140,8 @@ public class Bootstrapper {
             if (!cps.validate(diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()))) {
                 throw new IllegalStateException("Cannot validate checkpoint: " + checkpoint.height());
             }
-            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem, params.member().getId());
+            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem.compact(),
+                     params.member().getId());
             checkpointState = cps;
         });
         // reconstruct chain to genesis

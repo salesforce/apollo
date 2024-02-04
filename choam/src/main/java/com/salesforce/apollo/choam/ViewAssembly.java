@@ -198,7 +198,13 @@ public class ViewAssembly {
             }
             return null;
         }
-
+        final var hex = Digest.from(vm.getDiadem());
+        var diadem = view.diadem();
+        if (!diadem.equals(hex)) {
+            log.warn("Invalid diadem: {} not equivalent to: {} vm: {} on: {}", hex, diadem,
+                     ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+            return null;
+        }
         PubKey encoded = vm.getConsensusKey();
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {

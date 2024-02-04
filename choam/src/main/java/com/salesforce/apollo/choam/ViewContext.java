@@ -74,6 +74,10 @@ public class ViewContext {
         return context;
     }
 
+    public Digest diadem() {
+        return blockProducer == null ? DigestAlgorithm.DEFAULT.getLast() : blockProducer.diadem();
+    }
+
     public Validate generateValidation(HashedBlock block) {
         log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member().getId());
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());

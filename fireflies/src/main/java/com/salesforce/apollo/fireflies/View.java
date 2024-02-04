@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -89,7 +90,9 @@ public class View {
     private final        DigestAlgorithm                             digestAlgo;
     private final        RingCommunications<Participant, Fireflies>  gossiper;
     private final        AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final        Map<UUID, ViewLifecycleListener>            lifecycleListeners    = new HashMap<>();
+    private final        List<ViewLifecycleListener>                 lifecycleListeners    = new CopyOnWriteArrayList<>();
+    private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
+    Thread.ofVirtual().factory());
     private final        FireflyMetrics                              metrics;
     private final        Node                                        node;
     private final        Map<Digest, SignedViewChange>               observations          = new ConcurrentSkipListMap<>();
@@ -160,12 +163,10 @@ public class View {
     }
 
     /**
-     * Deregister the listener with the supplied id
-     *
-     * @param listenerId
+     * Deregister the listener
      */
-    public void deregister(UUID listenerId) {
-        lifecycleListeners.remove(listenerId);
+    public void deregister(ViewLifecycleListener listener) {
+        lifecycleListeners.remove(listener);
     }
 
     /**
@@ -183,15 +184,12 @@ public class View {
     }
 
     /**
-     * Register a listener to receive view change events
+     * Register the listener to receive view change events
      *
      * @param listener - the ViewChangeListener to receive events
-     * @return the UUID identifying this listener
      */
-    public UUID register(ViewLifecycleListener listener) {
-        final var id = UUID.randomUUID();
-        lifecycleListeners.put(id, listener);
-        return id;
+    public void register(ViewLifecycleListener listener) {
+        lifecycleListeners.add(listener);
     }
 
     /**
@@ -410,15 +408,18 @@ public class View {
 
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
         final var current = currentView();
-        lifecycleListeners.forEach((id, listener) -> {
-            try {
-                log.trace("Notifying view change: {} listener: {} cardinality: {} joins: {} leaves: {} on: {} ",
-                          currentView(), id, context.totalCount(), joining.size(), leaving.size(), node.getId());
-                listener.viewChange(context, current, joining, leaving);
-            } catch (Throwable e) {
-                log.error("error in view change listener: {} on: {} ", id, node.getId(), e);
-            }
-        });
+        viewNotificationQueue.execute(Utils.wrapped(() -> {
+            lifecycleListeners.forEach(listener -> {
+                try {
+                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
+                              currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
+                    listener.viewChange(i -> context.getMember(i.getDigest()), current, viewManagement.cardinality(),
+                                        joining, leaving);
+                } catch (Throwable e) {
+                    log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
+                }
+            });
+        }, log));
     }
 
     /**
@@ -1476,13 +1477,14 @@ public class View {
         /**
          * Notification of a view change event
          *
-         * @param context - the context for which the view change has occurred
-         * @param viewId  - the Digest identity of the new view
-         * @param joins   - the list of joining member's id
-         * @param leaves  - the list of leaving member's id
+         * @param members     - the source of Members for supplied identifiers
+         * @param viewId      - the compact Digest identifying the new view
+         * @param cardinality - the cardinality of the new view
+         * @param joins       - the list of joining member's id
+         * @param leaves      - the list of leaving member's id
          */
-        void viewChange(Context<Participant> context, Digest viewId, List<SelfAddressingIdentifier> joins,
-                        List<Digest> leaves);
+        void viewChange(Function<SelfAddressingIdentifier, Participant> members, Digest viewId, int cardinality,
+                        List<SelfAddressingIdentifier> joins, List<Digest> leaves);
 
     }
 

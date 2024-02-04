@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 public class ViewManagement {
     private static final Logger                                        log          = LoggerFactory.getLogger(
     ViewManagement.class);
+    final                AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private final        AtomicInteger                                 attempt      = new AtomicInteger();
     private final        Digest                                        bootstrapView;
     private final        Context<Participant>                          context;
@@ -62,7 +63,6 @@ public class ViewManagement {
     private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
     private final        Lock                                          joinLock     = new ReentrantLock();
     private final        AtomicReference<Digest>                       currentView  = new AtomicReference<>();
-    private final        AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private              boolean                                       bootstrap;
     private              CompletableFuture<Void>                       onJoined;
 
