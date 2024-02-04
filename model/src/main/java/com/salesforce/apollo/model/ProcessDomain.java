@@ -40,13 +40,14 @@ import java.util.concurrent.RejectedExecutionException;
  * @author hal.hildebrand
  */
 public class ProcessDomain extends Domain {
-    private final static Logger                              log      = LoggerFactory.getLogger(ProcessDomain.class);
-    protected final      KerlDHT                             dht;
-    protected final      View                                foundation;
-    private final        EventValidation.DelegatedValidation validations;
-    private final        Verifiers.DelegatedVerifiers        verifiers;
-    private final        ProcessDomainParameters             parameters;
-    private final        ViewLifecycleListener               listener = listener();
+    private final static Logger log = LoggerFactory.getLogger(ProcessDomain.class);
+
+    protected final KerlDHT                             dht;
+    protected final View                                foundation;
+    private final   EventValidation.DelegatedValidation validations;
+    private final   Verifiers.DelegatedVerifiers        verifiers;
+    private final   ProcessDomainParameters             parameters;
+    private final   ViewLifecycleListener               listener = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,

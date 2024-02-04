@@ -300,43 +300,47 @@ public class ViewManagement {
     }
 
     BiConsumer<? super Bound, ? super Throwable> join(Duration duration, Timer.Context timer) {
-        return (bound, t) -> view.viewChange(() -> {
-            final var hex = bound.view();
+        return (bound, t) -> {
             if (t != null) {
                 log.error("Failed to join view on: {}", node.getId(), t);
                 view.stop();
                 return;
             }
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                view.viewChange(() -> {
+                    final var hex = bound.view();
 
-            log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
-                     hex.compact(), context.getId(), node.getId());
-            context.rebalance(hex.getCardinality());
-            context.activate(node);
-            diadem.set(hex);
-            currentView.set(hex.compact());
+                    log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
+                             hex.compact(), context.getId(), node.getId());
+                    context.rebalance(hex.getCardinality());
+                    context.activate(node);
+                    diadem.set(hex);
+                    currentView.set(hex.compact());
 
-            bound.successors().forEach(view::addToView);
-            bound.initialSeedSet().forEach(view::addToView);
+                    bound.successors().forEach(view::addToView);
+                    bound.initialSeedSet().forEach(view::addToView);
 
-            view.reset();
+                    view.reset();
 
-            context.allMembers().forEach(Participant::clearAccusations);
+                    context.allMembers().forEach(Participant::clearAccusations);
 
-            view.schedule(duration);
+                    view.schedule(duration);
 
-            if (timer != null) {
-                timer.stop();
-            }
+                    if (timer != null) {
+                        timer.stop();
+                    }
 
-            view.introduced();
-            log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
-                     bound.successors().size(), cardinality(), context.totalCount(), node.getId());
-            if (context.totalCount() == cardinality()) {
-                join();
-            } else {
-                populate(new ArrayList<>(context.activeMembers()));
-            }
-        });
+                    view.introduced();
+                    log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
+                             bound.successors().size(), cardinality(), context.totalCount(), node.getId());
+                    if (context.totalCount() == cardinality()) {
+                        join();
+                    } else {
+                        populate(new ArrayList<>(context.activeMembers()));
+                    }
+                });
+            }, log));
+        };
     }
 
     void joinUpdatesFor(BloomFilter<Digest> joinBff, Builder builder) {
