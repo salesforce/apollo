@@ -182,9 +182,7 @@ public class ViewAssemblyTest {
     }
 
     private void initEthereals() {
-        var builder = Config.newBuilder()
-                            .setnProc(CARDINALITY)
-                            .setVerifiers(members.toArray(new Verifier[members.size()]));
+        var builder = Config.newBuilder().setnProc(CARDINALITY);
 
         for (short i = 0; i < CARDINALITY; i++) {
             final short pid = i;
