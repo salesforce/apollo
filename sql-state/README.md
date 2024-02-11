@@ -1,21 +1,19 @@
 # Apollo Replicated SQL State Machine
 
-The  _sql-state_  module provides a high-fidelity SQL Materialized View from a linear log. The model provided by this
-module is a SQL database.
+The  _sql-state_  module provides a high-fidelity SQL Materialized View from a linear log in the form of a SQL database.
 This SQL database has a single writer, which is the linear log fed into the SqlStateMachine.
 The log is a sequence of transactions to execute against the current SQL state of the database. As these transactions
 can contain SQL Data Definition Language statements,
 this also means that the manipulation of the meta-data of the SQL database is also part of the log. This allows this
 system to provide a full-featured
-SQL database that represents the "current state" of the linear log. This is, in essence, a Materialized View. Because
-this is a full-featured SQL database,
-this model includes stored procedures, triggers, functions, indexes as well as schemas, tables, types, and even views (a
+SQL database that represents the "current state" of the linear log. This is, in essence, a Materialized View. This model
+includes stored procedures, triggers, functions, indexes as well as schemas, tables, types, and even views (a
 view with a view).
 
 ## Model
 
 The input to the SQL state machine is a linear log of SQL commands. This log is composed of Blocks of transactions,
-which are submitted in order to the state machine.
+which are submitted, in order, to the state machine for execution.
 Each transaction is then executed against the local database that represents the materialized view of this state.
 Results may be returned from these transactions,
 such as the _Call_ results from a SQL function. Arguments may be supplied as well, which essentially means that each of
