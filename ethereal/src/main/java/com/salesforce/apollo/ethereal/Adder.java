@@ -600,8 +600,8 @@ public class Adder {
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
-        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), conf.epochLength() * 2 * conf.nProc() * 2,
+                                        conf.fpr());
         signedCommits.keySet().forEach(d -> bff.add(d));
         return bff.toBff();
     }
@@ -610,8 +610,8 @@ public class Adder {
      * Answer the bloom filter with the prevotes the receiver has
      */
     private Biff havePreVotes() {
-        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), conf.epochLength() * 2 * conf.nProc() * 2,
+                                        conf.fpr());
         signedPrevotes.keySet().forEach(d -> bff.add(d));
         return bff.toBff();
     }
@@ -620,8 +620,8 @@ public class Adder {
      * Answer the bloom filter with the units the receiver has
      */
     private Biff haveUnits() {
-        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), conf.epochLength() * 2 * conf.nProc() * 2,
+                                        conf.fpr());
         waiting.keySet().forEach(d -> bff.add(d));
         dag.have(bff);
         return bff.toBff();
