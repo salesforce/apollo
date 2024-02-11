@@ -25,7 +25,7 @@ and mechanisms of Apollo can be used for such, the design goals are much differe
 ## Some Features
 
 * Multi tenant isolation enclaves using GraalVM Isolates
-* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloomfilters.
+* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters.
 * Decentralized Identifier-based foundation and key management infrastructure, based on
   the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity boostrapping and secrets provisioning
@@ -95,7 +95,7 @@ profiles that are activated for the platform the build is running on.
 Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse. Each module is a Maven module
 under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
 
-* [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
+* [CHOAM](choam/README.md) - Committee maintenance of replicated state machines
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
 * [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
 * [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
@@ -117,7 +117,7 @@ under the source root and contains a README.md documenting (such as it is at the
 * [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs. JDBC interface.
 * [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure. KEL, KERL and other fundamental identity, key
   and trust management
-* [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
+* [Stereotomy Services](stereotomy-services) - GRPC services and protobuf interfaces for KERI services
 * [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing
   KERI decentralized identity
 * [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
@@ -219,7 +219,7 @@ which is nice.
 ### Your IDE and Maven code generation
 
 Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), the generation
-phase can occasionally cause interesting issues with your IDE whne you import Apollo. I work with Eclipse, and things
+phase can occasionally cause interesting issues with your IDE when you import Apollo. I work with Eclipse, and things
 are relatively fine with the current releases. However, there are sometimes synchronization issues in Eclipse Maven
 integration that invalidates the generated code and that may require an additional *generate-sources* pass. Apollo is a
 multimodule project and be sure you're leaving time for the asynchronous build process to complete.
@@ -238,7 +238,7 @@ Myself, I find that I have to first select the top level Apollo.app module, and 
 sources** (or the equivalent in your IDE). This *should* generate all the sources required for every submodule, so...
 
 Feel free to generate issues and such, and I will look into it as I do want this to be flawless and a good experience. I
-know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
+know that's impossible, but it undoubtedly can be made better, and PRs are, of course, a thing.
 
 Note that also, for inexplicable reasons, Eclipse Maven will determine it needs to invalidate the _grpc_ generated code
 and will thus need to be regenerated. I'm trying to figure out the heck is going on, but when this happens, please
@@ -263,7 +263,8 @@ machine. YMMV.
 
 ## Current Status
 
-Currently, the system is in development. Fundamental identity and digest/signature/pubKey encodings has been integrated.
+Currently, the system is in development. Fundamental identity and digest/signature/pubKey encodings have been
+integrated.
 Apollo is using Aleph-BFT for consensus, in the form of the Ethereal module. CHOAM has now replaced Consortium, and the
 SQL replicated state machine now uses CHOAM for its linear log and transaction model.
 
