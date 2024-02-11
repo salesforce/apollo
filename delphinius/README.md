@@ -10,7 +10,7 @@ state machine.
 
 Delphinius presents a simple model for Access Control Lists. An ACL is an asserted Tuple of {Subject, Object}.
 Each of the tuple elements forms a separate domain class and is further qualified with a Namespace. For example
-an Object is a tuple of {Namespace, Name, Relation}. Subject is likewise a tuple of {Namespace, Name, Relation}.
+an Object is a tuple of {Namespace, Name, Relation}. The Subject is likewise a tuple of {Namespace, Name, Relation}.
 Relation is simply {Namespace, Name}.
 
 Each domain class is further arranged in a directed graphs of mappings through parent/child relationships. These
@@ -79,7 +79,7 @@ integrating with Stereotomy identity and key management.
 
 ### Zookies?
 
-Note that the time based features of Google Zanibar are blatantly missing. The intention is to use a function of block
+Note that the time-based features of Google Zanzibar are blatantly missing. The intention is to use a function of block
 height, which is available in the SQL state machine. My assertion is that this will function as intended for a Zookie.
 
 ### Recursive Queries For Set Operations?
