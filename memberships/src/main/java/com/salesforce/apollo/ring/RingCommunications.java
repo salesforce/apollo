@@ -66,7 +66,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     public <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler) {
         final var next = next(member.getId());
         if (next == null || next.member == null) {
-            log.debug("No member for ring: {} on: {}", next.ring, member.getId());
+            log.debug("No member for ring: {} on: {}", next == null ? "<unkown>" : next.ring, member.getId());
             handler.handle(Optional.empty(), next);
             return;
         }
