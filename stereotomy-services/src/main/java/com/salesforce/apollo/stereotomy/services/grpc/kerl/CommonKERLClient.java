@@ -8,10 +8,10 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.*;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 import java.io.IOException;
@@ -101,8 +101,7 @@ public class CommonKERLClient implements ProtoKERLService {
             @Override
             public KeyStateWithEndorsementsAndValidations_ getKeyStateWithEndorsementsAndValidations(
             EventCoords coordinates) {
-                // TODO Auto-generated method stub
-                return null;
+                return service.getKeyStateWithEndorsementsAndValidations(coordinates);
             }
 
             @Override
