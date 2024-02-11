@@ -20,8 +20,6 @@ import java.util.List;
  * @author hal.hildebrand
  */
 public interface Driven {
-    String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
-    String SYNC                 = "SYNC";
 
     void assembled();
 
@@ -93,11 +91,6 @@ public interface Driven {
             }
         }, PROTOCOL_FAILURE {
             @Override
-            public Transitions assembled() {
-                return null;
-            }
-
-            @Override
             public Transitions checkpoint() {
                 return null;
             }
@@ -154,9 +147,7 @@ public interface Driven {
             public Transitions viewComplete() {
                 return null;
             }
-        };
-
-        private static final Logger log = LoggerFactory.getLogger(Earner.class);
+        }
     }
 
     /** Transition events for the Producer FSM */

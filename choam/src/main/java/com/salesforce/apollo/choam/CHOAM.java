@@ -15,7 +15,7 @@ import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.*;
 import com.salesforce.apollo.choam.fsm.Combine;
-import com.salesforce.apollo.choam.fsm.Combine.Merchantile;
+import com.salesforce.apollo.choam.fsm.Combine.Mercantile;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.*;
@@ -128,7 +128,7 @@ public class CHOAM {
                                                                 params.metrics(), r),
                                        TxnSubmitClient.getCreate(params.metrics()),
                                        TxnSubmission.getLocalLoopback(params.member(), txnSubmission));
-        var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
+        var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Mercantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
@@ -253,7 +253,7 @@ public class CHOAM {
     public boolean active() {
         final var c = current.get();
         HashedCertifiedBlock h = head.get();
-        return (c != null && h != null && transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL)
+        return (c != null && h != null && transitions.fsm().getCurrentState() == Mercantile.OPERATIONAL)
         && c instanceof Administration && h.height().compareTo(ULong.valueOf(1)) >= 0;
     }
 

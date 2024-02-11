@@ -43,11 +43,6 @@ public interface Reconfiguration {
             }
 
             @Override
-            public Transitions election() {
-                return RECONFIGURE;
-            }
-
-            @Override
             public Transitions gathered() {
                 return CERTIFICATION;
             }
@@ -60,11 +55,6 @@ public interface Reconfiguration {
             @Entry
             public void assembly() {
                 context().gather();
-            }
-
-            @Override
-            public Transitions election() {
-                return RECONFIGURE;
             }
 
             @Override
@@ -94,11 +84,6 @@ public interface Reconfiguration {
 
             @Override
             public Transitions complete() {
-                return null;
-            }
-
-            @Override
-            public Transitions election() {
                 return null;
             }
 
@@ -160,10 +145,6 @@ public interface Reconfiguration {
 
         default Transitions complete() {
             return Reconfigure.RECONFIGURE;
-        }
-
-        default Transitions election() {
-            return null;
         }
 
         default Transitions failed() {
