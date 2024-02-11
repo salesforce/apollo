@@ -28,9 +28,9 @@ and mechanisms of Apollo can be used for such, the design goals are much differe
 * Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters.
 * Decentralized Identifier-based foundation and key management infrastructure, based on
   the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
-* Secure and trusted attestation, identity boostrapping and secrets provisioning
+* Secure and trusted attestation, identity bootstrapping and secrets provisioning
 * MTLS network communication — KERI for MTLS certificate authentication. Local communication simulation for simplified
-  multinode simulation for single process (IDE) testing
+  multi-node simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * Byzantine intrusion tolerant secure membership and communications overlay providing virtually synchronous, stable
   membership views.

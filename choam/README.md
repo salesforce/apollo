@@ -13,7 +13,7 @@ provides an ordered sequence of events - blocks - that all participants process 
 unsuprisingly, the definition of _State Machine Replication_.
 
 In Apollo, however, the model is more complex than simple UTXO transactions. This module provides a committee selection
-mechanism that is maintained by signed blocks of batches of batches of fundamental
+mechanism that is maintained by signed blocks of batches of fundamental
 transactions.
 See [From Byzantine Replication to Blockchain: Consensus is only the Beginning](https://arxiv.org/abs/2004.14527) for
 discussion of the different types of blocks processed by the _CHOAM_.
@@ -44,7 +44,7 @@ collaboration, so all right-thinking Scotsman will - by design - produce essenti
 
 _CHOAM_  provides a model for mitigating one of the more serious issues with distributed ledger technology, that is to
 say *Bootstrapping*. CHOAM will periodically emit special _Checkpoint_ blocks that checkpoint the current state
-of the chain. When these checkpoints are processed, the eliminate the usefulness of the blocks before it that went into
+of the chain. When these checkpoints are processed, they eliminate the usefulness of the blocks before it that went into
 creating this checkpoint state and may thus be discarded. What isn't discarded is the View chain of reconfigurations,
 all the way back to genesis, and it is these blocks that prove the provenance of the Checkpoint and thus the state of
 the
@@ -104,9 +104,9 @@ Client transactions are submitted to the current members of the group using Poin
 is accomplished with Ethereal Gossip and is reused for view change and genesis bootstrapping consensus as well. In
 CHOAM, only a small subset of the membership produces new blocks. Consequently, the other members of the CHOAM must
 somehow receive these blocks and do so reliably. The CHOAM group (context) uses the Reliable Broadcast from the
-_membership_ module to reliably distribute the blocks to all live members using a 2/3+1 variation of the fireflies ring
+_membership_ module to reliably distribute the blocks to all live members using a 2/3+1 variation of the firefly's ring
 calculation. This protocol's message buffer is bounded and garbage collected and efficient in dissemination. As it is a
-garbage collected, bounded buffer broadcast, messages will ultimately age out and discared. The protocol is thus
+garbage collected, bounded buffer broadcast, messages will ultimately age out and discarded. The protocol is thus
 ultimately partially synchronous. Members can thus fall out of (partial) synchronization of the group. Currently, this
 is
 handled by resynchronizing with the available group through the same bootstrap mechanism a node uses to join anew.
