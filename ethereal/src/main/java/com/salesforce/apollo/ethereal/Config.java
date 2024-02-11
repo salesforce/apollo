@@ -10,7 +10,6 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Signer.MockSigner;
-import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 import com.salesforce.apollo.membership.Context;
 import org.joou.ULong;
@@ -23,11 +22,15 @@ import java.util.Objects;
  * @author hal.hildebrand
  */
 public record Config(String label, short nProc, int epochLength, short pid, Signer signer,
-                     DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey,
-                     double bias, Verifier[] verifiers, double fpr) {
+                     DigestAlgorithm digestAlgorithm, int numberOfEpochs, WeakThresholdKey WTKey, double bias,
+                     double fpr) {
 
     public static Builder newBuilder() {
         return new Builder();
+    }
+
+    public int lastLevel() {
+        return epochLength - 1;
     }
 
     public String logLabel() {
@@ -46,7 +49,6 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
         private double           pByz            = -1;
         private short            pid;
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT, ULong.MIN);
-        private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
 
         public Builder() {
@@ -62,8 +64,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-            return new Config(label, nProc, epochLength, pid, signer, digestAlgorithm, epochLength - 1, numberOfEpochs,
-                              wtk, bias, verifiers, fpr);
+            return new Config(label, nProc, epochLength, pid, signer, digestAlgorithm, numberOfEpochs, wtk, bias, fpr);
         }
 
         @Override
@@ -120,30 +121,12 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
-        public short getnProc() {
-            return nProc;
-        }
-
-        public Builder setnProc(short nProc) {
-            this.nProc = nProc;
-            return this;
-        }
-
         public int getNumberOfEpochs() {
             return numberOfEpochs;
         }
 
         public Builder setNumberOfEpochs(int numberOfEpochs) {
             this.numberOfEpochs = numberOfEpochs;
-            return this;
-        }
-
-        public double getpByz() {
-            return pByz;
-        }
-
-        public Builder setpByz(double pByz) {
-            this.pByz = pByz;
             return this;
         }
 
@@ -165,21 +148,30 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
             return this;
         }
 
-        public Verifier[] getVerifiers() {
-            return verifiers;
-        }
-
-        public Builder setVerifiers(Verifier[] verifiers) {
-            this.verifiers = verifiers;
-            return this;
-        }
-
         public WeakThresholdKey getWtk() {
             return wtk;
         }
 
         public Builder setWtk(WeakThresholdKey wtk) {
             this.wtk = wtk;
+            return this;
+        }
+
+        public short getnProc() {
+            return nProc;
+        }
+
+        public Builder setnProc(short nProc) {
+            this.nProc = nProc;
+            return this;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder setpByz(double pByz) {
+            this.pByz = pByz;
             return this;
         }
     }

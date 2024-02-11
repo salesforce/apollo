@@ -7,14 +7,14 @@
 package com.salesforce.apollo.demesnes.isolate;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.demesne.proto.ViewChange;
-import com.salesforce.apollo.stereotomy.event.proto.*;
-import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.model.demesnes.Demesne;
 import com.salesforce.apollo.model.demesnes.DemesneImpl;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.proto.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -57,7 +57,7 @@ public class DemesneIsolate {
     private static boolean active(JNIEnvironment jniEnv, JClass clazz, @CEntryPoint.IsolateThreadContext long isolateId)
     throws GeneralSecurityException {
         final Demesne d = demesne.get();
-        return d == null ? false : d.active();
+        return d != null && d.active();
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_commit")
@@ -225,16 +225,6 @@ public class DemesneIsolate {
         if (d != null) {
             d.stop();
         }
-    }
-
-    private static JByteArray toByteArray(InceptionEvent rotate) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    private static JByteArray toByteArray(RotationEvent rotate) {
-        // TODO Auto-generated method stub
-        return null;
     }
 
     @CEntryPoint(name = "Java_com_salesforce_apollo_model_demesnes_JniBridge_viewChange")

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.membership.Context;
@@ -35,8 +34,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class RbcAdderTest {
 
-    private Config config;
-    private List<SigningMember> members;
+    private Config                                   config;
+    private List<SigningMember>                      members;
     private HashMap<Short, Map<Integer, List<Unit>>> units;
 
     @BeforeEach
@@ -48,17 +47,20 @@ public class RbcAdderTest {
         units = DagTest.collectUnits(d);
         var context = Context.newBuilder().setCardinality(10).build();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        members = IntStream.range(0, 4).mapToObj(i -> stereotomy.newIdentifier()).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        members = IntStream.range(0, 4)
+                           .mapToObj(i -> stereotomy.newIdentifier())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(e -> (SigningMember) e)
+                           .toList();
         members.forEach(m -> context.activate(m));
         config = Config.newBuilder()
-                .setnProc((short) members.size())
-                .setVerifiers(members.toArray(new Verifier[members.size()]))
-                .setSigner(members.get(0))
-                .setPid((short) 0)
-                .build();
+                       .setnProc((short) members.size())
+                       .setSigner(members.get(0))
+                       .setPid((short) 0)
+                       .build();
     }
 
     @Test

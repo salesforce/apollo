@@ -6,30 +6,26 @@
  */
 package com.salesforce.apollo.ethereal.linear;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.function.Consumer;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.linear.UnanimousVoter.SuperMajorityDecider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.function.Consumer;
 
 /**
- * Extender is a type that implements an algorithm that extends order of units
- * provided by an instance of a Dag to a linear order.
- * 
- * @author hal.hildebrand
+ * Extender is a type that implements an algorithm that extends order of units provided by an instance of a Dag to a
+ * linear order.
  *
+ * @author hal.hildebrand
  */
 public class Extender {
-    private static final int FIRST_DECIDED_ROUND = 3;
-    private static Logger    log                 = LoggerFactory.getLogger(Extender.class);
+    private static final int    FIRST_DECIDED_ROUND = 3;
+    private static final Logger log                 = LoggerFactory.getLogger(Extender.class);
 
     private final Config                                conf;
     private final Dag                                   dag;
@@ -43,9 +39,8 @@ public class Extender {
     }
 
     /**
-     * roundSorter picks information about newly picked timing unit from the
-     * timingRounds channel, finds all units belonging to their timing round and
-     * establishes linear order on them. Sends slices of ordered units to output.
+     * roundSorter picks information about newly picked timing unit from the timingRounds channel, finds all units
+     * belonging to their timing round and establishes linear order on them. Sends slices of ordered units to output.
      */
     public TimingRound chooseNextTimingUnits(TimingRound lastTU, Consumer<List<Unit>> output) {
         TimingRound next;
@@ -119,9 +114,8 @@ public class Extender {
     }
 
     private SuperMajorityDecider getDecider(Unit uc, HashMap<Digest, SuperMajorityDecider> deciders) {
-        return deciders.computeIfAbsent(uc.hash(),
-                                        h -> new SuperMajorityDecider(new UnanimousVoter(dag, uc, new HashMap<>(),
-                                                                                         logLabel)));
+        return deciders.computeIfAbsent(uc.hash(), h -> new SuperMajorityDecider(
+        new UnanimousVoter(dag, uc, new HashMap<>(), logLabel)));
     }
 
     private List<Unit> permutation(int level, List<Unit> unitsOnLevel, Unit previousTU) {
@@ -137,18 +131,13 @@ public class Extender {
 
     private List<Short> pidOrder(int level, Unit tu) {
         var pids = new ArrayList<Short>();
-        int rnd = Math.abs((tu == null ? 0 : (short) tu.hash().getLongs()[0]));
         for (int pid = 0; pid < conf.nProc(); pid++) {
-            pids.add((short) ((pid + level + rnd) % conf.nProc()));
+            pids.add((short) pid);
         }
         if (tu == null) {
             return pids;
-
         }
-        for (short pid : new ArrayList<>(pids)) {
-            pids.set(pid, (short) ((pids.get(pid) + tu.creator()) % conf.nProc()));
-        }
+        Collections.shuffle(pids, new Random(tu.hash().fold()));
         return pids;
-
     }
 }

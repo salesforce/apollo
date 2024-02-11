@@ -10,12 +10,10 @@ package com.salesforce.apollo.ethereal;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Context;
@@ -23,6 +21,7 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -55,7 +54,7 @@ public class EtherealTest {
 
     static {
         LARGE_TESTS = Boolean.getBoolean("large_tests");
-        DELAY_MS = LARGE_TESTS ? 5 : 5;
+        DELAY_MS = 5;
         NPROC = LARGE_TESTS ? 7 : 4;
     }
 
@@ -107,8 +106,7 @@ public class EtherealTest {
         var builder = Config.newBuilder()
                             .setnProc((short) NPROC)
                             .setNumberOfEpochs(NUM_EPOCHS)
-                            .setEpochLength(EPOCH_LENGTH)
-                            .setVerifiers(members.toArray(new Verifier[members.size()]));
+                            .setEpochLength(EPOCH_LENGTH);
 
         List<List<List<ByteString>>> produced = new ArrayList<>();
         for (int i = 0; i < (short) NPROC; i++) {

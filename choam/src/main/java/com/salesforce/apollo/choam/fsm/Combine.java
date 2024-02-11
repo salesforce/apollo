@@ -32,7 +32,7 @@ public interface Combine {
 
     void regenerate();
 
-    enum Merchantile implements Transitions {
+    enum Mercantile implements Transitions {
         AWAITING_REGENERATION {
             @Exit
             public void cancelTimer() {
@@ -164,7 +164,7 @@ public interface Combine {
         }
 
         default Transitions fail() {
-            return Merchantile.PROTOCOL_FAILURE;
+            return Mercantile.PROTOCOL_FAILURE;
         }
 
         default Transitions finishCheckpoint() {

@@ -2,10 +2,11 @@
 
 The Apollo Delphinius project is an experimental multi-tenant, distributed system platform. Apollo provides a secure
 communications overlay using Fireflies. The consensus layer is supplied by an asynchronous bft consensus protocol. The
-sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear
-logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
+sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpoint CHOAM linear
+logs. Identity and key management are provided as a foundational service and integrated into the MTLS grpc
+communication.
 
-The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency
+The target service goal is a multi-tenant Zanzibar/KERI integration that provides a wide area replicated, low latency
 service for managing identity, key management, access control and verifiable credentials such as JWT issuance and
 validation.
 
@@ -18,26 +19,26 @@ builds from the command line maven.
 
 ## Not A Coin Platform™
 
-Apollo isn't designed for coins, rather as essentially a distributed multitenant database. Of course, while the systems
+Apollo isn't designed for coins, rather as essentially a distributed multi-tenant database. Of course, while the systems
 and mechanisms of Apollo can be used for such, the design goals are much different. Thus, no coins for you.
 
 ## Some Features
 
-* Multitenant isolation enclaves using GraalVM Isolates
-* Self contained cryptography module - Self describing Digests, Signatures and Identifiers, solid Bloomfilters.
-* Decentralized Identifier based foundation and key managment infrastructure, based on
+* Multi tenant isolation enclaves using GraalVM Isolates
+* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters.
+* Decentralized Identifier-based foundation and key management infrastructure, based on
   the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
-* Secure and trusted attestation, identity boostrapping and secrets provisioning
-* MTLS network communication - KERI for MTLS certificate authentication. Local communication simulation for simplified
-  multinode simulation for single process (IDE) testing
+* Secure and trusted attestation, identity bootstrapping and secrets provisioning
+* MTLS network communication — KERI for MTLS certificate authentication. Local communication simulation for simplified
+  multi-node simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * Byzantine intrusion tolerant secure membership and communications overlay providing virtually synchronous, stable
   membership views.
 * Efficient and easy to reuse communication patterns for Fireflies ring style gossiping on membership contexts
-* Reliable Broadcast - garbage collected, context routed reliable broadcast
+* Reliable Broadcast — garbage collected, context routed reliable broadcast
 * Efficient atomic broadcast in asynchronous networks with byzantine nodes
-* Dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines
-* JDBC accessible, SQL store backed, materialized views maintained by a SQL state machine. Supports DDL, DML, stored
+* Dynamic, committee-based, transaction causal ordering service producing linear logs - Replicated State Machines
+* JDBC accessible, SQL store backed, materialized views maintained by an SQL state machine. Supports DDL, DML, stored
   procedures, functions and triggers.
 * Google Zanzibar functionality providing Relation Based Access Control hosted on SQL state machines.
 
@@ -85,8 +86,8 @@ This will add the *[isolates](isolates/README.md)* modules to the build.
 
 ### Platform Specific Domain Socket Support
 
-Platform specific code for supporting Unix Domain Socket in GRPC Netty is segregated into two different modules:
-*[domain-epoll](domain-epoll)* and *[domain-kqueue](domain-kqueue)*. These modules are added via platform specific
+Platform-specific code for supporting Unix Domain Socket in GRPC Netty is segregated into two different modules:
+*[domain-epoll](domain-epoll)* and *[domain-kqueue](domain-kqueue)*. These modules are added via platform-specific
 profiles that are activated for the platform the build is running on.
 
 ## Modules
@@ -94,7 +95,7 @@ profiles that are activated for the platform the build is running on.
 Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse. Each module is a Maven module
 under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
 
-* [CHOAM](choam/README.md) - Committee maintanence of replicated state machines
+* [CHOAM](choam/README.md) - Committee maintenance of replicated state machines
 * [Delphinius](delphinius/README.md) - Bare bones Google Zanzibar clone
 * [Domain-EPoll](domain-epoll) - linux support for Netty domain sockets
 * [Domain-KQueue](domain-epoll) - mac osx support for Netty domain sockets
@@ -106,17 +107,17 @@ under the source root and contains a README.md documenting (such as it is at the
 * [Deterministic Liquibase](liquibase-deterministic) - Deterministic Liquibase
 * [Gorgoneion](gorgoneion/README.md) - Identity bootstrapping
 * [Gorgoneion Client](gorgoneion-client/README.md) - Identity bootstrap client
-* [Isolates](isolates/README.md) - GraalVM shared libray construction of Apollo sub domain enclaves.
+* [Isolates](isolates/README.md) - GraalVM shared library construction of Apollo subdomain enclaves.
 * [Isolate Functional Testing](isolate-ftesting/README.md) - Functional testing of Apollo domain enclaves.
 * [Memberships](memberships/README.md) - Fundamental membership and Context model. Local and MTLS GRPC _Routers_. Ring
   communication and gossip patterns.
-* [Model](model/README.md) - Replicated domains. Process and multitentant sharding domains and enclaves.
+* [Model](model/README.md) - Replicated domains. Process and multi-tenant sharding domains and enclaves.
 * [Protocols](protocols/README.md) - GRPC MTLS service fundamentals, Netflix GRPC and other rate limiters.
 * [Schemas](schemas/README.md) - Liquibase SQL definitions for other modules
 * [Sql-State](sql-state/README.md) - Replicated SQL state machines running on CHOAM linear logs. JDBC interface.
 * [Stereotomy](stereotomy/README.md) - Key Event Receipt Infrastructure. KEL, KERL and other fundamental identity, key
   and trust management
-* [Stereotomy Services](stereotomy-services) - GRPC services and protobuff interfaces for KERI services
+* [Stereotomy Services](stereotomy-services) - GRPC services and protobuf interfaces for KERI services
 * [Thoth](thoth/README.md) - Decentralized Stereotomy. Distributed hash table storage, protocols and API for managing
   KERI decentralized identity
 * [Tron](tron/README.md) - Compact, sophisticated Finite State Machine model using Java Enums.
@@ -125,28 +126,28 @@ under the source root and contains a README.md documenting (such as it is at the
 
 ## Protobuf and GRPC
 
-Apollo uses Protobuf for all serialization and GRPC for all interprocess communication. This implies code generation.
+Apollo uses Protobuf for all serializations and GRPC for all interprocess communication. This implies code generation.
 Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the
 Eclipse IDE Maven integration. To aleviate this,  _all_  grpc/proto generation occurs in one module, the aptly named
 _grpc_  module.
 
 ## JOOQ
 
-Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again,
+Apollo makes use of [JOOQ](https://www.jooq.org) as an SQL DSL for Java. This also implies code generation and, again,
 not something I adore. Unlike GRPC, the JOOQ code generation plays very nicely with the Eclipse IDE's Maven integration,
 so JOOQ code generation is included in the module that defines it.
 
 ## WIP
 
 Note that Apollo Delphinius is very much a  _work_   _in_   _progress_ . There is not yet an official release. Thus, it
-is by no means a full featured, hardened distributed systems platform.
+is by no means a full-featured, hardened distributed systems platform.
 
 ## Requirements
 
 Apollo is a pure Java application The build system uses Maven, and requires Maven 3.8.1+. The Maven enforcer plugin
-enforces dependency convergance and Apollo is built using Java 17.
+enforces dependency convergence, and Apollo is built using Java 17.
 
-Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html). This means
+Apollo is a [multimodule Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html). This means
 that the various modules of Apollo are built and versioned as a whole, rather than being separated out into individual
 repositories. This also means that modules refer to other modules within the project as dependencies, and consequently
 must be built in the correct order. Note that Maven does this by default, so there should be no issues. However, it does
@@ -172,7 +173,7 @@ Again, I stress that because these generated source directories are under the "(
 removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the
 build.
 
-Note that adding these generated source directories to the compile path is automatically taken care of in the Maven
+Note that adding these generated source directories to the compiler path is automatically taken care of in the Maven
 *pom.xml* in the "build-helper" plugin.
 
 ## IDE Integration
@@ -181,13 +182,13 @@ Note that adding these generated source directories to the compile path is autom
 Apollo contains one module that create a shaded version of standard libraries. This module **must** be built (
 installed), but only needs to be built once in order to install the resulting jar into your local maven repository. This
 is performed as part of the top level pom's  _pre_  profile. As mentioned previously, this profile must be executed at
-least once before the full build. Note, however, Eclipse and IntellJ **does not understand this transformation** and
+least once before the full build. Note, however, Eclipse and IntellJ **do not understand this transformation** and
 thus will not be able to import this module without errors and messing up the rest of the code that depends on the
 transformation. What this means is that the IDE thinks the module is fine and doesn't notice there has been package
 rewriting to avoid conflicts with existing libraries. What this means is that you *must* exclude this module in your IDE
 environment. This module will not be imported unless you explicitly do so, so please do not do so. If you really think
 you need to be working on it, then you probably understand all this. But if you are simply trying to get Apollo into
-your IDE, importing these module is gonna ruin your day.
+your IDE, importing these modules is gonna ruin your day.
 
 ### Module to exclude
 
@@ -196,14 +197,14 @@ The module to exclude is:
 * h2-deterministic
 
 Again, I stress that you must **NOT** include this in the import of Apollo into your IDE. You'll be scratching your head
-and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.
+and yelling at me about uncompilable code, and I will simply, calmly point you to this part of the readme file.
 
-This module must be built so please run the following once from the top level of the repository
+This module must be built, so please run the following once from the top level of the repository
 
     mvn clean install -Ppre -DskipTests
 
-from the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only need be
-done once as this will be installed in your local Maven repository and you won't have to do it again. Rebuilding this
+From the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only needs to be
+done once as this will be installed in your local Maven repository, and you won't have to do it again. Rebuilding this
 module will have no adverse effect on the rest of the build.
 
 ### Eclipse M2E issues with ${os.detected.classifier}
@@ -218,10 +219,10 @@ which is nice.
 ### Your IDE and Maven code generation
 
 Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), the generation
-phase can occasionally cause interesting issues with your IDE whne you import Apollo. I work with Eclipse, and things
+phase can occasionally cause interesting issues with your IDE when you import Apollo. I work with Eclipse, and things
 are relatively fine with the current releases. However, there are sometimes synchronization issues in Eclipse Maven
 integration that invalidates the generated code and that may require an additional *generate-sources* pass. Apollo is a
-multi-module project and be sure you're leaving time for the asynchronous build process to complete.
+multimodule project and be sure you're leaving time for the asynchronous build process to complete.
 
 I have no idea about IntellJ or Visual Code, so you're on your own there.
 
@@ -231,22 +232,23 @@ haven't updated from this repo in a while, don't try to be clever. Delete all th
 ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
 
 After you do this, you shouldn't have any issue *if* your IDE Maven integration knows about and takes care of using the
-build-helper plugin to manage compilation directories for the module in the IDE. However....
+build-helper plugin to manage compilation directories for the module in the IDE. However…
 
 Myself, I find that I have to first select the top level Apollo.app module, and then **Menu -> Run As -> Maven generate
 sources** (or the equivalent in your IDE). This *should* generate all the sources required for every submodule, so...
 
-Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience. I
-know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
+Feel free to generate issues and such, and I will look into it as I do want this to be flawless and a good experience. I
+know that's impossible, but it undoubtedly can be made better, and PRs are, of course, a thing.
 
 Note that also, for inexplicable reasons, Eclipse Maven will determine it needs to invalidate the _grpc_ generated code
-and will thus need to be regenerated. I'm trying to figure out the heck is going on, but when this happens please simply
+and will thus need to be regenerated. I'm trying to figure out the heck is going on, but when this happens, please
+simply
 regenerate by selecting the _grpc_ module and performing: Menu -> Run As -> Maven generate sources (or the equivalent in
 your IDE).
 
 ## Metrics
 
-Apollo uses Dropwizard Metrics and these are available for Fireflies, Reliable Broadcast, Ethereal and CHOAM.
+Apollo uses Dropwizard Metrics, and these are available for Fireflies, Reliable Broadcast, Ethereal and CHOAM.
 
 ## Testing
 
@@ -261,11 +263,12 @@ machine. YMMV.
 
 ## Current Status
 
-Currently, the system is in devlopment. Fundamental identity and digest/signature/pubKey encodings has been integrated.
+Currently, the system is in development. Fundamental identity and digest/signature/pubKey encodings have been
+integrated.
 Apollo is using Aleph-BFT for consensus, in the form of the Ethereal module. CHOAM has now replaced Consortium, and the
-SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+SQL replicated state machine now uses CHOAM for its linear log and transaction model.
 
-Multitenant shards is in place and being worked upon currently. This integrates Stereotomy and Delphinius using CHOAM.
+Multi-tenant shards are in place and being worked upon currently. This integrates Stereotomy and Delphinius using CHOAM.
 An E2E test of the ReBAC Delphinius service is in development being tested. Full integration of ProcessDomains using
 Fireflies discovery is in development.
 
