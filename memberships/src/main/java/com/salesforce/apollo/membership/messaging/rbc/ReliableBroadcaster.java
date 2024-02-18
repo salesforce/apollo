@@ -10,6 +10,7 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
@@ -181,12 +182,16 @@ public class ReliableBroadcaster {
     }
 
     public void start(Duration duration) {
+        start(duration, null);
+    }
+
+    public void start(Duration duration, Predicate<Token> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
-        comm.register(context.getId(), new Service());
+        comm.register(context.getId(), new Service(), validator);
         var scheduler = Executors.newScheduledThreadPool(2, Thread.ofVirtual().factory());
         scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> oneRound(duration, scheduler), log)),
                            initialDelay, TimeUnit.MILLISECONDS);

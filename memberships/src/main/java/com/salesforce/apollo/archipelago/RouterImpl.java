@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
@@ -46,6 +48,7 @@ public class RouterImpl implements Router {
     private final        Server                          server;
     private final        Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
     private final        AtomicBoolean                   started  = new AtomicBoolean();
+    private final        Predicate<Token>                validator;
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider) {
@@ -55,11 +58,18 @@ public class RouterImpl implements Router {
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, contextRegistration, null);
+    }
+
+    public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+                      ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration,
+                      Predicate<Token> validator) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.clone().setMember(from.getId()).build();
         this.clientIdentityProvider = clientIdentityProvider;
         this.contextRegistration = contextRegistration;
         this.from = from;
+        this.validator = validator;
     }
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
@@ -127,8 +137,32 @@ public class RouterImpl implements Router {
                                                                                        Service service,
                                                                                        String routingLabel,
                                                                                        Function<RoutableService<Service>, BindableService> factory) {
+
+        return create(member, context, service, routingLabel, factory, validator);
+    }
+
+    @Override
+    public <Service, Client extends Link> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                       Service service,
+                                                                                       String routingLabel,
+                                                                                       Function<RoutableService<Service>, BindableService> factory,
+                                                                                       Predicate<Token> validator) {
         return new CommonCommunications<>(context, member,
-                                          getServiceRoutableService(member, context, service, routingLabel, factory));
+                                          getRoutableService(member, context, service, routingLabel, factory,
+                                                             validator));
+    }
+
+    @Override
+    public <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                       Service service,
+                                                                                       String routingLabel,
+                                                                                       Function<RoutableService<Service>, BindableService> factory,
+                                                                                       CreateClientCommunications<Client> createFunction,
+                                                                                       Client localLoopback,
+                                                                                       Predicate<Token> validator) {
+        return new CommonCommunications<>(context, member,
+                                          getRoutableService(member, context, service, routingLabel, factory,
+                                                             validator), createFunction, localLoopback);
     }
 
     @Override
@@ -138,9 +172,8 @@ public class RouterImpl implements Router {
                                                                                        Function<RoutableService<Service>, BindableService> factory,
                                                                                        CreateClientCommunications<Client> createFunction,
                                                                                        Client localLoopback) {
-        return new CommonCommunications<>(context, member,
-                                          getServiceRoutableService(member, context, service, routingLabel, factory),
-                                          createFunction, localLoopback);
+
+        return create(member, context, service, routingLabel, factory, createFunction, localLoopback, validator);
     }
 
     @Override
@@ -166,9 +199,10 @@ public class RouterImpl implements Router {
         log.info("Started router: {}", server.getListenSockets());
     }
 
-    private <Service> RoutableService<Service> getServiceRoutableService(Member member, Digest context, Service service,
-                                                                         String routingLabel,
-                                                                         Function<RoutableService<Service>, BindableService> factory) {
+    private <Service> RoutableService<Service> getRoutableService(Member member, Digest context, Service service,
+                                                                  String routingLabel,
+                                                                  Function<RoutableService<Service>, BindableService> factory,
+                                                                  Predicate<Token> validator) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
             var route = new RoutableService<Service>();
@@ -176,7 +210,7 @@ public class RouterImpl implements Router {
             registry.addService(bindableService);
             return route;
         });
-        routing.bind(context, service);
+        routing.bind(context, service, validator);
         contextRegistration.accept(context);
         log.info("Communications created for: " + member.getId());
         return routing;
@@ -231,8 +265,8 @@ public class RouterImpl implements Router {
             routing.unbind(context);
         }
 
-        public void register(Digest context, Service service) {
-            routing.bind(context, service);
+        public void register(Digest context, Service service, Predicate<Token> validator) {
+            routing.bind(context, service, validator);
         }
     }
 }

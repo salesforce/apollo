@@ -6,15 +6,16 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.proto.KERL_;
-import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesforce.apollo.stereotomy.event.proto.Validations;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.proto.KERL_;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesforce.apollo.stereotomy.event.proto.Validations;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserver;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.observer.EventObserverServer;
@@ -23,6 +24,7 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * @author hal.hildebrand
@@ -60,7 +62,11 @@ public class Publisher implements ProtoEventObserver {
     }
 
     public void start() {
-        comms.register(context, service);
+        start(null);
+    }
+
+    public void start(Predicate<Token> validator) {
+        comms.register(context, service, validator);
     }
 
     public void stop() {

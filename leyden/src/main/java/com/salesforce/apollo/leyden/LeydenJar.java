@@ -3,6 +3,7 @@ package com.salesforce.apollo.leyden;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
@@ -35,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -157,12 +159,16 @@ public class LeydenJar {
     }
 
     public void start(Duration gossip) {
+        start(gossip, null);
+    }
+
+    public void start(Duration gossip, Predicate<Token> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         log.info("Starting context: {}:{} on: {}", context.getId(), System.identityHashCode(context), member.getId());
-        binderComms.register(context.getId(), borders);
-        reconComms.register(context.getId(), recon);
+        binderComms.register(context.getId(), borders, validator);
+        reconComms.register(context.getId(), recon, validator);
         reconcile(scheduler, gossip);
     }
 

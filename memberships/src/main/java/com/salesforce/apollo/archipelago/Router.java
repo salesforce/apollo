@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -15,6 +16,7 @@ import io.grpc.BindableService;
 
 import java.time.Duration;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * @author hal.hildebrand
@@ -31,11 +33,23 @@ public interface Router {
                                                                                 Service service, String routingLabel,
                                                                                 Function<RoutableService<Service>, BindableService> factory);
 
+    <Service, Client extends Link> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                Service service, String routingLabel,
+                                                                                Function<RoutableService<Service>, BindableService> factory,
+                                                                                Predicate<Token> validator);
+
     <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                 Service service, String routingLabel,
                                                                                 Function<RoutableService<Service>, BindableService> factory,
                                                                                 CreateClientCommunications<Client> createFunction,
                                                                                 Client localLoopback);
+
+    <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
+                                                                                Service service, String routingLabel,
+                                                                                Function<RoutableService<Service>, BindableService> factory,
+                                                                                CreateClientCommunications<Client> createFunction,
+                                                                                Client localLoopback,
+                                                                                Predicate<Token> validator);
 
     ClientIdentity getClientIdentityProvider();
 

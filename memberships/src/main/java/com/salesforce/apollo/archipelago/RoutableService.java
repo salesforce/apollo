@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import static com.salesforce.apollo.archipelago.Constants.SERVER_CONTEXT_KEY;
 
@@ -28,12 +29,11 @@ import static com.salesforce.apollo.archipelago.Constants.SERVER_CONTEXT_KEY;
  * @author hal.hildebrand
  */
 public class RoutableService<Service> {
-    private static final Logger log = LoggerFactory.getLogger(RoutableService.class);
+    private static final Logger                               log      = LoggerFactory.getLogger(RoutableService.class);
+    private final        Map<Digest, ServiceBinding<Service>> services = new ConcurrentHashMap<>();
 
-    private final Map<Digest, Service> services = new ConcurrentHashMap<>();
-
-    public void bind(Digest context, Service service) {
-        services.put(context, service);
+    public void bind(Digest context, Service service, Predicate<Token> validator) {
+        services.put(context, new ServiceBinding<>(service, validator));
     }
 
     public void evaluate(StreamObserver<?> responseObserver, Consumer<Service> c) {
@@ -42,13 +42,21 @@ public class RoutableService<Service> {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             log.error("Null context");
         } else {
-            Service service = services.get(context);
-            if (service == null) {
+            var binding = services.get(context);
+            if (binding == null) {
                 log.trace("No service for context {}", context);
                 responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             } else {
                 try {
-                    c.accept(service);
+                    if (binding.validator != null) {
+                        var token = FernetServerInterceptor.AccessTokenContextKey.get();
+                        if (!binding.validator.test(token)) {
+                            log.info("Unauthenticated on: {}", context);
+                            responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
+                            return;
+                        }
+                    }
+                    c.accept(binding.service);
                 } catch (Throwable t) {
                     log.error("Uncaught exception in service evaluation for context: {}", context, t);
                     responseObserver.onError(t);
@@ -63,13 +71,21 @@ public class RoutableService<Service> {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             log.error("Null context");
         } else {
-            Service service = services.get(context);
-            if (service == null) {
+            var binding = services.get(context);
+            if (binding == null) {
                 log.trace("No service for context {}", context);
                 responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             } else {
                 try {
-                    c.accept(service, FernetServerInterceptor.AccessTokenContextKey.get());
+                    if (binding.validator != null) {
+                        var token = FernetServerInterceptor.AccessTokenContextKey.get();
+                        if (!binding.validator.test(token)) {
+                            log.info("Unauthenticated on: {}", context);
+                            responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
+                            return;
+                        }
+                    }
+                    c.accept(binding.service, FernetServerInterceptor.AccessTokenContextKey.get());
                 } catch (Throwable t) {
                     log.error("Uncaught exception in service evaluation for context: {}", context, t);
                     responseObserver.onError(t);
@@ -80,5 +96,8 @@ public class RoutableService<Service> {
 
     public void unbind(Digest context) {
         services.remove(context);
+    }
+
+    private record ServiceBinding<Service>(Service service, Predicate<Token> validator) {
     }
 }

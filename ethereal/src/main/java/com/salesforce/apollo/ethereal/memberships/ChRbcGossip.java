@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Timer;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -36,6 +37,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
@@ -79,12 +81,19 @@ public class ChRbcGossip {
      * Start the receiver's gossip
      */
     public void start(Duration duration) {
+        start(duration, null);
+    }
+
+    /**
+     * Start the receiver's gossip
+     */
+    public void start(Duration duration, Predicate<Token> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamLong(duration.toMillis()));
         log.trace("Starting GossipService[{}] on: {}", context.getId(), member.getId());
-        comm.register(context.getId(), terminal);
+        comm.register(context.getId(), terminal, validator);
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(() -> {
             try {

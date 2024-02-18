@@ -3,6 +3,7 @@ package com.salesforce.apollo.archipelago;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.macasaet.fernet.Key;
+import com.macasaet.fernet.StringValidator;
 import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.client.FernetCallCredentials;
 import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
@@ -22,6 +23,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,7 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * @author hal.hildebrand
  **/
 public class FernetTest {
-    private final TestItService local = new TestItService() {
+    public static final String        HELLO_WORLD = "Hello, world!";
+    private final       TestItService local       = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -48,7 +51,8 @@ public class FernetTest {
             return null;
         }
     };
-    private       Token         token;
+    private             Token         token;
+    private             Key           key;
 
     @BeforeEach
     public void before() {
@@ -60,9 +64,9 @@ public class FernetTest {
                     ;
             }
         };
-        final Key key = Key.generateKey(deterministicRandom);
+        key = Key.generateKey(deterministicRandom);
 
-        token = Token.generate(deterministicRandom, key, "Hello, world!");
+        token = Token.generate(deterministicRandom, key, HELLO_WORLD);
     }
 
     @Test
@@ -78,9 +82,16 @@ public class FernetTest {
                                      () -> RouterImpl.defaultServerLimit(), null,
                                      Collections.singletonList(new FernetServerInterceptor()));
 
+        Predicate<Token> validator = t -> {
+            assertNotNull(t, "Token is null");
+            var result = token.validateAndDecrypt(key, new StringValidator() {
+            });
+            return result.equals(HELLO_WORLD);
+        };
         RouterImpl.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(),
                                                                                        "A", r -> new Server(r),
-                                                                                       c -> new TestItClient(c), local);
+                                                                                       c -> new TestItClient(c), local,
+                                                                                       validator);
 
         RouterSupplier serverB = new LocalServer(prefix, memberB);
         var routerB = serverB.router(ServerConnectionCache.newBuilder().setCredentials(creds),
@@ -90,7 +101,7 @@ public class FernetTest {
         RouterImpl.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(),
                                                                                          "B", r -> new Server(r),
                                                                                          c -> new TestItClient(c),
-                                                                                         local);
+                                                                                         local, validator);
 
         routerA.start();
         routerB.start();
@@ -128,7 +139,7 @@ public class FernetTest {
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
             router.evaluate(responseObserver, (t, token) -> {
-                assertNotNull(token);
+                assertNotNull(token, "No token!");
                 t.ping(request, responseObserver);
             });
         }
