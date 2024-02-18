@@ -4,18 +4,17 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.test.proto.TestItGrpc;
 import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
 import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
-import com.salesforce.apollo.archipelago.*;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -87,11 +86,11 @@ public class RouterTest {
         router.close(Duration.ofSeconds(1));
     }
 
-    public static interface TestIt {
+    public interface TestIt {
         void ping(Any request, StreamObserver<Any> responseObserver);
     }
 
-    public static interface TestItService extends Link {
+    public interface TestItService extends Link {
         Any ping(Any request);
     }
 
