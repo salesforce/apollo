@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
 import com.google.common.primitives.Ints;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.archipelago.Demultiplexer;
-import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.test.proto.ByteMessage;

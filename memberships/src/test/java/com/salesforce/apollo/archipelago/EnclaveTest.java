@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.archipeligo;
+package com.salesforce.apollo.archipelago;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -157,11 +156,11 @@ public class EnclaveTest {
                                   .build();
     }
 
-    public static interface TestIt {
+    public interface TestIt {
         void ping(Any request, StreamObserver<Any> responseObserver);
     }
 
-    public static interface TestItService extends Link {
+    public interface TestItService extends Link {
         Any ping(Any request);
     }
 
