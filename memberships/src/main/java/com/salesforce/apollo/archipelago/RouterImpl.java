@@ -68,7 +68,7 @@ public class RouterImpl implements Router {
             public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                        CallOptions callOptions, Channel next) {
                 ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
-                return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
+                return new SimpleForwardingClientCall<>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
                         headers.put(Constants.METADATA_CONTEXT_KEY, qb64(ctx));
@@ -127,9 +127,8 @@ public class RouterImpl implements Router {
                                                                                        Service service,
                                                                                        String routingLabel,
                                                                                        Function<RoutableService<Service>, BindableService> factory) {
-        return new CommonCommunications<Client, Service>(context, member,
-                                                         getServiceRoutableService(member, context, service,
-                                                                                   routingLabel, factory));
+        return new CommonCommunications<>(context, member,
+                                          getServiceRoutableService(member, context, service, routingLabel, factory));
     }
 
     @Override
@@ -139,10 +138,9 @@ public class RouterImpl implements Router {
                                                                                        Function<RoutableService<Service>, BindableService> factory,
                                                                                        CreateClientCommunications<Client> createFunction,
                                                                                        Client localLoopback) {
-        return new CommonCommunications<Client, Service>(context, member,
-                                                         getServiceRoutableService(member, context, service,
-                                                                                   routingLabel, factory),
-                                                         createFunction, localLoopback);
+        return new CommonCommunications<>(context, member,
+                                          getServiceRoutableService(member, context, service, routingLabel, factory),
+                                          createFunction, localLoopback);
     }
 
     @Override
@@ -191,14 +189,13 @@ public class RouterImpl implements Router {
         private final Client                             localLoopback;
         private final RoutableService<Service>           routing;
 
-        public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing) {
+        public CommonCommunications(Digest context, Member from, RoutableService<Service> routing) {
             this(context, from, routing, m -> vanilla(from), vanilla(from));
 
         }
 
-        public <T extends Member> CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
-                                                       CreateClientCommunications<Client> createFunction,
-                                                       Client localLoopback) {
+        public CommonCommunications(Digest context, Member from, RoutableService<Service> routing,
+                                    CreateClientCommunications<Client> createFunction, Client localLoopback) {
             this.context = context;
             this.routing = routing;
             this.createFunction = createFunction;
@@ -211,7 +208,7 @@ public class RouterImpl implements Router {
             Client client = (Client) new Link() {
 
                 @Override
-                public void close() throws IOException {
+                public void close() {
                 }
 
                 @Override
