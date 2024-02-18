@@ -12,7 +12,6 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.test.proto.TestItGrpc;
 import com.salesforce.apollo.utils.Utils;
-import io.grpc.CallCredentials;
 import io.grpc.stub.StreamObserver;
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,30 +67,29 @@ public class FernetTest {
 
     @Test
     public void smokin() throws Exception {
-        final var credentials = FernetCallCredentials.blocking(() -> token);
+        var creds = FernetCallCredentials.blocking(() -> token);
         final var memberA = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
         final var memberB = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
 
         RouterSupplier serverA = new LocalServer(prefix, memberA);
-        var routerA = serverA.router(ServerConnectionCache.newBuilder(), () -> RouterImpl.defaultServerLimit(), null,
+        var routerA = serverA.router(ServerConnectionCache.newBuilder().setCredentials(creds),
+                                     () -> RouterImpl.defaultServerLimit(), null,
                                      Collections.singletonList(new FernetServerInterceptor()));
 
         RouterImpl.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(),
                                                                                        "A", r -> new Server(r),
-                                                                                       c -> new TestItClient(c,
-                                                                                                             credentials),
-                                                                                       local);
+                                                                                       c -> new TestItClient(c), local);
 
         RouterSupplier serverB = new LocalServer(prefix, memberB);
-        var routerB = serverB.router(ServerConnectionCache.newBuilder(), () -> RouterImpl.defaultServerLimit(), null,
+        var routerB = serverB.router(ServerConnectionCache.newBuilder().setCredentials(creds),
+                                     () -> RouterImpl.defaultServerLimit(), null,
                                      Collections.singletonList(new FernetServerInterceptor()));
 
         RouterImpl.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(),
                                                                                          "B", r -> new Server(r),
-                                                                                         c -> new TestItClient(c,
-                                                                                                               credentials),
+                                                                                         c -> new TestItClient(c),
                                                                                          local);
 
         routerA.start();
@@ -139,12 +137,10 @@ public class FernetTest {
     public static class TestItClient implements TestItService {
         private final TestItGrpc.TestItBlockingStub client;
         private final ManagedServerChannel          connection;
-        private final CallCredentials               credentials;
 
-        public TestItClient(ManagedServerChannel c, CallCredentials credentials) {
+        public TestItClient(ManagedServerChannel c) {
             this.connection = c;
-            this.credentials = credentials;
-            client = TestItGrpc.newBlockingStub(c).withCallCredentials(credentials);
+            client = c.wrap(TestItGrpc.newBlockingStub(c));
         }
 
         @Override

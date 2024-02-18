@@ -115,7 +115,7 @@ public class LocalServerTest {
 
         public TestItClient(ManagedServerChannel c) {
             this.connection = c;
-            client = TestItGrpc.newBlockingStub(c);
+            client = c.wrap(TestItGrpc.newBlockingStub(c));
         }
 
         @Override

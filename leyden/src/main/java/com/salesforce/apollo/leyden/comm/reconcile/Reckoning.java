@@ -20,7 +20,7 @@ public class Reckoning implements ReconciliationClient {
 
     public Reckoning(ManagedServerChannel channel, Member member, ReconciliationMetrics metrics) {
         this.channel = channel;
-        this.client = ReconciliationGrpc.newBlockingStub(channel);
+        this.client = channel.wrap(ReconciliationGrpc.newBlockingStub(channel));
         this.member = member;
     }
 

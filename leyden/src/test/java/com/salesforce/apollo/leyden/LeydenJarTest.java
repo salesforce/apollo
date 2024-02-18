@@ -7,7 +7,7 @@ import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
-import com.salesforce.apollo.leyden.proto.KeyAndToken;
+import com.salesforce.apollo.leyden.proto.Key;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -55,17 +55,17 @@ public class LeydenJarTest {
     public void before() throws Exception {
         validator = new LeydenJar.OpValidator() {
             @Override
-            public boolean validateBind(Bound bound, byte[] token) {
+            public boolean validateBind(Bound bound) {
                 return true;
             }
 
             @Override
-            public boolean validateGet(byte[] key, byte[] token) {
+            public boolean validateGet(byte[] key) {
                 return true;
             }
 
             @Override
-            public boolean validateUnbind(byte[] key, byte[] token) {
+            public boolean validateUnbind(byte[] key) {
                 return true;
             }
         };
@@ -79,14 +79,14 @@ public class LeydenJarTest {
                                   .mapToObj(i -> stereotomy.newIdentifier())
                                   .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                             controlled -> controlled));
-        context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
+        context = Context.newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
         identities.keySet().forEach(m -> context.activate(m));
         identities.keySet().forEach(member -> instantiate(member, context));
 
         System.out.println();
         System.out.println();
-        System.out.println(String.format("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s", cardinality, PBYZ,
-                                         context.getRingCount(), context.majority()));
+        System.out.printf("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s%n", cardinality, PBYZ,
+                          context.getRingCount(), context.majority());
         System.out.println();
     }
 
@@ -107,7 +107,7 @@ public class LeydenJarTest {
             var success = Utils.waitForCondition(10_000, () -> {
                 Bound bound;
                 try {
-                    bound = e.getValue().get(KeyAndToken.newBuilder().setKey(key).build());
+                    bound = e.getValue().get(Key.newBuilder().setKey(key).build());
                 } catch (NoSuchElementException nse) {
                     try {
                         Thread.sleep(100);

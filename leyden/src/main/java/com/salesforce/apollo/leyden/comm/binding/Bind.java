@@ -4,7 +4,7 @@ import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.leyden.proto.BinderGrpc;
 import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
-import com.salesforce.apollo.leyden.proto.KeyAndToken;
+import com.salesforce.apollo.leyden.proto.Key;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
@@ -21,7 +21,7 @@ public class Bind implements BinderClient {
     public Bind(ManagedServerChannel channel, BinderMetrics metrics) {
         this.channel = channel;
         this.metrics = metrics;
-        this.client = BinderGrpc.newBlockingStub(channel);
+        this.client = channel.wrap(BinderGrpc.newBlockingStub(channel));
     }
 
     public static BinderClient getCreate(ManagedServerChannel c, BinderMetrics binderMetrics) {
@@ -41,7 +41,7 @@ public class Bind implements BinderClient {
             }
 
             @Override
-            public Bound get(KeyAndToken key) {
+            public Bound get(Key key) {
                 return service.get(key, member.getId());
             }
 
@@ -51,7 +51,7 @@ public class Bind implements BinderClient {
             }
 
             @Override
-            public void unbind(KeyAndToken key) {
+            public void unbind(Key key) {
                 service.unbind(key, member.getId());
             }
         };
@@ -68,7 +68,7 @@ public class Bind implements BinderClient {
     }
 
     @Override
-    public Bound get(KeyAndToken key) {
+    public Bound get(Key key) {
         return client.get(key);
     }
 
@@ -78,7 +78,7 @@ public class Bind implements BinderClient {
     }
 
     @Override
-    public void unbind(KeyAndToken key) {
+    public void unbind(Key key) {
         client.unbind(key);
     }
 }

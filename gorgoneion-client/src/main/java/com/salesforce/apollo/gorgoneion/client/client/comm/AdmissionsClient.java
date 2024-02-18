@@ -6,14 +6,14 @@
  */
 package com.salesforce.apollo.gorgoneion.client.client.comm;
 
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.proto.AdmissionsGrpc;
 import com.salesforce.apollo.gorgoneion.proto.Credentials;
 import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.Validations;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.membership.Member;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -29,7 +29,7 @@ public class AdmissionsClient implements Admissions {
 
     public AdmissionsClient(ManagedServerChannel channel, GorgoneionClientMetrics metrics) {
         this.channel = channel;
-        this.client = AdmissionsGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(AdmissionsGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

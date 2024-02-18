@@ -7,12 +7,12 @@
 package com.salesforce.apollo.ethereal.memberships.comm;
 
 import com.codahale.metrics.Timer.Context;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.ethereal.proto.ContextUpdate;
 import com.salesforce.apollo.ethereal.proto.Gossip;
 import com.salesforce.apollo.ethereal.proto.GossiperGrpc;
 import com.salesforce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -27,7 +27,7 @@ public class GossiperClient implements Gossiper {
 
     public GossiperClient(ManagedServerChannel channel, EtherealMetrics metrics) {
         this.channel = channel;
-        this.client = GossiperGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(GossiperGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

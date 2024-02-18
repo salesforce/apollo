@@ -26,7 +26,7 @@ public class EntranceClient implements Entrance {
 
     public EntranceClient(ManagedServerChannel channel, FireflyMetrics metrics) {
         this.channel = channel;
-        this.client = EntranceGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(EntranceGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

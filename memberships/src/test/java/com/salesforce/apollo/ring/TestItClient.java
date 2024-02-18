@@ -1,9 +1,9 @@
 package com.salesforce.apollo.ring;
 
 import com.google.protobuf.Any;
-import com.salesforce.apollo.test.proto.TestItGrpc;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.test.proto.TestItGrpc;
 
 import java.io.IOException;
 
@@ -16,7 +16,7 @@ public class TestItClient implements TestItService {
 
     public TestItClient(ManagedServerChannel c) {
         this.connection = c;
-        client = TestItGrpc.newBlockingStub(c);
+        client = c.wrap(TestItGrpc.newBlockingStub(c));
     }
 
     @Override

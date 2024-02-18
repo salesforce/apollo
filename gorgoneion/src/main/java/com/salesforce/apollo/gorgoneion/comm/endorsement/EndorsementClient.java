@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
-import com.salesforce.apollo.gorgoneion.proto.*;
-import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.gorgoneion.comm.GorgoneionMetrics;
+import com.salesforce.apollo.gorgoneion.proto.*;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -28,7 +28,7 @@ public class EndorsementClient implements Endorsement {
 
     public EndorsementClient(ManagedServerChannel channel, GorgoneionMetrics metrics) {
         this.channel = channel;
-        this.client = EndorsementGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(EndorsementGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

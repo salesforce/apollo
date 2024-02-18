@@ -125,7 +125,7 @@ public class LeydenJar {
         }
     }
 
-    public Bound get(KeyAndToken keyAndToken) {
+    public Bound get(Key keyAndToken) {
         var hash = algorithm.digest(keyAndToken.getKey());
         log.info("Get: {} on: {}", hash, member.getId());
         Instant timedOut = Instant.now().plus(operationTimeout);
@@ -175,7 +175,7 @@ public class LeydenJar {
         reconComms.deregister(context.getId());
     }
 
-    public void unbind(KeyAndToken keyAndToken) {
+    public void unbind(Key keyAndToken) {
         var key = keyAndToken.toByteArray();
         var hash = algorithm.digest(key);
         log.info("Unbind: {} on: {}", hash, member.getId());
@@ -477,11 +477,11 @@ public class LeydenJar {
     }
 
     public interface OpValidator {
-        boolean validateBind(Bound bound, byte[] token);
+        boolean validateBind(Bound bound);
 
-        boolean validateGet(byte[] key, byte[] token);
+        boolean validateGet(byte[] key);
 
-        boolean validateUnbind(byte[] key, byte[] token);
+        boolean validateUnbind(byte[] key);
     }
 
     private static class ConsensusState {
@@ -553,7 +553,7 @@ public class LeydenJar {
         @Override
         public void bind(Binding request, Digest from) {
             var bound = request.getBound();
-            if (!validator.validateBind(bound, request.getToken().toByteArray())) {
+            if (!validator.validateBind(bound)) {
                 log.warn("Invalid Bind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
@@ -565,8 +565,8 @@ public class LeydenJar {
         }
 
         @Override
-        public Bound get(KeyAndToken request, Digest from) {
-            if (!validator.validateGet(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+        public Bound get(Key request, Digest from) {
+            if (!validator.validateGet(request.getKey().toByteArray())) {
                 log.warn("Invalid Get Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
@@ -577,8 +577,8 @@ public class LeydenJar {
         }
 
         @Override
-        public void unbind(KeyAndToken request, Digest from) {
-            if (!validator.validateUnbind(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+        public void unbind(Key request, Digest from) {
+            if (!validator.validateUnbind(request.getKey().toByteArray())) {
                 log.warn("Invalid Unbind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }

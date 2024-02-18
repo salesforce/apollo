@@ -6,17 +6,17 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.resolver;
 
-import java.util.Optional;
-
 import com.codahale.metrics.Timer.Context;
-import com.salesforce.apollo.stereotomy.event.proto.Binding;
-import com.salesforce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.ResolverGrpc;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverBlockingStub;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ResolverGrpc;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverBlockingStub;
+
+import java.util.Optional;
 
 /**
  * @author hal.hildebrand
@@ -26,9 +26,10 @@ public class ResolverClient implements ResolverService {
     private final ManagedServerChannel channel;
     private final ResolverBlockingStub client;
     private final StereotomyMetrics    metrics;
+
     public ResolverClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
-        this.client = ResolverGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(ResolverGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

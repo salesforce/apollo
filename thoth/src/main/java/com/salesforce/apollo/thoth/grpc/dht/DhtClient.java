@@ -31,7 +31,7 @@ public class DhtClient implements DhtService {
 
     public DhtClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
-        this.client = KerlDhtGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(KerlDhtGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

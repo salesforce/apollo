@@ -31,7 +31,7 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
- * Context based GRPC routing
+ * Context-based GRPC routing
  *
  * @author hal.hildebrand
  */
