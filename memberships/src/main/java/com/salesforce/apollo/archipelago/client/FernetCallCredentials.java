@@ -2,6 +2,7 @@ package com.salesforce.apollo.archipelago.client;
 
 import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Constants;
+import io.grpc.CallCredentials;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import org.slf4j.Logger;
@@ -11,7 +12,7 @@ import java.util.concurrent.Executor;
 
 import static com.salesforce.apollo.archipelago.server.FernetServerInterceptor.AUTH_HEADER_PREFIX;
 
-public abstract class FernetCallCredentials extends io.grpc.CallCredentials {
+public abstract class FernetCallCredentials extends CallCredentials {
     private static final Logger LOGGER = LoggerFactory.getLogger(FernetCallCredentials.class);
 
     public static FernetCallCredentials synchronous(SynchronousTokenProvider tokenProvider) {

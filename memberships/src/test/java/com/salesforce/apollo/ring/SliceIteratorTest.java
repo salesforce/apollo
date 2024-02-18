@@ -1,6 +1,7 @@
 package com.salesforce.apollo.ring;
 
 import com.google.protobuf.Any;
+import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.membership.Context;
@@ -76,27 +77,34 @@ public class SliceIteratorTest {
         var serverBuilder = InProcessServerBuilder.forName(name);
         var cacheBuilder = ServerConnectionCache.newBuilder()
                                                 .setFactory(to -> InProcessChannelBuilder.forName(name).build());
-        var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1, context.getId(),
-                                                                                      new ServiceImpl(local1, "A"), "A",
-                                                                                      ServerImpl::new,
-                                                                                      TestItClient::new, local1);
+        Router router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
+        try {
+            RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1,
+                                                                                          context.getId(),
+                                                                                          new ServiceImpl(local1, "A"),
+                                                                                          "A", ServerImpl::new,
+                                                                                          TestItClient::new, local1);
 
-        RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2, context.getId(),
-                                                                                      new ServiceImpl(local2, "B"), "B",
-                                                                                      ServerImpl::new,
-                                                                                      TestItClient::new, local2);
+            RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2,
+                                                                                          context.getId(),
+                                                                                          new ServiceImpl(local2, "B"),
+                                                                                          "B", ServerImpl::new,
+                                                                                          TestItClient::new, local2);
 
-        router.start();
-        var slice = new SliceIterator<TestItService>("Test Me", serverMember1,
-                                                     Arrays.asList(serverMember1, serverMember2), commsA);
-        var countdown = new CountDownLatch(1);
-        slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true, () -> {
-            countdown.countDown();
-        }, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), Duration.ofMillis(1));
-        boolean finished = countdown.await(3, TimeUnit.SECONDS);
-        assertTrue(finished, "completed: " + countdown.getCount());
-        assertTrue(pinged1.get());
-        assertTrue(pinged2.get());
+            router.start();
+            var slice = new SliceIterator<TestItService>("Test Me", serverMember1,
+                                                         Arrays.asList(serverMember1, serverMember2), commsA);
+            var countdown = new CountDownLatch(1);
+            slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true,
+                          () -> {
+                              countdown.countDown();
+                          }, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), Duration.ofMillis(1));
+            boolean finished = countdown.await(3, TimeUnit.SECONDS);
+            assertTrue(finished, "completed: " + countdown.getCount());
+            assertTrue(pinged1.get());
+            assertTrue(pinged2.get());
+        } finally {
+            router.close(Duration.ofSeconds(2));
+        }
     }
 }

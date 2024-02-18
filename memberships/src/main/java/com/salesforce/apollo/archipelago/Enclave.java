@@ -24,6 +24,7 @@ import io.netty.channel.unix.DomainSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -72,7 +73,7 @@ public class Enclave implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -91,6 +92,9 @@ public class Enclave implements RouterSupplier {
                                                                                                        "Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
+        interceptors.forEach(i -> {
+            serverBuilder.intercept(i);
+        });
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)),
                               new RoutingClientIdentity() {
                                   @Override

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.salesforce.apollo.archipelago.server.FernetServerInterceptor.AUTH_HEADER_PREFIX;
@@ -19,21 +18,9 @@ import static org.mockito.Mockito.*;
 
 public class ServerInterceptorTest {
 
-    private final FernetParser                      tokenParser = serialized -> {
-        if (serialized.equals("Invalid Token")) {
-            CompletableFuture<Token> res = new CompletableFuture<>();
-            res.completeExceptionally(new RuntimeException("invalid token"));
-            return res;
-        }
-        try {
-            return CompletableFuture.completedFuture(Token.fromString(serialized));
-        } catch (Throwable t) {
-            return CompletableFuture.failedFuture(t);
-        }
-    };
-    private final FernetServerInterceptor           target      = new FernetServerInterceptor(tokenParser);
-    private final ServerCall<Object, Object>        serverCall  = (ServerCall<Object, Object>) mock(ServerCall.class);
-    private final ServerCallHandler<Object, Object> next        = (ServerCallHandler<Object, Object>) mock(
+    private final FernetServerInterceptor           target     = new FernetServerInterceptor();
+    private final ServerCall<Object, Object>        serverCall = (ServerCall<Object, Object>) mock(ServerCall.class);
+    private final ServerCallHandler<Object, Object> next       = (ServerCallHandler<Object, Object>) mock(
     ServerCallHandler.class);
     private       Token                             token;
 
@@ -58,7 +45,7 @@ public class ServerInterceptorTest {
         metadata.put(Constants.AuthorizationMetadataKey, AUTH_HEADER_PREFIX + token.serialise());
         final AtomicReference<Token> actualToken = new AtomicReference<>();
         when(next.startCall(any(), any())).thenAnswer(i -> {
-            actualToken.set(target.AccessTokenContextKey.get());
+            actualToken.set(FernetServerInterceptor.AccessTokenContextKey.get());
             return null;
         });
         target.interceptCall(serverCall, metadata, next);

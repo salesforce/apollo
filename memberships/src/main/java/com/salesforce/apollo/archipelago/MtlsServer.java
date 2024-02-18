@@ -38,6 +38,7 @@ import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Security;
 import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -134,7 +135,7 @@ public class MtlsServer implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -149,6 +150,9 @@ public class MtlsServer implements RouterSupplier {
                                                              .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                              .intercept(new TlsInterceptor(sslSessionContext))
                                                              .intercept(EnableCompressionInterceptor.SINGLETON);
+        interceptors.forEach(i -> {
+            serverBuilder.intercept(i);
+        });
         ClientIdentity identity = new ClientIdentity() {
 
             @Override

@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -15,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static com.salesforce.apollo.archipelago.Constants.SERVER_CONTEXT_KEY;
@@ -25,8 +28,9 @@ import static com.salesforce.apollo.archipelago.Constants.SERVER_CONTEXT_KEY;
  * @author hal.hildebrand
  */
 public class RoutableService<Service> {
-    private static final Logger               log      = LoggerFactory.getLogger(RoutableService.class);
-    private final        Map<Digest, Service> services = new ConcurrentHashMap<>();
+    private static final Logger log = LoggerFactory.getLogger(RoutableService.class);
+
+    private final Map<Digest, Service> services = new ConcurrentHashMap<>();
 
     public void bind(Digest context, Service service) {
         services.put(context, service);
@@ -45,6 +49,27 @@ public class RoutableService<Service> {
             } else {
                 try {
                     c.accept(service);
+                } catch (Throwable t) {
+                    log.error("Uncaught exception in service evaluation for context: {}", context, t);
+                    responseObserver.onError(t);
+                }
+            }
+        }
+    }
+
+    public void evaluate(StreamObserver<?> responseObserver, BiConsumer<Service, Token> c) {
+        var context = SERVER_CONTEXT_KEY.get();
+        if (context == null) {
+            responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
+            log.error("Null context");
+        } else {
+            Service service = services.get(context);
+            if (service == null) {
+                log.trace("No service for context {}", context);
+                responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
+            } else {
+                try {
+                    c.accept(service, FernetServerInterceptor.AccessTokenContextKey.get());
                 } catch (Throwable t) {
                     log.error("Uncaught exception in service evaluation for context: {}", context, t);
                     responseObserver.onError(t);
