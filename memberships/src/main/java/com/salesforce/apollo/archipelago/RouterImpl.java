@@ -127,17 +127,9 @@ public class RouterImpl implements Router {
                                                                                        Service service,
                                                                                        String routingLabel,
                                                                                        Function<RoutableService<Service>, BindableService> factory) {
-        @SuppressWarnings("unchecked")
-        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
-            var route = new RoutableService<Service>();
-            BindableService bindableService = factory.apply(route);
-            registry.addService(bindableService);
-            return route;
-        });
-        routing.bind(context, service);
-        contextRegistration.accept(context);
-        log.info("Communications created for: " + member.getId());
-        return new CommonCommunications<Client, Service>(context, member, routing);
+        return new CommonCommunications<Client, Service>(context, member,
+                                                         getServiceRoutableService(member, context, service,
+                                                                                   routingLabel, factory));
     }
 
     @Override
@@ -147,17 +139,10 @@ public class RouterImpl implements Router {
                                                                                        Function<RoutableService<Service>, BindableService> factory,
                                                                                        CreateClientCommunications<Client> createFunction,
                                                                                        Client localLoopback) {
-        @SuppressWarnings("unchecked")
-        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
-            var route = new RoutableService<Service>();
-            BindableService bindableService = factory.apply(route);
-            registry.addService(bindableService);
-            return route;
-        });
-        routing.bind(context, service);
-        contextRegistration.accept(context);
-        log.info("Communications created for: " + member.getId());
-        return new CommonCommunications<Client, Service>(context, member, routing, createFunction, localLoopback);
+        return new CommonCommunications<Client, Service>(context, member,
+                                                         getServiceRoutableService(member, context, service,
+                                                                                   routingLabel, factory),
+                                                         createFunction, localLoopback);
     }
 
     @Override
@@ -181,6 +166,22 @@ public class RouterImpl implements Router {
             throw new IllegalStateException("Cannot start server", e);
         }
         log.info("Started router: {}", server.getListenSockets());
+    }
+
+    private <Service> RoutableService<Service> getServiceRoutableService(Member member, Digest context, Service service,
+                                                                         String routingLabel,
+                                                                         Function<RoutableService<Service>, BindableService> factory) {
+        @SuppressWarnings("unchecked")
+        RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
+            var route = new RoutableService<Service>();
+            BindableService bindableService = factory.apply(route);
+            registry.addService(bindableService);
+            return route;
+        });
+        routing.bind(context, service);
+        contextRegistration.accept(context);
+        log.info("Communications created for: " + member.getId());
+        return routing;
     }
 
     public class CommonCommunications<Client extends Link, Service> implements Router.ClientConnector<Client> {
