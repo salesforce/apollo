@@ -95,12 +95,12 @@ public class Enclave implements RouterSupplier {
                               new RoutingClientIdentity() {
                                   @Override
                                   public Digest getAgent() {
-                                      return Router.SERVER_AGENT_ID_KEY.get();
+                                      return Constants.SERVER_AGENT_ID_KEY.get();
                                   }
 
                                   @Override
                                   public Digest getFrom() {
-                                      return Router.SERVER_CLIENT_ID_KEY.get();
+                                      return Constants.SERVER_CLIENT_ID_KEY.get();
                                   }
                               }, contextRegistration);
     }
@@ -114,8 +114,8 @@ public class Enclave implements RouterSupplier {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_TARGET_KEY, qb64(to.getId()));
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, fromString);
+                        headers.put(Constants.METADATA_TARGET_KEY, qb64(to.getId()));
+                        headers.put(Constants.METADATA_CLIENT_ID_KEY, fromString);
                         super.start(responseListener, headers);
                     }
                 };
@@ -136,19 +136,19 @@ public class Enclave implements RouterSupplier {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(Router.METADATA_CLIENT_ID_KEY);
+                String id = requestHeaders.get(Constants.METADATA_CLIENT_ID_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                String agent = requestHeaders.get(Router.METADATA_AGENT_KEY);
+                String agent = requestHeaders.get(Constants.METADATA_AGENT_KEY);
                 if (agent == null) {
                     log.error("No agent id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No agent ID in call");
                 }
                 Context ctx = Context.current()
-                                     .withValue(Router.SERVER_AGENT_ID_KEY, digest(agent))
-                                     .withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
+                                     .withValue(Constants.SERVER_AGENT_ID_KEY, digest(agent))
+                                     .withValue(Constants.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

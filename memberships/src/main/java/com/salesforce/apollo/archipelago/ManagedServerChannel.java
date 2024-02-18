@@ -70,8 +70,8 @@ public class ManagedServerChannel extends ManagedChannel {
         delegate.getChannel().newCall(methodDescriptor, callOptions)) {
             @Override
             public void start(Listener<ResponseT> responseListener, Metadata headers) {
-                headers.put(Router.METADATA_CONTEXT_KEY, qb64(context));
-                headers.put(Router.METADATA_TARGET_KEY, qb64(delegate.getMember().getId()));
+                headers.put(Constants.METADATA_CONTEXT_KEY, qb64(context));
+                headers.put(Constants.METADATA_TARGET_KEY, qb64(delegate.getMember().getId()));
                 super.start(responseListener, headers);
             }
         };

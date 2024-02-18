@@ -71,7 +71,7 @@ public class RouterImpl implements Router {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(RouterImpl.METADATA_CONTEXT_KEY, qb64(ctx));
+                        headers.put(Constants.METADATA_CONTEXT_KEY, qb64(ctx));
                         super.start(responseListener, headers);
                     }
                 };
@@ -89,14 +89,14 @@ public class RouterImpl implements Router {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(METADATA_CONTEXT_KEY);
+                String id = requestHeaders.get(Constants.METADATA_CONTEXT_KEY);
                 if (id == null) {
                     log.trace("No context id in call headers: {}", requestHeaders.keys());
                     return next.startCall(call, requestHeaders);
                 }
 
-                return Contexts.interceptCall(Context.current().withValue(SERVER_CONTEXT_KEY, digest(id)), call,
-                                              requestHeaders, next);
+                return Contexts.interceptCall(Context.current().withValue(Constants.SERVER_CONTEXT_KEY, digest(id)),
+                                              call, requestHeaders, next);
             }
         };
     }

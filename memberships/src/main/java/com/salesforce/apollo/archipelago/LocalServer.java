@@ -53,7 +53,7 @@ public class LocalServer implements RouterSupplier {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, qb64(from.getId()));
+                        headers.put(Constants.METADATA_CLIENT_ID_KEY, qb64(from.getId()));
                         super.start(responseListener, headers);
                     }
                 };
@@ -85,7 +85,7 @@ public class LocalServer implements RouterSupplier {
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), new ClientIdentity() {
             @Override
             public Digest getFrom() {
-                return Router.SERVER_CLIENT_ID_KEY.get();
+                return Constants.SERVER_CLIENT_ID_KEY.get();
             }
         }, d -> {
         });
@@ -119,12 +119,12 @@ public class LocalServer implements RouterSupplier {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(Router.METADATA_CLIENT_ID_KEY);
+                String id = requestHeaders.get(Constants.METADATA_CLIENT_ID_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                Context ctx = Context.current().withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
+                Context ctx = Context.current().withValue(Constants.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

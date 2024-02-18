@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-import static com.salesforce.apollo.archipelago.Router.SERVER_CONTEXT_KEY;
+import static com.salesforce.apollo.archipelago.Constants.SERVER_CONTEXT_KEY;
 
 /**
  * Service implementation routable by Digest context
@@ -37,7 +37,6 @@ public class RoutableService<Service> {
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             log.error("Null context");
-            return;
         } else {
             Service service = services.get(context);
             if (service == null) {

@@ -105,7 +105,7 @@ public class DemesneTest {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, qb64(ctx));
+                        headers.put(Constants.METADATA_CLIENT_ID_KEY, qb64(ctx));
                         super.start(responseListener, headers);
                     }
                 };
@@ -274,7 +274,7 @@ public class DemesneTest {
         assertNotNull(attached);
         assertEquals(1, attached.seals().size());
         final var extracted = attached.seals().get(0);
-        assertTrue(extracted instanceof Seal.EventSeal);
+        assertInstanceOf(Seal.EventSeal.class, extracted);
         //        assertEquals(1, attached.endorsements().size());
     }
 
@@ -288,11 +288,11 @@ public class DemesneTest {
                                   .build();
     }
 
-    public static interface TestIt {
+    public interface TestIt {
         void ping(Any request, StreamObserver<Any> responseObserver);
     }
 
-    public static interface TestItService extends Link {
+    public interface TestItService extends Link {
         Any ping(Any request);
     }
 
