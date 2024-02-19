@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
@@ -73,7 +75,8 @@ public class Enclave implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
+                             Predicate<Token> validator) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -106,7 +109,7 @@ public class Enclave implements RouterSupplier {
                                   public Digest getFrom() {
                                       return Constants.SERVER_CLIENT_ID_KEY.get();
                                   }
-                              }, contextRegistration);
+                              }, contextRegistration, validator);
     }
 
     private ManagedChannel connectTo(Member to) {

@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
@@ -26,6 +27,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
@@ -68,7 +70,8 @@ public class LocalServer implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
+                             Predicate<Token> validator) {
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
@@ -92,7 +95,7 @@ public class LocalServer implements RouterSupplier {
                 return Constants.SERVER_CLIENT_ID_KEY.get();
             }
         }, d -> {
-        });
+        }, validator);
     }
 
     private ManagedChannel connectTo(Member to) {

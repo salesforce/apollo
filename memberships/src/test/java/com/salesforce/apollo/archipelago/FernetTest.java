@@ -76,22 +76,20 @@ public class FernetTest {
         final var memberB = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
-
-        RouterSupplier serverA = new LocalServer(prefix, memberA);
-        var routerA = serverA.router(ServerConnectionCache.newBuilder().setCredentials(creds),
-                                     () -> RouterImpl.defaultServerLimit(), null,
-                                     Collections.singletonList(new FernetServerInterceptor()));
-
         Predicate<Token> validator = t -> {
             assertNotNull(t, "Token is null");
             var result = token.validateAndDecrypt(key, new StringValidator() {
             });
             return result.equals(HELLO_WORLD);
         };
+
+        RouterSupplier serverA = new LocalServer(prefix, memberA);
+        var routerA = serverA.router(ServerConnectionCache.newBuilder().setCredentials(creds),
+                                     () -> RouterImpl.defaultServerLimit(), null,
+                                     Collections.singletonList(new FernetServerInterceptor()), validator);
         RouterImpl.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(),
                                                                                        "A", r -> new Server(r),
-                                                                                       c -> new TestItClient(c), local,
-                                                                                       validator);
+                                                                                       c -> new TestItClient(c), local);
 
         RouterSupplier serverB = new LocalServer(prefix, memberB);
         var routerB = serverB.router(ServerConnectionCache.newBuilder().setCredentials(creds),

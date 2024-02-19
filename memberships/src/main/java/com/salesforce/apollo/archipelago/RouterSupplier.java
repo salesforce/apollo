@@ -6,12 +6,14 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.salesforce.apollo.protocols.LimitsRegistry;
 import io.grpc.ServerInterceptor;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -32,7 +34,12 @@ public interface RouterSupplier {
         return router(cacheBuilder, serverLimit, limitsRegistry, Collections.emptyList());
     }
 
+    default Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
+                          LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors) {
+        return router(cacheBuilder, serverLimit, limitsRegistry, interceptors, null);
+    }
+
     Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                  LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors);
+                  LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors, Predicate<Token> validator);
 
 }
