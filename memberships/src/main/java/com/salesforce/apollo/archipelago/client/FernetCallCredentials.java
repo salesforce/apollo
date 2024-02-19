@@ -38,6 +38,9 @@ public abstract class FernetCallCredentials extends CallCredentials {
     }
 
     protected void applyToken(MetadataApplier applier, Token token) {
+        if (token == null) {
+            return;
+        }
         Metadata metadata = new Metadata();
         metadata.put(Constants.AuthorizationMetadataKey, AUTH_HEADER_PREFIX + token.serialise());
         applier.apply(metadata);
