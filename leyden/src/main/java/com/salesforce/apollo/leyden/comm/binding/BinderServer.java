@@ -7,7 +7,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.leyden.proto.BinderGrpc;
 import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
-import com.salesforce.apollo.leyden.proto.KeyAndToken;
+import com.salesforce.apollo.leyden.proto.Key;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import io.grpc.stub.StreamObserver;
 
@@ -54,7 +54,7 @@ public class BinderServer extends BinderGrpc.BinderImplBase {
     }
 
     @Override
-    public void get(KeyAndToken request, StreamObserver<Bound> responseObserver) {
+    public void get(Key request, StreamObserver<Bound> responseObserver) {
         Timer.Context timer = metrics == null ? null : metrics.inboundGetTimer().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();
@@ -80,7 +80,7 @@ public class BinderServer extends BinderGrpc.BinderImplBase {
     }
 
     @Override
-    public void unbind(KeyAndToken request, StreamObserver<Empty> responseObserver) {
+    public void unbind(Key request, StreamObserver<Empty> responseObserver) {
         Timer.Context timer = metrics == null ? null : metrics.inboundUnbindTimer().time();
         if (metrics != null) {
             var serializedSize = request.getSerializedSize();

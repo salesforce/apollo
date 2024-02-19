@@ -8,17 +8,17 @@
 package com.salesforce.apollo.thoth.grpc.reconciliation;
 
 import com.google.protobuf.Empty;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.Digeste;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.thoth.proto.ReconciliationGrpc;
 import com.salesforce.apollo.thoth.proto.Update;
 import com.salesforce.apollo.thoth.proto.Updating;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 
 import java.io.IOException;
 
@@ -36,7 +36,7 @@ public class ReconciliationClient implements ReconciliationService {
     public ReconciliationClient(Digest context, ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.channel = channel;
-        this.client = ReconciliationGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(ReconciliationGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

@@ -9,6 +9,7 @@ package com.salesforce.apollo.archipelago;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
@@ -38,10 +39,12 @@ import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Security;
 import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -134,7 +137,8 @@ public class MtlsServer implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
+                             Predicate<Token> validator) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -149,6 +153,9 @@ public class MtlsServer implements RouterSupplier {
                                                              .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                              .intercept(new TlsInterceptor(sslSessionContext))
                                                              .intercept(EnableCompressionInterceptor.SINGLETON);
+        interceptors.forEach(i -> {
+            serverBuilder.intercept(i);
+        });
         ClientIdentity identity = new ClientIdentity() {
 
             @Override
@@ -161,7 +168,8 @@ public class MtlsServer implements RouterSupplier {
                 }
             }
         };
-        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity);
+        return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity, c -> {
+        }, validator);
     }
 
     private ManagedChannel connectTo(Member to) {

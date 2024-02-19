@@ -3,7 +3,7 @@ package com.salesforce.apollo.leyden.comm.binding;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
-import com.salesforce.apollo.leyden.proto.KeyAndToken;
+import com.salesforce.apollo.leyden.proto.Key;
 
 /**
  * @author hal.hildebrand
@@ -11,7 +11,7 @@ import com.salesforce.apollo.leyden.proto.KeyAndToken;
 public interface BinderService {
     void bind(Binding request, Digest from);
 
-    Bound get(KeyAndToken request, Digest from);
+    Bound get(Key request, Digest from);
 
-    void unbind(KeyAndToken request, Digest from);
+    void unbind(Key request, Digest from);
 }

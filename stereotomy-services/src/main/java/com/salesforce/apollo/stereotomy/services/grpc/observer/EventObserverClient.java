@@ -7,19 +7,19 @@
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import com.codahale.metrics.Timer.Context;
+import com.salesforce.apollo.archipelago.ManagedServerChannel;
+import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.proto.Validations;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.EventObserverGrpc.EventObserverFutureStub;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesforce.apollo.archipelago.ManagedServerChannel;
-import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
-import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 
 import java.io.IOException;
@@ -36,7 +36,7 @@ public class EventObserverClient implements EventObserverService {
 
     public EventObserverClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
-        this.client = EventObserverGrpc.newFutureStub(channel).withCompression("gzip");
+        this.client = channel.wrap(EventObserverGrpc.newFutureStub(channel));
         this.metrics = metrics;
     }
 

@@ -86,7 +86,7 @@ public class DemultiplexerTest {
         var routes = new HashMap<String, DomainSocketAddress>();
         Function<String, ManagedChannel> dmux = d -> handler(routes.get(d));
 
-        terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Router.METADATA_CONTEXT_KEY, dmux);
+        terminus = new Demultiplexer(InProcessServerBuilder.forName(name), Constants.METADATA_CONTEXT_KEY, dmux);
         terminus.start();
 
         var ctxA = DigestAlgorithm.DEFAULT.getOrigin();

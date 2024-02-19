@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
@@ -24,9 +25,11 @@ import io.netty.channel.unix.DomainSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL;
@@ -72,7 +75,8 @@ public class Enclave implements RouterSupplier {
 
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                             LimitsRegistry limitsRegistry) {
+                             LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
+                             Predicate<Token> validator) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -91,18 +95,21 @@ public class Enclave implements RouterSupplier {
                                                                                                        "Enclave server concurrency limit reached"))
                                                                                                        .build())
                                                            .intercept(serverInterceptor());
+        interceptors.forEach(i -> {
+            serverBuilder.intercept(i);
+        });
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)),
                               new RoutingClientIdentity() {
                                   @Override
                                   public Digest getAgent() {
-                                      return Router.SERVER_AGENT_ID_KEY.get();
+                                      return Constants.SERVER_AGENT_ID_KEY.get();
                                   }
 
                                   @Override
                                   public Digest getFrom() {
-                                      return Router.SERVER_CLIENT_ID_KEY.get();
+                                      return Constants.SERVER_CLIENT_ID_KEY.get();
                                   }
-                              }, contextRegistration);
+                              }, contextRegistration, validator);
     }
 
     private ManagedChannel connectTo(Member to) {
@@ -114,8 +121,8 @@ public class Enclave implements RouterSupplier {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_TARGET_KEY, qb64(to.getId()));
-                        headers.put(Router.METADATA_CLIENT_ID_KEY, fromString);
+                        headers.put(Constants.METADATA_TARGET_KEY, qb64(to.getId()));
+                        headers.put(Constants.METADATA_CLIENT_ID_KEY, fromString);
                         super.start(responseListener, headers);
                     }
                 };
@@ -136,19 +143,19 @@ public class Enclave implements RouterSupplier {
             public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                          final Metadata requestHeaders,
                                                                          ServerCallHandler<ReqT, RespT> next) {
-                String id = requestHeaders.get(Router.METADATA_CLIENT_ID_KEY);
+                String id = requestHeaders.get(Constants.METADATA_CLIENT_ID_KEY);
                 if (id == null) {
                     log.error("No member id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No member ID in call");
                 }
-                String agent = requestHeaders.get(Router.METADATA_AGENT_KEY);
+                String agent = requestHeaders.get(Constants.METADATA_AGENT_KEY);
                 if (agent == null) {
                     log.error("No agent id in call headers: {}", requestHeaders.keys());
                     throw new IllegalStateException("No agent ID in call");
                 }
                 Context ctx = Context.current()
-                                     .withValue(Router.SERVER_AGENT_ID_KEY, digest(agent))
-                                     .withValue(Router.SERVER_CLIENT_ID_KEY, digest(id));
+                                     .withValue(Constants.SERVER_AGENT_ID_KEY, digest(agent))
+                                     .withValue(Constants.SERVER_CLIENT_ID_KEY, digest(id));
                 return Contexts.interceptCall(ctx, call, requestHeaders, next);
             }
         };

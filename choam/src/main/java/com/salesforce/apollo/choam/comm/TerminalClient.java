@@ -25,7 +25,7 @@ public class TerminalClient implements Terminal {
 
     public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;
-        this.client = TerminalGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(TerminalGrpc.newBlockingStub(channel));
         this.metrics = metrics;
     }
 

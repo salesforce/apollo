@@ -12,6 +12,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.protobuf.Empty;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.cryptography.Digest;
@@ -75,6 +76,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
@@ -774,11 +776,15 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     public void start(Duration duration) {
+        start(duration, null);
+    }
+
+    public void start(Duration duration, Predicate<Token> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        dhtComms.register(context.getId(), service);
-        reconcileComms.register(context.getId(), reconciliation);
+        dhtComms.register(context.getId(), service, validator);
+        reconcileComms.register(context.getId(), reconciliation, validator);
         reconcile(scheduler, duration);
     }
 

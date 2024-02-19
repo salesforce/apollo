@@ -7,14 +7,14 @@
 package com.salesforce.apollo.membership.messaging.rbc.comms;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesforce.apollo.messaging.proto.MessageBff;
-import com.salesforce.apollo.messaging.proto.RBCGrpc;
-import com.salesforce.apollo.messaging.proto.Reconcile;
-import com.salesforce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
+import com.salesforce.apollo.messaging.proto.MessageBff;
+import com.salesforce.apollo.messaging.proto.RBCGrpc;
+import com.salesforce.apollo.messaging.proto.Reconcile;
+import com.salesforce.apollo.messaging.proto.ReconcileContext;
 
 /**
  * @author hal.hildebrand
@@ -28,7 +28,7 @@ public class RbcClient implements ReliableBroadcast {
 
     public RbcClient(ManagedServerChannel c, RbcMetrics metrics) {
         this.channel = c;
-        this.client = RBCGrpc.newBlockingStub(c).withCompression("gzip");
+        this.client = c.wrap(RBCGrpc.newBlockingStub(c));
         this.metrics = metrics;
     }
 

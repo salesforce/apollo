@@ -6,22 +6,22 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.validation;
 
-import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.BoolValue;
-import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 /**
  * @author hal.hildebrand
@@ -31,9 +31,10 @@ public class EventValidationClient implements EventValidationService {
     private final ManagedServerChannel channel;
     private final ValidatorFutureStub  client;
     private final StereotomyMetrics    metrics;
+
     public EventValidationClient(ManagedServerChannel channel, StereotomyMetrics metrics) {
         this.channel = channel;
-        this.client = ValidatorGrpc.newFutureStub(channel).withCompression("gzip");
+        this.client = channel.wrap(ValidatorGrpc.newFutureStub(channel));
         this.metrics = metrics;
     }
 

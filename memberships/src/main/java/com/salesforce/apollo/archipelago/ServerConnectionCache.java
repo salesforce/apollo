@@ -11,6 +11,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
+import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,9 +55,10 @@ public class ServerConnectionCache {
     private final        PriorityQueue<ReleasableManagedChannel> queue = new PriorityQueue<>();
     private final        int                                     target;
     private final        Digest                                  member;
+    private final        CallCredentials                         credentials;
 
-    public ServerConnectionCache(Digest member, ServerConnectionFactory factory, int target, Duration minIdle,
-                                 Clock clock, ServerConnectionCacheMetrics metrics) {
+    public ServerConnectionCache(Digest member, CallCredentials credentials, ServerConnectionFactory factory,
+                                 int target, Duration minIdle, Clock clock, ServerConnectionCacheMetrics metrics) {
         assert member != null;
         this.factory = factory;
         this.target = Math.max(target, 1);
@@ -64,6 +66,7 @@ public class ServerConnectionCache {
         this.clock = clock;
         this.metrics = metrics;
         this.member = member;
+        this.credentials = credentials;
     }
 
     public static Builder newBuilder() {
@@ -102,7 +105,7 @@ public class ServerConnectionCache {
             }
             log.trace("Borrowed channel to: {}, borrowed: {} on: {}", connection.member.getId(), connection.borrowed,
                       member);
-            return new ManagedServerChannel(context, connection);
+            return new ManagedServerChannel(context, connection, credentials);
         });
     }
 
@@ -218,9 +221,10 @@ public class ServerConnectionCache {
         private Duration                     minIdle = Duration.ofMillis(100);
         private int                          target  = 10;
         private Digest                       member;
+        private CallCredentials              credentials;
 
         public ServerConnectionCache build() {
-            return new ServerConnectionCache(member, factory, target, minIdle, clock, metrics);
+            return new ServerConnectionCache(member, credentials, factory, target, minIdle, clock, metrics);
         }
 
         @Override
@@ -238,6 +242,15 @@ public class ServerConnectionCache {
 
         public Builder setClock(Clock clock) {
             this.clock = clock;
+            return this;
+        }
+
+        public CallCredentials getCredentials() {
+            return credentials;
+        }
+
+        public Builder setCredentials(CallCredentials credentials) {
+            this.credentials = credentials;
             return this;
         }
 

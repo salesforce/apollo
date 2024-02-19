@@ -11,6 +11,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import io.grpc.*;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.stub.AbstractStub;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,12 +22,14 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 public class ManagedServerChannel extends ManagedChannel {
     private final static Logger log = LoggerFactory.getLogger(ManagedServerChannel.class);
 
-    private final Digest     context;
-    private final Releasable delegate;
+    private final Digest          context;
+    private final Releasable      delegate;
+    private final CallCredentials credentials;
 
-    ManagedServerChannel(Digest context, Releasable delegate) {
+    ManagedServerChannel(Digest context, Releasable delegate, CallCredentials credentials) {
         this.context = context;
         this.delegate = delegate;
+        this.credentials = credentials;
     }
 
     @Override
@@ -42,6 +45,10 @@ public class ManagedServerChannel extends ManagedChannel {
     @Override
     public void enterIdle() {
         delegate.getChannel().enterIdle();
+    }
+
+    public CallCredentials getCredentials() {
+        return credentials;
     }
 
     public Member getMember() {
@@ -70,8 +77,8 @@ public class ManagedServerChannel extends ManagedChannel {
         delegate.getChannel().newCall(methodDescriptor, callOptions)) {
             @Override
             public void start(Listener<ResponseT> responseListener, Metadata headers) {
-                headers.put(Router.METADATA_CONTEXT_KEY, qb64(context));
-                headers.put(Router.METADATA_TARGET_KEY, qb64(delegate.getMember().getId()));
+                headers.put(Constants.METADATA_CONTEXT_KEY, qb64(context));
+                headers.put(Constants.METADATA_TARGET_KEY, qb64(delegate.getMember().getId()));
                 super.start(responseListener, headers);
             }
         };
@@ -111,5 +118,10 @@ public class ManagedServerChannel extends ManagedChannel {
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this).add("delegate", delegate).toString();
+    }
+
+    public <S extends AbstractStub<S>> S wrap(S stub) {
+        stub = stub.withCompression("gzip");
+        return credentials == null ? stub : stub.withCallCredentials(credentials);
     }
 }

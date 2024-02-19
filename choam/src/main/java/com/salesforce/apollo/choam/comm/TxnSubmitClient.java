@@ -25,7 +25,7 @@ public class TxnSubmitClient implements TxnSubmission {
 
     public TxnSubmitClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;
-        this.client = TransactionSubmissionGrpc.newBlockingStub(channel).withCompression("gzip");
+        this.client = channel.wrap(TransactionSubmissionGrpc.newBlockingStub(channel));
     }
 
     public static CreateClientCommunications<TxnSubmission> getCreate(ChoamMetrics metrics) {

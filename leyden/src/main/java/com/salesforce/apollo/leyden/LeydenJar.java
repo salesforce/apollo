@@ -3,6 +3,7 @@ package com.salesforce.apollo.leyden;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
+import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
@@ -35,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -125,7 +127,7 @@ public class LeydenJar {
         }
     }
 
-    public Bound get(KeyAndToken keyAndToken) {
+    public Bound get(Key keyAndToken) {
         var hash = algorithm.digest(keyAndToken.getKey());
         log.info("Get: {} on: {}", hash, member.getId());
         Instant timedOut = Instant.now().plus(operationTimeout);
@@ -157,12 +159,16 @@ public class LeydenJar {
     }
 
     public void start(Duration gossip) {
+        start(gossip, null);
+    }
+
+    public void start(Duration gossip, Predicate<Token> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
         log.info("Starting context: {}:{} on: {}", context.getId(), System.identityHashCode(context), member.getId());
-        binderComms.register(context.getId(), borders);
-        reconComms.register(context.getId(), recon);
+        binderComms.register(context.getId(), borders, validator);
+        reconComms.register(context.getId(), recon, validator);
         reconcile(scheduler, gossip);
     }
 
@@ -175,7 +181,7 @@ public class LeydenJar {
         reconComms.deregister(context.getId());
     }
 
-    public void unbind(KeyAndToken keyAndToken) {
+    public void unbind(Key keyAndToken) {
         var key = keyAndToken.toByteArray();
         var hash = algorithm.digest(key);
         log.info("Unbind: {} on: {}", hash, member.getId());
@@ -477,11 +483,11 @@ public class LeydenJar {
     }
 
     public interface OpValidator {
-        boolean validateBind(Bound bound, byte[] token);
+        boolean validateBind(Bound bound);
 
-        boolean validateGet(byte[] key, byte[] token);
+        boolean validateGet(byte[] key);
 
-        boolean validateUnbind(byte[] key, byte[] token);
+        boolean validateUnbind(byte[] key);
     }
 
     private static class ConsensusState {
@@ -553,7 +559,7 @@ public class LeydenJar {
         @Override
         public void bind(Binding request, Digest from) {
             var bound = request.getBound();
-            if (!validator.validateBind(bound, request.getToken().toByteArray())) {
+            if (!validator.validateBind(bound)) {
                 log.warn("Invalid Bind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
@@ -565,8 +571,8 @@ public class LeydenJar {
         }
 
         @Override
-        public Bound get(KeyAndToken request, Digest from) {
-            if (!validator.validateGet(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+        public Bound get(Key request, Digest from) {
+            if (!validator.validateGet(request.getKey().toByteArray())) {
                 log.warn("Invalid Get Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }
@@ -577,8 +583,8 @@ public class LeydenJar {
         }
 
         @Override
-        public void unbind(KeyAndToken request, Digest from) {
-            if (!validator.validateUnbind(request.getKey().toByteArray(), request.getToken().toByteArray())) {
+        public void unbind(Key request, Digest from) {
+            if (!validator.validateUnbind(request.getKey().toByteArray())) {
                 log.warn("Invalid Unbind Token on: {}", member.getId());
                 throw new StatusRuntimeException(Status.INVALID_ARGUMENT);
             }

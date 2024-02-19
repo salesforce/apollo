@@ -46,7 +46,7 @@ public class Portal<To extends Member> {
 
     public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
                   DomainSocketAddress bridge, Duration keepAlive, Function<String, DomainSocketAddress> router) {
-        this.inbound = new Demultiplexer(inbound, Router.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
+        this.inbound = new Demultiplexer(inbound, Constants.METADATA_CONTEXT_KEY, d -> handler(router.apply(d)));
         this.outbound = new Demultiplexer(NettyServerBuilder.forAddress(bridge)
                                                             .executor(executor)
                                                             .protocolNegotiator(new DomainSocketNegotiator(IMPL))
@@ -54,7 +54,7 @@ public class Portal<To extends Member> {
                                                             .workerEventLoopGroup(IMPL.getEventLoopGroup())
                                                             .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                             .intercept(new DomainSocketServerInterceptor()),
-                                          Router.METADATA_TARGET_KEY, outbound);
+                                          Constants.METADATA_TARGET_KEY, outbound);
         this.keepAlive = keepAlive;
         this.agent = QualifiedBase64.qb64(agent);
     }
@@ -78,7 +78,7 @@ public class Portal<To extends Member> {
                 return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {
-                        headers.put(Router.METADATA_AGENT_KEY, agent);
+                        headers.put(Constants.METADATA_AGENT_KEY, agent);
                         super.start(responseListener, headers);
                     }
                 };

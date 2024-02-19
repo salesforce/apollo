@@ -56,6 +56,10 @@
             <classifier>${os.detected.classifier}</classifier>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.macasaet.fernet</groupId>
+            <artifactId>fernet-java8</artifactId>
+        </dependency>
 
         <!-- Test Only Dependencies Below This Line -->
         <dependency>

@@ -1,38 +1,41 @@
-/*
- * Copyright (c) 2022, salesforce.com, inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
 package com.salesforce.apollo.archipelago;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.macasaet.fernet.Key;
+import com.macasaet.fernet.StringValidator;
+import com.macasaet.fernet.Token;
+import com.salesforce.apollo.archipelago.client.FernetCallCredentials;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.test.proto.ByteMessage;
 import com.salesforce.apollo.test.proto.TestItGrpc;
-import com.salesforce.apollo.test.proto.TestItGrpc.TestItBlockingStub;
-import com.salesforce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.stub.StreamObserver;
 import org.joou.ULong;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
+ * Test Token Auth via Fernet Tokens
+ *
  * @author hal.hildebrand
- */
-public class LocalServerTest {
-    private final TestItService local = new TestItService() {
+ **/
+public class FernetTest {
+    public static final String        HELLO_WORLD = "Hello, world!";
+    private final       TestItService local       = new TestItService() {
 
         @Override
         public void close() throws IOException {
@@ -48,27 +51,55 @@ public class LocalServerTest {
             return null;
         }
     };
+    private             Token         token;
+    private             Key           key;
+
+    @BeforeEach
+    public void before() {
+        final SecureRandom deterministicRandom = new SecureRandom() {
+            private static final long serialVersionUID = 3075400891983079965L;
+
+            public void nextBytes(final byte[] bytes) {
+                for (int i = bytes.length; --i >= 0; bytes[i] = 1)
+                    ;
+            }
+        };
+        key = Key.generateKey(deterministicRandom);
+
+        token = Token.generate(deterministicRandom, key, HELLO_WORLD);
+    }
 
     @Test
     public void smokin() throws Exception {
+        var creds = FernetCallCredentials.blocking(() -> token);
         final var memberA = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
         final var memberB = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
+        Predicate<Token> validator = t -> {
+            assertNotNull(t, "Token is null");
+            var result = token.validateAndDecrypt(key, new StringValidator() {
+            });
+            return result.equals(HELLO_WORLD);
+        };
 
         RouterSupplier serverA = new LocalServer(prefix, memberA);
-        var routerA = serverA.router(ServerConnectionCache.newBuilder());
-
-        CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(), "A",
-                                                                            r -> new Server(r),
-                                                                            c -> new TestItClient(c), local);
+        var routerA = serverA.router(ServerConnectionCache.newBuilder().setCredentials(creds),
+                                     () -> RouterImpl.defaultServerLimit(), null,
+                                     Collections.singletonList(new FernetServerInterceptor()), validator);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA = routerA.create(memberA, ctxA, new ServerA(),
+                                                                                       "A", r -> new Server(r),
+                                                                                       c -> new TestItClient(c), local);
 
         RouterSupplier serverB = new LocalServer(prefix, memberB);
-        var routerB = serverB.router(ServerConnectionCache.newBuilder());
+        var routerB = serverB.router(ServerConnectionCache.newBuilder().setCredentials(creds),
+                                     () -> RouterImpl.defaultServerLimit(), null,
+                                     Collections.singletonList(new FernetServerInterceptor()));
 
-        CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(), "B",
-                                                                              r -> new Server(r),
-                                                                              c -> new TestItClient(c), local);
+        RouterImpl.CommonCommunications<TestItService, TestIt> commsA_B = routerB.create(memberB, ctxA, new ServerB(),
+                                                                                         "B", r -> new Server(r),
+                                                                                         c -> new TestItClient(c),
+                                                                                         local, validator);
 
         routerA.start();
         routerB.start();
@@ -96,7 +127,7 @@ public class LocalServerTest {
         Any ping(Any request);
     }
 
-    public static class Server extends TestItImplBase {
+    public static class Server extends TestItGrpc.TestItImplBase {
         private final RoutableService<TestIt> router;
 
         public Server(RoutableService<TestIt> router) {
@@ -105,13 +136,16 @@ public class LocalServerTest {
 
         @Override
         public void ping(Any request, StreamObserver<Any> responseObserver) {
-            router.evaluate(responseObserver, (t, token) -> t.ping(request, responseObserver));
+            router.evaluate(responseObserver, (t, token) -> {
+                assertNotNull(token, "No token!");
+                t.ping(request, responseObserver);
+            });
         }
     }
 
     public static class TestItClient implements TestItService {
-        private final TestItBlockingStub   client;
-        private final ManagedServerChannel connection;
+        private final TestItGrpc.TestItBlockingStub client;
+        private final ManagedServerChannel          connection;
 
         public TestItClient(ManagedServerChannel c) {
             this.connection = c;
