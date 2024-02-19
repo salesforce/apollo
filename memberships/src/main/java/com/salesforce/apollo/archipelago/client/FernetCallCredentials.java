@@ -39,6 +39,10 @@ public abstract class FernetCallCredentials extends CallCredentials {
 
     protected void applyToken(MetadataApplier applier, Token token) {
         if (token == null) {
+            String msg = "Supplied NULL bearer token";
+            var e = new IllegalArgumentException(msg);
+            LOGGER.debug(msg, e);
+            applier.fail(Status.UNAUTHENTICATED.withDescription(msg).withCause(e));
             return;
         }
         Metadata metadata = new Metadata();
