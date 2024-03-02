@@ -51,7 +51,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.digestOf;
@@ -69,9 +71,6 @@ public class Gorgoneion {
     private final ControlledIdentifierMember                            member;
     private final ProtoEventObserver                                    observer;
     private final Parameters                                            parameters;
-    private final ScheduledExecutorService                              scheduler = Executors.newScheduledThreadPool(1,
-                                                                                                                     Thread.ofVirtual()
-                                                                                                                           .factory());
     private final Predicate<SignedAttestation>                          verifier;
     private final boolean                                               bootstrap;
 
@@ -188,7 +187,7 @@ public class Gorgoneion {
                 log.info("Generated nonce for: {} signatures: {} on: {}", identifier, endorsements.size(),
                          member.getId());
             }
-        }, scheduler, parameters.frequency());
+        }, parameters.frequency());
         try {
             return generated.get();
         } catch (InterruptedException e) {
@@ -235,7 +234,7 @@ public class Gorgoneion {
             if (completed.size() < majority) {
                 throw new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
             }
-        }, scheduler, parameters.frequency());
+        }, parameters.frequency());
     }
 
     private Validations register(Credentials request) {
@@ -274,7 +273,7 @@ public class Gorgoneion {
                 log.debug("Validated credentials for: {} verifications: {} on: {}", identifier, verifications.size(),
                           member.getId());
             }
-        }, scheduler, parameters.frequency());
+        }, parameters.frequency());
         try {
             return validated.thenApply(v -> {
                 notarize(request, v);

@@ -387,7 +387,7 @@ public class ViewManagement {
                 scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
                                    TimeUnit.MILLISECONDS);
             }
-        }, scheduler, Duration.ofMillis(500)));
+        }, Duration.ofMillis(500)));
         repopulate.get().run();
     }
 

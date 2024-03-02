@@ -104,7 +104,7 @@ class Binding {
                     scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reseed.get(), log)),
                                        params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
                 }
-            }, scheduler, params.retryDelay());
+            }, params.retryDelay());
         });
         reseed.get().run();
     }
@@ -317,7 +317,7 @@ class Binding {
                         view.stop();
                     }
                 }
-            }, scheduler, params.retryDelay());
+            }, params.retryDelay());
         });
         regate.get().run();
     }

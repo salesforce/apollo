@@ -201,7 +201,7 @@ public class ViewAssembly {
         final var hex = Digest.from(vm.getDiadem());
         var diadem = view.diadem();
         if (!diadem.equals(hex)) {
-            log.warn("Invalid diadem: {} not equivalent to: {} vm: {} on: {}", hex, diadem,
+            log.info("Invalid diadem: {} not equivalent to local: {} vm: {} on: {}", hex, diadem,
                      ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
             return null;
         }
@@ -362,14 +362,12 @@ public class ViewAssembly {
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
             reiterate.set(() -> committee.iterate((term, m) -> {
-                                                      if (proposals.containsKey(m.getId())) {
-                                                          return null;
-                                                      }
-                                                      log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
-                                                      return term.join(nextViewId);
-                                                  }, ViewAssembly.this::consider, () -> completeSlice(retryDelay, reiterate),
-                                                  Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()),
-                                                  params().gossipDuration()));
+                if (proposals.containsKey(m.getId())) {
+                    return null;
+                }
+                log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member().getId());
+                return term.join(nextViewId);
+            }, ViewAssembly.this::consider, () -> completeSlice(retryDelay, reiterate), params().gossipDuration()));
             reiterate.get().run();
         }
 

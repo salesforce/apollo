@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -98,7 +97,7 @@ public class SliceIteratorTest {
             slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true,
                           () -> {
                               countdown.countDown();
-                          }, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), Duration.ofMillis(1));
+                          }, Duration.ofMillis(1));
             boolean finished = countdown.await(3, TimeUnit.SECONDS);
             assertTrue(finished, "completed: " + countdown.getCount());
             assertTrue(pinged1.get());
