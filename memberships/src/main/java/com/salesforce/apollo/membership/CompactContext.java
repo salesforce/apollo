@@ -29,6 +29,10 @@ public class CompactContext {
     private final int[][]    ringMap;
     private final Digest[][] rings;
 
+    public CompactContext(Context<?> of) {
+        this(of.getId(), of.allMembers().map(m -> m.getId()).toList(), of.getRingCount());
+    }
+
     public CompactContext(Digest id, int cardinality, double pByz, int bias, List<Digest> ids, double epsilon) {
         this(id, ids, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1));
     }

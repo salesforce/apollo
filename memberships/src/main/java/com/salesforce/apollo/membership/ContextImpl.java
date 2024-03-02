@@ -258,8 +258,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public int getRingCount() {
-        return rings.size();
+    public short getRingCount() {
+        return (short) rings.size();
     }
 
     @Override

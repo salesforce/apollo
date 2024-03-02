@@ -231,7 +231,7 @@ public interface Context<T extends Member> {
     /**
      * Answer the number of rings in the context
      */
-    int getRingCount();
+    short getRingCount();
 
     Digest hashFor(Digest d, int ring);
 
