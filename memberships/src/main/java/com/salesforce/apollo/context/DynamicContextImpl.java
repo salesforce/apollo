@@ -23,11 +23,8 @@ import java.util.stream.Stream;
 import static com.salesforce.apollo.context.Context.minMajority;
 
 /**
- * Provides a DynamicContext for Membership and is uniquely identified by a Digest. Members may be either active or
- * offline. The DynamicContext maintains a number of Rings (may be zero) that the DynamicContext provides for Firefly
- * type consistent hash ring ordering operators. Each ring has a unique hash of each individual member, and thus each
- * ring has a different ring order of the same membership set. Hashes for DynamicContext level operators include the ID
- * of the ring. Hashes computed for each member, per ring include the ID of the enclosing DynamicContext.
+ * Provides a dynamic Context for Membership. Members can be active or inactive.  Context membership is dynamic and
+ * members can be added or removed at any time.
  *
  * @author hal.hildebrand
  */

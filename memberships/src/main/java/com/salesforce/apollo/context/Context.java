@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2024, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
@@ -13,6 +19,16 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+/**
+ * Provides a Context for Membership and is uniquely identified by a Digest. Members may be either active or offline.
+ * The Context maintains a number of Rings (can be zero) that the Context provides for Firefly type consistent hash ring
+ * ordering operators. Each ring has a unique hash of each member, and thus each ring has a different ring order of the
+ * same membership set. Hashes for DynamicContext level operators include the ID of the ring. Hashes computed and cached
+ * for each member per ring include the ID of the enclosing DynamicContext.
+ *
+ * @param <T>
+ * @author hal.hildebrand
+ */
 public interface Context<T extends Member> {
 
     static List<Member> uniqueSuccessors(Context<Member> context, Digest digest) {

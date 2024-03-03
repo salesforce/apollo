@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, salesforce.com, inc.
+ * Copyright (c) 2024, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -19,7 +19,7 @@ import java.util.stream.StreamSupport;
 import static com.salesforce.apollo.context.Context.minMajority;
 
 /**
- * Static DynamicContext implementation
+ * Static Context implementation
  *
  * @author hal.hildebrand
  */
