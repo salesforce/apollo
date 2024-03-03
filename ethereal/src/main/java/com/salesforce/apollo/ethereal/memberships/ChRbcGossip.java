@@ -211,7 +211,7 @@ public class ChRbcGossip {
     private class Terminal implements GossiperService, Router.ServiceRouting {
         @Override
         public Update gossip(Gossip request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.debug("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
                           member.getId(), from, request.getRing(),
@@ -226,7 +226,7 @@ public class ChRbcGossip {
 
         @Override
         public void update(ContextUpdate request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.debug("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
                           member.getId(), from, request.getRing(),

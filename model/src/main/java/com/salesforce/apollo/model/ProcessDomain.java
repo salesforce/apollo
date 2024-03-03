@@ -15,6 +15,7 @@ import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
@@ -119,10 +120,10 @@ public class ProcessDomain extends Domain {
     protected ViewLifecycleListener listener() {
         return (context, id, cardinality, join, leaving) -> {
             for (var d : join) {
-                params.context().activate(context.apply(d));
+                ((DynamicContext) params.context()).activate(context.apply(d));
             }
             for (var d : leaving) {
-                params.context().remove(d);
+                ((DynamicContext) params.context()).remove(d);
             }
             choam.setDiadem(id);
 

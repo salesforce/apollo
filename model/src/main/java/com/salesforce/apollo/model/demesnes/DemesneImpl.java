@@ -84,7 +84,7 @@ public class DemesneImpl implements Demesne {
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
         this.parameters = parameters;
-        context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
+        context = DynamicContext.newBuilder().setId(Digest.from(parameters.getContext())).build();
         final var commDirectory = commDirectory();
         var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
 
@@ -170,11 +170,10 @@ public class DemesneImpl implements Demesne {
     @Override
     public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = domain;
-        joining.forEach(coords -> current.getContext()
-                                         .activate(new IdentifierMember(
-                                         coords.getIdentifier().getDigest(kerl.getDigestAlgorithm()),
-                                         new KerlVerifier<>(coords.getIdentifier(), kerl))));
-        leaving.forEach(id -> current.getContext().remove(id));
+        joining.forEach(coords -> ((DynamicContext) current.getContext()).activate(
+        new IdentifierMember(coords.getIdentifier().getDigest(kerl.getDigestAlgorithm()),
+                             new KerlVerifier<>(coords.getIdentifier(), kerl))));
+        leaving.forEach(id -> ((DynamicContext) current.getContext()).remove(id));
     }
 
     private Path commDirectory() {

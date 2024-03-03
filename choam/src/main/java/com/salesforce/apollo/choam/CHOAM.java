@@ -1294,7 +1294,7 @@ public class CHOAM {
 
         @Override
         public boolean isMember() {
-            return formation.isActive(params.member());
+            return formation.isMember(params.member());
         }
 
         @Override

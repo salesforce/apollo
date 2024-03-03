@@ -23,6 +23,7 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;

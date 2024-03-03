@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import java.security.SecureRandom;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 /**
  * @author hal.hildebrand
  */
@@ -30,7 +32,7 @@ public class CompactRingTest {
         var members = IntStream.range(0, cardinality).mapToObj(i -> {
             return new ControlledIdentifierMember(stereotomy.newIdentifier());
         }).toList();
-        final var ctxBuilder = Context.newBuilder().setCardinality(cardinality);
+        final var ctxBuilder = DynamicContext.newBuilder().setCardinality(cardinality);
         var context = ctxBuilder.build();
         members.forEach(m -> context.activate(m));
         final var compact = CompactContext.newBuilder(ctxBuilder)

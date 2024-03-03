@@ -8,6 +8,7 @@ package com.salesforce.apollo.thoth;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -35,7 +36,7 @@ public class MaatTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
-        var context = Context.newBuilder().setCardinality(4).build();
+        var context = DynamicContext.newBuilder().setCardinality(4).build();
         for (int i = 0; i < 4; i++) {
             context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier()));
         }

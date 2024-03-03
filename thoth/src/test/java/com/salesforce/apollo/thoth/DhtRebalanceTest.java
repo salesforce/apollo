@@ -10,7 +10,6 @@ import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -46,7 +45,7 @@ public class DhtRebalanceTest {
 
     private final TreeMap<SigningMember, Router>                                                  routers  = new TreeMap<>();
     private final TreeMap<SigningMember, KerlDHT>                                                 dhts     = new TreeMap<>();
-    private final TreeMap<SigningMember, Context<Member>>                                         contexts = new TreeMap<>();
+    private final TreeMap<SigningMember, DynamicContext<Member>>                                  contexts = new TreeMap<>();
     private       String                                                                          prefix;
     private       SecureRandom                                                                    entropy;
     private       StereotomyImpl                                                                  stereotomy;

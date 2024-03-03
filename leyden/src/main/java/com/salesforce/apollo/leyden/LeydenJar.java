@@ -15,7 +15,6 @@ import com.salesforce.apollo.leyden.comm.reconcile.*;
 import com.salesforce.apollo.leyden.proto.*;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
@@ -282,14 +281,13 @@ public class LeydenJar {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < context.getRingCount(); i++) {
-            Ring<Member> ring = context.ring(i);
-            Member predecessor = ring.predecessor(member);
+            Member predecessor = context.predecessor(i, member);
             if (predecessor == null) {
                 continue;
             }
 
-            Digest begin = ring.hash(predecessor);
-            Digest end = ring.hash(member);
+            Digest begin = context.hashFor(predecessor, i);
+            Digest end = context.hashFor(member, i);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
                 intervals.add(new KeyInterval(end, algorithm.getLast()));

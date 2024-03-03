@@ -10,6 +10,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -62,6 +63,16 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public Iterable<T> betweenPredecessors(int ring, T start, T stop) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> betweenSuccessor(int ring, T start, T stop) {
+        return null;
+    }
+
+    @Override
     public int cardinality() {
         return 0;
     }
@@ -69,6 +80,26 @@ public class StaticContext<T extends Member> implements Context<T> {
     @Override
     public int diameter() {
         return 0;
+    }
+
+    @Override
+    public T findPredecessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
+        return null;
+    }
+
+    @Override
+    public T findPredecessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
+        return null;
+    }
+
+    @Override
+    public T findSuccessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
+        return null;
+    }
+
+    @Override
+    public T findSuccessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
+        return null;
     }
 
     @Override
@@ -111,6 +142,11 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public boolean isBetween(int ring, T predecessor, T item, T successor) {
+        return false;
+    }
+
+    @Override
     public boolean isMember(Digest digest) {
         return false;
     }
@@ -136,6 +172,26 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public T predecessor(int ring, Digest location) {
+        return null;
+    }
+
+    @Override
+    public T predecessor(int ring, Digest location, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public T predecessor(int ring, T m) {
+        return null;
+    }
+
+    @Override
+    public T predecessor(int ring, T m, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
     public List<T> predecessors(Digest key) {
         return null;
     }
@@ -153,12 +209,47 @@ public class StaticContext<T extends Member> implements Context<T> {
         return null;
     }
 
+    @Override
+    public Iterable<T> predecessors(int ring, Digest location) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> predecessors(int ring, Digest location, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> predecessors(int ring, T start) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> predecessors(int ring, T start, Predicate<T> predicate) {
+        return null;
+    }
+
     public List<T> predecessors(Digest digest, Predicate<T> test) {
         var predecessors = new ArrayList<T>();
         for (var i = 0; i < rings.length; i++) {
             predecessors.add(new StaticRing(i).predecessor(digest, test));
         }
         return predecessors;
+    }
+
+    @Override
+    public int rank(int ring, Digest item, Digest dest) {
+        return 0;
+    }
+
+    @Override
+    public int rank(int ring, Digest item, T dest) {
+        return 0;
+    }
+
+    @Override
+    public int rank(int ring, T item, T dest) {
+        return 0;
     }
 
     public Ring<T> ring(int index) {
@@ -181,6 +272,46 @@ public class StaticContext<T extends Member> implements Context<T> {
     @Override
     public int size() {
         return 0;
+    }
+
+    @Override
+    public Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public Stream<T> streamPredecessors(int ring, T m, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public Stream<T> streamSuccessors(int ring, Digest location, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public Stream<T> streamSuccessors(int ring, T m, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public T successor(int ring, Digest hash) {
+        return null;
+    }
+
+    @Override
+    public T successor(int ring, Digest hash, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public T successor(int ring, T m) {
+        return null;
+    }
+
+    @Override
+    public T successor(int ring, T m, Predicate<T> predicate) {
+        return null;
     }
 
     public List<T> successors(Digest digest) {
@@ -210,6 +341,21 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public Iterable<T> successors(int ring, Digest location) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> successors(int ring, Digest location, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
+    public Iterable<T> successors(int ring, T m, Predicate<T> predicate) {
+        return null;
+    }
+
+    @Override
     public int timeToLive() {
         return 0;
     }
@@ -222,6 +368,11 @@ public class StaticContext<T extends Member> implements Context<T> {
     @Override
     public int totalCount() {
         return 0;
+    }
+
+    @Override
+    public Iterable<T> traverse(int ring, T member) {
+        return null;
     }
 
     @Override

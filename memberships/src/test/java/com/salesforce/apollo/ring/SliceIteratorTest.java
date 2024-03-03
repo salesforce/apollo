@@ -69,7 +69,7 @@ public class SliceIteratorTest {
             }
         };
         final var name = UUID.randomUUID().toString();
-        DynamicContext<Member> context = Context.newBuilder().build();
+        DynamicContext<Member> context = DynamicContext.newBuilder().build();
         context.activate(serverMember1);
         context.activate(serverMember2);
 

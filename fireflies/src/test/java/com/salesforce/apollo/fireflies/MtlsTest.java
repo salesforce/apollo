@@ -108,7 +108,7 @@ public class MtlsTest {
         var node0Registry = new MetricRegistry();
 
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
-        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
+        var ctxBuilder = DynamicContext.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var seeds = members.stream()
                            .map(m -> new Seed(m.getIdentifier().getIdentifier(), endpoints.get(m.getId())))

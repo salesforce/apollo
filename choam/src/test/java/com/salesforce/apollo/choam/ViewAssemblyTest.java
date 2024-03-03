@@ -19,7 +19,7 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -59,7 +59,7 @@ public class ViewAssemblyTest {
     private final        List<Ethereal>                  controllers    = new ArrayList<>();
     private final        List<ChRbcGossip>               gossipers      = new ArrayList<>();
     private              CountDownLatch                  complete;
-    private              Context<Member>                 context;
+    private              DynamicContext<Member>          context;
     private              Map<SigningMember, VDataSource> dataSources;
     private              List<SigningMember>             members;
     private              Digest                          nextViewId;
