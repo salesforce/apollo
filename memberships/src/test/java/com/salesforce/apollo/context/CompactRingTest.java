@@ -41,7 +41,7 @@ public class CompactRingTest {
         assertEquals(context.getRingCount(), compact.getRingCount());
 
         for (int i = 0; i < context.getRingCount(); i++) {
-            assertEquals(context.ring(i).stream().map(m -> m.getId()).toList(), compact.ring(i).stream().toList(),
+            assertEquals(context.stream(i).map(m -> m.getId()).toList(), compact.ring(i).stream().toList(),
                          "Ring " + i + " mismatched");
         }
     }

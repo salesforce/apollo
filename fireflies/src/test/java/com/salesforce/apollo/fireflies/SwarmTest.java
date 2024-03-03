@@ -163,10 +163,10 @@ public class SwarmTest {
         + " members");
 
         if (!largeTests) {
+            final var reference = views.get(0).getContext().stream(0).collect(Collectors.toSet());
             for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
-                final var reference = views.get(0).getContext().ring(i).getRing();
                 for (View view : views) {
-                    assertEquals(reference, view.getContext().ring(i).getRing());
+                    assertTrue(reference.containsAll(view.getContext().stream(i).toList()));
                 }
             }
 
@@ -180,7 +180,7 @@ public class SwarmTest {
             for (View v : views) {
                 Graph<Participant> testGraph = new Graph<>();
                 for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
-                    testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
+                    testGraph.addEdge(v.getNode(), v.getContext().successor(i, v.getNode()));
                 }
                 assertTrue(testGraph.isSC());
             }

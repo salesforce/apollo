@@ -276,6 +276,11 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public Stream<T> stream(int ring) {
+        return null;
+    }
+
+    @Override
     public Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate) {
         return null;
     }

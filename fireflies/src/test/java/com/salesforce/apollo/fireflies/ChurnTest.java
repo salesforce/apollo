@@ -240,7 +240,7 @@ public class ChurnTest {
         for (View v : views) {
             Graph<Participant> testGraph = new Graph<>();
             for (int i = 0; i < v.getContext().getRingCount(); i++) {
-                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
+                testGraph.addEdge(v.getNode(), v.getContext().successor(i, v.getNode()));
             }
             assertTrue(testGraph.isSC());
         }

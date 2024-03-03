@@ -363,6 +363,14 @@ public interface Context<T extends Member> {
     int size();
 
     /**
+     * Stream the members of the ring in hashed order
+     *
+     * @param ring
+     * @return
+     */
+    Stream<T> stream(int ring);
+
+    /**
      * @param ring
      * @param predicate
      * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but

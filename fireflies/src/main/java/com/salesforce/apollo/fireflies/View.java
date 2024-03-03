@@ -730,12 +730,12 @@ public class View {
         if (!context.validRing(accusation.getRingNumber())) {
             return false;
         }
-        Ring<Participant> ring = context.ring(accusation.getRingNumber());
 
-        if (accused.isAccusedOn(ring.getIndex())) {
-            Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
+        if (accused.isAccusedOn(accusation.getRingNumber())) {
+            Participant currentAccuser = context.getMember(
+            accused.getAccusation(accusation.getRingNumber()).getAccuser());
             if (!currentAccuser.equals(accuser)) {
-                if (ring.isBetween(currentAccuser, accuser, accused)) {
+                if (context.isBetween(accusation.getRingNumber(), currentAccuser, accuser, accused)) {
                     if (!accused.verify(accusation.getSignature(),
                                         accusation.getWrapped().getAccusation().toByteString())) {
                         log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
@@ -746,7 +746,7 @@ public class View {
                     pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
                                                                                                 params.rebuttalTimeout()));
                     log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
-                              ring.getIndex(), currentAccuser.getId(), node.getId());
+                              accusation.getRingNumber(), currentAccuser.getId(), node.getId());
                     if (metrics != null) {
                         metrics.accusations().mark();
                     }
@@ -769,7 +769,8 @@ public class View {
                 }
                 return false;
             }
-            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
+            Participant predecessor = context.predecessor(accusation.getRingNumber(), accused,
+                                                          m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId())) {
@@ -1937,7 +1938,7 @@ public class View {
                     }
                 }
 
-                Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+                Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No active successor on ring: {} from: {} on: {}", ring, from, node.getId());
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
@@ -1999,7 +2000,7 @@ public class View {
                     Status.INVALID_ARGUMENT.withDescription("No successor of: " + from));
                 }
                 Participant member = context.getActiveMember(from);
-                Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+                Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No successor, invalid update from: {} on ring: {} on: {}", from, ring, node.getId());
                     throw new StatusRuntimeException(

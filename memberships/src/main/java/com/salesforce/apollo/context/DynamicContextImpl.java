@@ -578,17 +578,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     /**
-     * @return the indexed Ring<T>
-     */
-    @Override
-    public Ring<T> ring(int index) {
-        if (index < 0 || index >= rings.size()) {
-            throw new IllegalArgumentException("Not a valid ring #: " + index + " max: " + (rings.size() - 1));
-        }
-        return rings.get(index);
-    }
-
-    /**
      * @return the Stream of rings managed by the context
      */
     @Override
@@ -630,6 +619,11 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     @Override
     public int size() {
         return members.size();
+    }
+
+    @Override
+    public Stream<T> stream(int ring) {
+        return ring(ring).stream();
     }
 
     @Override
@@ -778,6 +772,16 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
             s[ring] = hashFor(key, ring);
         }
         return s;
+    }
+
+    /**
+     * @return the indexed Ring<T>
+     */
+    private Ring<T> ring(int index) {
+        if (index < 0 || index >= rings.size()) {
+            throw new IllegalArgumentException("Not a valid ring #: " + index + " max: " + (rings.size() - 1));
+        }
+        return rings.get(index);
     }
 
     private Tracked<T> tracking(T m) {

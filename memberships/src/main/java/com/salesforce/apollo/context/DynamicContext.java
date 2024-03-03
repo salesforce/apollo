@@ -181,11 +181,6 @@ public interface DynamicContext<T extends Member> extends Context<T> {
     void remove(T m);
 
     /**
-     * @return the indexed Ring<T>
-     */
-    Ring<T> ring(int index);
-
-    /**
      * @return the Stream of rings managed by the context
      */
     Stream<Ring<T>> rings();
