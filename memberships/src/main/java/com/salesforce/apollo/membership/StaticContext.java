@@ -17,27 +17,27 @@ import java.util.stream.StreamSupport;
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 /**
- * Compact context structure that mimics a context, but only tracks the digest ids of the members.
+ * Static Context implementation
  *
  * @author hal.hildebrand
  */
-public class ReadOnlyContext<T extends Member> implements Context<T> {
+public class StaticContext<T extends Member> implements BaseContext<T> {
 
     private final Digest  id;
     private final T[]     members;
     private final int[][] ringMap;
     private final T[][]   rings;
 
-    public ReadOnlyContext(Context<T> of) {
+    public StaticContext(Context<T> of) {
         this(of.getId(), of.allMembers().toList(), of.getRingCount());
     }
 
-    public ReadOnlyContext(Digest id, int cardinality, double pByz, int bias, List<T> members, double epsilon) {
+    public StaticContext(Digest id, int cardinality, double pByz, int bias, List<T> members, double epsilon) {
         this(id, members, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1));
     }
 
     @SuppressWarnings("unchecked")
-    public ReadOnlyContext(Digest id, Collection<T> members, short rings) {
+    public StaticContext(Digest id, Collection<T> members, short rings) {
         this.id = id;
         this.members = (T[]) new Object[members.size()];
         this.rings = (T[][]) new Object[rings][];
@@ -57,51 +57,6 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public void activate(Collection<T> activeMembers) {
-
-    }
-
-    @Override
-    public boolean activate(T m) {
-        return false;
-    }
-
-    @Override
-    public boolean activate(Digest id) {
-        return false;
-    }
-
-    @Override
-    public boolean activateIfMember(T m) {
-        return false;
-    }
-
-    @Override
-    public Stream<T> active() {
-        return null;
-    }
-
-    @Override
-    public int activeCount() {
-        return 0;
-    }
-
-    @Override
-    public List<T> activeMembers() {
-        return null;
-    }
-
-    @Override
-    public <Q extends T> void add(Collection<Q> members) {
-
-    }
-
-    @Override
-    public boolean add(T m) {
-        return false;
-    }
-
-    @Override
     public Stream<T> allMembers() {
         return null;
     }
@@ -112,23 +67,8 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public void clear() {
-
-    }
-
-    @Override
-    public void deregister(UUID id) {
-
-    }
-
-    @Override
     public int diameter() {
         return 0;
-    }
-
-    @Override
-    public T getActiveMember(Digest memberID) {
-        return null;
     }
 
     @Override
@@ -157,11 +97,6 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public Collection<T> getOffline() {
-        return null;
-    }
-
-    @Override
     public double getProbabilityByzantine() {
         return 0;
     }
@@ -171,23 +106,8 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public Digest hashFor(Digest d, int ring) {
-        return null;
-    }
-
-    @Override
     public Digest hashFor(T m, int ring) {
         return null;
-    }
-
-    @Override
-    public boolean isActive(Digest id) {
-        return false;
-    }
-
-    @Override
-    public boolean isActive(T m) {
-        return false;
     }
 
     @Override
@@ -197,16 +117,6 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
 
     @Override
     public boolean isMember(T m) {
-        return false;
-    }
-
-    @Override
-    public boolean isOffline(Digest digest) {
-        return false;
-    }
-
-    @Override
-    public boolean isOffline(T m) {
         return false;
     }
 
@@ -226,26 +136,6 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public <Q extends T> void offline(Collection<Q> members) {
-
-    }
-
-    @Override
-    public boolean offline(T m) {
-        return false;
-    }
-
-    @Override
-    public int offlineCount() {
-        return 0;
-    }
-
-    @Override
-    public void offlineIfMember(T m) {
-
-    }
-
-    @Override
     public List<T> predecessors(Digest key) {
         return null;
     }
@@ -253,7 +143,7 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     public List<T> predecessors(T m) {
         var predecessors = new ArrayList<T>();
         for (var i = 0; i < rings.length; i++) {
-            predecessors.add(new CompactRing(i).predecessor(m.getId()));
+            predecessors.add(new StaticRing(i).predecessor(m.getId()));
         }
         return predecessors;
     }
@@ -266,50 +156,15 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     public List<T> predecessors(Digest digest, Predicate<T> test) {
         var predecessors = new ArrayList<T>();
         for (var i = 0; i < rings.length; i++) {
-            predecessors.add(new CompactRing(i).predecessor(digest, test));
+            predecessors.add(new StaticRing(i).predecessor(digest, test));
         }
         return predecessors;
-    }
-
-    @Override
-    public void rebalance() {
-
-    }
-
-    @Override
-    public void rebalance(int cardinality) {
-
-    }
-
-    @Override
-    public UUID register(MembershipListener<T> listener) {
-        return null;
-    }
-
-    @Override
-    public <Q extends T> void remove(Collection<Q> members) {
-
-    }
-
-    @Override
-    public void remove(Digest id) {
-
-    }
-
-    @Override
-    public void remove(T m) {
-
     }
 
     public Ring<T> ring(int index) {
         if (index < 0 || index >= rings.length) {
             throw new IndexOutOfBoundsException(index);
         }
-        return null;
-    }
-
-    @Override
-    public Stream<Ring<T>> rings() {
         return null;
     }
 
@@ -331,7 +186,7 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     public List<T> successors(Digest digest) {
         var successors = new ArrayList<T>();
         for (var i = 0; i < rings.length; i++) {
-            successors.add(new CompactRing(i).successor(digest));
+            successors.add(new StaticRing(i).successor(digest));
         }
         return successors;
     }
@@ -339,7 +194,7 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
     public List<T> successors(Digest digest, Predicate<T> test) {
         var successors = new ArrayList<T>();
         for (var i = 0; i < rings.length; i++) {
-            successors.add(new CompactRing(i).successor(digest, test));
+            successors.add(new StaticRing(i).successor(digest, test));
         }
         return successors;
     }
@@ -397,10 +252,10 @@ public class ReadOnlyContext<T extends Member> implements Context<T> {
         }
     }
 
-    public class CompactRing {
+    public class StaticRing {
         private final int index;
 
-        private CompactRing(int index) {
+        private StaticRing(int index) {
             this.index = index;
         }
 

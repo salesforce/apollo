@@ -8,10 +8,11 @@ package com.salesforce.apollo.membership;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import java.util.*;
-import java.util.function.Predicate;
+import java.util.Collection;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
@@ -23,10 +24,9 @@ import java.util.stream.Stream;
  *
  * @author hal.hildebrand
  */
-public interface Context<T extends Member> {
+public interface Context<T extends Member> extends BaseContext<T> {
 
-    double DEFAULT_EPSILON    = 0.99999;
-    String RING_HASH_TEMPLATE = "%s-%s-%s";
+    double DEFAULT_EPSILON = 0.99999;
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
         return d.prefix(ctxId, ring);
@@ -49,7 +49,7 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @return the minimum t such that the probability of more than t out of bias * t+1 monitors are correct with
+     * @return the minimum t such that the probability of more than t out of bias * t+1 monitors is correct with
      * probability e/size given the uniform probability pByz that a monitor is Byzantine.
      */
     static int minMajority(double pByz, int cardinality, double epsilon, int bias) {
@@ -82,7 +82,7 @@ public interface Context<T extends Member> {
     }
 
     static <Z extends Member> Builder<Z> newBuilder() {
-        return new Builder<Z>() {
+        return new Builder<>() {
 
             @Override
             public Context<Z> build() {
@@ -93,18 +93,6 @@ public interface Context<T extends Member> {
 
     static int toleranceLevel(int rings, int bias) {
         return ((rings - 1) / bias);
-    }
-
-    static List<Member> uniqueSuccessors(final Context<Member> context, Digest digest) {
-        Set<Member> post = new HashSet<>();
-        context.successors(digest, m -> {
-            if (post.size() == context.getRingCount()) {
-                return false;
-            }
-            return post.add(m);
-        });
-        var successors = new ArrayList<>(post);
-        return successors;
     }
 
     /**
@@ -160,16 +148,6 @@ public interface Context<T extends Member> {
     boolean add(T m);
 
     /**
-     * Answer a stream over all members, offline and active
-     */
-    Stream<T> allMembers();
-
-    /**
-     * Maximum cardinality of this context
-     */
-    int cardinality();
-
-    /**
      * Clear all members from the receiver
      */
     void clear();
@@ -180,57 +158,14 @@ public interface Context<T extends Member> {
     void deregister(UUID id);
 
     /**
-     * Answer the aproximate diameter of the receiver, assuming the rings were built with FF parameters, with the rings
-     * forming random graph connections segments.
-     */
-    int diameter();
-
-    /**
      * Answer the active member having the id, or null if offline or non-existent
      */
     T getActiveMember(Digest memberID);
 
     /**
-     * @return the List of all members
-     */
-    List<T> getAllMembers();
-
-    /**
-     * Answer the bias of the context. The bias is the multiple of the number of byzantine members the context is
-     * designed to foil
-     */
-    int getBias();
-
-    double getEpsilon();
-
-    /**
-     * Answer the identifier of the context
-     */
-    Digest getId();
-
-    /**
-     * Answer the member matching the id, or null if none.
-     */
-    T getMember(Digest memberID);
-
-    /**
      * Answer the collection of offline members
      */
     Collection<T> getOffline();
-
-    /**
-     * Answer the probability {0, 1} that any given member is byzantine
-     */
-    double getProbabilityByzantine();
-
-    /**
-     * Answer the number of rings in the context
-     */
-    short getRingCount();
-
-    Digest hashFor(Digest d, int ring);
-
-    Digest hashFor(T m, int ring);
 
     /**
      * Answer true if the member who's id is active
@@ -243,16 +178,6 @@ public interface Context<T extends Member> {
     boolean isActive(T m);
 
     /**
-     * Answer true if a member who's id is the supplied digest is a member of the view
-     */
-    boolean isMember(Digest digest);
-
-    /**
-     * Answer true if is a member of the view
-     */
-    boolean isMember(T m);
-
-    /**
      * Answer true if a member who's id is the supplied digest is offline
      */
     boolean isOffline(Digest digest);
@@ -261,35 +186,6 @@ public interface Context<T extends Member> {
      * Answer true if a member is offline
      */
     boolean isOffline(T m);
-
-    /**
-     * Answer true if the member is a successor of the supplied digest on any ring
-     *
-     * @param m
-     * @param digest
-     * @return
-     */
-    boolean isSuccessorOf(T m, Digest digest);
-
-    /**
-     * Answer the majority cardinality of the context, based on the current ring count
-     */
-    default int majority() {
-        return majority(false);
-    }
-
-    /**
-     * Answer the majority cardinality of the context, based on the current ring count
-     *
-     * @param bootstrapped - if true, calculate correct majority for bootstrapping cases where totalCount < true
-     *                     majority
-     */
-    int majority(boolean bootstrapped);
-
-    /**
-     * Answer the total member count (offline + active) tracked by this context
-     */
-    int memberCount();
 
     /**
      * Take the collection of members offline
@@ -309,26 +205,6 @@ public interface Context<T extends Member> {
      * Take a member offline if already a member
      */
     void offlineIfMember(T m);
-
-    /**
-     * @return the predecessor on each ring for the provided key
-     */
-    List<T> predecessors(Digest key);
-
-    /**
-     * @return the predecessor on each ring for the provided key that pass the provided predicate
-     */
-    List<T> predecessors(Digest key, Predicate<T> test);
-
-    /**
-     * @return the predecessor on each ring for the provided key
-     */
-    List<T> predecessors(T key);
-
-    /**
-     * @return the predecessor on each ring for the provided key that pass the provided predicate
-     */
-    List<T> predecessors(T key, Predicate<T> test);
 
     /**
      * Rebalance the rings based on the current total membership cardinality
@@ -370,84 +246,16 @@ public interface Context<T extends Member> {
      */
     Stream<Ring<T>> rings();
 
-    /**
-     * Answer a random sample of at least range size from the active members of the context
-     *
-     * @param range   - the desired range
-     * @param entropy - source o randomness
-     * @param exc     - the member to exclude from sample
-     * @return a random sample set of the view's live members. May be limited by the number of active members.
-     */
-    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
-
-    /**
-     * Answer a random sample of at least range size from the active members of the context
-     *
-     * @param range    - the desired range
-     * @param entropy  - source o randomness
-     * @param excluded - the member to exclude from sample
-     * @return a random sample set of the view's live members. May be limited by the number of active members.
-     */
-    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded);
-
-    /**
-     * Answer the total count of active and offline members of this context
-     */
-    int size();
-
-    /**
-     * @return the list of successors to the key on each ring
-     */
-    List<T> successors(Digest key);
-
-    /**
-     * @return the list of successor to the key on each ring that pass the provided predicate test
-     */
-    List<T> successors(Digest key, Predicate<T> test);
-
-    /**
-     * @return the list of successors to the key on each ring
-     */
-    List<T> successors(T key);
-
-    /**
-     * @return the list of successor to the key on each ring that pass the provided predicate test
-     */
-    List<T> successors(T key, Predicate<T> test);
-
-    /**
-     * The number of iterations until a given message has been distributed to all members in the context, using the
-     * rings of the receiver as a gossip graph
-     */
-    int timeToLive();
-
-    /**
-     * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
-     * FF parameters
-     */
-    int toleranceLevel();
-
-    /**
-     * @return the total number of members
-     */
-    int totalCount();
-
-    boolean validRing(int ring);
-
     interface MembershipListener<T extends Member> {
 
         /**
          * A new member has recovered and is now active
-         *
-         * @param member
          */
         default void active(T member) {
         }
 
         /**
          * A member is offline
-         *
-         * @param member
          */
         default void offline(T member) {
         }

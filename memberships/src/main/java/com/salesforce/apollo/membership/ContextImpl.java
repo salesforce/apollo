@@ -30,15 +30,16 @@ import static com.salesforce.apollo.membership.Context.minMajority;
  */
 public class ContextImpl<T extends Member> implements Context<T> {
 
-    private static final Logger                           log                 = LoggerFactory.getLogger(Context.class);
-    private final        int                              bias;
-    private final        double                           epsilon;
-    private final        Digest                           id;
-    private final        Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
-    private final        Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
-    private final        double                           pByz;
-    private final        List<Ring<T>>                    rings               = new ArrayList<>();
-    private volatile     int                              cardinality;
+    private static final Logger log = LoggerFactory.getLogger(Context.class);
+
+    private final    int                              bias;
+    private final    double                           epsilon;
+    private final    Digest                           id;
+    private final    Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
+    private final    Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
+    private final    double                           pByz;
+    private final    List<Ring<T>>                    rings               = new ArrayList<>();
+    private volatile int                              cardinality;
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
@@ -250,11 +251,6 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public Digest hashFor(Digest d, int ring) {
-        return Context.hashFor(id, ring, d);
-    }
-
-    @Override
     public Digest hashFor(T m, int ring) {
         assert ring >= 0 && ring < rings.size() : "Invalid ring: " + ring + " max: " + (rings.size() - 1);
         var tracked = members.get(m.getId());
@@ -314,11 +310,6 @@ public class ContextImpl<T extends Member> implements Context<T> {
             }
         }
         return false;
-    }
-
-    @Override
-    public int majority() {
-        return getRingCount() - toleranceLevel();
     }
 
     @Override

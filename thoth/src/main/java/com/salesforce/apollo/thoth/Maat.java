@@ -9,6 +9,7 @@ package com.salesforce.apollo.thoth;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
+import com.salesforce.apollo.membership.BaseContext;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
@@ -82,10 +83,11 @@ public class Maat extends DelegatedKERL {
             return false;
         }
         final Context<Member> ctx = context;
-        var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
-                                .stream()
-                                .map(m -> m.getId())
-                                .collect(Collectors.toSet());
+        var successors = BaseContext.uniqueSuccessors(ctx,
+                                                      digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
+                                    .stream()
+                                    .map(m -> m.getId())
+                                    .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {
         }
