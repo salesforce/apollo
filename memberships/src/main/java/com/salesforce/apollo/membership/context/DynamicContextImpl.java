@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.membership.context;
 
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +20,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import static com.salesforce.apollo.membership.Context.minMajority;
+import static com.salesforce.apollo.membership.context.Context.minMajority;
 
 /**
  * Provides a DynamicContext for Membership and is uniquely identified by a Digest. Members may be either active or

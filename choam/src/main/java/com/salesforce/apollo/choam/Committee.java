@@ -14,9 +14,9 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.context.Context;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import org.slf4j.Logger;
 
 import java.util.HashSet;

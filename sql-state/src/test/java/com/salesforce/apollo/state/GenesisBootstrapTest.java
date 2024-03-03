@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesforce.apollo.membership.DynamicContext;
+import com.salesforce.apollo.membership.context.DynamicContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

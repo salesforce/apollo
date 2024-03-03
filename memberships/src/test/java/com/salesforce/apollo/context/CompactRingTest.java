@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.context.CompactContext;
+import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;

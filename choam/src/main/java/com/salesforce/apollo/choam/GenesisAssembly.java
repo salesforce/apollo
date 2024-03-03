@@ -24,8 +24,8 @@ import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
-import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

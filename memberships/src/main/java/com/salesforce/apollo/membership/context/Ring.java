@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.membership.context;
 
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.membership.Member;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;

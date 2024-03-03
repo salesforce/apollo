@@ -7,7 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

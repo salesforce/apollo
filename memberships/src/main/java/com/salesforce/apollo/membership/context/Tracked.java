@@ -1,6 +1,7 @@
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.membership.context;
 
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

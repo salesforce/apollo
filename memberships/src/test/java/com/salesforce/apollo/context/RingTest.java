@@ -4,12 +4,16 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.cert.Certificates;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.context.Context;
+import com.salesforce.apollo.membership.context.DynamicContext;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.BeforeAll;

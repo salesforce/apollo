@@ -1,6 +1,8 @@
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.membership.context;
 
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Util;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.ArrayList;

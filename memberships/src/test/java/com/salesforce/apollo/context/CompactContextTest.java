@@ -1,12 +1,9 @@
-/*
- * Copyright (c) 2021, salesforce.com, inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.context.CompactContext;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -21,9 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author hal.hildebrand
- */
-public class ContextTests {
-
+ **/
+public class CompactContextTest {
     @Test
     public void consistency() throws Exception {
         var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
@@ -38,11 +34,13 @@ public class ContextTests {
             context.activate(m);
         }
 
-        List<Member> predecessors = context.predecessors(members.get(0));
-        assertEquals(predecessors.get(2), members.get(9));
+        var compact = new CompactContext(context);
 
-        List<Member> successors = context.successors(members.get(1));
-        assertEquals(members.get(0), successors.get(0));
-        assertEquals(members.get(1), context.ring(1).successor(members.get(0)));
+        var predecessors = compact.predecessors(members.get(0).getId());
+        assertEquals(members.get(9).getId(), predecessors.get(2));
+
+        var successors = compact.successors(members.get(1).getId());
+        assertEquals(members.get(0).getId(), successors.get(0));
+        assertEquals(members.get(1).getId(), compact.ring(1).successor(members.get(0).getId()));
     }
 }

@@ -20,7 +20,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.DynamicContextImpl;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;

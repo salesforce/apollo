@@ -19,7 +19,7 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.DynamicContextImpl;
+import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;

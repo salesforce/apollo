@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesforce.apollo.membership.DynamicContext;
+import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.utils.Utils;
 import org.joou.ULong;
 

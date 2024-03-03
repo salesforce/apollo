@@ -18,7 +18,7 @@ import com.salesforce.apollo.gorgoneion.client.client.comm.AdmissionsClient;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsServer;
 import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.gorgoneion.proto.SignedNonce;
-import com.salesforce.apollo.membership.DynamicContext;
+import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.proto.Validations;
