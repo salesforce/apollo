@@ -11,9 +11,6 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.cert.Certificates;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.context.Context;
-import com.salesforce.apollo.membership.context.DynamicContext;
-import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.BeforeAll;
@@ -85,7 +82,7 @@ public class RingTest {
         int stop = 3;
         int index = start - 1;
 
-        for (Member test : context.betweenPredecessors(1, members.get(start), members.get(stop))) {
+        for (Member test : context.betweenPredecessors(0, members.get(start), members.get(stop))) {
             if (index == -1) {
                 index = members.size() - 1; // wrap around
             }
@@ -97,7 +94,7 @@ public class RingTest {
         stop = 5;
         index = start - 1;
 
-        for (Member test : context.betweenPredecessors(1, members.get(start), members.get(stop))) {
+        for (Member test : context.betweenPredecessors(0, members.get(start), members.get(stop))) {
             if (index == -1) {
                 index = members.size() - 1; // wrap around
             }

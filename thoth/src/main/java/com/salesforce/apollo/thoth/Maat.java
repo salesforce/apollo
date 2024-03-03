@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.thoth;
 
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.context.Context;
-import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;

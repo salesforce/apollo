@@ -8,6 +8,7 @@ package com.salesforce.apollo.model;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -15,7 +16,6 @@ import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
-import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;

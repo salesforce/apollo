@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership.context;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -20,7 +20,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import static com.salesforce.apollo.membership.context.Context.minMajority;
+import static com.salesforce.apollo.context.Context.minMajority;
 
 /**
  * Provides a DynamicContext for Membership and is uniquely identified by a Digest. Members may be either active or
@@ -160,12 +160,12 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public Iterable<T> betweenPredecessors(int ring, T start, T stop) {
-        return null;
+        return ring(ring).betweenPredecessors(start, stop);
     }
 
     @Override
     public Iterable<T> betweenSuccessor(int ring, T start, T stop) {
-        return null;
+        return ring(ring).betweenSuccessor(start, stop);
     }
 
     @Override
@@ -213,22 +213,22 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public T findPredecessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
-        return null;
+        return ring(ring).findPredecessor(d, predicate);
     }
 
     @Override
     public T findPredecessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
-        return null;
+        return ring(ring).findPredecessor(m, predicate);
     }
 
     @Override
     public T findSuccessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
-        return null;
+        return ring(ring).findSuccessor(d, predicate);
     }
 
     @Override
     public T findSuccessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
-        return null;
+        return ring(ring).findSuccessor(m, predicate);
     }
 
     @Override
@@ -311,7 +311,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public boolean isBetween(int ring, T predecessor, T item, T successor) {
-        return false;
+        return ring(ring).isBetween(predecessor, item, successor);
     }
 
     @Override
@@ -417,22 +417,22 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public T predecessor(int ring, Digest location) {
-        return null;
+        return ring(ring).predecessor(location);
     }
 
     @Override
     public T predecessor(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessor(location, predicate);
     }
 
     @Override
     public T predecessor(int ring, T m) {
-        return null;
+        return ring(ring).predecessor(m);
     }
 
     @Override
     public T predecessor(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessor(m, predicate);
     }
 
     /**
@@ -483,17 +483,17 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public Iterable<T> predecessors(int ring, Digest location) {
-        return null;
+        return ring(ring).predecessors(location);
     }
 
     @Override
     public Iterable<T> predecessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessors(location, predicate);
     }
 
     @Override
     public Iterable<T> predecessors(int ring, T start) {
-        return null;
+        return ring(ring).predecessors(start);
     }
 
     @Override
@@ -503,17 +503,17 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public int rank(int ring, Digest item, Digest dest) {
-        return 0;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
     public int rank(int ring, Digest item, T dest) {
-        return 0;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
     public int rank(int ring, T item, T dest) {
-        return 0;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
@@ -637,42 +637,42 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamPredecessors(location, predicate);
     }
 
     @Override
     public Stream<T> streamPredecessors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamPredecessors(m, predicate);
     }
 
     @Override
     public Stream<T> streamSuccessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamSuccessors(location, predicate);
     }
 
     @Override
     public Stream<T> streamSuccessors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamSuccessors(m, predicate);
     }
 
     @Override
     public T successor(int ring, Digest hash) {
-        return null;
+        return ring(ring).successor(hash);
     }
 
     @Override
     public T successor(int ring, Digest hash, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successor(hash, predicate);
     }
 
     @Override
     public T successor(int ring, T m) {
-        return null;
+        return ring(ring).successor(m);
     }
 
     @Override
     public T successor(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successor(m, predicate);
     }
 
     /**
@@ -723,17 +723,17 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public Iterable<T> successors(int ring, Digest location) {
-        return null;
+        return ring(ring).successors(location);
     }
 
     @Override
     public Iterable<T> successors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successors(location, predicate);
     }
 
     @Override
     public Iterable<T> successors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successors(m, predicate);
     }
 
     /**
@@ -766,7 +766,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
     @Override
     public Iterable<T> traverse(int ring, T member) {
-        return null;
+        return ring(ring).traverse(member);
     }
 
     @Override

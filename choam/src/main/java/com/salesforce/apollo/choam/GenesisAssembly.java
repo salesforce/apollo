@@ -17,6 +17,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
@@ -25,7 +26,6 @@ import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

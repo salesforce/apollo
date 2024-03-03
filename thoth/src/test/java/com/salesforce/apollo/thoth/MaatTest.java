@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.thoth;
 
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
-import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;

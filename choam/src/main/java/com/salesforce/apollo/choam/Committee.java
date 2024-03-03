@@ -9,14 +9,14 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.context.Context;
-import com.salesforce.apollo.membership.context.DynamicContextImpl;
 import org.slf4j.Logger;
 
 import java.util.HashSet;

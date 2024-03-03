@@ -7,8 +7,6 @@
 package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.context.CompactContext;
-import com.salesforce.apollo.membership.context.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;

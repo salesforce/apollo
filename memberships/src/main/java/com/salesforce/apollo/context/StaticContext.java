@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership.context;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -16,7 +16,7 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static com.salesforce.apollo.membership.context.Context.minMajority;
+import static com.salesforce.apollo.context.Context.minMajority;
 
 /**
  * Static DynamicContext implementation

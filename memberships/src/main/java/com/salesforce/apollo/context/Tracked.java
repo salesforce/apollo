@@ -1,4 +1,4 @@
-package com.salesforce.apollo.membership.context;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;

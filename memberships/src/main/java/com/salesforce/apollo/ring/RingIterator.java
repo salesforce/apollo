@@ -8,10 +8,10 @@ package com.salesforce.apollo.ring;
 
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.context.Context;
 import com.salesforce.apollo.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

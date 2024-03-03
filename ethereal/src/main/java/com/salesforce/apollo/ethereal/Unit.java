@@ -7,11 +7,11 @@
 package com.salesforce.apollo.ethereal;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.membership.context.Context;
 
 import java.util.ArrayList;
 import java.util.HashMap;
