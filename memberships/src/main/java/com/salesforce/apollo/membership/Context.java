@@ -175,11 +175,6 @@ public interface Context<T extends Member> {
     void clear();
 
     /**
-     * Link the lifecycle of member in receiver context with the foundation
-     */
-    <Q extends T> UUID dependUpon(Context<Q> foundation);
-
-    /**
      * Deregister the membership listener identified by the supplied UUID
      */
     void deregister(UUID id);

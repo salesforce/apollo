@@ -6,30 +6,24 @@
  */
 package com.salesforce.apollo.membership;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Random;
-import java.util.stream.Collectors;
-
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.cert.Certificates;
 import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * @author hal.hildebrand
@@ -37,9 +31,11 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class RingTest {
 
-    private static final int    MEMBER_COUNT = 10;
-    private static List<Member> members;
-    private static final byte[] PROTO        = new byte[32];
+    private static final int          MEMBER_COUNT = 10;
+    private static final byte[]       PROTO        = new byte[32];
+    private static       List<Member> members;
+    private Context<Member> context;
+    private Ring<Member>    ring;
 
     @BeforeAll
     public static void beforeClass() {
@@ -62,9 +58,6 @@ public class RingTest {
                                                           keyPair, notBefore, notAfter, Collections.emptyList());
         return new MemberImpl(id, generated, generated.getPublicKey());
     }
-
-    private Context<Member> context;
-    private Ring<Member>    ring;
 
     @BeforeEach
     public void before() {
@@ -136,12 +129,11 @@ public class RingTest {
                 try {
                     var t = Context.minMajority(pByz, card, epsilon, 3);
                     if (t != tPrev) {
-                        System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
-                                                         pByz, card));
+                        System.out.printf("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s%n", t, (3 * t) + 1, pByz, card);
                     }
                     tPrev = t;
                 } catch (Exception e) {
-                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                    System.out.printf("Cannot calulate Pbyz: %s Cardinality: %s%n", pByz, card);
                 }
             }
         }
@@ -204,8 +196,7 @@ public class RingTest {
         for (double pByz : probabilityByzantine) {
             for (int card : cardinality) {
                 int t = Context.minMajority(pByz, card, epsilon);
-                System.out.println(String.format("Bias: 2 T: %s K: %s Pbyz: %s Cardinality: %s", t, (2 * t) + 1, pByz,
-                                                 card));
+                System.out.printf("Bias: 2 T: %s K: %s Pbyz: %s Cardinality: %s%n", t, (2 * t) + 1, pByz, card);
             }
         }
     }
@@ -220,10 +211,9 @@ public class RingTest {
             for (int card : cardinality) {
                 try {
                     int t = Context.minMajority(pByz, card, epsilon, 3);
-                    System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
-                                                     pByz, card));
+                    System.out.printf("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s%n", t, (3 * t) + 1, pByz, card);
                 } catch (Exception e) {
-                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                    System.out.printf("Cannot calulate Pbyz: %s Cardinality: %s%n", pByz, card);
                 }
             }
         }

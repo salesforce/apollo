@@ -27,7 +27,7 @@ public class CompactRingTest {
     public void smokin() throws Exception {
         var cardinality = 1_000;
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         var members = IntStream.range(0, cardinality).mapToObj(i -> {
             return new ControlledIdentifierMember(stereotomy.newIdentifier());
@@ -36,13 +36,13 @@ public class CompactRingTest {
         var context = ctxBuilder.build();
         members.forEach(m -> context.activate(m));
         final var compact = CompactContext.newBuilder(ctxBuilder)
-                .setMembers(members.stream().map(m -> m.getId()).toList())
-                .build();
+                                          .setMembers(members.stream().map(m -> m.getId()).toList())
+                                          .build();
         assertEquals(context.getRingCount(), compact.getRingCount());
 
         for (int i = 0; i < context.getRingCount(); i++) {
             assertEquals(context.ring(i).stream().map(m -> m.getId()).toList(), compact.ring(i).stream().toList(),
-                    "Ring " + i + " mismatched");
+                         "Ring " + i + " mismatched");
         }
     }
 }

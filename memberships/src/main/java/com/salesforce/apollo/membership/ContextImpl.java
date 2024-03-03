@@ -14,15 +14,13 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 /**
- * Provides a Context for Membership and is uniquely identified by a Digest;. Members may be either active or offline.
+ * Provides a Context for Membership and is uniquely identified by a Digest. Members may be either active or offline.
  * The Context maintains a number of Rings (may be zero) that the Context provides for Firefly type consistent hash ring
  * ordering operators. Each ring has a unique hash of each individual member, and thus each ring has a different ring
  * order of the same membership set. Hashes for Context level operators include the ID of the ring. Hashes computed for
@@ -32,16 +30,15 @@ import static com.salesforce.apollo.membership.Context.minMajority;
  */
 public class ContextImpl<T extends Member> implements Context<T> {
 
-    private static final Logger                              log                 = LoggerFactory.getLogger(
-    Context.class);
-    private final        int                                 bias;
-    private final        double                              epsilon;
-    private final        Digest                              id;
-    private final        Map<Digest, ContextImpl.Tracked<T>> members             = new ConcurrentSkipListMap<>();
-    private final        Map<UUID, MembershipListener<T>>    membershipListeners = new ConcurrentHashMap<>();
-    private final        double                              pByz;
-    private final        List<Ring<T>>                       rings               = new ArrayList<>();
-    private volatile     int                                 cardinality;
+    private static final Logger                           log                 = LoggerFactory.getLogger(Context.class);
+    private final        int                              bias;
+    private final        double                           epsilon;
+    private final        Digest                           id;
+    private final        Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
+    private final        Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
+    private final        double                           pByz;
+    private final        List<Ring<T>>                    rings               = new ArrayList<>();
+    private volatile     int                              cardinality;
 
     public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
@@ -60,7 +57,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public void activate(Collection<T> activeMembers) {
-        activeMembers.forEach(m -> activate(m));
+        activeMembers.forEach(this::activate);
     }
 
     /**
@@ -69,7 +66,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public boolean activate(T m) {
         if (tracking(m).activate()) {
-            membershipListeners.values().stream().forEach(l -> {
+            membershipListeners.values().forEach(l -> {
                 try {
                     l.active(m);
                 } catch (Throwable e) {
@@ -92,7 +89,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
             throw new NoSuchElementException("No member known: " + id);
         }
         if (m.activate()) {
-            membershipListeners.values().stream().forEach(l -> {
+            membershipListeners.values().forEach(l -> {
                 try {
                     l.active(m.member);
                 } catch (Throwable e) {
@@ -111,7 +108,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public boolean activateIfMember(T m) {
         var member = members.get(m.getId());
         if (member != null && member.activate()) {
-            membershipListeners.values().stream().forEach(l -> {
+            membershipListeners.values().forEach(l -> {
                 try {
                     l.active(m);
                 } catch (Throwable e) {
@@ -125,22 +122,22 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public Stream<T> active() {
-        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member());
+        return members.values().stream().filter(Tracked::isActive).map(Tracked::member);
     }
 
     @Override
     public int activeCount() {
-        return (int) members.values().stream().filter(e -> e.isActive()).count();
+        return (int) members.values().stream().filter(Tracked::isActive).count();
     }
 
     @Override
     public List<T> activeMembers() {
-        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member()).toList();
+        return members.values().stream().filter(Tracked::isActive).map(Tracked::member).toList();
     }
 
     @Override
     public <Q extends T> void add(Collection<Q> members) {
-        members.forEach(m -> add(m));
+        members.forEach(this::add);
     }
 
     @Override
@@ -154,7 +151,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public Stream<T> allMembers() {
-        return members.values().stream().map(e -> e.member());
+        return members.values().stream().map(Tracked::member);
     }
 
     @Override
@@ -169,21 +166,6 @@ public class ContextImpl<T extends Member> implements Context<T> {
             ring.clear();
         }
         members.clear();
-    }
-
-    @Override
-    public <Q extends T> UUID dependUpon(Context<Q> foundation) {
-        return foundation.register(new MembershipListener<Q>() {
-            @Override
-            public void active(Q member) {
-                activateIfMember(member);
-            }
-
-            @Override
-            public void offline(Q member) {
-                offlineIfMember(member);
-            }
-        });
     }
 
     @Override
@@ -249,7 +231,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public Collection<T> getOffline() {
-        return members.values().stream().filter(e -> !e.isActive()).map(e -> e.member()).toList();
+        return members.values().stream().filter(e -> !e.isActive()).map(Tracked::member).toList();
     }
 
     @Override
@@ -361,7 +343,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public <Q extends T> void offline(Collection<Q> members) {
-        members.forEach(m -> offline(m));
+        members.forEach(this::offline);
     }
 
     /**
@@ -463,7 +445,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         final var currentCount = rings.size();
         if (ringCount < currentCount) {
             for (int i = 0; i < currentCount - ringCount; i++) {
-                var removed = rings.remove(rings.size() - 1);
+                var removed = rings.removeLast();
                 removed.clear();
             }
         } else if (ringCount > currentCount) {
@@ -493,7 +475,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public <Q extends T> void remove(Collection<Q> members) {
-        members.forEach(m -> remove(m));
+        members.forEach(this::remove);
     }
 
     @Override
@@ -545,7 +527,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
         return rings.get(entropy.nextInt(rings.size()))
                     .stream()
-                    .collect(new ReservoirSampler<T>(excluded, range, entropy));
+                    .collect(new ReservoirSampler<>(excluded, range, entropy));
     }
 
     /**
@@ -657,68 +639,13 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return s;
     }
 
-    private ContextImpl.Tracked<T> tracking(T m) {
-        var tracking = members.computeIfAbsent(m.getId(), id -> {
+    private Tracked<T> tracking(T m) {
+        return members.computeIfAbsent(m.getId(), id1 -> {
             for (var ring : rings) {
                 ring.insert(m);
             }
-            return new ContextImpl.Tracked<>(m, () -> hashesFor(m));
+            return new Tracked<>(m, () -> hashesFor(m));
         });
-        return tracking;
     }
 
-    public static class Tracked<M extends Member> {
-        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
-
-        private final AtomicBoolean active = new AtomicBoolean(false);
-        private final M             member;
-        private       Digest[]      hashes;
-
-        public Tracked(M member, Supplier<Digest[]> hashes) {
-            this.member = member;
-            this.hashes = hashes.get();
-        }
-
-        public boolean activate() {
-            var activated = active.compareAndSet(false, true);
-            if (activated) {
-                log.trace("Activated: {}", member.getId());
-            }
-            return activated;
-        }
-
-        public Digest hash(int index) {
-            return hashes[index];
-        }
-
-        public boolean isActive() {
-            return active.get();
-        }
-
-        public M member() {
-            return member;
-        }
-
-        public boolean offline() {
-            var offlined = active.compareAndSet(true, false);
-            if (offlined) {
-                log.trace("Offlined: {}", member.getId());
-            }
-            return offlined;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
-        }
-
-        private void rebalance(int ringCount, ContextImpl<M> contextImpl) {
-            final var newHashes = new Digest[ringCount];
-            System.arraycopy(hashes, 0, newHashes, 0, Math.min(ringCount, hashes.length));
-            for (int i = Math.min(ringCount, hashes.length); i < newHashes.length; i++) {
-                newHashes[i] = contextImpl.hashFor(member.getId(), i);
-            }
-            hashes = newHashes;
-        }
-    }
 }
