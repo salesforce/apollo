@@ -16,8 +16,7 @@ import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -98,7 +97,7 @@ public class EtherealTest {
                                                .map(e -> (SigningMember) e)
                                                .toList();
 
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);
+        var context = new DynamicContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         for (Member m : members) {
             context.activate(m);

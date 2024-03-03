@@ -20,17 +20,17 @@ import java.util.stream.Stream;
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 /**
- * Provides a Context for Membership and is uniquely identified by a Digest. Members may be either active or offline.
- * The Context maintains a number of Rings (may be zero) that the Context provides for Firefly type consistent hash ring
- * ordering operators. Each ring has a unique hash of each individual member, and thus each ring has a different ring
- * order of the same membership set. Hashes for Context level operators include the ID of the ring. Hashes computed for
- * each member, per ring include the ID of the enclosing Context.
+ * Provides a DynamicContext for Membership and is uniquely identified by a Digest. Members may be either active or
+ * offline. The DynamicContext maintains a number of Rings (may be zero) that the DynamicContext provides for Firefly
+ * type consistent hash ring ordering operators. Each ring has a unique hash of each individual member, and thus each
+ * ring has a different ring order of the same membership set. Hashes for DynamicContext level operators include the ID
+ * of the ring. Hashes computed for each member, per ring include the ID of the enclosing DynamicContext.
  *
  * @author hal.hildebrand
  */
-public class ContextImpl<T extends Member> implements Context<T> {
+public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
-    private static final Logger log = LoggerFactory.getLogger(Context.class);
+    private static final Logger log = LoggerFactory.getLogger(DynamicContext.class);
 
     private final    int                              bias;
     private final    double                           epsilon;
@@ -41,11 +41,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private final    List<Ring<T>>                    rings               = new ArrayList<>();
     private volatile int                              cardinality;
 
-    public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
+    public DynamicContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
     }
 
-    public ContextImpl(Digest id, int cardinality, double pbyz, int bias, double epsilon) {
+    public DynamicContextImpl(Digest id, int cardinality, double pbyz, int bias, double epsilon) {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;
@@ -480,7 +480,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     /**
-     * remove a member from the receiving Context
+     * remove a member from the receiving DynamicContext
      */
     @Override
     public void remove(T m) {
@@ -599,7 +599,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public String toString() {
-        return "Context [" + id + "]";
+        return "DynamicContext [" + id + "]";
     }
 
     /**

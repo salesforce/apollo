@@ -20,7 +20,7 @@ import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -89,7 +89,7 @@ public class ViewAssemblyTest {
             var com = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
             communications.put(m, com);
         });
-        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
+        context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
         for (Member m : members) {
             context.activate(m);
         }
@@ -161,7 +161,7 @@ public class ViewAssemblyTest {
                                                                                    e -> new Verifier.DefaultVerifier(
                                                                                    e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
-        context.active().forEach(m -> {
+        context.allMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(

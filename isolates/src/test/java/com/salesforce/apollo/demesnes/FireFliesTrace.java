@@ -20,7 +20,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;
@@ -195,7 +195,7 @@ public class FireFliesTrace {
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var sealed = FoundationSeal.newBuilder().build();
         identities.forEach((digest, id) -> {
-            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
+            var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:%s-state".formatted(digest),

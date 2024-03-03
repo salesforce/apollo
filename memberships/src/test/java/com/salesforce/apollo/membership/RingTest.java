@@ -31,11 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  */
 public class RingTest {
 
-    private static final int          MEMBER_COUNT = 10;
-    private static final byte[]       PROTO        = new byte[32];
-    private static       List<Member> members;
-    private Context<Member> context;
-    private Ring<Member>    ring;
+    private static final int    MEMBER_COUNT = 10;
+    private static final byte[] PROTO        = new byte[32];
+
+    private static List<Member>           members;
+    private        DynamicContext<Member> context;
 
     @BeforeAll
     public static void beforeClass() {
@@ -64,8 +64,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new ContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
-        ring = context.rings().findFirst().get();
+        context = new DynamicContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
         members.forEach(m -> context.activate(m));
 
         Collections.sort(members, new Comparator<Member>() {
@@ -82,7 +81,7 @@ public class RingTest {
         int stop = 3;
         int index = start - 1;
 
-        for (Member test : ring.betweenPredecessors(members.get(start), members.get(stop))) {
+        for (Member test : context.betweenPredecessors(1, members.get(start), members.get(stop))) {
             if (index == -1) {
                 index = members.size() - 1; // wrap around
             }
@@ -94,7 +93,7 @@ public class RingTest {
         stop = 5;
         index = start - 1;
 
-        for (Member test : ring.betweenPredecessors(members.get(start), members.get(stop))) {
+        for (Member test : context.betweenPredecessors(1, members.get(start), members.get(stop))) {
             if (index == -1) {
                 index = members.size() - 1; // wrap around
             }
@@ -109,7 +108,7 @@ public class RingTest {
         int stop = 3;
         int index = start + 1;
 
-        for (Member test : ring.betweenSuccessor(members.get(start), members.get(stop))) {
+        for (Member test : context.betweenSuccessor(0, members.get(start), members.get(stop))) {
             if (index == members.size()) {
                 index = 0; // wrap around
             }
@@ -141,48 +140,49 @@ public class RingTest {
 
     @Test
     public void predecessor() {
-        Member predecessor = ring.predecessor(members.get(6));
+        Member predecessor = context.predecessor(0, members.get(6));
         assertEquals(5, members.indexOf(predecessor));
-        assertEquals(members.size() - 1, members.indexOf(ring.predecessor(members.get(0))));
+        assertEquals(members.size() - 1, members.indexOf(context.predecessor(0, members.get(0))));
     }
 
     @Test
     public void predecessors() {
-        Collection<Member> predecessors = ring.streamPredecessors(members.get(5),
-                                                                  m -> m.equals(members.get(members.size() - 3)))
-                                              .collect(Collectors.toList());
+        Collection<Member> predecessors = context.streamPredecessors(0, members.get(5),
+                                                                     m -> m.equals(members.get(members.size() - 3)))
+                                                 .collect(Collectors.toList());
         assertFalse(predecessors.isEmpty());
         assertEquals(7, predecessors.size());
     }
 
     @Test
     public void rank() {
-        assertEquals(members.size() - 2, ring.rank(members.get(0), members.get(members.size() - 1)));
+        assertEquals(members.size() - 2, context.rank(0, members.get(0), members.get(members.size() - 1)));
 
-        assertEquals(members.size() - 2, ring.rank(members.get(members.size() - 1), members.get(members.size() - 2)));
+        assertEquals(members.size() - 2,
+                     context.rank(0, members.get(members.size() - 1), members.get(members.size() - 2)));
 
-        assertEquals(members.size() - 2, ring.rank(members.get(1), members.get(0)));
+        assertEquals(members.size() - 2, context.rank(0, members.get(1), members.get(0)));
 
-        assertEquals(7, ring.rank(members.get(5), members.get(3)));
+        assertEquals(7, context.rank(0, members.get(5), members.get(3)));
 
-        assertEquals(4, ring.rank(members.get(2), members.get(7)));
+        assertEquals(4, context.rank(0, members.get(2), members.get(7)));
     }
 
     @Test
     public void successor() {
-        assertEquals(5, members.indexOf(ring.successor(members.get(4))));
-        assertEquals(0, members.indexOf(ring.successor(members.get(members.size() - 1))));
+        assertEquals(5, members.indexOf(context.successor(0, members.get(4))));
+        assertEquals(0, members.indexOf(context.successor(0, members.get(members.size() - 1))));
 
         for (int i = 0; i < members.size(); i++) {
             int successor = (i + 1) % members.size();
-            assertEquals(successor, members.indexOf(ring.successor(members.get(i))));
+            assertEquals(successor, members.indexOf(context.successor(0, members.get(i))));
         }
     }
 
     @Test
     public void successors() {
-        Collection<Member> successors = ring.streamSuccessors(members.get(5), m -> m.equals(members.get(3)))
-                                            .collect(Collectors.toList());
+        Collection<Member> successors = context.streamSuccessors(0, members.get(5), m -> m.equals(members.get(3)))
+                                               .collect(Collectors.toList());
         assertFalse(successors.isEmpty());
         assertEquals(7, successors.size());
     }
@@ -222,11 +222,11 @@ public class RingTest {
     @Test
     public void theRing() {
 
-        assertEquals(members.size(), ring.size());
+        assertEquals(members.size(), context.size());
 
         for (int start = 0; start < members.size(); start++) {
             int index = start + 1;
-            for (Member member : ring.traverse(members.get(start))) {
+            for (Member member : context.traverse(0, members.get(start))) {
                 if (index == members.size()) {
                     index = 0; // wrap around
                 }

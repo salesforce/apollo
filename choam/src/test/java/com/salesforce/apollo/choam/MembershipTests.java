@@ -16,7 +16,7 @@ import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -131,7 +131,7 @@ public class MembershipTests {
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
                                .setBootstrap(

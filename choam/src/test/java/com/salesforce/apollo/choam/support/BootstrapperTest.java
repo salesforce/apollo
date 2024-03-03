@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.salesforce.apollo.choam.proto.BlockReplication;
-import com.salesforce.apollo.choam.proto.Blocks;
-import com.salesforce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.Parameters;
@@ -16,10 +13,12 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.TestChain;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
+import com.salesforce.apollo.choam.proto.BlockReplication;
+import com.salesforce.apollo.choam.proto.Blocks;
+import com.salesforce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -50,7 +49,7 @@ public class BootstrapperTest {
 
     @Test
     public void smoke() throws Exception {
-        Context<SigningMember> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var context = new DynamicContextImpl<SigningMember>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         var entropy = SecureRandom.getInstance("SHA1PRNG");

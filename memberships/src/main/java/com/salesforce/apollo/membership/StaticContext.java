@@ -17,11 +17,11 @@ import java.util.stream.StreamSupport;
 import static com.salesforce.apollo.membership.Context.minMajority;
 
 /**
- * Static Context implementation
+ * Static DynamicContext implementation
  *
  * @author hal.hildebrand
  */
-public class StaticContext<T extends Member> implements BaseContext<T> {
+public class StaticContext<T extends Member> implements Context<T> {
 
     private final Digest  id;
     private final T[]     members;

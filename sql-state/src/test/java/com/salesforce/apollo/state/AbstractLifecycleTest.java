@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -18,13 +16,15 @@ import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -135,7 +135,7 @@ abstract public class AbstractLifecycleTest {
         blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();
 
         var params = parameters(context);
@@ -167,7 +167,7 @@ abstract public class AbstractLifecycleTest {
 
         final var clearTxns = Utils.waitForCondition(120_000, 1000, () ->
         transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).count() == transactioneers.size());
-        assertTrue(clearTxns, "Transactions did not clear: " + Arrays.asList(
+        assertTrue(clearTxns, "Transactions did not clear: " + Collections.singletonList(
         transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).toArray()));
 
         final var synchd = Utils.waitForCondition(120_000, 1000, () -> {
@@ -203,13 +203,13 @@ abstract public class AbstractLifecycleTest {
                                      .map(cb -> cb.height())
                                      .max((a, b) -> a.compareTo(b))
                                      .get();
-        assertTrue(members.stream()
-                          .map(m -> updaters.get(m))
-                          .map(ssm -> ssm.getCurrentBlock())
-                          .filter(cb -> cb != null)
-                          .map(cb -> cb.height())
-                          .filter(l -> l.compareTo(target) == 0)
-                          .count() == members.size(), "members did not end at same block: " + updaters.values()
+        assertEquals(members.stream()
+                            .map(m -> updaters.get(m))
+                            .map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null)
+                            .map(cb -> cb.height())
+                            .filter(l -> l.compareTo(target) == 0)
+                            .count(), members.size(), "members did not end at same block: " + updaters.values()
                                                                                                       .stream()
                                                                                                       .map(
                                                                                                       ssm -> ssm.getCurrentBlock())

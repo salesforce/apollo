@@ -16,7 +16,7 @@ import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
@@ -79,14 +79,14 @@ public class RbcTest {
         entropy.setSeed(new byte[] { 6, 6, 7, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, 50)
-                                               .mapToObj(i -> stereotomy.newIdentifier())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
+        var members = IntStream.range(0, 50)
+                               .mapToObj(i -> stereotomy.newIdentifier())
+                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                               .map(e -> (SigningMember) e)
+                               .toList();
 
-        Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
-        RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
+        var context = DynamicContext.newBuilder().setCardinality(members.size()).build();
+        var metrics = new RbcMetricsImpl(context.getId(), "test", registry);
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();

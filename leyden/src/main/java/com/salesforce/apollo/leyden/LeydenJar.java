@@ -270,7 +270,7 @@ public class LeydenJar {
             return true;
         }
 
-        Member predecessor = context.ring(ring).predecessor(member);
+        Member predecessor = context.predecessor(ring, member);
         if (predecessor == null || !from.equals(predecessor.getId())) {
             log.warn("Invalid, not predecessor: {}, ring: {} expected: {} on: {}", from, ring, predecessor.getId(),
                      member.getId());

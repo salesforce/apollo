@@ -24,8 +24,7 @@ import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,10 +76,9 @@ public class GenesisAssembly implements Genesis {
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        Context<Member> reContext = new ContextImpl<>(reconPrefixed, view.context().memberCount(),
-                                                      view.context().getProbabilityByzantine(),
-                                                      view.context().getBias());
-        reContext.activate(view.context().activeMembers());
+        var reContext = new DynamicContextImpl<>(reconPrefixed, view.context().memberCount(),
+                                                 view.context().getProbabilityByzantine(), view.context().getBias());
+        reContext.activate(view.context().getAllMembers());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();

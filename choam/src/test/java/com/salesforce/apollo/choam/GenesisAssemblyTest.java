@@ -22,8 +22,7 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.proto.PubKey;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -73,9 +72,9 @@ public class GenesisAssemblyTest {
                                         .map(cpk -> new ControlledIdentifierMember(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
+        var base = new DynamicContextImpl<>(viewId, members.size(), 0.2, 3);
         base.activate(members);
-        Context<Member> committee = Committee.viewFor(viewId, base);
+        var committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
                                               .setProducer(ProducerParameters.newBuilder()
@@ -108,7 +107,7 @@ public class GenesisAssemblyTest {
             var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
             return comm;
         }));
-        CountDownLatch complete = new CountDownLatch(committee.activeCount());
+        CountDownLatch complete = new CountDownLatch(committee.memberCount());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m, m -> communications.get(m)
                                                                                 .create(m, base.getId(), servers.get(m),
@@ -123,7 +122,7 @@ public class GenesisAssemblyTest {
                                                                                         Terminal.getLocalLoopback(
                                                                                         (SigningMember) m,
                                                                                         servers.get(m)))));
-        committee.active().forEach(m -> {
+        committee.getAllMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);

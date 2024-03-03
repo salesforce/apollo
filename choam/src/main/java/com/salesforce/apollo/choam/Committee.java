@@ -15,7 +15,7 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 
@@ -43,8 +43,8 @@ public interface Committee {
      * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
-                                                    baseContext.getProbabilityByzantine(), baseContext.getBias());
+        var newView = new DynamicContextImpl<>(hash, baseContext.getRingCount(), baseContext.getProbabilityByzantine(),
+                                               baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> newView.activate(e));
         return newView;

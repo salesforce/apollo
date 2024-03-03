@@ -15,7 +15,6 @@ import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
@@ -35,7 +34,8 @@ import java.util.concurrent.RejectedExecutionException;
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
  * <p>
  * The ProcessDomain represents a member node in the top level domain and represents the top level container model for
- * the distributed system. The Context of this domain is the foundational fireflies membership domain for the group id.
+ * the distributed system. The DynamicContext of this domain is the foundational fireflies membership domain for the
+ * group id.
  *
  * @author hal.hildebrand
  */

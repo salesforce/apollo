@@ -3,7 +3,7 @@ package com.salesforce.apollo.ring;
 import com.google.protobuf.Any;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -68,7 +68,7 @@ public class RingCommunicationsTest {
             }
         };
         final var name = UUID.randomUUID().toString();
-        Context<Member> context = Context.newBuilder().build();
+        DynamicContext<Member> context = DynamicContext.newBuilder().build();
         context.activate(serverMember1);
         context.activate(serverMember2);
 

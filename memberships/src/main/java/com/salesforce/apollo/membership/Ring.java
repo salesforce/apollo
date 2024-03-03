@@ -6,41 +6,28 @@
  */
 package com.salesforce.apollo.membership;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import com.salesforce.apollo.cryptography.Digest;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Sets;
-import com.salesforce.apollo.cryptography.Digest;
-
 /**
- * A ring of members. Also, too, addressable functions by Digest, for ring
- * operations to obtain members.
- * 
+ * A ring of members. Also, too, addressable functions by Digest, for ring operations to obtain members.
+ *
  * @author hal.hildebrand
  * @since 220
  */
 public class Ring<T extends Member> implements Iterable<T> {
-    public enum IterateResult {
-        CONTINUE, FAIL, SUCCESS;
-    }
-
-    private final ContextImpl<T>          context;
+    private final DynamicContextImpl<T>   context;
     private final int                     index;
     private final NavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
 
-    public Ring(int index, ContextImpl<T> context) {
+    public Ring(int index, DynamicContextImpl<T> context) {
         this.index = index;
         this.context = context;
     }
@@ -48,8 +35,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param stop
-     * @return Return all counter-clockwise items between (but not including) start
-     *         and stop
+     * @return Return all counter-clockwise items between (but not including) start and stop
      */
     public Iterable<T> betweenPredecessors(T start, T stop) {
         if (start.equals(stop)) {
@@ -86,8 +72,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param stop
-     * @return all clockwise items between (but not including) start item and stop
-     *         item.
+     * @return all clockwise items between (but not including) start item and stop item.
      */
     public Iterable<T> betweenSuccessor(T start, T stop) {
         if (start.equals(stop)) {
@@ -140,15 +125,11 @@ public class Ring<T extends Member> implements Iterable<T> {
         ring.remove(hash(m));
     }
 
-    public Set<Digest> difference(Ring<T> r) {
-        return Sets.difference(ring.keySet(), r.ring.keySet());
-    }
-
     /**
      * @param d         - the digest
      * @param predicate - the test function.
-     * @return the first successor of d for which function evaluates to SUCCESS.
-     *         Answer null if function evaluates to FAIL.
+     * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
      */
     public T findPredecessor(Digest d, Function<T, IterateResult> predicate) {
         return pred(hash(d), predicate);
@@ -157,8 +138,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param m         - the member
      * @param predicate - the test function.
-     * @return the first successor of m for which function evaluates to SUCCESS.
-     *         Answer null if function evaluates to FAIL.
+     * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
      */
     public T findPredecessor(T m, Function<T, IterateResult> predicate) {
         return pred(hash(m), predicate);
@@ -167,8 +148,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param d         - the digest
      * @param predicate - the test function.
-     * @return the first successor of d for which function evaluates to SUCCESS.
-     *         Answer null if function evaluates to FAIL.
+     * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
      */
     public T findSuccessor(Digest d, Function<T, IterateResult> predicate) {
         return succ(hash(d), predicate);
@@ -177,8 +158,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param m         - the member
      * @param predicate - the test function.
-     * @return the first successor of m for which function evaluates to SUCCESS.
-     *         Answer null if function evaluates to FAIL.
+     * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
      */
     public T findSuccessor(T m, Function<T, IterateResult> predicate) {
         return succ(hash(m), predicate);
@@ -207,7 +188,7 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     /**
      * for testing
-     * 
+     *
      * @return
      */
     public Map<Digest, T> getRing() {
@@ -229,22 +210,21 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     /**
      * <pre>
-     * 
+     *
      *    - An item lies between itself. That is, if pred == itm == succ, True is
      *    returned.
      *
      *    - Everything lies between an item and item and itself. That is, if pred == succ, then
      *    this method always returns true.
-     * 
+     *
      *    - An item is always between itself and any other item. That is, if
      *    pred == item, or succ == item, this method returns True.
      * </pre>
-     * 
+     *
      * @param predecessor - the asserted predecessor on the ring
      * @param item        - the item to test
      * @param successor   - the asserted successor on the ring
-     * @return true if the member item is between the pred and succ members on the
-     *         ring
+     * @return true if the member item is between the pred and succ members on the ring
      */
     public boolean isBetween(T predecessor, T item, T successor) {
         if (predecessor.equals(item) || successor.equals(item)) {
@@ -272,8 +252,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param location  - the target
      * @param predicate - the test predicate
-     * @return the first predecessor of m for which predicate evaluates to True. m
-     *         is never evaluated.
+     * @return the first predecessor of m for which predicate evaluates to True. m is never evaluated.
      */
     public T predecessor(Digest location, Predicate<T> predicate) {
         return pred(hash(location), predicate);
@@ -290,8 +269,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param m         - the member
      * @param predicate - the test predicate
-     * @return the first predecessor of m for which predicate evaluates to True. m
-     *         is never evaluated.
+     * @return the first predecessor of m for which predicate evaluates to True. m is never evaluated.
      */
     public T predecessor(T m, Predicate<T> predicate) {
         return pred(hash(m), predicate);
@@ -304,9 +282,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param location
      * @param predicate
-     * @return an Iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(Digest location, Predicate<T> predicate) {
         return preds(hash(location), predicate);
@@ -319,9 +296,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return an Iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Iterable<T> predecessors(T start, Predicate<T> predicate) {
         return preds(hash(start), predicate);
@@ -359,9 +335,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return a Stream of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Stream<T> streamPredecessors(Digest location, Predicate<T> predicate) {
         return StreamSupport.stream(predecessors(location, predicate).spliterator(), false);
@@ -370,9 +345,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return a list of all items counter-clock wise in the ring from (but
-     *         excluding) start item to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return a list of all items counter-clock wise in the ring from (but excluding) start item to (but excluding) the
+     * first item where predicate(item) evaluates to True.
      */
     public Stream<T> streamPredecessors(T m, Predicate<T> predicate) {
         return StreamSupport.stream(predecessors(m, predicate).spliterator(), false);
@@ -381,9 +355,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return a Stream of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Stream<T> streamSuccessors(Digest location, Predicate<T> predicate) {
         return StreamSupport.stream(successors(location, predicate).spliterator(), false);
@@ -392,9 +365,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return a Stream of all items counter-clock wise in the ring from (but
-     *         excluding) start item to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start item to (but excluding)
+     * the first item where predicate(item) evaluates to True.
      */
     public Stream<T> streamSuccessors(T m, Predicate<T> predicate) {
         return StreamSupport.stream(successors(m, predicate).spliterator(), false);
@@ -403,9 +375,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return a iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return a iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public T successor(Digest hash) {
         return successor(hash, e -> true);
@@ -414,8 +385,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param hash      - the location to start on the ring
      * @param predicate - the test predicate
-     * @return the first successor of m for which predicate evaluates to True. m is
-     *         never evaluated..
+     * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
      */
     public T successor(Digest hash, Predicate<T> predicate) {
         return succ(hash, predicate);
@@ -432,8 +402,7 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param m         - the member
      * @param predicate - the test predicate
-     * @return the first successor of m for which predicate evaluates to True. m is
-     *         never evaluated..
+     * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
      */
     public T successor(T m, Predicate<T> predicate) {
         return succ(hash(m), predicate);
@@ -446,9 +415,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return an Iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start location to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Iterable<T> successors(Digest location, Predicate<T> predicate) {
         return succs(hash(location), predicate);
@@ -457,9 +425,8 @@ public class Ring<T extends Member> implements Iterable<T> {
     /**
      * @param start
      * @param predicate
-     * @return an Iterable of all items counter-clock wise in the ring from (but
-     *         excluding) start item to (but excluding) the first item where
-     *         predicate(item) evaluates to True.
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
     public Iterable<T> successors(T m, Predicate<T> predicate) {
         return succs(hash(m), predicate);
@@ -684,5 +651,9 @@ public class Ring<T extends Member> implements Iterable<T> {
                 return iterator;
             }
         };
+    }
+
+    public enum IterateResult {
+        CONTINUE, FAIL, SUCCESS
     }
 }

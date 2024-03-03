@@ -206,7 +206,7 @@ public class ChRbcGossip {
     }
 
     /**
-     * The Service implementing the 3 phase gossip
+     * The Service implementing the 3-phase gossip
      */
     private class Terminal implements GossiperService, Router.ServiceRouting {
         @Override

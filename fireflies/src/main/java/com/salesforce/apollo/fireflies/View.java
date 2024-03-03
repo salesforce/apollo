@@ -86,7 +86,7 @@ public class View {
     final                CommonCommunications<Fireflies, Service>    comm;
     final                AtomicBoolean                               started               = new AtomicBoolean();
     private final        CommonCommunications<Entrance, Service>     approaches;
-    private final        Context<Participant>                        context;
+    private final        DynamicContext<Participant>                 context;
     private final        DigestAlgorithm                             digestAlgo;
     private final        RingCommunications<Participant, Fireflies>  gossiper;
     private final        AtomicBoolean                               introduced            = new AtomicBoolean();
@@ -108,14 +108,14 @@ public class View {
     private final        Verifiers                                   verifiers;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
-    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this(context, member, endpoint, validation, verifiers, communications, params, communications, digestAlgo,
              metrics);
     }
 
-    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 Router gateway, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
@@ -149,7 +149,7 @@ public class View {
      * @param mask
      * @return
      */
-    public static boolean isValidMask(BitSet mask, Context<?> context) {
+    public static boolean isValidMask(BitSet mask, DynamicContext<?> context) {
         if (mask.cardinality() == context.majority()) {
             if (mask.length() <= context.getRingCount()) {
                 return true;
@@ -172,7 +172,7 @@ public class View {
     /**
      * @return the context of the view
      */
-    public Context<Participant> getContext() {
+    public DynamicContext<Participant> getContext() {
         return context;
     }
 
@@ -1512,11 +1512,11 @@ public class View {
         }
 
         /**
-         * Create a mask of length Context.majority() randomly disabled rings
+         * Create a mask of length DynamicContext.majority() randomly disabled rings
          *
          * @return the mask
          */
-        public static BitSet createInitialMask(Context<?> context) {
+        public static BitSet createInitialMask(DynamicContext<?> context) {
             int nbits = context.getRingCount();
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();

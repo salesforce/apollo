@@ -231,8 +231,7 @@ public class CHOAM {
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
 
         // Canonical labeling of the view members for Ethereal
-        var ring0 = baseContext.ring(0);
-        return members.stream().collect(Collectors.toMap(ring0::hash, m -> m));
+        return members.stream().collect(Collectors.toMap(m -> baseContext.hashFor(m.getId(), 0), m -> m));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
@@ -355,7 +354,7 @@ public class CHOAM {
     }
 
     private boolean checkJoin(Digest nextView, Digest from) {
-        Member source = params.context().getActiveMember(from);
+        Member source = params.context().getMember(from);
         if (source == null) {
             log.debug("Request to join from non member: {} on: {}", from, params.member().getId());
             return false;
@@ -1067,7 +1066,7 @@ public class CHOAM {
 
         private void synchronizationFailed() {
             cancelSynchronization();
-            var activeCount = params.context().activeCount();
+            var activeCount = params.context().totalCount();
             if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
                 if (current.compareAndSet(null, new Formation())) {
                     log.info(
@@ -1260,7 +1259,7 @@ public class CHOAM {
 
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
-            if (formation.isActive(params.member())) {
+            if (formation.isMember(params.member())) {
                 final var c = next.get();
                 log.trace("Using genesis consensus key: {} sig: {} on: {}",
                           params.digestAlgorithm().digest(c.consensusKeyPair.getPublic().getEncoded()),

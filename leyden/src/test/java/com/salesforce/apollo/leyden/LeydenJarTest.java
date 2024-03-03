@@ -9,6 +9,7 @@ import com.salesforce.apollo.leyden.proto.Binding;
 import com.salesforce.apollo.leyden.proto.Bound;
 import com.salesforce.apollo.leyden.proto.Key;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -41,7 +42,7 @@ public class LeydenJarTest {
     protected final      Map<SigningMember, Router>        routers = new HashMap<>();
     private              String                            prefix;
     private              LeydenJar.OpValidator             validator;
-    private              Context<Member>                   context;
+    private              DynamicContext<Member>            context;
 
     @AfterEach
     public void after() {
@@ -79,7 +80,7 @@ public class LeydenJarTest {
                                   .mapToObj(i -> stereotomy.newIdentifier())
                                   .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                             controlled -> controlled));
-        context = Context.newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
+        context = DynamicContext.newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
         identities.keySet().forEach(m -> context.activate(m));
         identities.keySet().forEach(member -> instantiate(member, context));
 

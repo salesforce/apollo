@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class CompactContextTest {
     @Test
     public void consistency() throws Exception {
-        Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });

@@ -1,32 +1,29 @@
-/*
- * Copyright (c) 2021, salesforce.com, inc.
- * All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
- */
 package com.salesforce.apollo.membership;
 
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.UUID;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-/**
- * Provides a Context for Membership and is uniquely identified by a Digest;. Members may be either active or offline.
- * The Context maintains a number of Rings (may be zero) that the Context provides for Firefly type consistent hash ring
- * ordering operators. Each ring has a unique hash of each individual member, and thus each ring has a different ring
- * order of the same membership set. Hashes for Context level operators include the ID of the ring. Hashes computed and
- * cached for each member, per ring include the ID of the enclosing Context.
- *
- * @author hal.hildebrand
- */
-public interface Context<T extends Member> extends BaseContext<T> {
+public interface Context<T extends Member> {
 
-    double DEFAULT_EPSILON = 0.99999;
+    static List<Member> uniqueSuccessors(Context<Member> context, Digest digest) {
+        Set<Member> post = new HashSet<>();
+        context.successors(digest, m -> {
+            if (post.size() == context.getRingCount()) {
+                return false;
+            }
+            return post.add(m);
+        });
+        var successors = new ArrayList<>(post);
+        return successors;
+    }
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
         return d.prefix(ctxId, ring);
@@ -34,6 +31,10 @@ public interface Context<T extends Member> extends BaseContext<T> {
 
     static int majority(int rings, int bias) {
         return (bias - 1) * toleranceLevel(rings, bias);
+    }
+
+    static int toleranceLevel(int rings, int bias) {
+        return ((rings - 1) / bias);
     }
 
     static short minimalQuorum(int np, double bias) {
@@ -81,239 +82,387 @@ public interface Context<T extends Member> extends BaseContext<T> {
         return minMajority(pByz, cardinality, 0.99999, bias);
     }
 
-    static <Z extends Member> Builder<Z> newBuilder() {
-        return new Builder<>() {
+    /**
+     * Answer a stream over all members, offline and active
+     */
+    Stream<T> allMembers();
 
-            @Override
-            public Context<Z> build() {
-                return new ContextImpl<Z>(id, Math.max(bias + 1, cardinality), pByz, bias, epsilon);
-            }
-        };
+    /**
+     * @param start
+     * @param stop
+     * @return Return all counter-clockwise items between (but not including) start and stop
+     */
+    Iterable<T> betweenPredecessors(int ring, T start, T stop);
+
+    /**
+     * @param start
+     * @param stop
+     * @return all clockwise items between (but not including) start item and stop item.
+     */
+    Iterable<T> betweenSuccessor(int ring, T start, T stop);
+
+    /**
+     * Maximum cardinality of this context
+     */
+    int cardinality();
+
+    /**
+     * Answer the aproximate diameter of the receiver, assuming the rings were built with FF parameters, with the rings
+     * forming random graph connections segments.
+     */
+    int diameter();
+
+    /**
+     * @param d         - the digest
+     * @param predicate - the test function.
+     * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
+     */
+    T findPredecessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate);
+
+    /**
+     * @param m         - the member
+     * @param predicate - the test function.
+     * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
+     */
+    T findPredecessor(int ring, T m, Function<T, Ring.IterateResult> predicate);
+
+    /**
+     * @param d         - the digest
+     * @param predicate - the test function.
+     * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
+     */
+    T findSuccessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate);
+
+    /**
+     * @param m         - the member
+     * @param predicate - the test function.
+     * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
+     * FAIL.
+     */
+    T findSuccessor(int ring, T m, Function<T, Ring.IterateResult> predicate);
+
+    /**
+     * @return the List of all members
+     */
+    List<T> getAllMembers();
+
+    /**
+     * Answer the bias of the context. The bias is the multiple of the number of byzantine members the context is
+     * designed to foil
+     */
+    int getBias();
+
+    double getEpsilon();
+
+    /**
+     * Answer the identifier of the context
+     */
+    Digest getId();
+
+    /**
+     * Answer the member matching the id, or null if none.
+     */
+    T getMember(Digest memberID);
+
+    /**
+     * Answer the probability {0, 1} that any given member is byzantine
+     */
+    double getProbabilityByzantine();
+
+    /**
+     * Answer the number of rings in the context
+     */
+    short getRingCount();
+
+    default Digest hashFor(Digest d, int ring) {
+        return hashFor(getId(), ring, d);
     }
 
-    static int toleranceLevel(int rings, int bias) {
-        return ((rings - 1) / bias);
+    Digest hashFor(T m, int ring);
+
+    /**
+     * <pre>
+     *
+     *    - An item lies between itself. That is, if pred == itm == succ, True is
+     *    returned.
+     *
+     *    - Everything lies between an item and item and itself. That is, if pred == succ, then
+     *    this method always returns true.
+     *
+     *    - An item is always between itself and any other item. That is, if
+     *    pred == item, or succ == item, this method returns True.
+     * </pre>
+     *
+     * @param predecessor - the asserted predecessor on the ring
+     * @param item        - the item to test
+     * @param successor   - the asserted successor on the ring
+     * @return true if the member item is between the pred and succ members on the ring
+     */
+    boolean isBetween(int ring, T predecessor, T item, T successor);
+
+    /**
+     * Answer true if a member who's id is the supplied digest is a member of the view
+     */
+    boolean isMember(Digest digest);
+
+    /**
+     * Answer true if is a member of the view
+     */
+    boolean isMember(T m);
+
+    /**
+     * Answer true if the member is a successor of the supplied digest on any ring
+     *
+     * @param m
+     * @param digest
+     * @return
+     */
+    boolean isSuccessorOf(T m, Digest digest);
+
+    /**
+     * Answer the majority cardinality of the context, based on the current ring count
+     */
+    default int majority() {
+        return getRingCount() - toleranceLevel();
     }
 
     /**
-     * Activate the supplied collection of members
-     */
-    void activate(Collection<T> activeMembers);
-
-    /**
-     * Mark a member as active in the context
+     * Answer the majority cardinality of the context, based on the current ring count
      *
-     * @return true if the member was previously inactive, false if currently active
+     * @param bootstrapped - if true, calculate correct majority for bootstrapping cases where totalCount < true
+     *                     majority
      */
-    boolean activate(T m);
+    int majority(boolean bootstrapped);
 
     /**
-     * Mark a member identified by the digest ID as active in the context
+     * Answer the total member count (offline + active) tracked by this context
+     */
+    int memberCount();
+
+    T predecessor(int ring, Digest location);
+
+    /**
+     * @param location  - the target
+     * @param predicate - the test predicate
+     * @return the first predecessor of m for which predicate evaluates to True. m is never evaluated.
+     */
+    T predecessor(int ring, Digest location, Predicate<T> predicate);
+
+    /**
+     * @param m - the member
+     * @return the predecessor of the member
+     */
+    T predecessor(int ring, T m);
+
+    /**
+     * @param m         - the member
+     * @param predicate - the test predicate
+     * @return the first predecessor of m for which predicate evaluates to True. m is never evaluated.
+     */
+    T predecessor(int ring, T m, Predicate<T> predicate);
+
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
+    List<T> predecessors(Digest key);
+
+    /**
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
+     */
+    List<T> predecessors(Digest key, Predicate<T> test);
+
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
+    List<T> predecessors(T key);
+
+    /**
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
+     */
+    List<T> predecessors(T key, Predicate<T> test);
+
+    Iterable<T> predecessors(int ring, Digest location);
+
+    /**
+     * @param location
+     * @param predicate
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
+     */
+    Iterable<T> predecessors(int ring, Digest location, Predicate<T> predicate);
+
+    Iterable<T> predecessors(int ring, T start);
+
+    /**
+     * @param start
+     * @param predicate
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
+     */
+    Iterable<T> predecessors(int ring, T start, Predicate<T> predicate);
+
+    /**
+     * @return the number of items between item and dest
+     */
+    int rank(int ring, Digest item, Digest dest);
+
+    /**
+     * @return the number of items between item and dest
+     */
+    int rank(int ring, Digest item, T dest);
+
+    /**
+     * @return the number of items between item and dest
+     */
+    int rank(int ring, T item, T dest);
+
+    /**
+     * Answer a random sample of at least range size from the active members of the context
      *
-     * @return true if the member was previously inactive, false if currently active
-     * @throws NoSuchElementException - if no member is found in the context with the supplied ID
+     * @param range   - the desired range
+     * @param entropy - source o randomness
+     * @param exc     - the member to exclude from sample
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
-    boolean activate(Digest id);
+    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
 
     /**
-     * Mark a member as active in the context
-     */
-    boolean activateIfMember(T m);
-
-    /**
-     * @return the Stream of active members
-     */
-    Stream<T> active();
-
-    /**
-     * Answer the count of active members
-     */
-    int activeCount();
-
-    /**
-     * Answer the list of active members
-     */
-    List<T> activeMembers();
-
-    /**
-     * Add a collection of members in the offline state
-     */
-    <Q extends T> void add(Collection<Q> members);
-
-    /**
-     * Add a member in the offline state
+     * Answer a random sample of at least range size from the active members of the context
      *
-     * @return true if the member is newly added to the context
+     * @param range    - the desired range
+     * @param entropy  - source o randomness
+     * @param excluded - the member to exclude from sample
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
      */
-    boolean add(T m);
+    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded);
 
     /**
-     * Clear all members from the receiver
+     * Answer the total count of active and offline members of this context
      */
-    void clear();
+    int size();
 
     /**
-     * Deregister the membership listener identified by the supplied UUID
+     * @param ring
+     * @param predicate
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
-    void deregister(UUID id);
+    Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * Answer the active member having the id, or null if offline or non-existent
+     * @param ring
+     * @param predicate
+     * @return a list of all items counter-clock wise in the ring from (but excluding) start item to (but excluding) the
+     * first item where predicate(item) evaluates to True.
      */
-    T getActiveMember(Digest memberID);
+    Stream<T> streamPredecessors(int ring, T m, Predicate<T> predicate);
 
     /**
-     * Answer the collection of offline members
+     * @param ring
+     * @param predicate
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
-    Collection<T> getOffline();
+    Stream<T> streamSuccessors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * Answer true if the member who's id is active
+     * @param ring
+     * @param predicate
+     * @return a Stream of all items counter-clock wise in the ring from (but excluding) start item to (but excluding)
+     * the first item where predicate(item) evaluates to True.
      */
-    boolean isActive(Digest id);
+    Stream<T> streamSuccessors(int ring, T m, Predicate<T> predicate);
 
     /**
-     * Answer true if the member is active
+     * @param ring
+     * @return a iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item
      */
-    boolean isActive(T m);
+    T successor(int ring, Digest hash);
 
     /**
-     * Answer true if a member who's id is the supplied digest is offline
+     * @param hash      - the location to start on the ring
+     * @param predicate - the test predicate
+     * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
      */
-    boolean isOffline(Digest digest);
+    T successor(int ring, Digest hash, Predicate<T> predicate);
 
     /**
-     * Answer true if a member is offline
+     * @param m - the member
+     * @return the successor of the member
      */
-    boolean isOffline(T m);
+    T successor(int ring, T m);
 
     /**
-     * Take the collection of members offline
+     * @param m         - the member
+     * @param predicate - the test predicate
+     * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
      */
-    <Q extends T> void offline(Collection<Q> members);
+    T successor(int ring, T m, Predicate<T> predicate);
 
     /**
-     * Take a member offline
-     *
-     * @return true if the member was active previously
+     * @return the list of successors to the key on each ring
      */
-    boolean offline(T m);
-
-    int offlineCount();
+    List<T> successors(Digest key);
 
     /**
-     * Take a member offline if already a member
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
-    void offlineIfMember(T m);
+    List<T> successors(Digest key, Predicate<T> test);
 
     /**
-     * Rebalance the rings based on the current total membership cardinality
+     * @return the list of successors to the key on each ring
      */
-    void rebalance();
+    List<T> successors(T key);
 
     /**
-     * Rebalance the rings to the new cardinality
+     * @return the list of successor to the key on each ring that pass the provided predicate test
      */
-    void rebalance(int cardinality);
+    List<T> successors(T key, Predicate<T> test);
+
+    Iterable<T> successors(int ring, Digest location);
 
     /**
-     * Register a listener for membership events, answer the UUID that identifies it
+     * @param ring
+     * @param predicate
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
-    UUID register(MembershipListener<T> listener);
+    Iterable<T> successors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * Remove the members from the context
+     * @param ring
+     * @param predicate
+     * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
+     * excluding) the first item where predicate(item) evaluates to True.
      */
-    <Q extends T> void remove(Collection<Q> members);
+    Iterable<T> successors(int ring, T m, Predicate<T> predicate);
 
     /**
-     * remove a member with the id from the receiving Context
+     * The number of iterations until a given message has been distributed to all members in the context, using the
+     * rings of the receiver as a gossip graph
      */
-    void remove(Digest id);
+    int timeToLive();
 
     /**
-     * remove a member from the receiving Context
+     * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
+     * FF parameters
      */
-    void remove(T m);
+    int toleranceLevel();
 
     /**
-     * @return the indexed Ring<T>
+     * @return the total number of members
      */
-    Ring<T> ring(int index);
+    int totalCount();
 
     /**
-     * @return the Stream of rings managed by the context
+     * @param member
+     * @return the iteratator to traverse the ring starting at the member
      */
-    Stream<Ring<T>> rings();
+    Iterable<T> traverse(int ring, T member);
 
-    interface MembershipListener<T extends Member> {
-
-        /**
-         * A new member has recovered and is now active
-         */
-        default void active(T member) {
-        }
-
-        /**
-         * A member is offline
-         */
-        default void offline(T member) {
-        }
-    }
-
-    abstract class Builder<Z extends Member> {
-        protected int    bias    = 2;
-        protected int    cardinality;
-        protected double epsilon = DEFAULT_EPSILON;
-        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
-        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
-
-        public abstract Context<Z> build();
-
-        public int getBias() {
-            return bias;
-        }
-
-        public Builder<Z> setBias(int bias) {
-            this.bias = bias;
-            return this;
-        }
-
-        public int getCardinality() {
-            return cardinality;
-        }
-
-        public Builder<Z> setCardinality(int cardinality) {
-            this.cardinality = cardinality;
-            return this;
-        }
-
-        public double getEpsilon() {
-            return epsilon;
-        }
-
-        public Builder<Z> setEpsilon(double epsilon) {
-            this.epsilon = epsilon;
-            return this;
-        }
-
-        public Digest getId() {
-            return id;
-        }
-
-        public Builder<Z> setId(Digest id) {
-            this.id = id;
-            return this;
-        }
-
-        public double getpByz() {
-            return pByz;
-        }
-
-        public Builder<Z> setpByz(double pByz) {
-            this.pByz = pByz;
-            return this;
-        }
-    }
-
+    boolean validRing(int ring);
 }

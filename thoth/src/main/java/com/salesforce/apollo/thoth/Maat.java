@@ -9,8 +9,8 @@ package com.salesforce.apollo.thoth;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
-import com.salesforce.apollo.membership.BaseContext;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.DelegatedKERL;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -40,10 +40,9 @@ public class Maat extends DelegatedKERL {
     private static final Logger log = LoggerFactory.getLogger(Maat.class);
 
     private final Context<Member> context;
+    private final KERL            validators;
 
-    private final KERL validators;
-
-    public Maat(Context<Member> context, AppendKERL delegate, KERL validators) {
+    public Maat(DynamicContext<Member> context, AppendKERL delegate, KERL validators) {
         super(delegate);
         this.context = context;
         this.validators = validators;
@@ -83,11 +82,10 @@ public class Maat extends DelegatedKERL {
             return false;
         }
         final Context<Member> ctx = context;
-        var successors = BaseContext.uniqueSuccessors(ctx,
-                                                      digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
-                                    .stream()
-                                    .map(m -> m.getId())
-                                    .collect(Collectors.toSet());
+        var successors = Context.uniqueSuccessors(ctx, digestOf(event.getIdentifier().toIdent(), digest.getAlgorithm()))
+                                .stream()
+                                .map(m -> m.getId())
+                                .collect(Collectors.toSet());
 
         record validator(EstablishmentEvent validating, JohnHancock signature) {
         }

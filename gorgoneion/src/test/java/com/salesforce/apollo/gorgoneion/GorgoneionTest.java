@@ -16,7 +16,7 @@ import com.salesforce.apollo.gorgoneion.comm.admissions.AdmissionsService;
 import com.salesforce.apollo.gorgoneion.proto.Attestation;
 import com.salesforce.apollo.gorgoneion.proto.Credentials;
 import com.salesforce.apollo.gorgoneion.proto.SignedAttestation;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.proto.KERL_;
@@ -47,7 +47,7 @@ public class GorgoneionTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var context = Context.newBuilder().setCardinality(1).build();
+        var context = DynamicContext.newBuilder().setCardinality(1).build();
         context.activate(member);
 
         // Gorgoneion service comms

@@ -23,8 +23,7 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -55,17 +54,17 @@ public class SessionTest {
 
     @Test
     public void func() throws Exception {
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        Parameters params = Parameters.newBuilder()
-                                      .build(RuntimeParameters.newBuilder()
-                                                              .setContext(context)
-                                                              .setMember(new ControlledIdentifierMember(
-                                                              new StereotomyImpl(new MemKeyStore(),
-                                                                                 new MemKERL(DigestAlgorithm.DEFAULT),
-                                                                                 entropy).newIdentifier()))
-                                                              .build());
+        var params = Parameters.newBuilder()
+                               .build(RuntimeParameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setMember(new ControlledIdentifierMember(
+                                                       new StereotomyImpl(new MemKeyStore(),
+                                                                          new MemKERL(DigestAlgorithm.DEFAULT),
+                                                                          entropy).newIdentifier()))
+                                                       .build());
         var gate = new CountDownLatch(1);
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, SubmitResult> service = stx -> {
@@ -105,7 +104,7 @@ public class SessionTest {
     public void scalingTest() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
+        DynamicContext<Member> context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

@@ -409,7 +409,7 @@ public class ReliableBroadcaster {
     public class Service implements Router.ServiceRouting {
 
         public Reconcile gossip(MessageBff request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
                           context.getId(), member.getId(), from, request.getRing(),
@@ -423,7 +423,7 @@ public class ReliableBroadcaster {
         }
 
         public void update(ReconcileContext reconcile, Digest from) {
-            Member predecessor = context.ring(reconcile.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(reconcile.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages reconcile on {}:{} from: {} on ring: {} - not predecessor: {}",
                          context.getId(), member.getId(), from, reconcile.getRing(),

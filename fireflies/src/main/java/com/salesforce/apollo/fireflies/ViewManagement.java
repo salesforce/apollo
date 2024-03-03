@@ -18,7 +18,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -52,7 +52,7 @@ public class ViewManagement {
     final                AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private final        AtomicInteger                                 attempt      = new AtomicInteger();
     private final        Digest                                        bootstrapView;
-    private final        Context<Participant>                          context;
+    private final        DynamicContext<Participant>                   context;
     private final        DigestAlgorithm                               digestAlgo;
     private final        ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
     private final        FireflyMetrics                                metrics;
@@ -66,7 +66,7 @@ public class ViewManagement {
     private              boolean                                       bootstrap;
     private              CompletableFuture<Void>                       onJoined;
 
-    ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
+    ViewManagement(View view, DynamicContext<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
         this.node = node;
         this.view = view;

@@ -17,7 +17,7 @@ import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -83,7 +83,7 @@ public class Emulator {
         params = Parameters.newBuilder()
                            .build(RuntimeParameters.newBuilder()
                                                    .setMember(new ControlledIdentifierMember(identifier))
-                                                   .setContext(new ContextImpl<>(base, 5, 0.01, 3))
+                                                   .setContext(new DynamicContextImpl<>(base, 5, 0.01, 3))
                                                    .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {

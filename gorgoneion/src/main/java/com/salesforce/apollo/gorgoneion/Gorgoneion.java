@@ -25,7 +25,6 @@ import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementClient;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementServer;
 import com.salesforce.apollo.gorgoneion.comm.endorsement.EndorsementService;
 import com.salesforce.apollo.gorgoneion.proto.*;
-import com.salesforce.apollo.membership.BaseContext;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -159,8 +158,8 @@ public class Gorgoneion {
                          .build();
 
         var successors = context.totalCount() == 1 ? Collections.singletonList(member)
-                                                   : BaseContext.uniqueSuccessors(context, digestOf(ident,
-                                                                                                    parameters.digestAlgorithm()));
+                                                   : Context.uniqueSuccessors(context, digestOf(ident,
+                                                                                                parameters.digestAlgorithm()));
         final var majority = context.majority(true);
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -222,8 +221,8 @@ public class Gorgoneion {
                                        .setValidations(validations)
                                        .build();
 
-        var successors = BaseContext.uniqueSuccessors(context,
-                                                      digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = Context.uniqueSuccessors(context,
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.majority(true);
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
@@ -249,8 +248,8 @@ public class Gorgoneion {
 
         var validated = new CompletableFuture<Validations>();
 
-        var successors = BaseContext.uniqueSuccessors(context,
-                                                      digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = Context.uniqueSuccessors(context,
+                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.majority(true);
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();

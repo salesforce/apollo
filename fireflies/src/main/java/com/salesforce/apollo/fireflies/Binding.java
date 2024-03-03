@@ -23,6 +23,7 @@ import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.fireflies.comm.entrance.Entrance;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
@@ -50,7 +51,7 @@ import java.util.stream.Collectors;
 class Binding {
     private final static Logger                                  log = LoggerFactory.getLogger(Binding.class);
     private final        CommonCommunications<Entrance, Service> approaches;
-    private final        Context<Participant>                    context;
+    private final        DynamicContext<Participant>             context;
     private final        DigestAlgorithm                         digestAlgo;
     private final        Duration                                duration;
     private final        FireflyMetrics                          metrics;
@@ -59,7 +60,7 @@ class Binding {
     private final        List<Seed>                              seeds;
     private final        View                                    view;
 
-    public Binding(View view, List<Seed> seeds, Duration duration, Context<Participant> context,
+    public Binding(View view, List<Seed> seeds, Duration duration, DynamicContext<Participant> context,
                    CommonCommunications<Entrance, Service> approaches, Node node, Parameters params,
                    FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
         this.view = view;

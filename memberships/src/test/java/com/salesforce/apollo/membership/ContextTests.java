@@ -26,10 +26,10 @@ public class ContextTests {
 
     @Test
     public void consistency() throws Exception {
-        Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         for (int i = 0; i < 10; i++) {

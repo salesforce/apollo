@@ -20,7 +20,6 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
@@ -89,28 +88,27 @@ import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH
  * @author hal.hildebrand
  */
 public class KerlDHT implements ProtoKERLService {
-    private final static Logger                                                      log            = LoggerFactory.getLogger(
-    KerlDHT.class);
-    private final static Logger                                                      reconcileLog   = LoggerFactory.getLogger(
-    KerlSpace.class);
-    private final        Ani                                                         ani;
-    private final        CachingKERL                                                 cache;
-    private final        JdbcConnectionPool                                          connectionPool;
-    private final        Context<Member>                                             context;
-    private final        CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
-    private final        double                                                      fpr;
-    private final        Duration                                                    operationsFrequency;
-    private final        CachingKERL                                                 kerl;
-    private final        UniKERLDirectPooled                                         kerlPool;
-    private final        KerlSpace                                                   kerlSpace;
-    private final        SigningMember                                               member;
-    private final        RingCommunications<Member, ReconciliationService>           reconcile;
-    private final        CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
-    private final        Reconcile                                                   reconciliation = new Reconcile();
-    private final        ScheduledExecutorService                                    scheduler;
-    private final        Service                                                     service        = new Service();
-    private final        AtomicBoolean                                               started        = new AtomicBoolean();
-    private final        TemporalAmount                                              operationTimeout;
+    private final static Logger log          = LoggerFactory.getLogger(KerlDHT.class);
+    private final static Logger reconcileLog = LoggerFactory.getLogger(KerlSpace.class);
+
+    private final Ani                                                         ani;
+    private final CachingKERL                                                 cache;
+    private final JdbcConnectionPool                                          connectionPool;
+    private final Context<Member>                                             context;
+    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
+    private final double                                                      fpr;
+    private final Duration                                                    operationsFrequency;
+    private final CachingKERL                                                 kerl;
+    private final UniKERLDirectPooled                                         kerlPool;
+    private final KerlSpace                                                   kerlSpace;
+    private final SigningMember                                               member;
+    private final RingCommunications<Member, ReconciliationService>           reconcile;
+    private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
+    private final Reconcile                                                   reconciliation = new Reconcile();
+    private final ScheduledExecutorService                                    scheduler;
+    private final Service                                                     service        = new Service();
+    private final AtomicBoolean                                               started        = new AtomicBoolean();
+    private final TemporalAmount                                              operationTimeout;
 
     public KerlDHT(Duration operationsFrequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
@@ -856,14 +854,13 @@ public class KerlDHT implements ProtoKERLService {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < context.getRingCount(); i++) {
-            Ring<Member> ring = context.ring(i);
-            Member predecessor = ring.predecessor(member);
+            Member predecessor = context.predecessor(i, member);
             if (predecessor == null) {
                 continue;
             }
 
-            Digest begin = ring.hash(predecessor);
-            Digest end = ring.hash(member);
+            Digest begin = context.hashFor(predecessor, i);
+            Digest end = context.hashFor(member, i);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
                 intervals.add(new KeyInterval(end, digestAlgorithm().getLast()));
@@ -987,7 +984,7 @@ public class KerlDHT implements ProtoKERLService {
         if (fromMember == null) {
             return false;
         }
-        Member successor = context.ring(ring).successor(fromMember, m -> context.isActive(m.getId()));
+        Member successor = context.successor(ring, fromMember);
         if (successor == null) {
             return false;
         }

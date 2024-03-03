@@ -6,19 +6,18 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import com.salesforce.apollo.choam.proto.Checkpoint;
-import com.salesforce.apollo.choam.proto.CheckpointReplication;
-import com.salesforce.apollo.choam.proto.CheckpointSegments;
-import com.salesforce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
+import com.salesforce.apollo.choam.proto.Checkpoint;
+import com.salesforce.apollo.choam.proto.CheckpointReplication;
+import com.salesforce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.membership.DynamicContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -82,7 +81,7 @@ public class CheckpointAssemblerTest {
             gos.close();
         }
 
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var context = new DynamicContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
