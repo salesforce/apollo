@@ -27,8 +27,6 @@ import java.util.stream.Stream;
  */
 public interface DynamicContext<T extends Member> extends Context<T> {
 
-    double DEFAULT_EPSILON = 0.99999;
-
     static <Z extends Member> Builder<Z> newBuilder() {
         return new Builder<>() {
 
@@ -203,7 +201,7 @@ public interface DynamicContext<T extends Member> extends Context<T> {
     abstract class Builder<Z extends Member> {
         protected int    bias    = 2;
         protected int    cardinality;
-        protected double epsilon = DEFAULT_EPSILON;
+        protected double epsilon = Context.DEFAULT_EPSILON;
         protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
         protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
 

@@ -124,7 +124,7 @@ public class CompactContext {
 
     public static class Builder {
         private int          bias    = 2;
-        private double       epsilon = DynamicContext.DEFAULT_EPSILON;
+        private double       epsilon = Context.DEFAULT_EPSILON;
         private Digest       id      = DigestAlgorithm.DEFAULT.getOrigin();
         private List<Digest> members;
         private double       pByz    = 0.1;                                // 10% chance any node is out to get ya

@@ -45,7 +45,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     private volatile int                              cardinality;
 
     public DynamicContextImpl(Digest id, int cardinality, double pbyz, int bias) {
-        this(id, cardinality, pbyz, bias, DEFAULT_EPSILON);
+        this(id, cardinality, pbyz, bias, Context.DEFAULT_EPSILON);
     }
 
     public DynamicContextImpl(Digest id, int cardinality, double pbyz, int bias, double epsilon) {

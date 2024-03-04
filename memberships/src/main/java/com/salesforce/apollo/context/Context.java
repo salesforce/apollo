@@ -31,6 +31,8 @@ import java.util.stream.Stream;
  */
 public interface Context<T extends Member> {
 
+    double DEFAULT_EPSILON = 0.99999;
+
     static List<Member> uniqueSuccessors(Context<Member> context, Digest digest) {
         Set<Member> post = new HashSet<>();
         context.successors(digest, m -> {
