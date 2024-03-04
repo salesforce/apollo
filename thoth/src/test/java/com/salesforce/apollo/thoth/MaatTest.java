@@ -36,7 +36,9 @@ public class MaatTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         final var kerl_ = new MemKERL(DigestAlgorithm.DEFAULT);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl_, entropy);
-        var context = DynamicContext.newBuilder().setCardinality(4).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(4);
+        var context = b.build();
         for (int i = 0; i < 4; i++) {
             context.activate(new ControlledIdentifierMember(stereotomy.newIdentifier()));
         }

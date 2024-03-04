@@ -80,7 +80,9 @@ public class LeydenJarTest {
                                   .mapToObj(i -> stereotomy.newIdentifier())
                                   .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                             controlled -> controlled));
-        context = DynamicContext.newBuilder().setpByz(PBYZ).setCardinality(cardinality).build();
+        var b = DynamicContext.newBuilder();
+        b.setpByz(PBYZ).setCardinality(cardinality);
+        context = b.build();
         identities.keySet().forEach(m -> context.activate(m));
         identities.keySet().forEach(member -> instantiate(member, context));
 

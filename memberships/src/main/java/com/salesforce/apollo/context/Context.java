@@ -7,6 +7,7 @@
 package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
 import org.apache.commons.math3.random.BitsStreamGenerator;
@@ -497,4 +498,62 @@ public interface Context<T extends Member> {
     Iterable<T> traverse(int ring, T member);
 
     boolean validRing(int ring);
+
+    /**
+     * @author hal.hildebrand
+     **/
+    abstract class Builder<Z extends Member> {
+        protected int    bias    = 2;
+        protected int    cardinality;
+        protected double epsilon = DEFAULT_EPSILON;
+        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
+        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
+
+        public abstract <C extends Context<Z>> C build();
+
+        public int getBias() {
+            return bias;
+        }
+
+        public Builder<Z> setBias(int bias) {
+            this.bias = bias;
+            return this;
+        }
+
+        public int getCardinality() {
+            return cardinality;
+        }
+
+        public Builder<Z> setCardinality(int cardinality) {
+            this.cardinality = cardinality;
+            return this;
+        }
+
+        public double getEpsilon() {
+            return epsilon;
+        }
+
+        public Builder<Z> setEpsilon(double epsilon) {
+            this.epsilon = epsilon;
+            return this;
+        }
+
+        public Digest getId() {
+            return id;
+        }
+
+        public Builder<Z> setId(Digest id) {
+            this.id = id;
+            return this;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder<Z> setpByz(double pByz) {
+            this.pByz = pByz;
+            return this;
+        }
+    }
 }

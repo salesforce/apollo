@@ -87,7 +87,9 @@ public class RbcTest {
                                .map(e -> (SigningMember) e)
                                .toList();
 
-        var context = DynamicContext.newBuilder().setCardinality(members.size()).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(members.size());
+        var context = b.build();
         var metrics = new RbcMetricsImpl(context.getId(), "test", registry);
         members.forEach(m -> context.activate(m));
 

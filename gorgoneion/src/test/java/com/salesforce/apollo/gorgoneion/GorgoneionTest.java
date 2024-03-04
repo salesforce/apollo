@@ -47,7 +47,9 @@ public class GorgoneionTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var context = DynamicContext.newBuilder().setCardinality(1).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(10);
+        var context = b.build();
         context.activate(member);
 
         // Gorgoneion service comms

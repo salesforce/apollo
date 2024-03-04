@@ -7,7 +7,6 @@
 package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 
 import java.util.Collection;
@@ -28,13 +27,7 @@ import java.util.stream.Stream;
 public interface DynamicContext<T extends Member> extends Context<T> {
 
     static <Z extends Member> Builder<Z> newBuilder() {
-        return new Builder<>() {
-
-            @Override
-            public DynamicContext<Z> build() {
-                return new DynamicContextImpl<Z>(id, Math.max(bias + 1, cardinality), pByz, bias, epsilon);
-            }
-        };
+        return new Builder<>();
     }
 
     /**
@@ -200,59 +193,11 @@ public interface DynamicContext<T extends Member> extends Context<T> {
         }
     }
 
-    abstract class Builder<Z extends Member> {
-        protected int    bias    = 2;
-        protected int    cardinality;
-        protected double epsilon = Context.DEFAULT_EPSILON;
-        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
-        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
+    class Builder<Z extends Member> extends Context.Builder<Z> {
 
-        public abstract DynamicContext<Z> build();
-
-        public int getBias() {
-            return bias;
-        }
-
-        public Builder<Z> setBias(int bias) {
-            this.bias = bias;
-            return this;
-        }
-
-        public int getCardinality() {
-            return cardinality;
-        }
-
-        public Builder<Z> setCardinality(int cardinality) {
-            this.cardinality = cardinality;
-            return this;
-        }
-
-        public double getEpsilon() {
-            return epsilon;
-        }
-
-        public Builder<Z> setEpsilon(double epsilon) {
-            this.epsilon = epsilon;
-            return this;
-        }
-
-        public Digest getId() {
-            return id;
-        }
-
-        public Builder<Z> setId(Digest id) {
-            this.id = id;
-            return this;
-        }
-
-        public double getpByz() {
-            return pByz;
-        }
-
-        public Builder<Z> setpByz(double pByz) {
-            this.pByz = pByz;
-            return this;
+        @Override
+        public DynamicContext<Z> build() {
+            return new DynamicContextImpl<Z>(id, Math.max(bias + 1, cardinality), pByz, bias, epsilon);
         }
     }
-
 }

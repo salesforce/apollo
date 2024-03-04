@@ -45,7 +45,9 @@ public class RbcAdderTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         units = DagTest.collectUnits(d);
-        var context = DynamicContext.newBuilder().setCardinality(10).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(10);
+        var context = b.build();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

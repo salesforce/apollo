@@ -59,7 +59,9 @@ public class GorgoneionClientTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), kerl, entropy);
         final var prefix = UUID.randomUUID().toString();
         var member = new ControlledIdentifierMember(stereotomy.newIdentifier());
-        var context = DynamicContext.newBuilder().setCardinality(1).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(1);
+        var context = b.build();
         context.activate(member);
 
         // Gorgoneion service comms
@@ -139,7 +141,9 @@ public class GorgoneionClientTest {
             }
         }).when(observer).publish(Mockito.any(), Mockito.anyList());
 
-        var context = DynamicContext.newBuilder().setCardinality(members.size()).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(members.size());
+        var context = b.build();
         for (ControlledIdentifierMember member : members) {
             context.activate(member);
         }
