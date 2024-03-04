@@ -858,7 +858,7 @@ public class StaticContext<T extends Member> implements Context<T> {
             int startIndex = Arrays.binarySearch(ring.rehashed, item);
             int endIndex = Arrays.binarySearch(ring.rehashed, dest);
             int count = 0;
-            var i = new TailIntervalIterator(startIndex, t -> true, endIndex);
+            var i = new TailIntervalIterator(startIndex, t -> false, endIndex);
             while (i.hasNext()) {
                 i.next();
                 count++;
@@ -988,26 +988,41 @@ public class StaticContext<T extends Member> implements Context<T> {
             private final int          start;
             private final Predicate<T> test;
             int current;
+            T   next;
 
             private HeadIterator(int start, Predicate<T> test) {
+                assert start >= 0 && start < members.length && test != null;
                 this.start = start;
                 this.test = test;
-                current = Math.max(0, (start - 1)) % members.length;
+                if (!test.test(ring().get(start, members).member)) {
+                    next = ring().get(start, members).member();
+                }
+                current = (start - 1) % members.length;
+                if (current < 0) {
+                    current = members.length + current;
+                }
             }
 
             @Override
             public boolean hasNext() {
-                return current != start && test.test(ring().get(current, members).member);
+                return current != start && next != null;
             }
 
             @Override
             public T next() {
-                if (current == start || test.test(ring().get(current, members).member)) {
+                if (next == null) {
                     throw new NoSuchElementException();
                 }
-                var m = ring().get(start, members);
-                current = Math.max(0, (current - 1)) % members.length;
-                return m.member;
+                var returned = next;
+                next = null;
+                current = (current - 1) % members.length;
+                if (current < 0) {
+                    current = members.length + current;
+                }
+                if (current != start && !test.test(ring().get(current, members).member)) {
+                    next = ring().get(current, members).member();
+                }
+                return returned;
             }
         }
 
@@ -1026,7 +1041,7 @@ public class StaticContext<T extends Member> implements Context<T> {
 
             @Override
             public T next() {
-                if (current != endExclusive) {
+                if (current == endExclusive) {
                     throw new NoSuchElementException();
                 }
                 return super.next();
@@ -1037,26 +1052,35 @@ public class StaticContext<T extends Member> implements Context<T> {
             private final int          start;
             private final Predicate<T> test;
             int current;
+            T   next;
 
             private TailIterator(int start, Predicate<T> test) {
+                assert start >= 0 && start < members.length && test != null;
                 this.start = start;
                 this.test = test;
-                current = Math.max(0, (start - 1)) % members.length;
+                if (!test.test(ring().get(start, members).member)) {
+                    next = ring().get(start, members).member();
+                }
+                current = (start + 1) % members.length;
             }
 
             @Override
             public boolean hasNext() {
-                return current != start && test.test(ring().get(current, members).member);
+                return current != start && next != null;
             }
 
             @Override
             public T next() {
-                if (current == start || test.test(ring().get(current, members).member)) {
+                if (next == null) {
                     throw new NoSuchElementException();
                 }
-                var member = ring().get(start, members);
-                current = Math.max(0, (current - 1)) % members.length;
-                return member.member;
+                var returned = next;
+                next = null;
+                current = (current + 1) % members.length;
+                if (current != start && !test.test(ring().get(current, members).member)) {
+                    next = ring().get(current, members).member();
+                }
+                return returned;
             }
         }
     }

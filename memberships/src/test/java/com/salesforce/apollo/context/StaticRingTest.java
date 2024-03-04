@@ -35,8 +35,9 @@ public class StaticRingTest {
     private static final int    MEMBER_COUNT = 10;
     private static final byte[] PROTO        = new byte[32];
 
-    private static List<Member>    members;
-    private        Context<Member> context;
+    private static List<Member>               members;
+    private        Context<Member>            context;
+    private        DynamicContextImpl<Member> prototype;
 
     @BeforeAll
     public static void beforeClass() {
@@ -65,9 +66,9 @@ public class StaticRingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        var initial = new DynamicContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
-        members.forEach(m -> initial.activate(m));
-        context = new StaticContext<>(initial);
+        prototype = new DynamicContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
+        members.forEach(m -> prototype.activate(m));
+        context = new StaticContext<>(prototype);
 
         Collections.sort(members, new Comparator<Member>() {
             @Override
@@ -137,7 +138,7 @@ public class StaticRingTest {
 
     @Test
     public void rank() {
-        assertEquals(members.size() - 2, context.rank(0, members.get(0), members.get(members.size() - 1)));
+        assertEquals(members.size() - 4, context.rank(0, members.get(2), members.get(members.size() - 1)));
 
         assertEquals(members.size() - 2,
                      context.rank(0, members.get(members.size() - 1), members.get(members.size() - 2)));
@@ -172,14 +173,17 @@ public class StaticRingTest {
     public void theRing() {
 
         assertEquals(members.size(), context.size());
+        var proto = prototype.stream(0).toList();
+        var test = context.stream(0).toList();
+        assertEquals(proto, test);
 
         for (int start = 0; start < members.size(); start++) {
-            int index = start + 1;
+            int index = start;
             for (Member member : context.traverse(0, members.get(start))) {
                 if (index == members.size()) {
                     index = 0; // wrap around
                 }
-                assertEquals(members.get(index), member);
+                assertEquals(proto.get(index), member);
                 index++;
             }
         }
