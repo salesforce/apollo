@@ -89,6 +89,8 @@ public interface DynamicContext<T extends Member> extends Context<T> {
      */
     boolean add(T m);
 
+    Context asStatic();
+
     /**
      * Clear all members from the receiver
      */

@@ -68,7 +68,7 @@ public class StaticRingTest {
         entropy.nextBytes(id);
         prototype = new DynamicContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
         members.forEach(m -> prototype.activate(m));
-        context = new StaticContext<>(prototype);
+        context = prototype.asStatic();
 
         Collections.sort(members, new Comparator<Member>() {
             @Override

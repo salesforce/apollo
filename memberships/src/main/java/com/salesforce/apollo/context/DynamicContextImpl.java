@@ -159,6 +159,11 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
+    public Context asStatic() {
+        return new StaticContext(this);
+    }
+
+    @Override
     public Iterable<T> betweenPredecessors(int ring, T start, T stop) {
         return ring(ring).betweenPredecessors(start, stop);
     }

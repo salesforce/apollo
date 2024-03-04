@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class StaticContextTest {
     @Test
     public void consistency() throws Exception {
-        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        var prototype = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -29,16 +29,16 @@ public class StaticContextTest {
         for (int i = 0; i < 10; i++) {
             SigningMember m = new ControlledIdentifierMember(stereotomy.newIdentifier());
             members.add(m);
-            context.activate(m);
+            prototype.activate(m);
         }
 
-        var compact = new StaticContext(context);
+        var context = prototype.asStatic();
 
-        var predecessors = compact.predecessors(members.get(0).getId());
+        var predecessors = context.predecessors(members.get(0).getId());
         assertEquals(members.get(9), predecessors.get(2));
 
-        var successors = compact.successors(members.get(1).getId());
+        var successors = context.successors(members.get(1).getId());
         assertEquals(members.get(0), successors.get(0));
-        assertEquals(members.get(1), compact.successor(1, members.get(0).getId()));
+        assertEquals(members.get(1), context.successor(1, members.get(0).getId()));
     }
 }
