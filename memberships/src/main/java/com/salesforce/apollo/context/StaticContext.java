@@ -25,26 +25,36 @@ import static com.salesforce.apollo.context.Context.minMajority;
  */
 public class StaticContext<T extends Member> implements Context<T> {
 
-    private final Digest  id;
-    private final T[]     members;
-    private final int[][] ringMap;
-    private final T[][]   rings;
+    private final Digest       id;
+    private final Tracked<T>[] members;
+    private final int[][]      ringMap;
+    private final Digest[][]   rings;
+    private final int          bias;
+    private final double       epsilon;
+    private final double       pByz;
+    private final int          cardinality;
 
     public StaticContext(Context<T> of) {
-        this(of.getId(), of.allMembers().toList(), of.getRingCount());
+        this(of.getId(), of.getProbabilityByzantine(), of.getBias(), of.allMembers().toList(), of.getEpsilon(),
+             of.cardinality());
     }
 
-    public StaticContext(Digest id, int cardinality, double pByz, int bias, List<T> members, double epsilon) {
-        this(id, members, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1));
+    public StaticContext(Digest id, double pByz, int bias, List<T> members, double epsilon, int cardinality) {
+        this(id, members, (short) ((minMajority(pByz, members.size(), epsilon, bias) * bias) + 1), bias, epsilon, pByz,
+             cardinality);
     }
 
-    @SuppressWarnings("unchecked")
-    public StaticContext(Digest id, Collection<T> members, short rings) {
+    public StaticContext(Digest id, Collection<T> members, short rings, int bias, double epsilon, double pByz,
+                         int cardinality) {
         this.id = id;
-        this.members = (T[]) new Object[members.size()];
-        this.rings = (T[][]) new Object[rings][];
+        this.members = newArray(members.size());
+        this.rings = new Digest[rings][];
+        this.bias = bias;
+        this.epsilon = epsilon;
+        this.pByz = pByz;
+        this.cardinality = cardinality;
         for (int j = 0; j < rings; j++) {
-            this.rings[j] = (T[]) new Object[members.size()];
+            this.rings[j] = new Digest[members.size()];
         }
         this.ringMap = new int[rings][];
         for (int j = 0; j < rings; j++) {
@@ -65,42 +75,37 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public Iterable<T> betweenPredecessors(int ring, T start, T stop) {
-        return null;
+        return ring(ring).betweenPredecessors(start, stop);
     }
 
     @Override
     public Iterable<T> betweenSuccessor(int ring, T start, T stop) {
-        return null;
+        return ring(ring).betweenSuccessor(start, stop);
     }
 
     @Override
     public int cardinality() {
-        return 0;
+        return cardinality;
     }
 
     @Override
-    public int diameter() {
-        return 0;
+    public T findPredecessor(int ring, Digest d, Function<T, IterateResult> predicate) {
+        return ring(ring).findPredecessor(d, predicate);
     }
 
     @Override
-    public T findPredecessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
-        return null;
+    public T findPredecessor(int ring, T m, Function<T, IterateResult> predicate) {
+        return ring(ring).findPredecessor(m, predicate);
     }
 
     @Override
-    public T findPredecessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
-        return null;
+    public T findSuccessor(int ring, Digest d, Function<T, IterateResult> predicate) {
+        return ring(ring).findSuccessor(d, predicate);
     }
 
     @Override
-    public T findSuccessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate) {
-        return null;
-    }
-
-    @Override
-    public T findSuccessor(int ring, T m, Function<T, Ring.IterateResult> predicate) {
-        return null;
+    public T findSuccessor(int ring, T m, Function<T, IterateResult> predicate) {
+        return ring(ring).findSuccessor(m, predicate);
     }
 
     @Override
@@ -110,17 +115,17 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public int getBias() {
-        return 0;
+        return bias;
     }
 
     @Override
     public double getEpsilon() {
-        return 0;
+        return epsilon;
     }
 
     @Override
     public Digest getId() {
-        return null;
+        return id;
     }
 
     @Override
@@ -130,7 +135,7 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public double getProbabilityByzantine() {
-        return 0;
+        return pByz;
     }
 
     public short getRingCount() {
@@ -138,8 +143,15 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public Digest hashFor(T m, int ring) {
-        return null;
+    public Digest hashFor(T m, int r) {
+        assert r >= 0 && r < rings.length : "Invalid ring: " + r + " max: " + (rings.length - 1);
+        var ring = ring(r);
+        int index = Arrays.binarySearch(members, m);
+        var tracked = members[index];
+        if (tracked == null) {
+            return hashFor(m.getId(), r);
+        }
+        return tracked.hash(r);
     }
 
     @Override
@@ -174,55 +186,85 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public T predecessor(int ring, Digest location) {
-        return null;
+        return ring(ring).predecessor(location);
     }
 
     @Override
     public T predecessor(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessor(location, predicate);
     }
 
     @Override
     public T predecessor(int ring, T m) {
-        return null;
+        return ring(ring).predecessor(m);
     }
 
     @Override
     public T predecessor(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessor(m, predicate);
     }
 
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
     @Override
     public List<T> predecessors(Digest key) {
-        return null;
+        return predecessors(key, t -> true);
     }
 
-    public List<T> predecessors(T m) {
-        var predecessors = new ArrayList<T>();
-        for (var i = 0; i < rings.length; i++) {
-            predecessors.add(new StaticRing(i).predecessor(m.getId()));
+    /**
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
+     */
+    @Override
+    public List<T> predecessors(Digest key, Predicate<T> test) {
+        List<T> predecessors = new ArrayList<>();
+        for (int r = 0; r < rings.length; r++) {
+            var ring = new StaticRing(r);
+            T predecessor = ring.predecessor(key, test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
+        }
+        return predecessors;
+    }
+
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
+    @Override
+    public List<T> predecessors(T key) {
+        return predecessors(key, t -> true);
+    }
+
+    /**
+     * @return the predecessor on each ring for the provided key that pass the provided predicate
+     */
+    @Override
+    public List<T> predecessors(T key, Predicate<T> test) {
+        List<T> predecessors = new ArrayList<>();
+        for (int r = 0; r < rings.length; r++) {
+            var ring = new StaticRing(r);
+            T predecessor = ring.predecessor(key, test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
         }
         return predecessors;
     }
 
     @Override
-    public List<T> predecessors(T key, Predicate<T> test) {
-        return null;
-    }
-
-    @Override
     public Iterable<T> predecessors(int ring, Digest location) {
-        return null;
+        return ring(ring).predecessors(location);
     }
 
     @Override
     public Iterable<T> predecessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessors(location, predicate);
     }
 
     @Override
     public Iterable<T> predecessors(int ring, T start) {
-        return null;
+        return ring(ring).predecessors(start);
     }
 
     @Override
@@ -230,34 +272,19 @@ public class StaticContext<T extends Member> implements Context<T> {
         return null;
     }
 
-    public List<T> predecessors(Digest digest, Predicate<T> test) {
-        var predecessors = new ArrayList<T>();
-        for (var i = 0; i < rings.length; i++) {
-            predecessors.add(new StaticRing(i).predecessor(digest, test));
-        }
-        return predecessors;
-    }
-
     @Override
     public int rank(int ring, Digest item, Digest dest) {
-        return 0;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
     public int rank(int ring, Digest item, T dest) {
-        return 0;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
     public int rank(int ring, T item, T dest) {
-        return 0;
-    }
-
-    public Ring<T> ring(int index) {
-        if (index < 0 || index >= rings.length) {
-            throw new IndexOutOfBoundsException(index);
-        }
-        return null;
+        return ring(ring).rank(item, dest);
     }
 
     @Override
@@ -272,93 +299,115 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public int size() {
-        return 0;
+        return members.length;
     }
 
     @Override
     public Stream<T> stream(int ring) {
-        return null;
+        return ring(ring).stream();
     }
 
     @Override
     public Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamPredecessors(location, predicate);
     }
 
     @Override
     public Stream<T> streamPredecessors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamPredecessors(m, predicate);
     }
 
     @Override
     public Stream<T> streamSuccessors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamSuccessors(location, predicate);
     }
 
     @Override
     public Stream<T> streamSuccessors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).streamSuccessors(m, predicate);
     }
 
     @Override
     public T successor(int ring, Digest hash) {
-        return null;
+        return ring(ring).successor(hash);
     }
 
     @Override
     public T successor(int ring, Digest hash, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successor(hash, predicate);
     }
 
     @Override
     public T successor(int ring, T m) {
-        return null;
+        return ring(ring).successor(m);
     }
 
     @Override
     public T successor(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successor(m, predicate);
     }
 
-    public List<T> successors(Digest digest) {
-        var successors = new ArrayList<T>();
-        for (var i = 0; i < rings.length; i++) {
-            successors.add(new StaticRing(i).successor(digest));
+    /**
+     * @return the list of successors to the key on each ring
+     */
+    @Override
+    public List<T> successors(Digest key) {
+        return successors(key, t -> true);
+    }
+
+    /**
+     * @return the list of successor to the key on each ring that pass the provided predicate test
+     */
+    @Override
+    public List<T> successors(Digest key, Predicate<T> test) {
+        List<T> successors = new ArrayList<>();
+        for (int r = 0; r < rings.length; r++) {
+            var ring = new StaticRing(r);
+            T successor = ring.successor(key, test);
+            if (successor != null) {
+                successors.add(successor);
+            }
         }
         return successors;
     }
 
-    public List<T> successors(Digest digest, Predicate<T> test) {
-        var successors = new ArrayList<T>();
-        for (var i = 0; i < rings.length; i++) {
-            successors.add(new StaticRing(i).successor(digest, test));
-        }
-        return successors;
-    }
-
+    /**
+     * @return the list of successors to the key on each ring
+     */
     @Override
     public List<T> successors(T key) {
-        return null;
+        return successors(key, t -> true);
     }
 
+    /**
+     * @return the list of successor to the key on each ring that pass the provided predicate test
+     */
     @Override
     public List<T> successors(T key, Predicate<T> test) {
-        return null;
+        List<T> successors = new ArrayList<>();
+        for (int r = 0; r < rings.length; r++) {
+            var ring = ring(r);
+            T successor = ring.successor(key, test);
+            if (successor != null) {
+                successors.add(successor);
+            }
+        }
+        return successors;
     }
 
     @Override
     public Iterable<T> successors(int ring, Digest location) {
-        return null;
+        return ring(ring).successors(location);
     }
 
     @Override
     public Iterable<T> successors(int ring, Digest location, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successors(location, predicate);
     }
 
     @Override
     public Iterable<T> successors(int ring, T m, Predicate<T> predicate) {
-        return null;
+        return ring(ring).successors(m, predicate);
     }
 
     @Override
@@ -373,67 +422,224 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public int totalCount() {
-        return 0;
+        return members.length;
     }
 
     @Override
     public Iterable<T> traverse(int ring, T member) {
-        return null;
+        return ring(ring).traverse(member);
     }
 
     @Override
     public boolean validRing(int ring) {
-        return false;
+        return ring >= 0 && ring < rings.length;
+    }
+
+    private Digest[] hashesFor(T m) {
+        Digest key = m.getId();
+        Digest[] s = new Digest[rings.length];
+        for (int ring = 0; ring < rings.length; ring++) {
+            s[ring] = hashFor(key, ring);
+        }
+        return s;
     }
 
     private void initialize(Collection<T> members) {
-        record ringMapping<T extends Member>(T m, short i) {
+        record ringMapping<T extends Member>(Tracked<T> m, short i) {
         }
-        var i = 0;
-        for (var m : members) {
-            this.members[i++] = m;
+        {
+            var i = 0;
+            for (var m : members) {
+                this.members[i++] = new Tracked<>(m, hashesFor(m));
+            }
         }
-        Arrays.sort(this.members);
+        Arrays.sort(this.members, Comparator.comparing(t -> t.member));
         for (int j = 0; j < rings.length; j++) {
-            var mapped = new TreeMap<Digest, ringMapping>();
-            for (short idx = 0; i < this.members.length; i++) {
-                var m = this.members[idx];
-                mapped.put(Context.hashFor(id, j, m.getId()), new ringMapping<T>(m, idx));
+            var mapped = new TreeMap<Digest, ringMapping<T>>();
+            for (short i = 0; i < this.members.length; i++) {
+                var m = this.members[i];
+                mapped.put(Context.hashFor(id, j, m.member.getId()), new ringMapping<>(m, i));
             }
             short index = 0;
             for (var e : mapped.entrySet()) {
-                rings[j][index] = (T) e.getValue().m;
+                rings[j][index] = e.getKey();
                 ringMap[j][index] = e.getValue().i;
                 index++;
             }
         }
     }
 
+    private StaticRing ring(int index) {
+        if (index < 0 || index >= rings.length) {
+            throw new IndexOutOfBoundsException(index);
+        }
+        return new StaticRing(index);
+    }
+
+    private record Tracked<T extends Member>(T member, Digest[] hashes) implements Comparable<Member> {
+        @Override
+        public int compareTo(Member m) {
+            return member.compareTo(m);
+        }
+
+        public Digest hash(int ring) {
+            return hashes[ring];
+        }
+    }
+
     public class StaticRing {
+
         private final int index;
 
         private StaticRing(int index) {
             this.index = index;
         }
 
+        /**
+         * @param start
+         * @param stop
+         * @return Return all counter-clockwise items between (but not including) start and stop
+         */
+        public Iterable<T> betweenPredecessors(T start, T stop) {
+            if (start.equals(stop)) {
+                return Collections.emptyList();
+            }
+            var ring = ring();
+            Digest startHash = hashFor(start);
+            Digest stopHash = hashFor(stop);
+            int startIndex = Arrays.binarySearch(ring.rehashed, startHash);
+            int endIndex = Arrays.binarySearch(ring.rehashed, stopHash);
+            return () -> new HeadIntervalIterator(startIndex, t -> true, endIndex);
+        }
+
+        /**
+         * @return all clockwise items between (but not including) start item and stop item.
+         */
+        public Iterable<T> betweenSuccessor(T start, T stop) {
+            var ring = ring();
+            Digest startHash = hashFor(start);
+            Digest stopHash = hashFor(stop);
+            int startIndex = Arrays.binarySearch(ring.rehashed, startHash);
+            int endIndex = Arrays.binarySearch(ring.rehashed, stopHash);
+            return () -> new TailIntervalIterator(startIndex, t -> true, endIndex);
+        }
+
+        /**
+         * @param d         - the digest
+         * @param predicate - the test function.
+         * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates
+         * to FAIL.
+         */
+        public T findPredecessor(Digest d, Function<T, IterateResult> predicate) {
+            return pred(hashFor(d), predicate);
+        }
+
+        /**
+         * @param m         - the member
+         * @param predicate - the test function.
+         * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates
+         * to FAIL.
+         */
+        public T findPredecessor(T m, Function<T, IterateResult> predicate) {
+            return pred(hashFor(m), predicate);
+        }
+
+        /**
+         * @param d         - the digest
+         * @param predicate - the test function.
+         * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates
+         * to FAIL.
+         */
+        public T findSuccessor(Digest d, Function<T, IterateResult> predicate) {
+            return succ(hashFor(d), predicate);
+        }
+
+        /**
+         * @param m         - the member
+         * @param predicate - the test function.
+         * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates
+         * to FAIL.
+         */
+        public T findSuccessor(T m, Function<T, IterateResult> predicate) {
+            return succ(hashFor(m), predicate);
+        }
+
         public Digest hashFor(Digest d) {
             return Context.hashFor(id, index, d);
         }
 
+        public Digest hashFor(T d) {
+            return StaticContext.this.hashFor(d, index);
+        }
+
         public T predecessor(Digest digest) {
-            return pred(Context.hashFor(id, index, digest), d -> true);
+            return pred(Context.hashFor(id, index, digest), (Predicate<T>) d -> true);
+        }
+
+        /**
+         * @param m - the member
+         * @return the predecessor of the member
+         */
+        public T predecessor(T m) {
+            return predecessor(m, e -> true);
+        }
+
+        /**
+         * @param m         - the member
+         * @param predicate - the test predicate
+         * @return the first predecessor of m for which predicate evaluates to True. m is never evaluated.
+         */
+        public T predecessor(T m, Predicate<T> predicate) {
+            return pred(hashFor(m), predicate);
         }
 
         public T predecessor(Digest digest, Predicate<T> test) {
             return pred(Context.hashFor(id, index, digest), test);
         }
 
+        public Iterable<T> predecessors(Digest location) {
+            return predecessors(location, m -> true);
+        }
+
         public Iterable<T> predecessors(T digest) {
             return preds(Context.hashFor(id, index, digest.getId()), d -> true);
         }
 
-        public Iterable<T> predecessors(T digest, Predicate<Digest> test) {
-            return preds(Context.hashFor(id, index, digest.getId()), test);
+        /**
+         * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Iterable<T> predecessors(T start, Predicate<T> predicate) {
+            return preds(hashFor(start), predicate);
+        }
+
+        /**
+         * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Iterable<T> predecessors(Digest location, Predicate<T> predicate) {
+            return preds(hashFor(location), predicate);
+        }
+
+        /**
+         * @return the number of items between item and dest
+         */
+        public int rank(Digest item, Digest dest) {
+            return rankBetween(hashFor(item), hashFor(dest));
+        }
+
+        /**
+         * @return the number of items between item and dest
+         */
+        public int rank(Digest item, T dest) {
+            return rankBetween(hashFor(item), hashFor(dest));
+        }
+
+        /**
+         * @return the number of items between item and dest
+         */
+        public int rank(T item, T dest) {
+            return rankBetween(hashFor(item), hashFor(dest));
         }
 
         public Stream<T> stream() {
@@ -443,7 +649,7 @@ public class StaticContext<T extends Member> implements Context<T> {
                 public Iterator<T> iterator() {
                     return new Iterator<T>() {
                         private final Ring<T> ring = ring();
-                        private short current = 0;
+                        private int current = 0;
 
                         @Override
                         public boolean hasNext() {
@@ -457,7 +663,7 @@ public class StaticContext<T extends Member> implements Context<T> {
                             }
                             var digest = ring.get(current, members);
                             current++;
-                            return digest;
+                            return digest.member;
                         }
                     };
                 }
@@ -465,20 +671,101 @@ public class StaticContext<T extends Member> implements Context<T> {
             return StreamSupport.stream(iterable.spliterator(), false);
         }
 
+        /**
+         * @param location
+         * @param predicate
+         * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Stream<T> streamPredecessors(Digest location, Predicate<T> predicate) {
+            return StreamSupport.stream(predecessors(location, predicate).spliterator(), false);
+        }
+
+        /**
+         * @param m
+         * @param predicate
+         * @return a list of all items counter-clock wise in the ring from (but excluding) start item to (but excluding)
+         * the first item where predicate(item) evaluates to True.
+         */
+        public Stream<T> streamPredecessors(T m, Predicate<T> predicate) {
+            return StreamSupport.stream(predecessors(m, predicate).spliterator(), false);
+        }
+
+        /**
+         * @param location
+         * @param predicate
+         * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Stream<T> streamSuccessors(Digest location, Predicate<T> predicate) {
+            return StreamSupport.stream(successors(location, predicate).spliterator(), false);
+        }
+
+        /**
+         * @param m
+         * @param predicate
+         * @return a Stream of all items counter-clock wise in the ring from (but excluding) start item to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Stream<T> streamSuccessors(T m, Predicate<T> predicate) {
+            return StreamSupport.stream(successors(m, predicate).spliterator(), false);
+        }
+
         public T successor(Digest digest) {
-            return succ(Context.hashFor(id, index, digest), d -> true);
+            return succ(Context.hashFor(id, index, digest), (Predicate<T>) d -> true);
         }
 
         public T successor(Digest digest, Predicate<T> test) {
             return succ(Context.hashFor(id, index, digest), test);
         }
 
+        /**
+         * @param m - the member
+         * @return the successor of the member
+         */
+        public T successor(T m) {
+            return successor(m, e -> true);
+        }
+
+        /**
+         * @param m         - the member
+         * @param predicate - the test predicate
+         * @return the first successor of m for which predicate evaluates to True. m is never evaluated..
+         */
+        public T successor(T m, Predicate<T> predicate) {
+            return succ(hashFor(m), predicate);
+        }
+
         public Iterable<T> successors(Digest digest) {
             return succs(Context.hashFor(id, index, digest), d -> true);
         }
 
-        public Iterable<T> sucessors(Digest digest, Predicate<T> test) {
-            return succs(Context.hashFor(id, index, digest), test);
+        /**
+         * @param location
+         * @param predicate
+         * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Iterable<T> successors(Digest location, Predicate<T> predicate) {
+            return succs(hashFor(location), predicate);
+        }
+
+        /**
+         * @param m
+         * @param predicate
+         * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
+         * excluding) the first item where predicate(item) evaluates to True.
+         */
+        public Iterable<T> successors(T m, Predicate<T> predicate) {
+            return succs(hashFor(m), predicate);
+        }
+
+        public Iterable<T> traverse(T member) {
+            var ring = ring();
+            var digest = hashFor(member);
+            int startIndex = Arrays.binarySearch(ring.rehashed, digest);
+            final Iterator<T> iterator = new TailIterator(startIndex, t -> true);
+            return () -> iterator;
         }
 
         private T pred(Digest digest, Predicate<T> test) {
@@ -487,38 +774,96 @@ public class StaticContext<T extends Member> implements Context<T> {
             if (startIndex < 0) {
                 for (short i = (short) (ring.rehashed.length - 1); i >= 0; i--) {
                     final var tested = ring.get(i, members);
-                    if (test.test(tested)) {
-                        return tested;
+                    if (test.test(tested.member)) {
+                        return tested.member;
                     }
                 }
                 return null;
             }
             for (short i = (short) (startIndex - 1); i >= 0; i--) {
                 final var tested = ring.get(i, members);
-                if (test.test(tested)) {
-                    return tested;
+                if (test.test(tested.member)) {
+                    return tested.member;
                 }
             }
             for (short i = (short) (ring.rehashed.length - 1); i > startIndex; i--) {
                 final var tested = ring.get(i, members);
-                if (test.test(tested)) {
-                    return tested;
+                if (test.test(tested.member)) {
+                    return tested.member;
                 }
             }
             return null;
         }
 
-        private Iterable<T> preds(Digest digest, Predicate<Digest> test) {
+        private T pred(Digest digest, Function<T, IterateResult> predicate) {
             var ring = ring();
             short startIndex = (short) Arrays.binarySearch(ring.rehashed, digest);
-            final var iterator = new HeadIterator(startIndex, test);
-            return new Iterable<>() {
-
-                @Override
-                public Iterator<T> iterator() {
-                    return iterator;
+            if (startIndex < 0) {
+                for (short i = (short) (ring.rehashed.length - 1); i >= 0; i--) {
+                    final var member = ring.get(i, members);
+                    switch (predicate.apply(member.member)) {
+                    case CONTINUE:
+                        continue;
+                    case FAIL:
+                        return null;
+                    case SUCCESS:
+                        return member.member;
+                    default:
+                        throw new IllegalStateException();
+                    }
                 }
-            };
+                return null;
+            }
+            for (short i = (short) (startIndex - 1); i >= 0; i--) {
+                final var member = ring.get(i, members);
+                switch (predicate.apply(member.member)) {
+                case CONTINUE:
+                    continue;
+                case FAIL:
+                    return null;
+                case SUCCESS:
+                    return member.member;
+                default:
+                    throw new IllegalStateException();
+                }
+            }
+            for (short i = (short) (ring.rehashed.length - 1); i > startIndex; i--) {
+                final var member = ring.get(i, members);
+                switch (predicate.apply(member.member)) {
+                case CONTINUE:
+                    continue;
+                case FAIL:
+                    return null;
+                case SUCCESS:
+                    return member.member;
+                default:
+                    throw new IllegalStateException();
+                }
+            }
+            return null;
+        }
+
+        private Iterable<T> preds(Digest hash, Predicate<T> predicate) {
+            var ring = ring();
+            int startIndex = Arrays.binarySearch(ring.rehashed, hash);
+            final var iterator = new HeadIterator(startIndex, predicate);
+            return () -> iterator;
+        }
+
+        /**
+         * @return the number of items between item and dest
+         */
+        private int rankBetween(Digest item, Digest dest) {
+            var ring = ring();
+            int startIndex = Arrays.binarySearch(ring.rehashed, item);
+            int endIndex = Arrays.binarySearch(ring.rehashed, dest);
+            int count = 0;
+            var i = new TailIntervalIterator(startIndex, t -> true, endIndex);
+            while (i.hasNext()) {
+                i.next();
+                count++;
+            }
+            return count;
         }
 
         private Ring<T> ring() {
@@ -531,22 +876,73 @@ public class StaticContext<T extends Member> implements Context<T> {
             if (startIndex < 0) {
                 for (short i = 0; i < ring.rehashed.length; i++) {
                     final var tested = ring.get(i, members);
-                    if (test.test(tested)) {
-                        return tested;
+                    if (test.test(tested.member)) {
+                        return tested.member;
                     }
                 }
                 return null;
             }
             for (short i = (short) (startIndex + 1); i < ring.rehashed.length; i++) {
                 final var tested = ring.get(i, members);
-                if (test.test(tested)) {
-                    return tested;
+                if (test.test(tested.member)) {
+                    return tested.member;
                 }
             }
             for (short i = 0; i < startIndex; i++) {
                 final var tested = ring.get(i, members);
-                if (test.test(tested)) {
-                    return tested;
+                if (test.test(tested.member)) {
+                    return tested.member;
+                }
+            }
+            return null;
+        }
+
+        private T succ(Digest hash, Function<T, IterateResult> predicate) {
+            var ring = ring();
+            short startIndex = (short) Arrays.binarySearch(ring.rehashed, hash);
+            if (startIndex < 0) {
+                for (short i = 0; i < ring.rehashed.length; i++) {
+                    final var member = ring.get(i, members);
+                    switch (predicate.apply(member.member)) {
+                    case CONTINUE:
+                        continue;
+                    case FAIL:
+                        return null;
+                    case SUCCESS:
+                        return member.member;
+                    default:
+                        throw new IllegalStateException();
+
+                    }
+                }
+                return null;
+            }
+            for (short i = (short) (startIndex + 1); i < ring.rehashed.length; i++) {
+                final var member = ring.get(i, members);
+                switch (predicate.apply(member.member)) {
+                case CONTINUE:
+                    continue;
+                case FAIL:
+                    return null;
+                case SUCCESS:
+                    return member.member;
+                default:
+                    throw new IllegalStateException();
+
+                }
+            }
+            for (short i = 0; i < startIndex; i++) {
+                final var member = ring.get(i, members);
+                switch (predicate.apply(member.member)) {
+                case CONTINUE:
+                    continue;
+                case FAIL:
+                    return null;
+                case SUCCESS:
+                    return member.member;
+                default:
+                    throw new IllegalStateException();
+
                 }
             }
             return null;
@@ -554,80 +950,115 @@ public class StaticContext<T extends Member> implements Context<T> {
 
         private Iterable<T> succs(Digest digest, Predicate<T> test) {
             var ring = ring();
-            short startIndex = (short) Arrays.binarySearch(ring.rehashed, digest);
-            final Iterator<T> iterator = new TailIterator<T>(startIndex, test);
-            return new Iterable<>() {
-
-                @Override
-                public Iterator<T> iterator() {
-                    return iterator;
-                }
-            };
-        }
-
-        private static class HeadIterator<T extends Member> implements Iterator<T> {
-            private final short        start;
-            private final Predicate<T> test;
-            private       short        current;
-            private       T[]          ids;
-            private       Ring<T>      ring;
-
-            private HeadIterator(short start, Predicate<T> test) {
-                this.start = start;
-                this.test = test;
-                current = (short) ((start - 1) % ids.length);
-            }
-
-            @Override
-            public boolean hasNext() {
-                return current != start && test.test(ring.get(current, ids));
-            }
-
-            @Override
-            public T next() {
-                if (current == start || test.test(ring.get(current, ids))) {
-                    throw new NoSuchElementException();
-                }
-                var m = ring.get(start, ids);
-                current = (short) ((current + 1) % ids.length);
-                return m;
-            }
+            int startIndex = Arrays.binarySearch(ring.rehashed, digest);
+            final Iterator<T> iterator = new TailIterator(startIndex, test);
+            return () -> iterator;
         }
 
         // A Ring is a list of rehashed ids and a map from these ids to the original id
-        private record Ring<T extends Member>(T[] rehashed, int[] mapping) {
-            private T get(short i, T[] members) {
+        private record Ring<T extends Member>(Digest[] rehashed, int[] mapping) {
+            private Tracked<T> get(int i, Tracked<T>[] members) {
                 return members[mapping[i]];
             }
         }
 
-        private static class TailIterator<T extends Member> implements Iterator<T> {
-            private final short        start;
-            private final Predicate<T> test;
-            private       short        current;
-            private       T[]          ids;
-            private       Ring<T>      ring;
+        private class HeadIntervalIterator extends HeadIterator {
+            final int endExclusive;
 
-            private TailIterator(short start, Predicate<T> test) {
-                this.start = start;
-                this.test = test;
-                current = (short) ((start - 1) % ids.length);
+            private HeadIntervalIterator(int start, Predicate<T> test, int endExclusive) {
+                super(start, test);
+                this.endExclusive = endExclusive;
             }
 
             @Override
             public boolean hasNext() {
-                return current != start && test.test(ring.get(current, ids));
+                return current != endExclusive && super.hasNext();
             }
 
             @Override
             public T next() {
-                if (current == start || test.test(ring.get(current, ids))) {
+                if (current != endExclusive) {
                     throw new NoSuchElementException();
                 }
-                var member = ring.get(start, ids);
-                current = (short) (current - 1 % ids.length);
-                return member;
+                return super.next();
+            }
+        }
+
+        private class HeadIterator implements Iterator<T> {
+            private final int          start;
+            private final Predicate<T> test;
+            int current;
+
+            private HeadIterator(int start, Predicate<T> test) {
+                this.start = start;
+                this.test = test;
+                current = Math.max(0, (start - 1)) % members.length;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return current != start && test.test(ring().get(current, members).member);
+            }
+
+            @Override
+            public T next() {
+                if (current == start || test.test(ring().get(current, members).member)) {
+                    throw new NoSuchElementException();
+                }
+                var m = ring().get(start, members);
+                current = Math.max(0, (current - 1)) % members.length;
+                return m.member;
+            }
+        }
+
+        private class TailIntervalIterator extends TailIterator {
+            final int endExclusive;
+
+            private TailIntervalIterator(int start, Predicate<T> test, int endExclusive) {
+                super(start, test);
+                this.endExclusive = endExclusive;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return current != endExclusive && super.hasNext();
+            }
+
+            @Override
+            public T next() {
+                if (current != endExclusive) {
+                    throw new NoSuchElementException();
+                }
+                return super.next();
+            }
+        }
+
+        private class TailIterator implements Iterator<T> {
+            private final int          start;
+            private final Predicate<T> test;
+            int current;
+
+            private TailIterator(int start, Predicate<T> test) {
+                this.start = start;
+                this.test = test;
+                current = Math.max(0, (start - 1)) % members.length;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return current != start && test.test(ring().get(current, members).member);
+            }
+
+            @Override
+            public T next() {
+                if (current == start || test.test(ring().get(current, members).member)) {
+                    throw new NoSuchElementException();
+                }
+                var member = ring().get(start, members);
+                current = Math.max(0, (current - 1)) % members.length;
+                return member.member;
             }
         }
     }
+
 }

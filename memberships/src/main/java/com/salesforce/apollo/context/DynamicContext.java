@@ -183,7 +183,7 @@ public interface DynamicContext<T extends Member> extends Context<T> {
     /**
      * @return the Stream of rings managed by the context
      */
-    Stream<Ring<T>> rings();
+    Stream<DynamicContextImpl.Ring<T>> rings();
 
     interface MembershipListener<T extends Member> {
 

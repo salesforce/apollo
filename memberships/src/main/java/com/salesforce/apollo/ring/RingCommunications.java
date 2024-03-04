@@ -9,7 +9,7 @@ package com.salesforce.apollo.ring;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.context.Context;
-import com.salesforce.apollo.context.Ring.IterateResult;
+import com.salesforce.apollo.context.IterateResult;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;

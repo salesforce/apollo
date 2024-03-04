@@ -17,7 +17,7 @@ import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.context.DynamicContext;
-import com.salesforce.apollo.context.Ring;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.fireflies.Binding.Bound;
@@ -1134,7 +1134,7 @@ public class View {
      * @param ring
      * @param check
      */
-    private void invalidate(Participant q, Ring<Participant> ring, Deque<Participant> check) {
+    private void invalidate(Participant q, DynamicContextImpl.Ring<Participant> ring, Deque<Participant> check) {
         AccusationWrapper qa = q.getAccusation(ring.getIndex());
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());

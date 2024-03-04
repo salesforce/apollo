@@ -128,7 +128,11 @@ public interface Context<T extends Member> {
      * Answer the aproximate diameter of the receiver, assuming the rings were built with FF parameters, with the rings
      * forming random graph connections segments.
      */
-    int diameter();
+    default int diameter() {
+        double pN = ((double) (getBias() * toleranceLevel())) / ((double) cardinality());
+        double logN = Math.log(cardinality());
+        return (int) (logN / Math.log(cardinality() * pN));
+    }
 
     /**
      * @param d         - the digest
@@ -136,7 +140,7 @@ public interface Context<T extends Member> {
      * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
      * FAIL.
      */
-    T findPredecessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate);
+    T findPredecessor(int ring, Digest d, Function<T, IterateResult> predicate);
 
     /**
      * @param m         - the member
@@ -144,7 +148,7 @@ public interface Context<T extends Member> {
      * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
      * FAIL.
      */
-    T findPredecessor(int ring, T m, Function<T, Ring.IterateResult> predicate);
+    T findPredecessor(int ring, T m, Function<T, IterateResult> predicate);
 
     /**
      * @param d         - the digest
@@ -152,7 +156,7 @@ public interface Context<T extends Member> {
      * @return the first successor of d for which function evaluates to SUCCESS. Answer null if function evaluates to
      * FAIL.
      */
-    T findSuccessor(int ring, Digest d, Function<T, Ring.IterateResult> predicate);
+    T findSuccessor(int ring, Digest d, Function<T, IterateResult> predicate);
 
     /**
      * @param m         - the member
@@ -160,7 +164,7 @@ public interface Context<T extends Member> {
      * @return the first successor of m for which function evaluates to SUCCESS. Answer null if function evaluates to
      * FAIL.
      */
-    T findSuccessor(int ring, T m, Function<T, Ring.IterateResult> predicate);
+    T findSuccessor(int ring, T m, Function<T, IterateResult> predicate);
 
     /**
      * @return the List of all members
