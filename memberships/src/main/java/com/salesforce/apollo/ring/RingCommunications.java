@@ -9,7 +9,6 @@ package com.salesforce.apollo.ring;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.context.Context;
-import com.salesforce.apollo.context.IterateResult;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -100,16 +99,16 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         for (int ring = 0; ring < context.getRingCount(); ring++) {
             T successor = direction.retrieve(context, ring, digest, m -> {
                 if (ignoreSelf && m.equals(member)) {
-                    return IterateResult.CONTINUE;
+                    return Context.IterateResult.CONTINUE;
                 }
                 if (noDuplicates) {
                     if (traversed.add(m)) {
-                        return IterateResult.SUCCESS;
+                        return Context.IterateResult.SUCCESS;
                     } else {
-                        return IterateResult.CONTINUE;
+                        return Context.IterateResult.CONTINUE;
                     }
                 }
-                return IterateResult.SUCCESS;
+                return Context.IterateResult.SUCCESS;
             });
             traversal.add(new iteration<>(successor == null ? (T) member : successor, ring));
         }
@@ -181,34 +180,34 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         PREDECESSOR {
             @Override
             public <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                 Function<T, IterateResult> test) {
+                                                 Function<T, Context.IterateResult> test) {
                 return context.findPredecessor(ring, hash, test);
             }
 
             @Override
             public <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                 Function<T, IterateResult> test) {
+                                                 Function<T, Context.IterateResult> test) {
                 return context.findPredecessor(ring, member, test);
             }
         }, SUCCESSOR {
             @Override
             public <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                 Function<T, IterateResult> test) {
+                                                 Function<T, Context.IterateResult> test) {
                 return context.findSuccessor(ring, hash, test);
             }
 
             @Override
             public <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                 Function<T, IterateResult> test) {
+                                                 Function<T, Context.IterateResult> test) {
                 return context.findSuccessor(ring, member, test);
             }
         };
 
         public abstract <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                      Function<T, IterateResult> test);
+                                                      Function<T, Context.IterateResult> test);
 
         public abstract <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                      Function<T, IterateResult> test);
+                                                      Function<T, Context.IterateResult> test);
     }
 
     public record Destination<M, Q>(M member, Q link, int ring) {

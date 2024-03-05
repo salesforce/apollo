@@ -506,6 +506,13 @@ public interface Context<T extends Member> {
     /**
      * @author hal.hildebrand
      **/
+    enum IterateResult {
+        CONTINUE, FAIL, SUCCESS
+    }
+
+    /**
+     * @author hal.hildebrand
+     **/
     abstract class Builder<Z extends Member> {
         protected int    bias    = 2;
         protected int    cardinality;
