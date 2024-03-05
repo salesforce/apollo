@@ -16,6 +16,7 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.*;
@@ -96,6 +97,7 @@ public class View {
     private final        RingCommunications<Participant, Fireflies>  gossiper;
     private final        AtomicBoolean                               introduced            = new AtomicBoolean();
     private final        List<ViewLifecycleListener>                 lifecycleListeners    = new CopyOnWriteArrayList<>();
+    private final        List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
     private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
     Thread.ofVirtual().factory());
     private final        FireflyMetrics                              metrics;
@@ -175,6 +177,13 @@ public class View {
     }
 
     /**
+     * Deregister the listener
+     */
+    public void deregister(BiConsumer<Context, Digest> listener) {
+        viewChangeListeners.remove(listener);
+    }
+
+    /**
      * @return the context of the view
      */
     public DynamicContext<Participant> getContext() {
@@ -195,6 +204,13 @@ public class View {
      */
     public void register(ViewLifecycleListener listener) {
         lifecycleListeners.add(listener);
+    }
+
+    /**
+     * Register the listener to receive view changes
+     */
+    public void register(BiConsumer<Context, Digest> listener) {
+        viewChangeListeners.add(listener);
     }
 
     /**
@@ -420,6 +436,18 @@ public class View {
                               currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
                     listener.viewChange(i -> context.getMember(i.getDigest()), current, viewManagement.cardinality(),
                                         joining, leaving);
+                } catch (Throwable e) {
+                    log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
+                }
+            });
+        }, log));
+        var sc = context.asStatic();
+        viewNotificationQueue.execute(Utils.wrapped(() -> {
+            viewChangeListeners.forEach(listener -> {
+                try {
+                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
+                              currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
+                    listener.accept(sc, current);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
                 }

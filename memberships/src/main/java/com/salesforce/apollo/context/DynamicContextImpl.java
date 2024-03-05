@@ -52,7 +52,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;
-        this.cardinality = cardinality;
+        this.cardinality = Math.max(bias + 1, cardinality);
         this.epsilon = epsilon;
         for (int i = 0; i < (minMajority(pByz, cardinality, epsilon, bias) * bias) + 1; i++) {
             rings.add(new Ring<>(i, this));
@@ -724,27 +724,9 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         return ring(ring).successors(m, predicate);
     }
 
-    /**
-     * The number of iterations until a given message has been distributed to all members in the context, using the
-     * rings of the receiver as a gossip graph
-     */
-    @Override
-    public int timeToLive() {
-        return (rings.size() * diameter()) + 1;
-    }
-
     @Override
     public String toString() {
         return "DynamicContext [" + id + "]";
-    }
-
-    /**
-     * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
-     * FF parameters
-     */
-    @Override
-    public int toleranceLevel() {
-        return (rings.size() - 1) / bias;
     }
 
     @Override

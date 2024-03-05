@@ -8,6 +8,7 @@ package com.salesforce.apollo.model;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -15,7 +16,6 @@ import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
@@ -29,7 +29,10 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BiConsumer;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
@@ -48,7 +51,9 @@ public class ProcessDomain extends Domain {
     private final   EventValidation.DelegatedValidation validations;
     private final   Verifiers.DelegatedVerifiers        verifiers;
     private final   ProcessDomainParameters             parameters;
-    private final   ViewLifecycleListener               listener = listener();
+    private final   List<BiConsumer<Context, Digest>>   lifecycleListeners = new CopyOnWriteArrayList<>();
+    private final   View.ViewLifecycleListener          listener           = listener();
+    private final   BiConsumer<Context, Digest>         listener2          = listener2();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
@@ -115,7 +120,7 @@ public class ProcessDomain extends Domain {
         }
     }
 
-    protected ViewLifecycleListener listener() {
+    protected View.ViewLifecycleListener listener() {
         return (context, id, cardinality, join, leaving) -> {
             for (var d : join) {
                 ((DynamicContext) params.context()).activate(context.apply(d));
@@ -127,6 +132,15 @@ public class ProcessDomain extends Domain {
 
             log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
                      join.size(), leaving.size(), params.member().getId());
+        };
+    }
+
+    protected BiConsumer<Context, Digest> listener2() {
+        return (context, diadem) -> {
+            choam.nextView(context, diadem);
+
+            log.info("View change: {} for: {} cardinality: {} on: {}", diadem, params.context().getId(),
+                     context.totalCount(), params.member().getId());
         };
     }
 

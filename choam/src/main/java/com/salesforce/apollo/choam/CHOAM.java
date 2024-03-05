@@ -62,32 +62,33 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
  * @author hal.hildebrand
  */
 public class CHOAM {
-    private static final Logger                                                log                   = LoggerFactory.getLogger(
-    CHOAM.class);
-    private final        Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
-    private final        AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
-    private final        ReliableBroadcaster                                   combine;
-    private final        CommonCommunications<Terminal, Concierge>             comm;
-    private final        AtomicReference<Committee>                            current               = new AtomicReference<>();
-    private final        ExecutorService                                       executions;
-    private final        AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
-    private final        AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
-    private final        AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
-    private final        AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
-    private final        ExecutorService                                       linear;
-    private final        AtomicReference<nextView>                             next                  = new AtomicReference<>();
-    private final        AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
-    private final        Parameters                                            params;
-    private final        PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
-    private final        RoundScheduler                                        roundScheduler;
-    private final        Session                                               session;
-    private final        AtomicBoolean                                         started               = new AtomicBoolean();
-    private final        Store                                                 store;
-    private final        CommonCommunications<TxnSubmission, Submitter>        submissionComm;
-    private final        Combine.Transitions                                   transitions;
-    private final        TransSubmission                                       txnSubmission         = new TransSubmission();
-    private final        AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
-    private final        AtomicReference<Digest>                               diadem                = new AtomicReference<>();
+    private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
+
+    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
+    private final ReliableBroadcaster                                   combine;
+    private final CommonCommunications<Terminal, Concierge>             comm;
+    private final AtomicReference<Committee>                            current               = new AtomicReference<>();
+    private final ExecutorService                                       executions;
+    private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
+    private final ExecutorService                                       linear;
+    private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
+    private final Parameters                                            params;
+    private final PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
+    private final RoundScheduler                                        roundScheduler;
+    private final Session                                               session;
+    private final AtomicBoolean                                         started               = new AtomicBoolean();
+    private final Store                                                 store;
+    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
+    private final Combine.Transitions                                   transitions;
+    private final TransSubmission                                       txnSubmission         = new TransSubmission();
+    private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
+    private final AtomicReference<Digest>                               diadem                = new AtomicReference<>();
+    private final AtomicReference<PendingView>                          pendingView           = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
@@ -296,6 +297,16 @@ public class CHOAM {
                                                                                  c.getClass().getSimpleName(),
                                                                                  transitions.fsm().getCurrentState(),
                                                                                  params.member().getId());
+    }
+
+    /**
+     * A view change has occurred
+     *
+     * @param context - the new membership context
+     * @param diadem  - the compact HexBloom of the context view
+     */
+    public void nextView(Context<Member> context, Digest diadem) {
+        pendingView.set(new PendingView(context, diadem));
     }
 
     public void setDiadem(Digest diadem) {
@@ -986,6 +997,9 @@ public class CHOAM {
 
         default void genesis(Digest hash, List<Transaction> initialization) {
         }
+    }
+
+    private record PendingView(Context<Member> context, Digest diadem) {
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {

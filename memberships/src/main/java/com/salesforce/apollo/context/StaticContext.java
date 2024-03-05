@@ -8,6 +8,8 @@ package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.MockMember;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.*;
@@ -39,8 +41,8 @@ public class StaticContext<T extends Member> implements Context<T> {
              of.cardinality());
     }
 
-    public StaticContext(Digest id, double pByz, int bias, List<T> members, double epsilon, int cardinality) {
-        this(id, members, (short) ((minMajority(pByz, members.size(), epsilon, bias) * bias) + 1), bias, epsilon, pByz,
+    public StaticContext(Digest id, double pByz, int bias, Collection<T> members, double epsilon, int cardinality) {
+        this(id, members, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1), bias, epsilon, pByz,
              cardinality);
     }
 
@@ -52,7 +54,7 @@ public class StaticContext<T extends Member> implements Context<T> {
         this.bias = bias;
         this.epsilon = epsilon;
         this.pByz = pByz;
-        this.cardinality = cardinality;
+        this.cardinality = Math.max(bias + 1, cardinality);
         for (int j = 0; j < rings; j++) {
             this.rings[j] = new Digest[members.size()];
         }
@@ -70,7 +72,7 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public Stream<T> allMembers() {
-        return null;
+        return Arrays.stream(members).map(t -> t.member);
     }
 
     @Override
@@ -110,7 +112,7 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public List<T> getAllMembers() {
-        return null;
+        return allMembers().toList();
     }
 
     @Override
@@ -130,7 +132,8 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public T getMember(Digest memberID) {
-        return null;
+        int index = Arrays.binarySearch(members, new MockMember(memberID));
+        return index >= 0 && (members[index].member.getId().equals(memberID)) ? members[index].member : null;
     }
 
     @Override
@@ -156,32 +159,49 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public boolean isBetween(int ring, T predecessor, T item, T successor) {
-        return false;
+        return ring(ring).isBetween(predecessor, item, successor);
     }
 
     @Override
     public boolean isMember(Digest digest) {
-        return false;
+        int index = Arrays.binarySearch(members, new MockMember(digest));
+        return index >= 0 && (members[index].member.getId().equals(digest));
     }
 
     @Override
     public boolean isMember(T m) {
-        return false;
+        int index = Arrays.binarySearch(members, m);
+        return index >= 0 && (members[index].member == m);
     }
 
     @Override
     public boolean isSuccessorOf(T m, Digest digest) {
+        for (int r = 0; r < rings.length; r++) {
+            if (m.equals(ring(r).successor(m))) {
+                return true;
+            }
+        }
         return false;
     }
 
     @Override
     public int majority(boolean bootstrapped) {
-        return 0;
+        var majority = getRingCount() - toleranceLevel();
+        if (bootstrapped) {
+            return switch (totalCount()) {
+                case 1, 2 -> 1;
+                case 3 -> 2;
+                case 4 -> 3;
+                default -> majority;
+            };
+        } else {
+            return majority;
+        }
     }
 
     @Override
     public int memberCount() {
-        return 0;
+        return members.length;
     }
 
     @Override
@@ -269,7 +289,7 @@ public class StaticContext<T extends Member> implements Context<T> {
 
     @Override
     public Iterable<T> predecessors(int ring, T start, Predicate<T> predicate) {
-        return null;
+        return ring(ring).predecessors(start, predicate);
     }
 
     @Override
@@ -287,14 +307,31 @@ public class StaticContext<T extends Member> implements Context<T> {
         return ring(ring).rank(item, dest);
     }
 
-    @Override
-    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
-        return null;
-    }
-
+    /**
+     * Answer a random sample of at least range size from the active members of the context
+     *
+     * @param range    - the desired range
+     * @param entropy  - source o randomness
+     * @param excluded - predicate to test for exclusion
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
+     */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
-        return null;
+        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<>(excluded, range, entropy));
+    }
+
+    /**
+     * Answer a random sample of at least range size from the active members of the context
+     *
+     * @param range   - the desired range
+     * @param entropy - source o randomness
+     * @param exc     - the member to exclude from sample
+     * @return a random sample set of the view's live members. May be limited by the number of active members.
+     */
+    @Override
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
+        Member excluded = exc == null ? null : getMember(exc);
+        return ring(entropy.nextInt(rings.length)).stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
     @Override
@@ -356,7 +393,7 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     /**
-     * @return the list of successor to the key on each ring that pass the provided predicate test
+     * @return the list of successor to the key on each ring that passes the provided predicate test
      */
     @Override
     public List<T> successors(Digest key, Predicate<T> test) {
@@ -408,16 +445,6 @@ public class StaticContext<T extends Member> implements Context<T> {
     @Override
     public Iterable<T> successors(int ring, T m, Predicate<T> predicate) {
         return ring(ring).successors(m, predicate);
-    }
-
-    @Override
-    public int timeToLive() {
-        return 0;
-    }
-
-    @Override
-    public int toleranceLevel() {
-        return 0;
     }
 
     @Override
@@ -570,6 +597,34 @@ public class StaticContext<T extends Member> implements Context<T> {
 
         public Digest hashFor(T d) {
             return StaticContext.this.hashFor(d, index);
+        }
+
+        /**
+         * <pre>
+         *
+         *    - An item lies between itself. That is, if pred == itm == succ, True is
+         *    returned.
+         *
+         *    - Everything lies between an item and item and itself. That is, if pred == succ, then
+         *    this method always returns true.
+         *
+         *    - An item is always between itself and any other item. That is, if
+         *    pred == item, or succ == item, this method returns True.
+         * </pre>
+         *
+         * @param predecessor - the asserted predecessor on the ring
+         * @param item        - the item to test
+         * @param successor   - the asserted successor on the ring
+         * @return true if the member item is between the pred and succ members on the ring
+         */
+        public boolean isBetween(T predecessor, T item, T successor) {
+            if (predecessor.equals(item) || successor.equals(item)) {
+                return true;
+            }
+            Digest predHash = hashFor(predecessor);
+            Digest memberHash = hashFor(item);
+            Digest succHash = hashFor(successor);
+            return predHash.compareTo(memberHash) < 0 & memberHash.compareTo(succHash) < 0;
         }
 
         public T predecessor(Digest digest) {

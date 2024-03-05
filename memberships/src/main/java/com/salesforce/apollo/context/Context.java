@@ -478,13 +478,17 @@ public interface Context<T extends Member> {
      * The number of iterations until a given message has been distributed to all members in the context, using the
      * rings of the receiver as a gossip graph
      */
-    int timeToLive();
+    default int timeToLive() {
+        return (getRingCount() * diameter()) + 1;
+    }
 
     /**
      * Answer the tolerance level of the context to byzantine members, assuming this context has been constructed from
      * FF parameters
      */
-    int toleranceLevel();
+    default int toleranceLevel() {
+        return (getRingCount() - 1) / getBias();
+    }
 
     /**
      * @return the total number of members

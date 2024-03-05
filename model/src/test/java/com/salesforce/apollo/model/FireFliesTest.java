@@ -14,15 +14,14 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -39,7 +38,7 @@ import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -110,22 +109,17 @@ public class FireFliesTest {
         final var seeds = Collections.singletonList(
         new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
         domains.forEach(d -> {
-            var listener = new View.ViewLifecycleListener() {
-
-                @Override
-                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, Digest viewId,
-                                       int cardinality, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
-                    if (cardinality == CARDINALITY) {
-                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, cardinality,
-                                          d.getMember().getId());
-                        countdown.countDown();
-                    } else {
-                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, cardinality,
-                                          d.getMember().getId());
-                    }
+            BiConsumer<Context, Digest> c = (context, viewId) -> {
+                if (context.cardinality() == CARDINALITY) {
+                    System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.cardinality(),
+                                      d.getMember().getId());
+                    countdown.countDown();
+                } else {
+                    System.out.printf("Members joining: %s members: %s on: %s%n", viewId, context.cardinality(),
+                                      d.getMember().getId());
                 }
             };
-            d.getFoundation().register(listener);
+            d.foundation.register(c);
         });
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));
@@ -156,7 +150,7 @@ public class FireFliesTest {
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
-        final var activated = Utils.waitForCondition(60_000, 1_000,
+        final var activated = Utils.waitForCondition(20_000, 1_000,
                                                      () -> domains.stream().filter(c -> !c.active()).count() == 0);
         assertTrue(activated, "Domains did not become active : " + (domains.stream()
                                                                            .filter(c -> !c.active())
