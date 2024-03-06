@@ -171,7 +171,7 @@ public class StaticContext<T extends Member> implements Context<T> {
     @Override
     public boolean isMember(T m) {
         int index = Arrays.binarySearch(members, m);
-        return index >= 0 && (members[index].member == m);
+        return index >= 0 && (members[index].member.getId().equals(m.getId()));
     }
 
     @Override

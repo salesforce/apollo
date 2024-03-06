@@ -10,7 +10,7 @@ import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.context.Context;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
@@ -43,10 +43,9 @@ public interface Committee {
      * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        var newView = new DynamicContextImpl<>(hash, baseContext.getRingCount(), baseContext.getProbabilityByzantine(),
-                                               baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
-        successors.forEach(e -> newView.activate(e));
+        var newView = new StaticContext<>(hash, baseContext.getProbabilityByzantine(), 3, successors,
+                                          baseContext.getEpsilon(), successors.size());
         return newView;
     }
 
