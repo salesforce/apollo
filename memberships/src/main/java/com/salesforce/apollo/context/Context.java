@@ -257,10 +257,22 @@ public interface Context<T extends Member> {
     /**
      * Answer the majority cardinality of the context, based on the current ring count
      *
-     * @param bootstrapped - if true, calculate correct majority for bootstrapping cases where totalCount < true
+     * @param bootstrapped - if true, calculate the correct majority for bootstrapping cases where totalCount < true
      *                     majority
      */
-    int majority(boolean bootstrapped);
+    default int majority(boolean bootstrapped) {
+        var majority = getRingCount() - toleranceLevel();
+        if (bootstrapped) {
+            return switch (totalCount()) {
+                case 1, 2 -> 1;
+                case 3 -> 2;
+                case 4 -> 3;
+                default -> majority;
+            };
+        } else {
+            return majority;
+        }
+    }
 
     /**
      * Answer the total member count (offline + active) tracked by this context

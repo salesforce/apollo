@@ -22,8 +22,7 @@ import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
-import com.salesforce.apollo.context.DynamicContext;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -37,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
@@ -55,7 +55,7 @@ public class SessionTest {
 
     @Test
     public void func() throws Exception {
-        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
+        var context = new StaticContext<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, Collections.emptyList(), 2);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var params = Parameters.newBuilder()
@@ -105,7 +105,7 @@ public class SessionTest {
     public void scalingTest() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        DynamicContext<Member> context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
+        var context = new StaticContext<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, Collections.emptyList(), 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

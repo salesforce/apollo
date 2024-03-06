@@ -15,7 +15,7 @@ import com.salesforce.apollo.choam.proto.Checkpoint;
 import com.salesforce.apollo.choam.proto.CheckpointReplication;
 import com.salesforce.apollo.choam.proto.CheckpointSegments;
 import com.salesforce.apollo.choam.proto.Slice;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
@@ -81,22 +81,21 @@ public class CheckpointAssemblerTest {
             gos.close();
         }
 
-        var context = new DynamicContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY)
-                                               .mapToObj(i -> stereotomy.newIdentifier())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
-        members.forEach(m -> context.activate(m));
+        List<Member> members = IntStream.range(0, CARDINALITY)
+                                        .mapToObj(i -> stereotomy.newIdentifier())
+                                        .map(cpk -> new ControlledIdentifierMember(cpk))
+                                        .map(e -> (Member) e)
+                                        .toList();
+        var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
 
         Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE,
                                                  DigestAlgorithm.DEFAULT.getOrigin(), 2);
 
-        SigningMember bootstrapping = members.get(0);
+        SigningMember bootstrapping = (SigningMember) members.get(0);
 
         Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointState state = new CheckpointState(checkpoint,

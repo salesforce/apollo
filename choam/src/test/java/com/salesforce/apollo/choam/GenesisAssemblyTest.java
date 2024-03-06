@@ -18,7 +18,7 @@ import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
@@ -69,11 +69,10 @@ public class GenesisAssemblyTest {
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> stereotomy.newIdentifier())
-                                        .map(cpk -> new ControlledIdentifierMember(cpk))
+                                        .map(ControlledIdentifierMember::new)
                                         .map(e -> (Member) e)
                                         .toList();
-        var base = new DynamicContextImpl<>(viewId, members.size(), 0.2, 3);
-        base.activate(members);
+        var base = new StaticContext<>(viewId, 0.2, members, 3);
         var committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
@@ -103,10 +102,10 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
-            return comm;
-        }));
+        Map<Member, Router> communications = members.stream()
+                                                    .collect(Collectors.toMap(m -> m,
+                                                                              m -> new LocalServer(prefix, m).router(
+                                                                              ServerConnectionCache.newBuilder())));
         CountDownLatch complete = new CountDownLatch(committee.memberCount());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m, m -> communications.get(m)
@@ -180,12 +179,12 @@ public class GenesisAssemblyTest {
         });
 
         try {
-            communications.values().forEach(r -> r.start());
-            genii.values().forEach(r -> r.start());
+            communications.values().forEach(Router::start);
+            genii.values().forEach(GenesisAssembly::start);
             complete.await(15, TimeUnit.SECONDS);
         } finally {
             communications.values().forEach(r -> r.close(Duration.ofSeconds(1)));
-            genii.values().forEach(r -> r.stop());
+            genii.values().forEach(GenesisAssembly::stop);
         }
     }
 }

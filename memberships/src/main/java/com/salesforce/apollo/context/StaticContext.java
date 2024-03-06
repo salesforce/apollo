@@ -42,8 +42,12 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     public StaticContext(Digest id, double pByz, int bias, Collection<T> members, double epsilon, int cardinality) {
-        this(id, members, (short) ((minMajority(pByz, cardinality, epsilon, bias) * bias) + 1), bias, epsilon, pByz,
-             cardinality);
+        this(id, members, (short) ((minMajority(pByz, Math.max(bias + 1, cardinality), epsilon, bias) * bias) + 1),
+             bias, epsilon, pByz, cardinality);
+    }
+
+    public StaticContext(Digest id, double pbyz, Collection<T> members, int bias) {
+        this(id, pbyz, bias, members, Context.DEFAULT_EPSILON, members.size());
     }
 
     public StaticContext(Digest id, Collection<T> members, short rings, int bias, double epsilon, double pByz,
@@ -182,21 +186,6 @@ public class StaticContext<T extends Member> implements Context<T> {
             }
         }
         return false;
-    }
-
-    @Override
-    public int majority(boolean bootstrapped) {
-        var majority = getRingCount() - toleranceLevel();
-        if (bootstrapped) {
-            return switch (totalCount()) {
-                case 1, 2 -> 1;
-                case 3 -> 2;
-                case 4 -> 3;
-                default -> majority;
-            };
-        } else {
-            return majority;
-        }
     }
 
     @Override

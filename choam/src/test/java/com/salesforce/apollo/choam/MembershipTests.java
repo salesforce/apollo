@@ -14,7 +14,7 @@ import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.SigningMember;
@@ -131,7 +131,6 @@ public class MembershipTests {
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
-        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
                                .setBootstrap(
@@ -156,8 +155,8 @@ public class MembershipTests {
                            .mapToObj(i -> stereotomy.newIdentifier())
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
                            .toList();
+        var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {

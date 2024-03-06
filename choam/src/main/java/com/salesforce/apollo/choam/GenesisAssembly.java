@@ -17,7 +17,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
@@ -76,9 +76,9 @@ public class GenesisAssembly implements Genesis {
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        var reContext = new DynamicContextImpl<>(reconPrefixed, view.context().memberCount(),
-                                                 view.context().getProbabilityByzantine(), view.context().getBias());
-        reContext.activate(view.context().getAllMembers());
+        var reContext = new StaticContext<>(reconPrefixed, view.context().getProbabilityByzantine(), 3,
+                                            view.context().getAllMembers(), view.context().getEpsilon(),
+                                            view.context().size());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();

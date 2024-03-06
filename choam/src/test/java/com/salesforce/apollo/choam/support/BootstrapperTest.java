@@ -17,7 +17,7 @@ import com.salesforce.apollo.choam.proto.BlockReplication;
 import com.salesforce.apollo.choam.proto.Blocks;
 import com.salesforce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -49,19 +49,18 @@ public class BootstrapperTest {
 
     @Test
     public void smoke() throws Exception {
-        var context = new DynamicContextImpl<SigningMember>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, CARDINALITY)
-                                               .mapToObj(i -> stereotomy.newIdentifier())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
-        context.activate(members);
+        List<Member> members = IntStream.range(0, CARDINALITY)
+                                        .mapToObj(i -> stereotomy.newIdentifier())
+                                        .map(ControlledIdentifierMember::new)
+                                        .map(e -> (Member) e)
+                                        .toList();
+        var context = new StaticContext<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()
                  .userBlocks(10)
@@ -89,7 +88,7 @@ public class BootstrapperTest {
         bootstrapStore.validate(lastBlock.height(), ULong.valueOf(0));
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
-        SigningMember member = members.get(0);
+        SigningMember member = (SigningMember) members.get(0);
 
         @SuppressWarnings("unchecked")
         CommonCommunications<Terminal, Concierge> comms = mock(CommonCommunications.class);

@@ -345,21 +345,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
-    public int majority(boolean bootstrapped) {
-        var majority = getRingCount() - toleranceLevel();
-        if (bootstrapped) {
-            return switch (totalCount()) {
-                case 1, 2 -> 1;
-                case 3 -> 2;
-                case 4 -> 3;
-                default -> majority;
-            };
-        } else {
-            return majority;
-        }
-    }
-
-    @Override
     public int memberCount() {
         return members.size();
     }

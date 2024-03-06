@@ -17,7 +17,7 @@ import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.SigningMember;
@@ -86,15 +86,15 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() throws Exception {
-        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var origin = DigestAlgorithm.DEFAULT.getOrigin();
         registry = new MetricRegistry();
-        var metrics = new ChoamMetricsImpl(context.getId(), registry);
+        var metrics = new ChoamMetricsImpl(origin, registry);
         blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         var params = Parameters.newBuilder()
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
+                               .setGenesisViewId(origin.prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
@@ -115,7 +115,7 @@ public class TestCHOAM {
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .toList();
-        members.forEach(m -> context.activate(m));
+        var context = new StaticContext<>(origin, 0.2, members, 3);
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(

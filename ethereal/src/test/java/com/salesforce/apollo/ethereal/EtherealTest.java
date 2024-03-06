@@ -13,8 +13,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Member;
@@ -91,17 +92,14 @@ public class EtherealTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, (short) NPROC)
-                                               .mapToObj(i -> stereotomy.newIdentifier())
-                                               .map(cpk -> new ControlledIdentifierMember(cpk))
-                                               .map(e -> (SigningMember) e)
-                                               .toList();
+        List<Member> members = IntStream.range(0, (short) NPROC)
+                                        .mapToObj(i -> stereotomy.newIdentifier())
+                                        .map(ControlledIdentifierMember::new)
+                                        .map(e -> (Member) e)
+                                        .toList();
 
-        var context = new DynamicContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);
+        StaticContext<Member> context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members, 3);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
-        for (Member m : members) {
-            context.activate(m);
-        }
         var builder = Config.newBuilder()
                             .setnProc((short) NPROC)
                             .setNumberOfEpochs(NUM_EPOCHS)
@@ -122,7 +120,7 @@ public class EtherealTest {
             final var member = members.get(i);
             var com = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder());
             comms.add(com);
-            var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
+            var controller = new Ethereal(builder.setSigner((Signer) members.get(i)).setPid(pid).build(), maxSize, ds,
                                           (pb, last) -> {
                                               System.out.println("block: " + level.incrementAndGet() + " pid: " + pid);
                                               output.add(pb);
@@ -135,7 +133,7 @@ public class EtherealTest {
                 }
             }, "Test: " + i);
 
-            var gossiper = new ChRbcGossip(context, member, controller.processor(), com, metrics);
+            var gossiper = new ChRbcGossip(context, (SigningMember) member, controller.processor(), com, metrics);
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);
@@ -147,16 +145,16 @@ public class EtherealTest {
             }
         }
         try {
-            controllers.forEach(e -> e.start());
-            comms.forEach(e -> e.start());
+            controllers.forEach(Ethereal::start);
+            comms.forEach(Router::start);
             gossipers.forEach(e -> {
                 e.start(gossipPeriod);
             });
             finished.await(LARGE_TESTS ? 90 : 10, TimeUnit.SECONDS);
         } finally {
             controllers.forEach(c -> System.out.println(c.dump()));
-            controllers.forEach(e -> e.stop());
-            gossipers.forEach(e -> e.stop());
+            controllers.forEach(Ethereal::stop);
+            gossipers.forEach(ChRbcGossip::stop);
             comms.forEach(e -> e.close(Duration.ofSeconds(1)));
         }
 
@@ -200,9 +198,8 @@ public class EtherealTest {
             }
         }
         assertTrue((NPROC - failed.size()) >= context.majority(), "Failed iteration: " + iteration);
-        assertTrue(
-        produced.stream().map(pbs -> pbs.size()).filter(count -> count == expected).count() >= context.majority(),
-        "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
+        assertTrue(produced.stream().map(List::size).filter(count -> count == expected).count() >= context.majority(),
+                   "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
     }
 
     private static class SimpleDataSource implements DataSource {
