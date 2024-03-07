@@ -34,15 +34,17 @@ public class ViewContext {
     private final        Map<Digest, Short>    roster;
     private final        Signer                signer;
     private final        Map<Member, Verifier> validators;
+    private final        CHOAM.PendingView     pendingView;
 
-    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
-                       BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, CHOAM.PendingView pendingView, Signer signer,
+                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
+        this.pendingView = pendingView;
 
         var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
         short pid = 0;
@@ -72,10 +74,6 @@ public class ViewContext {
 
     public Context<Member> context() {
         return context;
-    }
-
-    public Digest diadem() {
-        return blockProducer == null ? DigestAlgorithm.DEFAULT.getLast() : blockProducer.diadem();
     }
 
     public Validate generateValidation(HashedBlock block) {
@@ -127,6 +125,10 @@ public class ViewContext {
 
     public Parameters params() {
         return params;
+    }
+
+    public CHOAM.PendingView pendingView() {
+        return pendingView;
     }
 
     public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {

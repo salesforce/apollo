@@ -243,7 +243,7 @@ public class Producer {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
-        var diadem = view.diadem();
+        var diadem = view.pendingView().diadem();
         log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
@@ -373,14 +373,14 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.diadem(),
+            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.pendingView().diadem(),
                       params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
                     log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
-                              view.diadem(), getSlate().size(), params().member().getId());
+                              view.pendingView().diadem(), getSlate().size(), params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

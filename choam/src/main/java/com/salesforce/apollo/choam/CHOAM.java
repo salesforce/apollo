@@ -307,6 +307,8 @@ public class CHOAM {
      */
     public void nextView(Context<Member> context, Digest diadem) {
         pendingView.set(new PendingView(context, diadem));
+        params.context().setContext(context);
+        this.diadem.set(diadem);
     }
 
     public void setDiadem(Digest diadem) {
@@ -482,11 +484,6 @@ public class CHOAM {
             @Override
             public Block checkpoint() {
                 return CHOAM.this.checkpoint();
-            }
-
-            @Override
-            public Digest diadem() {
-                return diadem.get();
             }
 
             @Override
@@ -971,8 +968,6 @@ public class CHOAM {
     public interface BlockProducer {
         Block checkpoint();
 
-        Digest diadem();
-
         Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
 
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
@@ -999,7 +994,7 @@ public class CHOAM {
         }
     }
 
-    private record PendingView(Context<Member> context, Digest diadem) {
+    public record PendingView(Context<Member> context, Digest diadem) {
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {
@@ -1237,8 +1232,10 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate(), ULong.MIN);
-            producer = new Producer(new ViewContext(context, params, signer, validators, constructBlock()), head.get(),
-                                    checkpoint.get(), comm, getLabel());
+            var pv = pendingView.get();
+            pv = pv == null ? new PendingView(params.context(), diadem.get()) : pv;
+            producer = new Producer(new ViewContext(context, params, pv, signer, validators, constructBlock()),
+                                    head.get(), checkpoint.get(), comm, getLabel());
             producer.start();
         }
 
@@ -1280,7 +1277,9 @@ public class CHOAM {
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()),
                           params.member().getId());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate(), ULong.MIN);
-                ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
+                var pv = pendingView.get();
+                pv = pv == null ? new PendingView(params.context(), diadem.get()) : pv;
+                ViewContext vc = new GenesisContext(formation, pv, params, signer, constructBlock());
                 assembly = new GenesisAssembly(vc, comm, next.get().member, getLabel());
                 nextViewId.set(params.genesisViewId());
             } else {

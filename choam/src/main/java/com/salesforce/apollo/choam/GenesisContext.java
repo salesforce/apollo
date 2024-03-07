@@ -20,8 +20,9 @@ import java.util.Collections;
  */
 public class GenesisContext extends ViewContext {
 
-    public GenesisContext(Context<Member> context, Parameters params, Signer signer, BlockProducer blockProducer) {
-        super(context, params, signer, Collections.emptyMap(), blockProducer);
+    public GenesisContext(Context<Member> context, CHOAM.PendingView pendingView, Parameters params, Signer signer,
+                          BlockProducer blockProducer) {
+        super(context, params, pendingView, signer, Collections.emptyMap(), blockProducer);
     }
 
     @Override

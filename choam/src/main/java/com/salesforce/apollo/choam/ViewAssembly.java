@@ -62,7 +62,7 @@ public class ViewAssembly {
         view = vc;
         this.nextViewId = nextViewId;
         this.publisher = publisher;
-        nextAssembly = Committee.viewMembersOf(nextViewId, params().context())
+        nextAssembly = Committee.viewMembersOf(nextViewId, view.pendingView().context())
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
@@ -199,7 +199,7 @@ public class ViewAssembly {
             return null;
         }
         final var hex = Digest.from(vm.getDiadem());
-        var diadem = view.diadem();
+        var diadem = view.pendingView().diadem();
         if (!diadem.equals(hex)) {
             log.info("Invalid diadem: {} not equivalent to local: {} vm: {} on: {}", hex, diadem,
                      ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());

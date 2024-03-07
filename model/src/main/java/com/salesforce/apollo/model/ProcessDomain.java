@@ -52,8 +52,7 @@ public class ProcessDomain extends Domain {
     private final   Verifiers.DelegatedVerifiers        verifiers;
     private final   ProcessDomainParameters             parameters;
     private final   List<BiConsumer<Context, Digest>>   lifecycleListeners = new CopyOnWriteArrayList<>();
-    private final   View.ViewLifecycleListener          listener           = listener();
-    private final   BiConsumer<Context, Digest>         listener2          = listener2();
+    private final   BiConsumer<Context, Digest>         listener           = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
@@ -120,22 +119,7 @@ public class ProcessDomain extends Domain {
         }
     }
 
-    protected View.ViewLifecycleListener listener() {
-        return (context, id, cardinality, join, leaving) -> {
-            for (var d : join) {
-                ((DynamicContext) params.context()).activate(context.apply(d));
-            }
-            for (var d : leaving) {
-                ((DynamicContext) params.context()).remove(d);
-            }
-            choam.setDiadem(id);
-
-            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
-                     join.size(), leaving.size(), params.member().getId());
-        };
-    }
-
-    protected BiConsumer<Context, Digest> listener2() {
+    protected BiConsumer<Context, Digest> listener() {
         return (context, diadem) -> {
             choam.nextView(context, diadem);
 

@@ -21,6 +21,7 @@ import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -68,7 +69,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.communications;
     }
 
-    public Context<Member> context() {
+    public DelegatedContext<Member> context() {
         return runtime.context;
     }
 
@@ -283,7 +284,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         }
     }
 
-    public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
+    public record RuntimeParameters(DelegatedContext<Member> context, Router communications, SigningMember member,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
@@ -325,8 +326,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             };
 
             public RuntimeParameters build() {
-                return new RuntimeParameters(context, communications, member, genesisData, processor, restorer,
-                                             checkpointer, metrics, kerl, foundation);
+                return new RuntimeParameters(new DelegatedContext<Member>(context), communications, member, genesisData,
+                                             processor, restorer, checkpointer, metrics, kerl, foundation);
             }
 
             @Override
