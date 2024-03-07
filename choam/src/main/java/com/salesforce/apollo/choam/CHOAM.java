@@ -707,6 +707,19 @@ public class CHOAM {
 
     private void reconfigure(Reconfigure reconfigure) {
         nextViewId.set(null);
+        var n = Digest.from(reconfigure.getView());
+        var d = diadem.get();
+        if (!n.equals(d)) {
+            var pv = pendingView.get();
+            if (pv != null && n.equals(pv.diadem)) {
+                params.context().setContext(pv.context);
+                diadem.set(pv.diadem);
+            } else {
+                throw new IllegalStateException(
+                "next view: %s not equal to current: %s and not equal to pending: %s".formatted(n, d, pv == null ? null
+                                                                                                                 : pv.diadem));
+            }
+        }
         final Committee c = current.get();
         c.complete();
         var validators = validatorsOf(reconfigure, params.context());
