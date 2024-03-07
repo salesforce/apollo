@@ -73,6 +73,8 @@ public interface Committee {
 
     Logger log();
 
+    void nextView(CHOAM.PendingView pendingView);
+
     Parameters params();
 
     default void regenerate() {

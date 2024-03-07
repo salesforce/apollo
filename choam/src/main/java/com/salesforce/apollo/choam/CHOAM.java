@@ -306,9 +306,15 @@ public class CHOAM {
      * @param diadem  - the compact HexBloom of the context view
      */
     public void nextView(Context<Member> context, Digest diadem) {
-        pendingView.set(new PendingView(context, diadem));
-        params.context().setContext(context);
-        this.diadem.set(diadem);
+        var c = current.get();
+        var pv = new PendingView(context, diadem);
+        if (c != null) {
+            c.nextView(pv);
+        } else {
+            params.context().setContext(context);
+            this.diadem.set(diadem);
+            CHOAM.this.pendingView.set(pv);
+        }
     }
 
     public void setDiadem(Digest diadem) {
@@ -1174,6 +1180,11 @@ public class CHOAM {
         }
 
         @Override
+        public void nextView(PendingView pendingView) {
+            CHOAM.this.pendingView.set(pendingView);
+        }
+
+        @Override
         public Parameters params() {
             return params;
         }
@@ -1330,6 +1341,13 @@ public class CHOAM {
         }
 
         @Override
+        public void nextView(PendingView pendingView) {
+            params.context().setContext(pendingView.context);
+            CHOAM.this.diadem.set(pendingView.diadem);
+            CHOAM.this.pendingView.set(pendingView);
+        }
+
+        @Override
         public Parameters params() {
             return params;
         }
@@ -1354,6 +1372,7 @@ public class CHOAM {
 
     /** a synchronizer of the current committee */
     private class Synchronizer implements Committee {
+
         private final Map<Member, Verifier> validators;
 
         public Synchronizer(Map<Member, Verifier> validators) {
@@ -1382,6 +1401,13 @@ public class CHOAM {
         @Override
         public Logger log() {
             return log;
+        }
+
+        @Override
+        public void nextView(PendingView pendingView) {
+            params.context().setContext(pendingView.context);
+            CHOAM.this.diadem.set(pendingView.diadem);
+            CHOAM.this.pendingView.set(pendingView);
         }
 
         @Override
