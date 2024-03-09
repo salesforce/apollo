@@ -121,7 +121,6 @@ public class EtherealTest {
             comms.add(com);
             var controller = new Ethereal(builder.setSigner((Signer) members.get(i)).setPid(pid).build(), maxSize, ds,
                                           (pb, last) -> {
-                                              System.out.println("block: " + level.incrementAndGet() + " pid: " + pid);
                                               output.add(pb);
                                               if (last) {
                                                   finished.countDown();

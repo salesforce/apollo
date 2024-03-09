@@ -45,7 +45,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
         private double           fpr             = 0.0125;
         private String           label           = "";
         private short            nProc;
-        private int              numberOfEpochs  = 3;
+        private int              numberOfEpochs  = 3;  // < 0 for unbounded
         private double           pByz            = -1;
         private short            pid;
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT, ULong.MIN);
