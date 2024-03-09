@@ -43,16 +43,16 @@ public class Ethereal {
     private final        int                             maxSerializedSize;
     private final        Consumer<Integer>               newEpochAction;
     private final        AtomicBoolean                   started      = new AtomicBoolean();
-    private final        BiConsumer<Integer, List<Unit>> toPreblock;
-    private              int                             numberOfEpochs;
+    private final        BiConsumer<Boolean, List<Unit>> toPreblock;
+    private volatile     boolean                         completeIt   = false;
 
     public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<List<ByteString>, Boolean> blocker,
                     Consumer<Integer> newEpochAction, String label) {
         this(label, config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction);
     }
 
-    public Ethereal(String label, Config conf, int maxSerializedSize, DataSource ds,
-                    BiConsumer<Integer, List<Unit>> toPreblock, Consumer<Integer> newEpochAction) {
+    private Ethereal(String label, Config conf, int maxSerializedSize, DataSource ds,
+                     BiConsumer<Boolean, List<Unit>> toPreblock, Consumer<Integer> newEpochAction) {
         if (!Dag.validate(conf.nProc())) {
             throw new IllegalArgumentException("Invalid # of processes, unable to build quorum: " + conf.nProc());
         }
@@ -62,7 +62,6 @@ public class Ethereal {
         this.newEpochAction = newEpochAction;
         this.maxSerializedSize = maxSerializedSize;
         this.consumer = consumer(label);
-        numberOfEpochs = config.numberOfEpochs();
 
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
@@ -78,7 +77,7 @@ public class Ethereal {
     }
 
     /**
-     * return a preblock from a slice of units containing a timing round. It assumes that the timing unit is the last
+     * Return a preblock from a slice of units containing a timing round. It assumes that the timing unit is the last
      * unit in the slice, and that random source data of the timing unit starts with random bytes from the previous
      * level.
      */
@@ -92,15 +91,16 @@ public class Ethereal {
         return data.isEmpty() ? null : data;
     }
 
-    private static BiConsumer<Integer, List<Unit>> blocker(BiConsumer<List<ByteString>, Boolean> blocker,
+    private static BiConsumer<Boolean, List<Unit>> blocker(BiConsumer<List<ByteString>, Boolean> blocker,
                                                            Config config) {
-        return (numberOfEpochs, units) -> {
+        return (completeIt, units) -> {
             var print = log.isTraceEnabled() ? units.stream().map(PreUnit::shortString).toList() : null;
             log.trace("Make pre block: {} on: {}", print, config.logLabel());
             List<ByteString> preBlock = toList(units);
             var timingUnit = units.getLast();
             var last = false;
-            if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == numberOfEpochs - 1) {
+            if (timingUnit.level() == config.lastLevel() && (completeIt
+            || timingUnit.epoch() == config.numberOfEpochs() - 1)) {
                 log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
                           config.logLabel());
                 last = true;
@@ -116,23 +116,24 @@ public class Ethereal {
         };
     }
 
+    public void completeIt() {
+        completeIt = true;
+    }
+
     public String dump() {
         var builder = new StringBuffer();
         builder.append("****************************").append('\n');
-        epochs.keySet().stream().sorted().forEach(e -> {
-            builder.append("Epoch: ")
-                   .append(e)
-                   .append('\n')
-                   .append(epochs.get(e).adder.dump())
-                   .append('\n')
-                   .append('\n');
-        });
+        epochs.keySet()
+              .stream()
+              .sorted()
+              .forEach(e -> builder.append("Epoch: ")
+                                   .append(e)
+                                   .append('\n')
+                                   .append(epochs.get(e).adder.dump())
+                                   .append('\n')
+                                   .append('\n'));
         builder.append("****************************").append('\n').append('\n');
         return builder.toString();
-    }
-
-    public void haltNextEpoch() {
-        numberOfEpochs = currentEpoch.get() + 1;
     }
 
     public Processor processor() {
@@ -164,10 +165,8 @@ public class Ethereal {
                       .stream()
                       .filter(e -> e.getKey() >= current)
                       .filter(e -> !haves.contains(e.getKey()))
-                      .forEach(e -> {
-                          builder.addMissings(
-                          Missing.newBuilder().setEpoch(e.getKey()).setHaves(e.getValue().adder().have()));
-                      });
+                      .forEach(e -> builder.addMissings(
+                      Missing.newBuilder().setEpoch(e.getKey()).setHaves(e.getValue().adder().have())));
                 return builder.build();
             }
 
@@ -216,6 +215,7 @@ public class Ethereal {
             return;
         }
         log.trace("Stopping Ethereal on: {}", config.logLabel());
+        completeIt();
         consumer.getQueue().clear(); // Flush any pending consumers
         creator.stop();
         epochs.values().forEach(epoch::close);
@@ -247,7 +247,7 @@ public class Ethereal {
                     return;
                 }
 
-                // creator already knows about units created by this node.
+                // the creator already knows about units created by this node.
                 if (unit.creator() != config.pid()) {
                     creator.consume(unit);
                 }
@@ -255,15 +255,11 @@ public class Ethereal {
 
         });
         final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);
-        final var e = new epoch(epoch, dg, adder, new AtomicBoolean(true));
-        return e;
+        return new epoch(epoch, dg, adder, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {
-        var ep = getEpoch(epoch);
-        if (ep != null) {
-            ep.noMoreUnits();
-        }
+        getEpoch(epoch).noMoreUnits();
     }
 
     private epochWithNewer getEpoch(int epoch) {
@@ -297,7 +293,7 @@ public class Ethereal {
                 finishEpoch(epoch);
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                toPreblock.accept(numberOfEpochs, round);
+                toPreblock.accept(completeIt, round);
                 log.trace("Preblock produced: {} on: {}", timingUnit, config.logLabel());
             }
             current.set(epoch);
@@ -305,7 +301,7 @@ public class Ethereal {
     }
 
     /**
-     * insert puts the provided unit directly into the corresponding epoch. If such epoch does not exist, creates it.
+     * Insert puts the provided unit directly into the corresponding epoch. If the epoch does not exist, it creates it.
      * All correctness checks (epoch proof, adder, dag checks) are skipped. This method is meant for our own units
      * only.
      */
@@ -325,14 +321,14 @@ public class Ethereal {
     }
 
     /**
-     * newEpoch creates and returns a new epoch object with the given EpochID. If such epoch already exists, returns
-     * it.
+     * newEpoch creates and returns a new epoch object with the given EpochID. If the epoch already exists, return it.
      */
     private epoch newEpoch(int epoch) {
-        if (epoch >= numberOfEpochs) {
-            log.trace("Finished, beyond last epoch: {} on: {}", epoch, config.logLabel());
-            return null;
-        }
+        //        var n = config.numberOfEpochs();
+        //        if (epoch >= n) {
+        //            log.trace("Finished, beyond last epoch: {} on: {}", epoch, config.logLabel());
+        //            return null;
+        //        }
         final var currentId = currentEpoch.get();
         epoch e = epochs.get(epoch);
         if (e == null && epoch == currentId + 1) {
@@ -357,8 +353,7 @@ public class Ethereal {
     }
 
     /**
-     * newEpoch creates and returns a new epoch object with the given EpochID. If such epoch already exists, returns
-     * it.
+     * newEpoch creates and returns a new epoch object with the given EpochID. If the epoch already exists, return it.
      */
     private epoch retreiveEpoch(int epoch) {
         final var currentId = currentEpoch.get();
