@@ -60,7 +60,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -96,7 +95,6 @@ public class View {
     private final        DigestAlgorithm                             digestAlgo;
     private final        RingCommunications<Participant, Fireflies>  gossiper;
     private final        AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final        List<ViewLifecycleListener>                 lifecycleListeners    = new CopyOnWriteArrayList<>();
     private final        List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
     private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
     Thread.ofVirtual().factory());
@@ -172,13 +170,6 @@ public class View {
     /**
      * Deregister the listener
      */
-    public void deregister(ViewLifecycleListener listener) {
-        lifecycleListeners.remove(listener);
-    }
-
-    /**
-     * Deregister the listener
-     */
     public void deregister(BiConsumer<Context, Digest> listener) {
         viewChangeListeners.remove(listener);
     }
@@ -195,15 +186,6 @@ public class View {
      */
     public Digest getNodeId() {
         return node.getId();
-    }
-
-    /**
-     * Register the listener to receive view change events
-     *
-     * @param listener - the ViewChangeListener to receive events
-     */
-    public void register(ViewLifecycleListener listener) {
-        lifecycleListeners.add(listener);
     }
 
     /**
@@ -429,18 +411,6 @@ public class View {
 
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
         final var current = currentView();
-        viewNotificationQueue.execute(Utils.wrapped(() -> {
-            lifecycleListeners.forEach(listener -> {
-                try {
-                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
-                              currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
-                    listener.viewChange(i -> context.getMember(i.getDigest()), current, viewManagement.cardinality(),
-                                        joining, leaving);
-                } catch (Throwable e) {
-                    log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
-                }
-            });
-        }, log));
         var sc = context.asStatic();
         viewNotificationQueue.execute(Utils.wrapped(() -> {
             viewChangeListeners.forEach(listener -> {
@@ -1503,23 +1473,6 @@ public class View {
             return false;
         }
         return verifier.get().verify(threshold, signature, message);
-    }
-
-    @FunctionalInterface
-    public interface ViewLifecycleListener {
-
-        /**
-         * Notification of a view change event
-         *
-         * @param members     - the source of Members for supplied identifiers
-         * @param viewId      - the compact Digest identifying the new view
-         * @param cardinality - the cardinality of the new view
-         * @param joins       - the list of joining member's id
-         * @param leaves      - the list of leaving member's id
-         */
-        void viewChange(Function<SelfAddressingIdentifier, Participant> members, Digest viewId, int cardinality,
-                        List<SelfAddressingIdentifier> joins, List<Digest> leaves);
-
     }
 
     public record Seed(SelfAddressingIdentifier identifier, InetSocketAddress endpoint) {

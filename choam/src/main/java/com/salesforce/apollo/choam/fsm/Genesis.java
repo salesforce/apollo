@@ -87,6 +87,11 @@ public interface Genesis {
             public Transitions nextEpoch(Integer epoch) {
                 return null;
             }
+
+            @Override
+            public Transitions process(List<ByteString> preblock, boolean last) {
+                return null;
+            }
         }
 
     }

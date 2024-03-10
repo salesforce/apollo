@@ -196,6 +196,7 @@ public class GenesisAssembly implements Genesis {
                  .map(Map.Entry::getValue)
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
+        controller.completeIt();
         log.debug("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
                   params().member().getId());
     }
