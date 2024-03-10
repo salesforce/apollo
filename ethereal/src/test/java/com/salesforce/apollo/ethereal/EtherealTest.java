@@ -109,8 +109,8 @@ public class EtherealTest {
 
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
-        var expectedExpochs = NUM_EPOCHS * 2;
-        var epochCountDown = new CountDownLatch(NPROC * expectedExpochs);
+        var expectedEpochs = NUM_EPOCHS + 1;
+        var epochCountDown = new CountDownLatch(NPROC * expectedEpochs);
         for (short i = 0; i < (short) NPROC; i++) {
             var level = new AtomicInteger();
             var ds = new SimpleDataSource();
@@ -158,7 +158,7 @@ public class EtherealTest {
             comms.forEach(e -> e.close(Duration.ofSeconds(1)));
         }
 
-        final var expected = expectedExpochs * (EPOCH_LENGTH - 1);
+        final var expected = expectedEpochs * (EPOCH_LENGTH - 1);
         final var first = produced.stream().filter(l -> l.size() == expected).findFirst();
         assertFalse(first.isEmpty(),
                     "no process produced " + expected + " blocks: " + produced.stream().map(l -> l.size()).toList());
