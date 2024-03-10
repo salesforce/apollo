@@ -307,6 +307,7 @@ public class Producer {
             pending.put(reconfiguration.hash, p);
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
+            controller.completeIt();
             log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
                      reconfiguration.height(), params().member().getId());
         }
