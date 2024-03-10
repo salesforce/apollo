@@ -82,6 +82,11 @@ public interface Genesis {
             public void publish() {
                 context().publish();
             }
+
+            @Override
+            public Transitions nextEpoch(Integer epoch) {
+                return null;
+            }
         }
 
     }

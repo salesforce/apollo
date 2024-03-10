@@ -68,6 +68,7 @@ public class ServerInterceptorTest {
         Metadata metadata = new Metadata();
         metadata.put(Constants.AuthorizationMetadataKey, "Bearer Invalid Token");
         target.interceptCall(serverCall, metadata, next);
+        System.out.println("\n\n*** Exception above expected ***\n");
         verify(serverCall).close(any(), any());
         verify(next, never()).startCall(any(), any());
     }
