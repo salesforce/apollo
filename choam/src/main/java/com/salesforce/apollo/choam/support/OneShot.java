@@ -33,7 +33,7 @@ public class OneShot implements Supplier<ByteString> {
     }
 
     public void setValue(ByteString value) {
-        log.trace("resetting value: " + value);
+        log.trace("resetting value: " + (value == null ? "null" : String.valueOf(value.size())));
         this.value = value;
         latch.countDown();
     }

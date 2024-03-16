@@ -68,8 +68,6 @@ public class GenesisAssembly implements Genesis {
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
-            log.error("Invalid cardinality: {} for: {} on: {}", nextAssembly.size(), view.context().getId(),
-                      params().member().getId());
             throw new IllegalStateException("Invalid BFT cardinality: " + nextAssembly.size());
         }
         this.genesisMember = genesisMember;
@@ -151,13 +149,19 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void gather(List<ByteString> preblock, boolean last) {
-        preblock.stream().map(bs -> {
-            try {
-                return Join.parseFrom(bs);
-            } catch (InvalidProtocolBufferException e) {
-                return null;
-            }
-        }).filter(Objects::nonNull).filter(j -> !j.equals(Join.getDefaultInstance())).forEach(this::join);
+        preblock.stream()
+                .map(bs -> {
+                    try {
+                        return Join.parseFrom(bs);
+                    } catch (InvalidProtocolBufferException e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .filter(j -> !j.equals(Join.getDefaultInstance()))
+                .peek(
+                j -> log.info("Gathering: {} on: {}", Digest.from(j.getMember().getId()), params().member().getId()))
+                .forEach(this::join);
     }
 
     @Override
@@ -170,6 +174,8 @@ public class GenesisAssembly implements Genesis {
                  .map(p -> view.generateValidation(p.join.getMember()))
                  .forEach(validations::addValidations);
         ds.setValue(validations.build().toByteString());
+        log.info("Nominations of: {} validations: {} on: {}", params().context().getId(),
+                 validations.getValidationsCount(), params().member().getId());
     }
 
     @Override

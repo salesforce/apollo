@@ -1205,7 +1205,8 @@ public class CHOAM {
         public void nextView(PendingView pendingView) {
             var previous = CHOAM.this.pendingView.getAndSet(pendingView);
             log.info("Pending view: {} size: {} previous: {} size: {} on: {}", pendingView.diadem,
-                     pendingView.context.size(), previous.diadem, previous.context.size(), params.member().getId());
+                     pendingView.context.size(), previous == null ? "<null>" : previous.diadem,
+                     previous == null ? "<null>" : previous.context.size(), params.member().getId());
         }
 
         @Override
@@ -1371,7 +1372,9 @@ public class CHOAM {
             params.context().setContext(pendingView.context);
             CHOAM.this.diadem.set(pendingView.diadem);
             CHOAM.this.pendingView.set(pendingView);
-            assembly.stop();
+            if (assembly != null) {
+                assembly.start();
+            }
             transitions.nextView();
         }
 

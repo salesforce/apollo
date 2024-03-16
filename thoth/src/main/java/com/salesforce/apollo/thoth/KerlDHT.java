@@ -824,7 +824,7 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
-        log.error("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
+        log.debug("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
                   context.majority(true), member.getId());
         return result.completeExceptionally(new CompletionException(
         "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority(true)
