@@ -82,7 +82,7 @@ public class GenesisAssembly implements Genesis {
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();
-        fsm.setName("Genesis" + params().member().getId());
+        fsm.setName("Genesis:" + view.context().getId() + ":" + params().member().getId());
 
         Config.Builder config = params().producer().ethereal().clone();
 
@@ -132,6 +132,7 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void gather() {
+        log.info("Gathering next assembly on: " + params().member().getId());
         var certification = view.generateValidation(genesisMember).getWitness();
         var join = Join.newBuilder()
                        .setMember(genesisMember)

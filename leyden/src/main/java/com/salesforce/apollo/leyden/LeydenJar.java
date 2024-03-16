@@ -3,9 +3,9 @@ package com.salesforce.apollo.leyden;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
@@ -161,7 +161,7 @@ public class LeydenJar {
         start(gossip, null);
     }
 
-    public void start(Duration gossip, Predicate<Token> validator) {
+    public void start(Duration gossip, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }

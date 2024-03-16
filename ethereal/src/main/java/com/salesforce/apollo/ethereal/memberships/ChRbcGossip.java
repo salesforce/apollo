@@ -7,9 +7,9 @@
 package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Timer;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.Processor;
@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -87,7 +86,7 @@ public class ChRbcGossip {
     /**
      * Start the receiver's gossip
      */
-    public void start(Duration duration, Predicate<Token> validator) {
+    public void start(Duration duration, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -131,11 +130,11 @@ public class ChRbcGossip {
         try {
             return link.gossip(processor.gossip(context.getId(), ring));
         } catch (StatusRuntimeException e) {
-            log.debug("gossiping[{}] failed: {} with: {} with {} ring: {} on {}", context.getId(), e.getMessage(),
-                      member.getId(), ring, link.getMember().getId(), member.getId(), e);
+            log.debug("gossiping[{}] failed: {} with: {} with {} ring: {} on: {}", context.getId(), e.getMessage(),
+                      member.getId(), ring, link.getMember().getId(), member.getId());
             return null;
         } catch (Throwable e) {
-            log.warn("gossiping[{}] failed: {} from {} with {} ring: {} on {}", context.getId(), member.getId(), ring,
+            log.warn("gossiping[{}] failed: {} from {} with {} ring: {} on: {}", context.getId(), member.getId(), ring,
                      link.getMember().getId(), ring, member.getId(), e);
             return null;
         }
@@ -157,29 +156,25 @@ public class ChRbcGossip {
                 if (timer != null) {
                     timer.stop();
                 }
-                log.trace("no update from {} on: {}", destination.member().getId(), member.getId());
                 return;
             }
-            Update update;
-            try {
-                update = result.get();
-            } catch (NoSuchElementException e) {
-                log.warn("null gossiping with {} on: {}", destination.member().getId(), member.getId());
-                return;
-            }
+            Update update = result.get();
             if (update.equals(Update.getDefaultInstance())) {
                 return;
             }
-            log.trace("Null gossip update with {} on: {}", destination.member().getId(), member.getId());
             try {
-                destination.link()
-                           .update(ContextUpdate.newBuilder()
-                                                .setRing(destination.ring())
-                                                .setUpdate(processor.update(update))
-                                                .build());
+                var u = processor.update(update);
+                if (!Update.getDefaultInstance().equals(u)) {
+                    log.trace("Gossip update with: {} on: {}", destination.member().getId(), member.getId());
+                    destination.link()
+                               .update(ContextUpdate.newBuilder().setRing(destination.ring()).setUpdate(u).build());
+                }
             } catch (StatusRuntimeException e) {
-                log.debug("gossiping[{}] failed: {} with: {} with {} ring: {} on {}", context.getId(), e.getMessage(),
-                          member.getId(), ring, destination.member().getId(), member.getId(), e);
+                log.debug("gossiping[{}] failed: {} with: {} with {} ring: {} on: {}", context.getId(), e.getMessage(),
+                          member.getId(), ring, destination.member().getId(), member.getId());
+            } catch (Throwable e) {
+                log.warn("gossiping[{}] failed: {} with: {} with {} ring: {} on: {}", context.getId(), e.getMessage(),
+                         member.getId(), ring, destination.member().getId(), member.getId(), e);
             }
         } finally {
             if (timer != null) {
@@ -213,9 +208,9 @@ public class ChRbcGossip {
         public Update gossip(Gossip request, Digest from) {
             Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.debug("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member.getId(), from, request.getRing(),
-                          predecessor == null ? "<null>" : predecessor.getId());
+                log.debug("Invalid inbound gossip context: {} from: {} on ring: {} - not predecessor: {} on: {}",
+                          context.getId(), from, request.getRing(),
+                          predecessor == null ? "<null>" : predecessor.getId(), member.getId());
                 return Update.getDefaultInstance();
             }
             final var update = processor.gossip(request);
@@ -228,9 +223,9 @@ public class ChRbcGossip {
         public void update(ContextUpdate request, Digest from) {
             Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.debug("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member.getId(), from, request.getRing(),
-                          predecessor == null ? "<null>" : predecessor.getId());
+                log.debug("Invalid inbound update context:{} from: {} on ring: {} - not predecessor: {} on: {}",
+                          context.getId(), from, request.getRing(),
+                          predecessor == null ? "<null>" : predecessor.getId(), member.getId());
                 return;
             }
             log.trace("gossip update with {} on: {}", from, member.getId());

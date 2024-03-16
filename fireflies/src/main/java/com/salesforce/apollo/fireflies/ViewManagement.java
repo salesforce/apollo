@@ -530,7 +530,11 @@ public class ViewManagement {
         log.info("Gateway initial seeding: {} successors: {} for: {} on: {}", gateway.getInitialSeedSetCount(),
                  successors.size(), from, node.getId());
         responseObserver.onNext(gateway);
-        responseObserver.onCompleted();
+        try {
+            responseObserver.onCompleted();
+        } catch (RejectedExecutionException e) {
+            log.trace("in shutdown on: {}", node.getId());
+        }
         if (timer != null) {
             var serializedSize = gateway.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);

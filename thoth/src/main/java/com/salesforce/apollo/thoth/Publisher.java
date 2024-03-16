@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.thoth;
 
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.event.proto.AttachmentEvent;
@@ -65,7 +65,7 @@ public class Publisher implements ProtoEventObserver {
         start(null);
     }
 
-    public void start(Predicate<Token> validator) {
+    public void start(Predicate<FernetServerInterceptor.HashedToken> validator) {
         comms.register(context, service, validator);
     }
 

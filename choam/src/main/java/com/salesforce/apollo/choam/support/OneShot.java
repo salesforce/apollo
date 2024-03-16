@@ -7,11 +7,15 @@
 package com.salesforce.apollo.choam.support;
 
 import com.google.protobuf.ByteString;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 
 public class OneShot implements Supplier<ByteString> {
+    private static final Logger log = LoggerFactory.getLogger(OneShot.class);
+
     private final    CountDownLatch latch = new CountDownLatch(1);
     private volatile ByteString     value;
 
@@ -23,11 +27,13 @@ public class OneShot implements Supplier<ByteString> {
             return ByteString.EMPTY;
         }
         final var current = value;
+        log.trace("providing value: " + (current == null ? "null" : String.valueOf(current.size())));
         value = null;
         return current == null ? ByteString.EMPTY : current;
     }
 
     public void setValue(ByteString value) {
+        log.trace("resetting value: " + value);
         this.value = value;
         latch.countDown();
     }

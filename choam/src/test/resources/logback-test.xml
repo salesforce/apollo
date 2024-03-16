@@ -7,8 +7,7 @@
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <Pattern>
-                %d{mm:ss.SSS} [%thread] %-5level %logger{0}
-                - %msg%n
+                %logger{0} - %msg%n
             </Pattern>
         </encoder>
     </appender>
@@ -20,15 +19,11 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

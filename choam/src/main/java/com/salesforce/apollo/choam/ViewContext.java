@@ -180,7 +180,7 @@ public class ViewContext {
         var m = context.getMember(mid);
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: {} on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
@@ -188,7 +188,7 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: {} on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;

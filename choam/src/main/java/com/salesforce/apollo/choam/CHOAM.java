@@ -311,15 +311,11 @@ public class CHOAM {
         if (c != null) {
             c.nextView(pv);
         } else {
+            log.info("Acquiring new diadem: {} size: {} on: {}", diadem, context.size(), params.member().getId());
             params.context().setContext(context);
             this.diadem.set(diadem);
-            CHOAM.this.pendingView.set(pv);
+            pendingView.set(null);
         }
-    }
-
-    public void setDiadem(Digest diadem) {
-        log.info("Set diadem: {} on: {}", diadem, params.member().getId());
-        this.diadem.set(diadem);
     }
 
     public void start() {
@@ -712,12 +708,16 @@ public class CHOAM {
         if (!n.equals(d)) {
             var pv = pendingView.get();
             if (pv != null && n.equals(pv.diadem)) {
+                pendingView.set(null);
                 params.context().setContext(pv.context);
                 diadem.set(pv.diadem);
+                log.info("Reconfiguring to new diadem: {} size: {} on: {}", pv.diadem, pv.context.size(),
+                         params.member().getId());
             } else {
                 throw new IllegalStateException(
-                "next view: %s not equal to current: %s and not equal to pending: %s".formatted(n, d, pv == null ? null
-                                                                                                                 : pv.diadem));
+                "next view: %s not equal to current diadem: %s and not equal to pending: %s".formatted(n, d,
+                                                                                                       pv == null ? null
+                                                                                                                  : pv.diadem));
             }
         }
         final Committee c = current.get();
@@ -733,12 +733,12 @@ public class CHOAM {
             current.set(new Client(validators, getViewId()));
         }
         session.setView(h);
-        log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
-                 validators.entrySet()
-                           .stream()
-                           .map(e -> String.format("id: %s key: %s", e.getKey().getId(),
-                                                   params.digestAlgorithm().digest(e.toString())))
-                           .toList(), params.member().getId());
+        log.info("Reconfigured to view: {} diadem: {} validators: {} on: {}", new Digest(reconfigure.getId()),
+                 diadem.get(), validators.entrySet()
+                                         .stream()
+                                         .map(e -> String.format("id: %s key: %s", e.getKey().getId(),
+                                                                 params.digestAlgorithm().digest(e.toString())))
+                                         .toList(), params.member().getId());
     }
 
     private void recover(HashedCertifiedBlock anchor) {
@@ -1066,7 +1066,16 @@ public class CHOAM {
             }
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 log.trace("Synchronization failed on: {}", params.member().getId());
-                synchronizationFailed();
+                try {
+                    synchronizationFailed();
+                } catch (IllegalStateException e) {
+                    final var c = current.get();
+                    log.info(
+                    "Synchronization quorum formation failed: {}, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
+                    e.getMessage(), context().totalCount(), context().getRingCount(), context().majority(),
+                    c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
+                    awaitSynchronization();
+                }
             }, params.synchronizationCycles());
         }
 
@@ -1094,23 +1103,23 @@ public class CHOAM {
 
         private void synchronizationFailed() {
             cancelSynchronization();
-            var activeCount = params.context().totalCount();
-            if (activeCount >= params.majority() && params.context().memberCount() >= params.context().getRingCount()) {
+            var activeCount = context().totalCount();
+            if (activeCount >= context().majority()) {
                 if (current.compareAndSet(null, new Formation())) {
                     log.info(
                     "Quorum achieved, triggering regeneration. have: {} desired: {} required: {} forming Genesis committe on: {}",
-                    activeCount, params.context().getRingCount(), params.context().majority(), params.member().getId());
+                    activeCount, context().getRingCount(), context().majority(), params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
-                             activeCount, params.context().getRingCount(), params.majority(),
+                             activeCount, context().getRingCount(), context().majority(),
                              current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();
                 log.info(
                 "Synchronization failed, no quorum available, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                activeCount, params.context().getRingCount(), params.majority(),
+                activeCount, context().getRingCount(), context().majority(),
                 c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }
@@ -1194,7 +1203,9 @@ public class CHOAM {
 
         @Override
         public void nextView(PendingView pendingView) {
-            CHOAM.this.pendingView.set(pendingView);
+            var previous = CHOAM.this.pendingView.getAndSet(pendingView);
+            log.info("Pending view: {} size: {} previous: {} size: {} on: {}", pendingView.diadem,
+                     pendingView.context.size(), previous.diadem, previous.context.size(), params.member().getId());
         }
 
         @Override
@@ -1355,9 +1366,13 @@ public class CHOAM {
 
         @Override
         public void nextView(PendingView pendingView) {
+            log.info("Cancelling formation, acquiring new diadem: {} size: {} on: {}", pendingView.diadem,
+                     pendingView.context.size(), params.member().getId());
             params.context().setContext(pendingView.context);
             CHOAM.this.diadem.set(pendingView.diadem);
             CHOAM.this.pendingView.set(pendingView);
+            assembly.stop();
+            transitions.nextView();
         }
 
         @Override
@@ -1418,6 +1433,8 @@ public class CHOAM {
 
         @Override
         public void nextView(PendingView pendingView) {
+            log.info("Acquiring new diadem: {} size: {} on: {}", pendingView.diadem, pendingView.context.size(),
+                     params.member().getId());
             params.context().setContext(pendingView.context);
             CHOAM.this.diadem.set(pendingView.diadem);
             CHOAM.this.pendingView.set(pendingView);

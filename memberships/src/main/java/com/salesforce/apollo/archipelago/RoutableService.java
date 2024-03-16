@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import io.grpc.Status;
@@ -32,7 +31,7 @@ public class RoutableService<Service> {
     private static final Logger                               log      = LoggerFactory.getLogger(RoutableService.class);
     private final        Map<Digest, ServiceBinding<Service>> services = new ConcurrentHashMap<>();
 
-    public void bind(Digest context, Service service, Predicate<Token> validator) {
+    public void bind(Digest context, Service service, Predicate<FernetServerInterceptor.HashedToken> validator) {
         services.put(context, new ServiceBinding<>(service, validator));
     }
 
@@ -65,7 +64,8 @@ public class RoutableService<Service> {
         }
     }
 
-    public void evaluate(StreamObserver<?> responseObserver, BiConsumer<Service, Token> c) {
+    public void evaluate(StreamObserver<?> responseObserver,
+                         BiConsumer<Service, FernetServerInterceptor.HashedToken> c) {
         var context = SERVER_CONTEXT_KEY.get();
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
@@ -78,8 +78,8 @@ public class RoutableService<Service> {
             } else {
                 try {
                     if (binding.validator != null) {
-                        var token = FernetServerInterceptor.AccessTokenContextKey.get();
-                        if (!binding.validator.test(token)) {
+                        var ht = FernetServerInterceptor.AccessTokenContextKey.get();
+                        if (!binding.validator.test(ht)) {
                             log.info("Unauthenticated on: {}", context);
                             responseObserver.onError(new StatusRuntimeException(Status.UNAUTHENTICATED));
                             return;
@@ -98,6 +98,6 @@ public class RoutableService<Service> {
         services.remove(context);
     }
 
-    private record ServiceBinding<Service>(Service service, Predicate<Token> validator) {
+    private record ServiceBinding<Service>(Service service, Predicate<FernetServerInterceptor.HashedToken> validator) {
     }
 }

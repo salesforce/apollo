@@ -10,9 +10,9 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomWindow;
@@ -185,7 +185,7 @@ public class ReliableBroadcaster {
         start(duration, null);
     }
 
-    public void start(Duration duration, Predicate<Token> validator) {
+    public void start(Duration duration, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }

@@ -133,6 +133,11 @@ public interface Combine {
                 return null;
             }
 
+            @Override
+            public Transitions nextView() {
+                return RECOVERING;
+            }
+
             @Entry
             public void regenerateView() {
                 context().regenerate();
@@ -169,6 +174,10 @@ public interface Combine {
 
         default Transitions finishCheckpoint() {
             throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions nextView() {
+            return null;
         }
 
         default Transitions regenerate() {
