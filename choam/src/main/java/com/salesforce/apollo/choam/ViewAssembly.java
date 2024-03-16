@@ -103,7 +103,8 @@ public class ViewAssembly {
                      .sorted(Comparator.comparing(p -> p.member.getId()))
                      .forEach(p -> slate.put(p.member(), joinOf(p)));
             if (slate.size() >= params().context().majority()) {
-                log.debug("Complete.  Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+                log.debug("Complete.  Electing slate: {} of: {} on: {}", slate.size(), nextViewId,
+                          params().member().getId());
             } else {
                 log.error("Failed completion, election required: {} slate: {} of: {} on: {}",
                           params().context().majority() + 1, proposals.values()
@@ -273,13 +274,13 @@ public class ViewAssembly {
         final var cid = Digest.from(v.getWitness().getId());
         var certifier = view.context().getMember(cid);
         if (certifier == null) {
-            log.warn("Unknown certifier: {} on: {}", cid, params().member());
+            log.warn("Unknown certifier: {} on: {}", cid, params().member().getId());
             return;
         }
         final var digest = Digest.from(v.getHash());
         final var member = nextAssembly.get(digest);
         if (member == null) {
-            log.warn("Unknown next view member: {} on: {}", digest, params().member());
+            log.warn("Unknown next view member: {} on: {}", digest, params().member().getId());
             return;
         }
         var proposed = proposals.get(digest);
@@ -322,7 +323,8 @@ public class ViewAssembly {
                                                                          .stream()
                                                                          .map(e -> String.format("%s:%s", e.getKey(),
                                                                                                  e.getValue().validations.size()))
-                                                                         .toList(), nextViewId, params().member());
+                                                                         .toList(), nextViewId,
+                      params().member().getId());
         }
 
         @Override
@@ -346,19 +348,19 @@ public class ViewAssembly {
                           proposals.values()
                                    .stream()
                                    .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
-                                   .toList(), nextViewId, params().member());
+                                   .toList(), nextViewId, params().member().getId());
             }
         }
 
         @Override
         public void failed() {
             stop();
-            log.error("Failed view assembly for: {} on: {}", nextViewId, params().member());
+            log.error("Failed view assembly for: {} on: {}", nextViewId, params().member().getId());
         }
 
         @Override
         public void gather() {
-            log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member());
+            log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member().getId());
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
             reiterate.set(() -> committee.iterate((term, m) -> {

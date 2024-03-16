@@ -25,19 +25,19 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Session" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.support" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -57,7 +57,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

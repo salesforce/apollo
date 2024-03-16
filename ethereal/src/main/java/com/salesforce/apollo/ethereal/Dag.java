@@ -41,8 +41,13 @@ public interface Dag {
     }
 
     static boolean validate(int nProc) {
-        var threshold = threshold(nProc);
-        return (threshold * 3 + 1) == nProc;
+        if (nProc < 4) {
+            return false;
+        }
+        var threshold = Math.max(1, threshold(nProc));
+        var calc = threshold * 3 + 1;
+        var result = calc == nProc || calc == nProc - 1;
+        return result;
     }
 
     void addCheck(BiFunction<Unit, Dag, Correctness> checker);

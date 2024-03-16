@@ -137,6 +137,10 @@ public class ReliableBroadcaster {
         buffer.clear();
     }
 
+    public Context<Member> getContext() {
+        return context;
+    }
+
     public Member getMember() {
         return member;
     }

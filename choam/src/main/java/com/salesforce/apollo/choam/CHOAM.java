@@ -22,6 +22,7 @@ import com.salesforce.apollo.choam.support.*;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.proto.PubKey;
@@ -97,7 +98,8 @@ public class CHOAM {
         executions = Executors.newVirtualThreadPerTaskExecutor();
 
         nextView();
-        combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.communications(),
+        var bContext = new DelegatedContext<>(params.context());
+        combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
                                           new MessageAdapter(any -> true,
                                                              (Function<ByteString, Digest>) any -> signatureHash(any),
@@ -306,6 +308,7 @@ public class CHOAM {
      * @param diadem  - the compact HexBloom of the context view
      */
     public void nextView(Context<Member> context, Digest diadem) {
+        ((DelegatedContext<Member>) combine.getContext()).setContext(context);
         var c = current.get();
         var pv = new PendingView(context, diadem);
         if (c != null) {
@@ -582,7 +585,7 @@ public class CHOAM {
         }
         BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
-        store.fetchBlocks(bff, blocks, 5, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
+        store.fetchBlocks(bff, blocks, 100, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
         return blocks.build();
     }
 
@@ -661,10 +664,19 @@ public class CHOAM {
             params.processor().beginBlock(h.height(), h.hash);
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
             var ass = Digest.from(h.block.getAssemble().getDiadem());
-            var current = diadem.getAndSet(ass);
-            if (!current.equals(ass)) {
-                log.info("Next view id: {} diadem: {} does match current: {} on: {}", nextViewId.get(), ass, current,
-                         params.member().getId());
+            var currentDiadem = diadem.get();
+            if (!currentDiadem.equals(ass)) {
+                var pass = pendingView.get();
+                if (pass != null && pass.diadem.equals(ass)) {
+                    pendingView.set(null);
+                    log.info("Advancing to assembly diadem: {} current: {} view id: {} on: {}", ass, current,
+                             nextViewId.get(), params.member().getId());
+                    diadem.set(pass.diadem);
+                    params.context().setContext(pass.context);
+                } else {
+                    log.warn("Next view id: {} diadem: {} does match current: {} on: {}", nextViewId.get(), ass,
+                             current, params.member().getId());
+                }
             }
             log.info("Next view id: {} diadem: {} on: {}", nextViewId.get(), diadem.get(), params.member().getId());
             c.assembled();
@@ -853,11 +865,6 @@ public class CHOAM {
 
     private Initial sync(Synchronize request, Digest from) {
         if (from == null) {
-            return Initial.getDefaultInstance();
-        }
-        Member member = params.context().getMember(from);
-        if (member == null) {
-            log.warn("Received sync from non member: {} on: {}", from, params.member().getId());
             return Initial.getDefaultInstance();
         }
         Initial.Builder initial = Initial.newBuilder();
@@ -1070,9 +1077,9 @@ public class CHOAM {
                     synchronizationFailed();
                 } catch (IllegalStateException e) {
                     final var c = current.get();
-                    log.info(
-                    "Synchronization quorum formation failed: {}, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                    e.getMessage(), context().totalCount(), context().getRingCount(), context().majority(),
+                    log.debug(
+                    "Synchronization quorum formation failed: {}, members: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
+                    e.getMessage(), context().totalCount(), context().getRingCount(), Math.max(4, context().majority()),
                     c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                     awaitSynchronization();
                 }
@@ -1104,22 +1111,23 @@ public class CHOAM {
         private void synchronizationFailed() {
             cancelSynchronization();
             var activeCount = context().totalCount();
-            if (activeCount >= context().majority()) {
-                if (current.compareAndSet(null, new Formation())) {
+            var majority = Math.max(4, context().majority());
+            if (activeCount >= majority) {
+                if (current.get() == null && current.compareAndSet(null, new Formation())) {
                     log.info(
-                    "Quorum achieved, triggering regeneration. have: {} desired: {} required: {} forming Genesis committe on: {}",
-                    activeCount, context().getRingCount(), context().majority(), params.member().getId());
+                    "Quorum achieved, triggering regeneration. members: {} desired: {} required: {} forming Genesis committee on: {}",
+                    activeCount, context().getRingCount(), majority, params.member().getId());
                     transitions.regenerate();
                 } else {
-                    log.info("Quorum achieved, have: {} desired: {} required: {} existing committee: {} on: {}",
-                             activeCount, context().getRingCount(), context().majority(),
-                             current.get().getClass().getSimpleName(), params.member().getId());
+                    log.info("Quorum achieved, members: {} desired: {} required: {} existing committee: {} on: {}",
+                             activeCount, context().getRingCount(), majority, current.get().getClass().getSimpleName(),
+                             params.member().getId());
                 }
             } else {
                 final var c = current.get();
-                log.info(
-                "Synchronization failed, no quorum available, have: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                activeCount, context().getRingCount(), context().majority(),
+                log.debug(
+                "Synchronization failed, no quorum available, members: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
+                activeCount, context().getRingCount(), majority,
                 c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }

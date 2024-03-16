@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -56,6 +57,8 @@ public class RoutableService<Service> {
                         }
                     }
                     c.accept(binding.service);
+                } catch (RejectedExecutionException e) {
+                    log.debug("Rejected execution context: {} on: {}", context, c);
                 } catch (Throwable t) {
                     log.error("Uncaught exception in service evaluation for context: {}", context, t);
                     responseObserver.onError(t);

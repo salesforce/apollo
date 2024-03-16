@@ -10,6 +10,7 @@ import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author hal.hildebrand
@@ -97,7 +98,12 @@ public interface Combine {
         }, PROTOCOL_FAILURE, RECOVERING {
             @Override
             public Transitions bootstrap(HashedCertifiedBlock anchor) {
-                context().recover(anchor);
+                try {
+                    context().recover(anchor);
+                } catch (Exception e) {
+                    LoggerFactory.getLogger(Mercantile.class).info("Unable to recover anchor: {}", anchor, e);
+                    return null;
+                }
                 return BOOTSTRAPPING;
             }
 
