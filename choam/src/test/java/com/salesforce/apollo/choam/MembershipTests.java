@@ -133,6 +133,7 @@ public class MembershipTests {
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
 
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setBootstrap(
                                BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(20)).build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
@@ -143,6 +144,7 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
+                               .setGenerateGenesis(true)
                                .setCheckpointBlockDelta(checkpointBlockSize);
         params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);

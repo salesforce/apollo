@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
@@ -27,17 +28,17 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer         blockProducer;
-    private final        Context<Member>       context;
-    private final        Parameters            params;
-    private final        Map<Digest, Short>    roster;
-    private final        Signer                signer;
-    private final        Map<Member, Verifier> validators;
-    private final        CHOAM.PendingView     pendingView;
+    private final static Logger                      log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer               blockProducer;
+    private final        Context<Member>             context;
+    private final        Parameters                  params;
+    private final        Map<Digest, Short>          roster;
+    private final        Signer                      signer;
+    private final        Map<Member, Verifier>       validators;
+    private final        Supplier<CHOAM.PendingView> pendingView;
 
-    public ViewContext(Context<Member> context, Parameters params, CHOAM.PendingView pendingView, Signer signer,
-                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<CHOAM.PendingView> pendingView,
+                       Signer signer, Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
@@ -128,7 +129,7 @@ public class ViewContext {
     }
 
     public CHOAM.PendingView pendingView() {
-        return pendingView;
+        return pendingView.get();
     }
 
     public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {

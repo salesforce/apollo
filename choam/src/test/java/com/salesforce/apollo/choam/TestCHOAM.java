@@ -94,6 +94,7 @@ public class TestCHOAM {
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setGenesisViewId(origin.prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()

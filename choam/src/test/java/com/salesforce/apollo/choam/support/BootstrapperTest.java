@@ -99,6 +99,7 @@ public class BootstrapperTest {
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(), Parameters.newBuilder()
+                                                                              .setGenerateGenesis(true)
                                                                               .setGossipDuration(Duration.ofMillis(10))
                                                                               .build(RuntimeParameters.newBuilder()
                                                                                                       .setContext(

@@ -202,8 +202,8 @@ public class ViewAssembly {
         final var hex = Digest.from(vm.getDiadem());
         var diadem = view.pendingView().diadem();
         if (!diadem.equals(hex)) {
-            log.info("Invalid diadem: {} not equivalent to local: {} vm: {} on: {}", hex, diadem,
-                     ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+            log.info("Not joining: {}, invalid diadem: {} not equivalent to local: {} vm: {} on: {}", m.getId(), hex,
+                     diadem, ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
             return null;
         }
         PubKey encoded = vm.getConsensusKey();

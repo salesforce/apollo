@@ -14,14 +14,15 @@ import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.membership.Member;
 
 import java.util.Collections;
+import java.util.function.Supplier;
 
 /**
  * @author hal.hildebrand
  */
 public class GenesisContext extends ViewContext {
 
-    public GenesisContext(Context<Member> context, CHOAM.PendingView pendingView, Parameters params, Signer signer,
-                          BlockProducer blockProducer) {
+    public GenesisContext(Context<Member> context, Supplier<CHOAM.PendingView> pendingView, Parameters params,
+                          Signer signer, BlockProducer blockProducer) {
         super(context, params, pendingView, signer, Collections.emptyMap(), blockProducer);
     }
 

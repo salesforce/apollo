@@ -121,6 +121,7 @@ public class ContainmentDomainTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()

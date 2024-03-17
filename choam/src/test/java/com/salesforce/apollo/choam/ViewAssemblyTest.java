@@ -114,6 +114,7 @@ public class ViewAssemblyTest {
 
     private void buildAssemblies() {
         Parameters.Builder params = Parameters.newBuilder()
+                                              .setGenerateGenesis(true)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
@@ -165,7 +166,7 @@ public class ViewAssemblyTest {
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
-                                               new CHOAM.PendingView(context, DigestAlgorithm.DEFAULT.getLast()),
+                                               () -> new CHOAM.PendingView(context, DigestAlgorithm.DEFAULT.getLast()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
                                                validators, null);
             views.put(m, view);

@@ -340,6 +340,7 @@ abstract public class AbstractLifecycleTest {
 
     private Builder parameters(Context<Member> context) {
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(10))

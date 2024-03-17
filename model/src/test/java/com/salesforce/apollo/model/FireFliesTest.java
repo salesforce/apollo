@@ -170,6 +170,7 @@ public class FireFliesTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(50))
                                .setProducer(ProducerParameters.newBuilder()

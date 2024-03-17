@@ -49,6 +49,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.salesforce.apollo.choam.Committee.validatorsOf;
@@ -561,11 +562,6 @@ public class CHOAM {
     }
 
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
-        Member member = params.context().getMember(from);
-        if (member == null) {
-            log.warn("Received checkpoint fetch from non member: {} on: {}", from, params.member().getId());
-            return CheckpointSegments.getDefaultInstance();
-        }
         CheckpointState state = cachedCheckpoints.get(ULong.valueOf(request.getCheckpoint()));
         if (state == null) {
             log.info("No cached checkpoint for {} on: {}", request.getCheckpoint(), params.member().getId());
@@ -578,11 +574,6 @@ public class CHOAM {
     }
 
     private Blocks fetchBlocks(BlockReplication rep, Digest from) {
-        Member member = params.context().getMember(from);
-        if (member == null) {
-            log.warn("Received fetchBlocks from non member: {} on: {}", from, params.member().getId());
-            return Blocks.getDefaultInstance();
-        }
         BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
         store.fetchBlocks(bff, blocks, 100, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
@@ -590,14 +581,9 @@ public class CHOAM {
     }
 
     private Blocks fetchViewChain(BlockReplication rep, Digest from) {
-        Member member = params.context().getMember(from);
-        if (member == null) {
-            log.warn("Received fetchViewChain from non member: {} on: {}", from, params.member().getId());
-            return Blocks.getDefaultInstance();
-        }
         BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
-        store.fetchViewChain(bff, blocks, 1, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
+        store.fetchViewChain(bff, blocks, 100, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
         return blocks.build();
     }
 
@@ -663,22 +649,8 @@ public class CHOAM {
         case ASSEMBLE: {
             params.processor().beginBlock(h.height(), h.hash);
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
-            var ass = Digest.from(h.block.getAssemble().getDiadem());
-            var currentDiadem = diadem.get();
-            if (!currentDiadem.equals(ass)) {
-                var pass = pendingView.get();
-                if (pass != null && pass.diadem.equals(ass)) {
-                    pendingView.set(null);
-                    log.info("Advancing to assembly diadem: {} current: {} view id: {} on: {}", ass, current,
-                             nextViewId.get(), params.member().getId());
-                    diadem.set(pass.diadem);
-                    params.context().setContext(pass.context);
-                } else {
-                    log.warn("Next view id: {} diadem: {} does match current: {} on: {}", nextViewId.get(), ass,
-                             current, params.member().getId());
-                }
-            }
-            log.info("Next view id: {} diadem: {} on: {}", nextViewId.get(), diadem.get(), params.member().getId());
+            log.info("Assembled next view id: {} diadem: {} on: {}", nextViewId.get(),
+                     Digest.from(h.block.getAssemble().getDiadem()), params.member().getId());
             c.assembled();
             break;
         }
@@ -867,9 +839,9 @@ public class CHOAM {
         if (from == null) {
             return Initial.getDefaultInstance();
         }
-        Initial.Builder initial = Initial.newBuilder();
         final HashedCertifiedBlock g = genesis.get();
         if (g != null) {
+            Initial.Builder initial = Initial.newBuilder();
             initial.setGenesis(g.certifiedBlock);
             HashedCertifiedBlock cp = checkpoint.get();
             if (cp != null) {
@@ -899,10 +871,11 @@ public class CHOAM {
             } else {
                 log.debug("Returning sync: {} to: {} on: {}", g.hash, from, params.member().getId());
             }
+            return initial.build();
         } else {
-            log.debug("Returning null sync to: {} on: {}", from, params.member().getId());
+            log.debug("Genesis undefined, returning null sync to: {} on: {}", from, params.member().getId());
+            return Initial.getDefaultInstance();
         }
-        return initial.build();
     }
 
     private void synchronize(SynchronizedState state) {
@@ -1097,6 +1070,12 @@ public class CHOAM {
         }
 
         @Override
+        public void fail() {
+            log.info("Failed!  Shutting down on: {}", params.member().getId());
+            stop();
+        }
+
+        @Override
         public void recover(HashedCertifiedBlock anchor) {
             log.info("Anchor discovered: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
             current.set(new Formation());
@@ -1112,7 +1091,7 @@ public class CHOAM {
             cancelSynchronization();
             var activeCount = context().totalCount();
             var majority = Math.max(4, context().majority());
-            if (activeCount >= majority) {
+            if (params.generateGenesis() && activeCount >= majority) {
                 if (current.get() == null && current.compareAndSet(null, new Formation())) {
                     log.info(
                     "Quorum achieved, triggering regeneration. members: {} desired: {} required: {} forming Genesis committee on: {}",
@@ -1125,10 +1104,8 @@ public class CHOAM {
                 }
             } else {
                 final var c = current.get();
-                log.debug(
-                "Synchronization failed, no quorum available, members: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                activeCount, context().getRingCount(), majority,
-                c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
+                log.trace("Synchronization failed; members: {}, no anchor to recover from: {} on: {}", activeCount,
+                          c == null ? "<no committee>" : c.getClass().getSimpleName(), params.member().getId());
                 awaitSynchronization();
             }
         }
@@ -1276,8 +1253,10 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate(), ULong.MIN);
-            var pv = pendingView.get();
-            pv = pv == null ? new PendingView(params.context(), diadem.get()) : pv;
+            Supplier<PendingView> pv = () -> {
+                var v = pendingView.get();
+                return v == null ? new PendingView(params.context(), diadem.get()) : v;
+            };
             producer = new Producer(new ViewContext(context, params, pv, signer, validators, constructBlock()),
                                     head.get(), checkpoint.get(), comm, getLabel());
             producer.start();
@@ -1321,9 +1300,11 @@ public class CHOAM {
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()),
                           params.member().getId());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate(), ULong.MIN);
-                var pv = pendingView.get();
-                pv = pv == null ? new PendingView(params.context(), diadem.get()) : pv;
-                ViewContext vc = new GenesisContext(formation, pv, params, signer, constructBlock());
+                Supplier<PendingView> supp = () -> {
+                    var pv = pendingView.get();
+                    return pv == null ? new PendingView(params.context(), diadem.get()) : pv;
+                };
+                ViewContext vc = new GenesisContext(formation, supp, params, signer, constructBlock());
                 assembly = new GenesisAssembly(vc, comm, next.get().member, getLabel());
                 nextViewId.set(params.genesisViewId());
             } else {

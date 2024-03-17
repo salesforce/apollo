@@ -29,6 +29,8 @@ public interface Combine {
 
     void combine();
 
+    void fail();
+
     void recover(HashedCertifiedBlock anchor);
 
     void regenerate();
@@ -95,7 +97,12 @@ public interface Combine {
                 return null;
             }
 
-        }, PROTOCOL_FAILURE, RECOVERING {
+        }, PROTOCOL_FAILURE {
+            @Entry
+            public void failIt() {
+                context().fail();
+            }
+        }, RECOVERING {
             @Override
             public Transitions bootstrap(HashedCertifiedBlock anchor) {
                 try {

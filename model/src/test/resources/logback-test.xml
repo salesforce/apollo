@@ -45,11 +45,11 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

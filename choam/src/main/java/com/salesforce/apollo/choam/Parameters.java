@@ -55,7 +55,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
                          ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
-                         ExponentialBackoffPolicy.Builder drainPolicy) {
+                         ExponentialBackoffPolicy.Builder drainPolicy, boolean generateGenesis) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -679,12 +679,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
         private int                              crowns                = 2;
+        private boolean                          generateGenesis       = false;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, crowns, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, regenerationCycles, bootstrap, producer, mvBuilder,
-                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy);
+                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy, generateGenesis);
         }
 
         @Override
@@ -856,6 +857,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
-    }
 
+        public boolean isGenerateGenesis() {
+            return generateGenesis;
+        }
+
+        public Builder setGenerateGenesis(boolean generateGenesis) {
+            this.generateGenesis = generateGenesis;
+            return this;
+        }
+    }
 }

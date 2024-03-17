@@ -81,6 +81,7 @@ public class Emulator {
         identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
                                         entropy).newIdentifier();
         params = Parameters.newBuilder()
+                           .setGenerateGenesis(true)
                            .build(RuntimeParameters.newBuilder()
                                                    .setMember(new ControlledIdentifierMember(identifier))
                                                    .setContext(new DynamicContextImpl<>(base, 5, 0.01, 3))

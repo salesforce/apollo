@@ -76,6 +76,7 @@ public class GenesisAssemblyTest {
         var committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
+                                              .setGenerateGenesis(true)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
@@ -161,8 +162,9 @@ public class GenesisAssemblyTest {
                     return null;
                 }
             };
-            var view = new GenesisContext(committee, new CHOAM.PendingView(base, DigestAlgorithm.DEFAULT.getLast()),
-                                          built, sm, reconfigure);
+            var view = new GenesisContext(committee,
+                                          () -> new CHOAM.PendingView(base, DigestAlgorithm.DEFAULT.getLast()), built,
+                                          sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());
