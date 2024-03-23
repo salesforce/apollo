@@ -66,7 +66,7 @@ public class ViewAssembly {
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         var slice = new ArrayList<>(nextAssembly.values());
-        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms);
+        committee = new SliceIterator<>("Committee for " + nextViewId, params().member(), slice, comms);
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(new Recon(), Transitions.class,
                                                                     Reconfigure.AWAIT_ASSEMBLY, true);
@@ -78,8 +78,7 @@ public class ViewAssembly {
     }
 
     public Map<Member, Join> getSlate() {
-        final var c = slate;
-        return c;
+        return slate;
     }
 
     public void start() {
@@ -111,7 +110,7 @@ public class ViewAssembly {
                                                                       .stream()
                                                                       .map(p -> String.format("%s:%s", p.member.getId(),
                                                                                               p.validations.size()))
-                                                                      .toList(), nextViewId, params().member());
+                                                                      .toList(), nextViewId, params().member().getId());
                 transitions.failed();
             }
         }
@@ -316,7 +315,8 @@ public class ViewAssembly {
             if (proposals.values().stream().filter(p -> p.validations.size() == nextAssembly.size()).count()
             == nextAssembly.size()) {
                 cancelSlice.set(true);
-                log.debug("Certifying slate: {} of: {} on: {}", proposals.size(), nextViewId, params().member());
+                log.debug("Certifying slate: {} of: {} on: {}", proposals.size(), nextViewId,
+                          params().member().getId());
                 transitions.certified();
             }
             log.debug("Not certifying slate: {} of: {} on: {}", proposals.entrySet()
@@ -341,7 +341,7 @@ public class ViewAssembly {
                      .forEach(p -> slate.put(p.member(), joinOf(p)));
             if (slate.size() >= params().context().majority()) {
                 cancelSlice.set(true);
-                log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+                log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member().getId());
                 transitions.complete();
             } else {
                 log.error("Failed election, required: {} slate: {} of: {} on: {}", params().context().majority() + 1,

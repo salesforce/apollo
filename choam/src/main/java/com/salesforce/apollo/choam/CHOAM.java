@@ -311,9 +311,8 @@ public class CHOAM {
     public void nextView(Context<Member> context, Digest diadem) {
         ((DelegatedContext<Member>) combine.getContext()).setContext(context);
         var c = current.get();
-        var pv = new PendingView(context, diadem);
         if (c != null) {
-            c.nextView(pv);
+            c.nextView(new PendingView(context, diadem));
         } else {
             log.info("Acquiring new diadem: {} size: {} on: {}", diadem, context.size(), params.member().getId());
             params.context().setContext(context);
@@ -881,20 +880,20 @@ public class CHOAM {
     private void synchronize(SynchronizedState state) {
         transitions.synchronizing();
         CertifiedBlock current1;
-        if (state.lastCheckpoint == null) {
-            log.info("Synchronizing from genesis: {} on: {}", state.genesis.hash, params.member().getId());
-            current1 = state.genesis.certifiedBlock;
+        if (state.lastCheckpoint() == null) {
+            log.info("Synchronizing from genesis: {} on: {}", state.genesis().hash, params.member().getId());
+            current1 = state.genesis().certifiedBlock;
         } else {
-            log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint.hash, params.member().getId());
-            restoreFrom(state.lastCheckpoint, state.checkpoint);
-            current1 = store.getCertifiedBlock(state.lastCheckpoint.height().add(1));
+            log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint().hash, params.member().getId());
+            restoreFrom(state.lastCheckpoint(), state.checkpoint());
+            current1 = store.getCertifiedBlock(state.lastCheckpoint().height().add(1));
         }
         while (current1 != null) {
             synchronizedProcess(current1);
             current1 = store.getCertifiedBlock(height(current1.getBlock()).add(1));
         }
         log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
-                 state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
+                 state.lastCheckpoint() != null ? state.lastCheckpoint().hash : state.genesis().hash, pending.size(),
                  params.member().getId());
         try {
             linear.execute(transitions::regenerated);
@@ -926,7 +925,7 @@ public class CHOAM {
                 }
             } else {
                 if (hcb.height().compareTo(prevHeight) <= 0) {
-                    log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}",
+                    log.trace("Discarding previously committed block: {} height: {} current height: {} on: {}",
                               hcb.hash, hcb.height(), prevHeight, params.member().getId());
                     return;
                 }
@@ -1360,7 +1359,7 @@ public class CHOAM {
                      pendingView.context.size(), params.member().getId());
             params.context().setContext(pendingView.context);
             CHOAM.this.diadem.set(pendingView.diadem);
-            CHOAM.this.pendingView.set(pendingView);
+            CHOAM.this.pendingView.set(null);
             if (assembly != null) {
                 assembly.start();
             }
@@ -1429,7 +1428,7 @@ public class CHOAM {
                      params.member().getId());
             params.context().setContext(pendingView.context);
             CHOAM.this.diadem.set(pendingView.diadem);
-            CHOAM.this.pendingView.set(pendingView);
+            CHOAM.this.pendingView.set(null);
         }
 
         @Override

@@ -493,23 +493,12 @@ public class Bootstrapper {
         }
     }
 
+    public record SynchronizedState(HashedCertifiedBlock genesis, HashedCertifiedBlock lastView,
+                                    HashedCertifiedBlock lastCheckpoint, CheckpointState checkpoint) {
+    }
+
     public static class GenesisNotResolved extends Exception {
         private static final long serialVersionUID = 1L;
 
-    }
-
-    public static class SynchronizedState {
-        public final CheckpointState      checkpoint;
-        public final HashedCertifiedBlock genesis;
-        public final HashedCertifiedBlock lastCheckpoint;
-        public final HashedCertifiedBlock lastView;
-
-        public SynchronizedState(HashedCertifiedBlock genesis, HashedCertifiedBlock lastView,
-                                 HashedCertifiedBlock lastCheckpoint, CheckpointState checkpoint) {
-            this.genesis = genesis;
-            this.lastView = lastView;
-            this.lastCheckpoint = lastCheckpoint;
-            this.checkpoint = checkpoint;
-        }
     }
 }

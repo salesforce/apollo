@@ -111,10 +111,10 @@ public class BootstrapperTest {
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
         SynchronizedState state = syncFuture.get(10, TimeUnit.SECONDS);
         assertNotNull(state);
-        assertNotNull(state.genesis);
-        assertNotNull(state.checkpoint);
-        assertNotNull(state.lastCheckpoint);
-        assertNotNull(state.lastView);
+        assertNotNull(state.genesis());
+        assertNotNull(state.checkpoint());
+        assertNotNull(state.lastCheckpoint());
+        assertNotNull(state.lastView());
     }
 
     private Terminal mockClient(Member to, Store bootstrapStore, TestChain testChain) {
