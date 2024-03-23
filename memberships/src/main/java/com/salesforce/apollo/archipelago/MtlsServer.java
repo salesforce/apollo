@@ -144,6 +144,7 @@ public class MtlsServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
+                                                             .executor(executor)
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),
@@ -174,7 +175,7 @@ public class MtlsServer implements RouterSupplier {
 
     private ManagedChannel connectTo(Member to) {
         return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                              contextSupplier.apply(from), epProvider.getValiator()).getChannel();
+                              contextSupplier.apply(from), epProvider.getValiator(), executor).getChannel();
     }
 
     private X509Certificate getCert() {
