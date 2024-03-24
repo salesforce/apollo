@@ -41,15 +41,15 @@
         <jooq.version>3.17.2</jooq.version>
         <bc.version>1.74</bc.version>
         <logback.version>1.4.12</logback.version>
-        <grpc.version>1.61.0</grpc.version>
-        <protobuf.version>3.25.2</protobuf.version>
+        <grpc.version>1.62.2</grpc.version>
+        <protobuf.version>3.25.3</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <netty.version>4.1.100.Final</netty.version>
         <native.maven.plugin.version>0.9.27</native.maven.plugin.version>
         <junit.version>5.9.1</junit.version>
         <slf4j.version>2.0.3</slf4j.version>
-        <version.java>21</version.java>
-        <graal.vm.version>23.1.0</graal.vm.version>
+        <version.java>22</version.java>
+        <graal.vm.version>23.1.2</graal.vm.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <forks>1</forks>
     </properties>
@@ -696,7 +696,7 @@
                                 </requireMavenVersion>
                                 <dependencyConvergence/>
                                 <requireJavaVersion>
-                                    <version>[21,)</version>
+                                    <version>[22,)</version>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>
@@ -779,7 +779,7 @@
                     <version>3.1.2</version>
                     <configuration>
                         <forkCount>${forks}</forkCount>
-                        <reuseForks>true</reuseForks>
+                        <reuseForks>false</reuseForks>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -812,7 +812,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.5.0</version>
+                    <version>3.5.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>

@@ -8,8 +8,8 @@ package com.salesforce.apollo.ring;
 
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
@@ -111,8 +111,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                   tally.get(), digest, context.getId(), next.ring(), member.getId());
         if (next == null || next.link() == null) {
             log.trace("No successor found for digest: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
-                      context.getId(), iteration(), traversed, context.ring(currentIndex).stream().toList(),
-                      member.getId());
+                      context.getId(), iteration(), traversed, currentIndex, member.getId());
             final boolean allow = handler.handle(tally, Optional.empty(), next);
             allowed.accept(allow);
             if (allow) {

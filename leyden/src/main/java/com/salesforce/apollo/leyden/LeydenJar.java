@@ -3,19 +3,18 @@ package com.salesforce.apollo.leyden;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.leyden.comm.binding.*;
 import com.salesforce.apollo.leyden.comm.reconcile.*;
 import com.salesforce.apollo.leyden.proto.*;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
@@ -162,7 +161,7 @@ public class LeydenJar {
         start(gossip, null);
     }
 
-    public void start(Duration gossip, Predicate<Token> validator) {
+    public void start(Duration gossip, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -270,7 +269,7 @@ public class LeydenJar {
             return true;
         }
 
-        Member predecessor = context.ring(ring).predecessor(member);
+        Member predecessor = context.predecessor(ring, member);
         if (predecessor == null || !from.equals(predecessor.getId())) {
             log.warn("Invalid, not predecessor: {}, ring: {} expected: {} on: {}", from, ring, predecessor.getId(),
                      member.getId());
@@ -282,14 +281,13 @@ public class LeydenJar {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < context.getRingCount(); i++) {
-            Ring<Member> ring = context.ring(i);
-            Member predecessor = ring.predecessor(member);
+            Member predecessor = context.predecessor(i, member);
             if (predecessor == null) {
                 continue;
             }
 
-            Digest begin = ring.hash(predecessor);
-            Digest end = ring.hash(member);
+            Digest begin = context.hashFor(predecessor, i);
+            Digest end = context.hashFor(member, i);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
                 intervals.add(new KeyInterval(end, algorithm.getLast()));

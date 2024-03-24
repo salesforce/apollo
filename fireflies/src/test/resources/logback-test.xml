@@ -22,12 +22,12 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
         <!--        <appender-ref ref="FILE" />-->
     </logger>
 
-    <logger name="com.salesforce.apollo.archipelago.ServerConnectionCache" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.archipelago.ServerConnectionCache" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
         <!--        <appender-ref ref="FILE" />-->
     </logger>
@@ -36,11 +36,11 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.ring.SliceIterator" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ring.SliceIterator" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.protocols" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.protocols" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -52,7 +52,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

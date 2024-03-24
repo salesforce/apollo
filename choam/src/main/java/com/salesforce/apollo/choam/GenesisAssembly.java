@@ -17,6 +17,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
@@ -24,8 +25,6 @@ import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,22 +68,19 @@ public class GenesisAssembly implements Genesis {
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
-            log.error("Invalid cardinality: {} for: {} on: {}", nextAssembly.size(), view.context().getId(),
-                      params().member().getId());
             throw new IllegalStateException("Invalid BFT cardinality: " + nextAssembly.size());
         }
         this.genesisMember = genesisMember;
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        Context<Member> reContext = new ContextImpl<>(reconPrefixed, view.context().memberCount(),
-                                                      view.context().getProbabilityByzantine(),
-                                                      view.context().getBias());
-        reContext.activate(view.context().activeMembers());
+        var reContext = new StaticContext<>(reconPrefixed, view.context().getProbabilityByzantine(), 3,
+                                            view.context().getAllMembers(), view.context().getEpsilon(),
+                                            view.context().size());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();
-        fsm.setName("Genesis" + params().member().getId());
+        fsm.setName("Genesis:" + view.context().getId() + ":" + params().member().getId());
 
         Config.Builder config = params().producer().ethereal().clone();
 
@@ -134,6 +130,7 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void gather() {
+        log.info("Gathering next assembly on: " + params().member().getId());
         var certification = view.generateValidation(genesisMember).getWitness();
         var join = Join.newBuilder()
                        .setMember(genesisMember)
@@ -152,13 +149,19 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void gather(List<ByteString> preblock, boolean last) {
-        preblock.stream().map(bs -> {
-            try {
-                return Join.parseFrom(bs);
-            } catch (InvalidProtocolBufferException e) {
-                return null;
-            }
-        }).filter(Objects::nonNull).filter(j -> !j.equals(Join.getDefaultInstance())).forEach(this::join);
+        preblock.stream()
+                .map(bs -> {
+                    try {
+                        return Join.parseFrom(bs);
+                    } catch (InvalidProtocolBufferException e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .filter(j -> !j.equals(Join.getDefaultInstance()))
+                .peek(
+                j -> log.info("Gathering: {} on: {}", Digest.from(j.getMember().getId()), params().member().getId()))
+                .forEach(this::join);
     }
 
     @Override
@@ -171,6 +174,8 @@ public class GenesisAssembly implements Genesis {
                  .map(p -> view.generateValidation(p.join.getMember()))
                  .forEach(validations::addValidations);
         ds.setValue(validations.build().toByteString());
+        log.info("Nominations of: {} validations: {} on: {}", params().context().getId(),
+                 validations.getValidationsCount(), params().member().getId());
     }
 
     @Override
@@ -198,6 +203,7 @@ public class GenesisAssembly implements Genesis {
                  .map(Map.Entry::getValue)
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
+        controller.completeIt();
         log.debug("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
                   params().member().getId());
     }

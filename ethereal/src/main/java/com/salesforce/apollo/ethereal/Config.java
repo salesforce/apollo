@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Signer.MockSigner;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
-import com.salesforce.apollo.membership.Context;
 import org.joou.ULong;
 
 import java.util.Objects;
@@ -42,10 +42,10 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
         private int              bias            = 3;
         private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int              epochLength     = 30;
-        private double           fpr             = 0.0125;
+        private double           fpr             = 0.000125;
         private String           label           = "";
         private short            nProc;
-        private int              numberOfEpochs  = 3;
+        private int              numberOfEpochs  = 3;  // < 0 for unbounded
         private double           pByz            = -1;
         private short            pid;
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT, ULong.MIN);

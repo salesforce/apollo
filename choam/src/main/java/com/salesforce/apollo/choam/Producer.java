@@ -55,6 +55,7 @@ public class Producer {
     private final        Map<Digest, PendingBlock>         pending            = new ConcurrentHashMap<>();
     private final        BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
     private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
+    private final        AtomicBoolean                     reconfigured       = new AtomicBoolean();
     private final        AtomicBoolean                     started            = new AtomicBoolean(false);
     private final        Transitions                       transitions;
     private final        ViewContext                       view;
@@ -243,7 +244,7 @@ public class Producer {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
-        var diadem = view.diadem();
+        var diadem = view.pendingView().diadem();
         log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
@@ -298,6 +299,9 @@ public class Producer {
 
         @Override
         public void assembled() {
+            if (!reconfigured.compareAndSet(false, true)) {
+                return;
+            }
             final var slate = assembly.get().getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get(),
@@ -307,6 +311,7 @@ public class Producer {
             pending.put(reconfiguration.hash, p);
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
+            controller.completeIt();
             log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
                      reconfiguration.height(), params().member().getId());
         }
@@ -373,14 +378,14 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.diadem(),
+            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.pendingView().diadem(),
                       params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
                     log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
-                              view.diadem(), getSlate().size(), params().member().getId());
+                              view.pendingView().diadem(), getSlate().size(), params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

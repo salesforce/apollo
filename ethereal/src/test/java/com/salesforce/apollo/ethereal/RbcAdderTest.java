@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -45,7 +45,9 @@ public class RbcAdderTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         units = DagTest.collectUnits(d);
-        var context = Context.newBuilder().setCardinality(10).build();
+        var b = DynamicContext.newBuilder();
+        b.setCardinality(10);
+        var context = b.build();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

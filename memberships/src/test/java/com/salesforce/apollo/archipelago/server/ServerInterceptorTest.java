@@ -43,7 +43,7 @@ public class ServerInterceptorTest {
     public void callNextStageWithContextKeyOnValidHeader() {
         Metadata metadata = new Metadata();
         metadata.put(Constants.AuthorizationMetadataKey, AUTH_HEADER_PREFIX + token.serialise());
-        final AtomicReference<Token> actualToken = new AtomicReference<>();
+        final AtomicReference<FernetServerInterceptor.HashedToken> actualToken = new AtomicReference<>();
         when(next.startCall(any(), any())).thenAnswer(i -> {
             actualToken.set(FernetServerInterceptor.AccessTokenContextKey.get());
             return null;
@@ -51,7 +51,7 @@ public class ServerInterceptorTest {
         target.interceptCall(serverCall, metadata, next);
         verify(serverCall, never()).close(any(), any());
         verify(next).startCall(any(), any());
-        assertEquals(token.serialise(), actualToken.get().serialise());
+        assertEquals(token.serialise(), actualToken.get().token().serialise());
     }
 
     @Test
@@ -68,6 +68,7 @@ public class ServerInterceptorTest {
         Metadata metadata = new Metadata();
         metadata.put(Constants.AuthorizationMetadataKey, "Bearer Invalid Token");
         target.interceptCall(serverCall, metadata, next);
+        System.out.println("\n\n*** Exception above expected ***\n");
         verify(serverCall).close(any(), any());
         verify(next, never()).startCall(any(), any());
     }

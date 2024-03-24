@@ -2,6 +2,8 @@ package com.salesforce.apollo.archipelago.server;
 
 import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Constants;
+import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import io.grpc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,10 +12,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public class FernetServerInterceptor implements ServerInterceptor {
-    public static final  String             AUTH_HEADER_PREFIX    = "Bearer ";
-    public static final  Context.Key<Token> AccessTokenContextKey = Context.key("AccessToken");
-    private static final Logger             LOGGER                = LoggerFactory.getLogger(
+    public static final  String                   AUTH_HEADER_PREFIX    = "Bearer ";
+    public static final  Context.Key<HashedToken> AccessTokenContextKey = Context.key("AccessToken");
+    private static final Logger                   LOGGER                = LoggerFactory.getLogger(
     FernetServerInterceptor.class);
+    private final        DigestAlgorithm          algorithm;
+
+    public FernetServerInterceptor() {
+        this(DigestAlgorithm.DEFAULT);
+    }
+
+    public FernetServerInterceptor(DigestAlgorithm algorithm) {
+        this.algorithm = algorithm;
+    }
 
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call, Metadata headers,
@@ -54,14 +65,13 @@ public class FernetServerInterceptor implements ServerInterceptor {
         return delayedListener;
     }
 
-    private CompletionStage<Token> deserialize(String serialized) {
+    private CompletionStage<HashedToken> deserialize(String serialized) {
         if (serialized.equals("Invalid Token")) {
-            CompletableFuture<Token> res = new CompletableFuture<>();
-            res.completeExceptionally(new RuntimeException("invalid token"));
-            return res;
+            return CompletableFuture.failedFuture(new RuntimeException("invalid token"));
         }
         try {
-            return CompletableFuture.completedFuture(Token.fromString(serialized));
+            return CompletableFuture.completedFuture(
+            new HashedToken(algorithm.digest(serialized), Token.fromString(serialized)));
         } catch (Throwable t) {
             return CompletableFuture.failedFuture(t);
         }
@@ -73,5 +83,26 @@ public class FernetServerInterceptor implements ServerInterceptor {
         call.close(Status.UNAUTHENTICATED.withDescription(msg).withCause(e), new Metadata());
         return new ServerCall.Listener<ReqT>() {
         };
+    }
+
+    /**
+     * This record provides the hash of the Token.serialized() string using the interceptor's DigestAlgorithm
+     *
+     * @param hash  - the hash of the serialized token String
+     * @param token - the deserialized Token
+     */
+    public record HashedToken(Digest hash, Token token) {
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof HashedToken ht) {
+                return hash.equals(ht.hash);
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return hash.hashCode();
+        }
     }
 }

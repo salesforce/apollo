@@ -6,13 +6,10 @@
  */
 package com.salesforce.apollo.state;
 
-import java.util.Collections;
-
 import org.junit.jupiter.api.Test;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
@@ -21,7 +18,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         pre();
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
-        choam.context().activate(Collections.singletonList(testSubject));
         choam.start();
         routers.get(testSubject.getId()).start();
         post();

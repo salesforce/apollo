@@ -6,10 +6,10 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -33,22 +33,23 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
 
 /**
- * Context-based GRPC routing
+ * DynamicContext-based GRPC routing
  *
  * @author hal.hildebrand
  */
 public class RouterImpl implements Router {
 
-    private final static Logger                          log      = LoggerFactory.getLogger(RouterImpl.class);
-    private final        ServerConnectionCache           cache;
-    private final        ClientIdentity                  clientIdentityProvider;
-    private final        Consumer<Digest>                contextRegistration;
-    private final        Member                          from;
-    private final        MutableHandlerRegistry          registry = new MutableHandlerRegistry();
-    private final        Server                          server;
-    private final        Map<String, RoutableService<?>> services = new ConcurrentHashMap<>();
-    private final        AtomicBoolean                   started  = new AtomicBoolean();
-    private final        Predicate<Token>                validator;
+    private final static Logger                                         log      = LoggerFactory.getLogger(
+    RouterImpl.class);
+    private final        ServerConnectionCache                          cache;
+    private final        ClientIdentity                                 clientIdentityProvider;
+    private final        Consumer<Digest>                               contextRegistration;
+    private final        Member                                         from;
+    private final        MutableHandlerRegistry                         registry = new MutableHandlerRegistry();
+    private final        Server                                         server;
+    private final        Map<String, RoutableService<?>>                services = new ConcurrentHashMap<>();
+    private final        AtomicBoolean                                  started  = new AtomicBoolean();
+    private final        Predicate<FernetServerInterceptor.HashedToken> validator;
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider) {
@@ -63,7 +64,7 @@ public class RouterImpl implements Router {
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration,
-                      Predicate<Token> validator) {
+                      Predicate<FernetServerInterceptor.HashedToken> validator) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.clone().setMember(from.getId()).build();
         this.clientIdentityProvider = clientIdentityProvider;
@@ -146,7 +147,7 @@ public class RouterImpl implements Router {
                                                                                        Service service,
                                                                                        String routingLabel,
                                                                                        Function<RoutableService<Service>, BindableService> factory,
-                                                                                       Predicate<Token> validator) {
+                                                                                       Predicate<FernetServerInterceptor.HashedToken> validator) {
         return new CommonCommunications<>(context, member,
                                           getRoutableService(member, context, service, routingLabel, factory,
                                                              validator));
@@ -159,7 +160,7 @@ public class RouterImpl implements Router {
                                                                                        Function<RoutableService<Service>, BindableService> factory,
                                                                                        CreateClientCommunications<Client> createFunction,
                                                                                        Client localLoopback,
-                                                                                       Predicate<Token> validator) {
+                                                                                       Predicate<FernetServerInterceptor.HashedToken> validator) {
         return new CommonCommunications<>(context, member,
                                           getRoutableService(member, context, service, routingLabel, factory,
                                                              validator), createFunction, localLoopback);
@@ -202,7 +203,7 @@ public class RouterImpl implements Router {
     private <Service> RoutableService<Service> getRoutableService(Member member, Digest context, Service service,
                                                                   String routingLabel,
                                                                   Function<RoutableService<Service>, BindableService> factory,
-                                                                  Predicate<Token> validator) {
+                                                                  Predicate<FernetServerInterceptor.HashedToken> validator) {
         @SuppressWarnings("unchecked")
         RoutableService<Service> routing = (RoutableService<Service>) services.computeIfAbsent(routingLabel, c -> {
             var route = new RoutableService<Service>();
@@ -265,7 +266,8 @@ public class RouterImpl implements Router {
             routing.unbind(context);
         }
 
-        public void register(Digest context, Service service, Predicate<Token> validator) {
+        public void register(Digest context, Service service,
+                             Predicate<FernetServerInterceptor.HashedToken> validator) {
             routing.bind(context, service, validator);
         }
     }

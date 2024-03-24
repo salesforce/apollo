@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.protocols.LimitsRegistry;
 import io.grpc.ServerInterceptor;
 
@@ -40,6 +40,7 @@ public interface RouterSupplier {
     }
 
     Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
-                  LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors, Predicate<Token> validator);
+                  LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
+                  Predicate<FernetServerInterceptor.HashedToken> validator);
 
 }

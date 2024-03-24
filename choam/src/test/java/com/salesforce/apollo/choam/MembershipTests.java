@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -14,9 +13,10 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -131,9 +131,9 @@ public class MembershipTests {
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
+                               .setGenerateGenesis(true)
                                .setBootstrap(
                                BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(20)).build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
@@ -144,6 +144,7 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
+                               .setGenerateGenesis(true)
                                .setCheckpointBlockDelta(checkpointBlockSize);
         params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
@@ -156,8 +157,8 @@ public class MembershipTests {
                            .mapToObj(i -> stereotomy.newIdentifier())
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
                            .toList();
+        var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {

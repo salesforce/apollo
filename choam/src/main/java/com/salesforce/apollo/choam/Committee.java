@@ -9,13 +9,13 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 
@@ -43,10 +43,9 @@ public interface Committee {
      * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
-                                                    baseContext.getProbabilityByzantine(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
-        successors.forEach(e -> newView.activate(e));
+        var newView = new StaticContext<>(hash, baseContext.getProbabilityByzantine(), 3, successors,
+                                          baseContext.getEpsilon(), successors.size());
         return newView;
     }
 
@@ -73,6 +72,8 @@ public interface Committee {
     ViewMember join(Digest nextView, Digest from);
 
     Logger log();
+
+    void nextView(CHOAM.PendingView pendingView);
 
     Parameters params();
 

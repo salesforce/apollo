@@ -6,19 +6,19 @@
  */
 package com.salesforce.apollo.state;
 
-import com.salesforce.apollo.choam.proto.*;
-import com.salesforce.apollo.choam.proto.SubmitResult.Result;
-import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.state.proto.Txn;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -81,9 +81,10 @@ public class Emulator {
         identifier = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
                                         entropy).newIdentifier();
         params = Parameters.newBuilder()
+                           .setGenerateGenesis(true)
                            .build(RuntimeParameters.newBuilder()
                                                    .setMember(new ControlledIdentifierMember(identifier))
-                                                   .setContext(new ContextImpl<>(base, 5, 0.01, 3))
+                                                   .setContext(new DynamicContextImpl<>(base, 5, 0.01, 3))
                                                    .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {

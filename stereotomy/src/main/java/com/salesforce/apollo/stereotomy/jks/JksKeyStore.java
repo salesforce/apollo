@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.jks;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesforce.apollo.cryptography.cert.BcX500NameDnImpl;
 import com.salesforce.apollo.cryptography.cert.CertExtension;
 import com.salesforce.apollo.cryptography.cert.Certificates;
@@ -18,6 +21,7 @@ import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -33,14 +37,22 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
  * @author hal.hildebrand
  */
 public class JksKeyStore implements StereotomyKeyStore {
-    private static final Logger           log  = LoggerFactory.getLogger(JksKeyStore.class);
-    protected final      KeyStore         keyStore;
-    protected final      Supplier<char[]> passwordProvider;
-    private final        Lock             lock = new ReentrantLock();
+    private static final Logger log = LoggerFactory.getLogger(JksKeyStore.class);
+
+    protected final KeyStore               keyStore;
+    protected final Supplier<char[]>       passwordProvider;
+    private final   Lock                   lock = new ReentrantLock();
+    private final   Cache<String, KeyPair> cached;
 
     public JksKeyStore(KeyStore keyStore, Supplier<char[]> passwordProvider) {
         this.keyStore = keyStore;
         this.passwordProvider = passwordProvider;
+        cached = Caffeine.newBuilder()
+                         .maximumSize(4)
+                         .expireAfterWrite(Duration.ofMinutes(10))
+                         .removalListener(
+                         (String alias, KeyPair ks, RemovalCause cause) -> log.trace("KeyPair was removed ({})", cause))
+                         .build();
     }
 
     public static String coordinateOrdering(KeyCoordinates coords) {
@@ -134,15 +146,15 @@ public class JksKeyStore implements StereotomyKeyStore {
         }
     }
 
-    private Optional<KeyPair> get(String alias, KeyCoordinates keyCoordinates) {
+    private KeyPair fetch(String alias, KeyCoordinates keyCoordinates) {
         try {
             if (!keyStore.containsAlias(alias)) {
-                return Optional.empty();
+                return null;
             }
         } catch (KeyStoreException e) {
             log.error("Unable to query keystore for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
                       e.getMessage());
-            return Optional.empty();
+            return null;
         }
         Certificate cert;
         try {
@@ -150,7 +162,7 @@ public class JksKeyStore implements StereotomyKeyStore {
         } catch (KeyStoreException e) {
             log.error("Unable to retrieve certificate for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
                       e.getMessage());
-            return Optional.empty();
+            return null;
         }
         var publicKey = cert.getPublicKey();
         PrivateKey privateKey;
@@ -159,8 +171,12 @@ public class JksKeyStore implements StereotomyKeyStore {
         } catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException e) {
             log.error("Unable to retrieve certificate for: {} : {}", keyCoordinates != null ? keyCoordinates : alias,
                       e.getMessage());
-            return Optional.empty();
+            return null;
         }
-        return Optional.of(new KeyPair(publicKey, privateKey));
+        return new KeyPair(publicKey, privateKey);
+    }
+
+    private Optional<KeyPair> get(String alias, KeyCoordinates keyCoordinates) {
+        return Optional.ofNullable(cached.get(alias, key -> fetch(key, keyCoordinates)));
     }
 }

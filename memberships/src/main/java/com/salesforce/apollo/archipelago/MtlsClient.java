@@ -18,6 +18,7 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.ClientAuth;
 
 import java.net.SocketAddress;
+import java.util.concurrent.Executor;
 
 /**
  * @author hal.hildebrand
@@ -27,10 +28,11 @@ public class MtlsClient {
     private final ManagedChannel channel;
 
     public MtlsClient(SocketAddress address, ClientAuth clientAuth, String alias, ClientContextSupplier supplier,
-                      CertificateValidator validator) {
+                      CertificateValidator validator, Executor executor) {
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
+                                     .executor(executor)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, MtlsServer.TL_SV1_3))
                                      .intercept(new ConcurrencyLimitClientInterceptor(limiter,
                                                                                       () -> Status.RESOURCE_EXHAUSTED.withDescription(

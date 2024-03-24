@@ -20,11 +20,12 @@ import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -54,7 +55,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
                          ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
-                         ExponentialBackoffPolicy.Builder drainPolicy) {
+                         ExponentialBackoffPolicy.Builder drainPolicy, boolean generateGenesis) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -68,7 +69,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.communications;
     }
 
-    public Context<Member> context() {
+    public DelegatedContext<Member> context() {
         return runtime.context;
     }
 
@@ -283,7 +284,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         }
     }
 
-    public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
+    public record RuntimeParameters(DelegatedContext<Member> context, Router communications, SigningMember member,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
@@ -325,8 +326,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             };
 
             public RuntimeParameters build() {
-                return new RuntimeParameters(context, communications, member, genesisData, processor, restorer,
-                                             checkpointer, metrics, kerl, foundation);
+                return new RuntimeParameters(new DelegatedContext<Member>(context), communications, member, genesisData,
+                                             processor, restorer, checkpointer, metrics, kerl, foundation);
             }
 
             @Override
@@ -678,12 +679,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
         private int                              crowns                = 2;
+        private boolean                          generateGenesis       = false;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, crowns, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, regenerationCycles, bootstrap, producer, mvBuilder,
-                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy);
+                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy, generateGenesis);
         }
 
         @Override
@@ -855,6 +857,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
-    }
 
+        public boolean isGenerateGenesis() {
+            return generateGenesis;
+        }
+
+        public Builder setGenerateGenesis(boolean generateGenesis) {
+            this.generateGenesis = generateGenesis;
+            return this;
+        }
+    }
 }

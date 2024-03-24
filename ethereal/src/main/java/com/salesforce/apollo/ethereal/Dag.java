@@ -8,10 +8,10 @@ package com.salesforce.apollo.ethereal;
 
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.PreUnit.DecodedId;
 import com.salesforce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.membership.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +41,13 @@ public interface Dag {
     }
 
     static boolean validate(int nProc) {
-        var threshold = threshold(nProc);
-        return (threshold * 3 + 1) == nProc;
+        if (nProc < 4) {
+            return false;
+        }
+        var threshold = Math.max(1, threshold(nProc));
+        var calc = threshold * 3 + 1;
+        var result = calc == nProc || calc == nProc - 1;
+        return result;
     }
 
     void addCheck(BiFunction<Unit, Dag, Correctness> checker);

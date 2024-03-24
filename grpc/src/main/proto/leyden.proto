@@ -7,7 +7,6 @@ option objc_class_prefix = "Ley";
 
 import "google/protobuf/empty.proto";
 
-import "stereotomy.proto";
 import "crypto.proto";
 
 package leyden;

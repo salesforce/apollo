@@ -13,14 +13,14 @@ import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.proto.Reassemble;
 import com.salesforce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -53,16 +53,16 @@ import static org.mockito.Mockito.when;
 
 public class ViewAssemblyTest {
 
-    private static final short                           CARDINALITY    = 4;
-    private final        Map<Member, ViewAssembly>       assemblies     = new HashMap<>();
-    private final        Map<SigningMember, Router>      communications = new HashMap<>();
-    private final        List<Ethereal>                  controllers    = new ArrayList<>();
-    private final        List<ChRbcGossip>               gossipers      = new ArrayList<>();
-    private              CountDownLatch                  complete;
-    private              Context<Member>                 context;
-    private              Map<SigningMember, VDataSource> dataSources;
-    private              List<SigningMember>             members;
-    private              Digest                          nextViewId;
+    private static final short                     CARDINALITY    = 4;
+    private final        Map<Member, ViewAssembly> assemblies     = new HashMap<>();
+    private final        Map<Member, Router>       communications = new HashMap<>();
+    private final        List<Ethereal>            controllers    = new ArrayList<>();
+    private final        List<ChRbcGossip>         gossipers      = new ArrayList<>();
+    private              CountDownLatch            complete;
+    private              Context<Member>           context;
+    private              Map<Member, VDataSource>  dataSources;
+    private              List<Member>              members;
+    private              Digest                    nextViewId;
 
     @AfterEach
     public void after() {
@@ -80,8 +80,8 @@ public class ViewAssemblyTest {
 
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> stereotomy.newIdentifier())
-                           .map(cpk -> new ControlledIdentifierMember(cpk))
-                           .map(e -> (SigningMember) e)
+                           .map(ControlledIdentifierMember::new)
+                           .map(e -> (Member) e)
                            .toList();
 
         final var prefix = UUID.randomUUID().toString();
@@ -89,14 +89,13 @@ public class ViewAssemblyTest {
             var com = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
             communications.put(m, com);
         });
-        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), members.size(), 0.1, 3);
-        for (Member m : members) {
-            context.activate(m);
-        }
+        context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(2), 0.1, members, 3);
         nextViewId = context.getId().prefix(0x666);
 
-        dataSources = members.stream().collect(Collectors.toMap(m -> m, m -> new VDataSource()));
-        complete = new CountDownLatch(context.activeCount());
+        dataSources = members.stream()
+                             .map(m -> (SigningMember) m)
+                             .collect(Collectors.toMap(m -> m, m -> new VDataSource()));
+        complete = new CountDownLatch(context.totalCount());
         buildAssemblies();
         initEthereals();
     }
@@ -115,6 +114,7 @@ public class ViewAssemblyTest {
 
     private void buildAssemblies() {
         Parameters.Builder params = Parameters.newBuilder()
+                                              .setGenerateGenesis(true)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
@@ -151,9 +151,9 @@ public class ViewAssemblyTest {
                                                                                             null, r);
                                                                                         },
                                                                                         TerminalClient.getCreate(null),
-                                                                                        Terminal.getLocalLoopback(m,
-                                                                                                                  servers.get(
-                                                                                                                  m)))));
+                                                                                        Terminal.getLocalLoopback(
+                                                                                        (SigningMember) m,
+                                                                                        servers.get(m)))));
 
         Map<Member, Verifier> validators = consensusPairs.entrySet()
                                                          .stream()
@@ -161,11 +161,12 @@ public class ViewAssemblyTest {
                                                                                    e -> new Verifier.DefaultVerifier(
                                                                                    e.getValue().getPublic())));
         Map<Member, ViewContext> views = new HashMap<>();
-        context.active().forEach(m -> {
+        context.allMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
+                                               () -> new CHOAM.PendingView(context, DigestAlgorithm.DEFAULT.getLast()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
                                                validators, null);
             views.put(m, view);
@@ -191,11 +192,12 @@ public class ViewAssemblyTest {
             BiConsumer<List<ByteString>, Boolean> blocker = (pb, last) -> {
                 assembly.inbound().accept(process(pb, last));
             };
-            var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
+            var controller = new Ethereal(builder.setSigner((Signer) members.get(i)).setPid(pid).build(), 1024 * 1024,
                                           dataSources.get(member), blocker, ep -> {
             }, Integer.toString(i));
 
-            var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member), null);
+            var gossiper = new ChRbcGossip(context, (SigningMember) member, controller.processor(),
+                                           communications.get(member), null);
             gossipers.add(gossiper);
             controllers.add(controller);
         }

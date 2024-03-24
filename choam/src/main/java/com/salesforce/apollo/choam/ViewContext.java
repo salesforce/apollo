@@ -10,8 +10,8 @@ import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.*;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
@@ -27,22 +28,24 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer         blockProducer;
-    private final        Context<Member>       context;
-    private final        Parameters            params;
-    private final        Map<Digest, Short>    roster;
-    private final        Signer                signer;
-    private final        Map<Member, Verifier> validators;
+    private final static Logger                      log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer               blockProducer;
+    private final        Context<Member>             context;
+    private final        Parameters                  params;
+    private final        Map<Digest, Short>          roster;
+    private final        Signer                      signer;
+    private final        Map<Member, Verifier>       validators;
+    private final        Supplier<CHOAM.PendingView> pendingView;
 
-    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
-                       BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<CHOAM.PendingView> pendingView,
+                       Signer signer, Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
+        this.pendingView = pendingView;
 
         var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
         short pid = 0;
@@ -72,10 +75,6 @@ public class ViewContext {
 
     public Context<Member> context() {
         return context;
-    }
-
-    public Digest diadem() {
-        return blockProducer == null ? DigestAlgorithm.DEFAULT.getLast() : blockProducer.diadem();
     }
 
     public Validate generateValidation(HashedBlock block) {
@@ -129,6 +128,10 @@ public class ViewContext {
         return params;
     }
 
+    public CHOAM.PendingView pendingView() {
+        return pendingView.get();
+    }
+
     public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {
         return blockProducer.produce(l, hash, assemble, checkpoint);
     }
@@ -178,7 +181,7 @@ public class ViewContext {
         var m = context.getMember(mid);
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: {} on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
@@ -186,7 +189,7 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: {} on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;

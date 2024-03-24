@@ -9,11 +9,11 @@ package com.salesforce.apollo.model.demesnes;
 import com.salesforce.apollo.archipelago.Enclave;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.demesne.proto.SubContext;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.membership.stereotomy.IdentifierMember;
@@ -71,20 +71,20 @@ public class DemesneImpl implements Demesne {
     private static final EventLoopGroup           eventLoopGroup          = IMPL.getEventLoopGroup();
     private static final Logger                   log                     = LoggerFactory.getLogger(DemesneImpl.class);
 
-    private final    Executor           executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final    KERL.AppendKERL    kerl;
-    private final    OuterContextClient outer;
-    private final    DemesneParameters  parameters;
-    private final    AtomicBoolean      started  = new AtomicBoolean();
-    private final    Thoth              thoth;
-    private final    Context<Member>    context;
-    private volatile SubDomain          domain;
-    private volatile Enclave            enclave;
+    private final    Executor               executor = Executors.newVirtualThreadPerTaskExecutor();
+    private final    KERL.AppendKERL        kerl;
+    private final    OuterContextClient     outer;
+    private final    DemesneParameters      parameters;
+    private final    AtomicBoolean          started  = new AtomicBoolean();
+    private final    Thoth                  thoth;
+    private final    DynamicContext<Member> context;
+    private volatile SubDomain              domain;
+    private volatile Enclave                enclave;
 
     public DemesneImpl(DemesneParameters parameters) throws GeneralSecurityException, IOException {
         assert parameters.hasContext() : "Must define context id";
         this.parameters = parameters;
-        context = Context.newBuilder().setId(Digest.from(parameters.getContext())).build();
+        context = DynamicContext.newBuilder().setId(Digest.from(parameters.getContext())).build();
         final var commDirectory = commDirectory();
         var outerContextAddress = commDirectory.resolve(parameters.getParent()).toFile();
 
@@ -170,11 +170,10 @@ public class DemesneImpl implements Demesne {
     @Override
     public void viewChange(Digest viewId, List<EventCoordinates> joining, List<Digest> leaving) {
         final var current = domain;
-        joining.forEach(coords -> current.getContext()
-                                         .activate(new IdentifierMember(
-                                         coords.getIdentifier().getDigest(kerl.getDigestAlgorithm()),
-                                         new KerlVerifier<>(coords.getIdentifier(), kerl))));
-        leaving.forEach(id -> current.getContext().remove(id));
+        joining.forEach(coords -> ((DynamicContext) current.getContext()).activate(
+        new IdentifierMember(coords.getIdentifier().getDigest(kerl.getDigestAlgorithm()),
+                             new KerlVerifier<>(coords.getIdentifier(), kerl))));
+        leaving.forEach(id -> ((DynamicContext) current.getContext()).remove(id));
     }
 
     private Path commDirectory() {
@@ -225,7 +224,7 @@ public class DemesneImpl implements Demesne {
     }
 
     private RuntimeParameters.Builder runtimeParameters(DemesneParameters parameters, ControlledIdentifierMember member,
-                                                        Context<Member> context) {
+                                                        DynamicContext<Member> context) {
         final var current = enclave;
         return RuntimeParameters.newBuilder()
                                 .setCommunications(current.router())
@@ -235,7 +234,7 @@ public class DemesneImpl implements Demesne {
     }
 
     private SubDomain subdomainFrom(DemesneParameters parameters, ControlledIdentifierMember member,
-                                    Context<Member> context) {
+                                    DynamicContext<Member> context) {
         final var gossipInterval = parameters.getGossipInterval();
         final var interval = gossipInterval.getSeconds() != 0 || gossipInterval.getNanos() != 0 ? Duration.ofSeconds(
         gossipInterval.getSeconds(), gossipInterval.getNanos()) : DEFAULT_GOSSIP_INTERVAL;

@@ -10,17 +10,17 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomFilter.DigestBloomFilter;
 import com.salesforce.apollo.bloomFilters.BloomWindow;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.proto.Biff;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
@@ -137,6 +137,10 @@ public class ReliableBroadcaster {
         buffer.clear();
     }
 
+    public Context<Member> getContext() {
+        return context;
+    }
+
     public Member getMember() {
         return member;
     }
@@ -185,7 +189,7 @@ public class ReliableBroadcaster {
         start(duration, null);
     }
 
-    public void start(Duration duration, Predicate<Token> validator) {
+    public void start(Duration duration, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -409,7 +413,7 @@ public class ReliableBroadcaster {
     public class Service implements Router.ServiceRouting {
 
         public Reconcile gossip(MessageBff request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(request.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.trace("Invalid inbound messages gossip on {}:{} from: {} on ring: {} - not predecessor: {}",
                           context.getId(), member.getId(), from, request.getRing(),
@@ -423,7 +427,7 @@ public class ReliableBroadcaster {
         }
 
         public void update(ReconcileContext reconcile, Digest from) {
-            Member predecessor = context.ring(reconcile.getRing()).predecessor(member);
+            Member predecessor = context.predecessor(reconcile.getRing(), member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
                 log.info("Invalid inbound messages reconcile on {}:{} from: {} on ring: {} - not predecessor: {}",
                          context.getId(), member.getId(), from, reconcile.getRing(),

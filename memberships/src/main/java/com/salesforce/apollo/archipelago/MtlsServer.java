@@ -9,9 +9,9 @@ package com.salesforce.apollo.archipelago;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.macasaet.fernet.Token;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.cryptography.Digest;
@@ -138,12 +138,13 @@ public class MtlsServer implements RouterSupplier {
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
-                             Predicate<Token> validator) {
+                             Predicate<FernetServerInterceptor.HashedToken> validator) {
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
+                                                             .executor(executor)
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),
@@ -174,7 +175,7 @@ public class MtlsServer implements RouterSupplier {
 
     private ManagedChannel connectTo(Member to) {
         return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                              contextSupplier.apply(from), epProvider.getValiator()).getChannel();
+                              contextSupplier.apply(from), epProvider.getValiator(), executor).getChannel();
     }
 
     private X509Certificate getCert() {

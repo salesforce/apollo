@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.protocols.ClientIdentity;
@@ -36,7 +36,7 @@ public interface Router {
     <Service, Client extends Link> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                 Service service, String routingLabel,
                                                                                 Function<RoutableService<Service>, BindableService> factory,
-                                                                                Predicate<Token> validator);
+                                                                                Predicate<FernetServerInterceptor.HashedToken> validator);
 
     <Client extends Link, Service> CommonCommunications<Client, Service> create(Member member, Digest context,
                                                                                 Service service, String routingLabel,
@@ -49,7 +49,7 @@ public interface Router {
                                                                                 Function<RoutableService<Service>, BindableService> factory,
                                                                                 CreateClientCommunications<Client> createFunction,
                                                                                 Client localLoopback,
-                                                                                Predicate<Token> validator);
+                                                                                Predicate<FernetServerInterceptor.HashedToken> validator);
 
     ClientIdentity getClientIdentityProvider();
 

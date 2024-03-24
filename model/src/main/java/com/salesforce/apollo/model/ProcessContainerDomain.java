@@ -9,7 +9,6 @@ import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.demesne.proto.DemesneParameters;
 import com.salesforce.apollo.demesne.proto.SubContext;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.demesnes.Demesne;
@@ -141,16 +140,6 @@ public class ProcessContainerDomain extends ProcessDomain {
             return (SelfAddressingIdentifier) incp.getIdentifier();
         }
         return computed.getId();
-    }
-
-    @Override
-    protected View.ViewLifecycleListener listener() {
-        var delegate = super.listener();
-        return (context, diadem, id, join, leaving) -> {
-            delegate.viewChange(context, diadem, id, join, leaving);
-            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
-                     join.size(), leaving.size(), params.member().getId());
-        };
     }
 
     @Override
