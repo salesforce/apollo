@@ -173,7 +173,7 @@ public class Utils {
     public static int allocatePort(InetAddress host) {
         InetAddress address = host == null ? InetAddress.getLoopbackAddress() : host;
 
-        try (ServerSocket socket = new ServerSocket(0, 0, address);) {
+        try (ServerSocket socket = new ServerSocket(0, 0, address)) {
             socket.setReuseAddress(true);
             var localPort = socket.getLocalPort();
             socket.close();
@@ -189,7 +189,7 @@ public class Utils {
                 return c.call();
             } catch (Exception e) {
                 log.error("Error in call", e);
-                throw new IllegalStateException(e);
+                return null;
             }
         };
     }
@@ -200,7 +200,6 @@ public class Utils {
                 c.accept(t);
             } catch (Exception e) {
                 log.error("Error in call", e);
-                throw new IllegalStateException(e);
             }
         };
     }
@@ -211,7 +210,6 @@ public class Utils {
                 r.run();
             } catch (Throwable e) {
                 log.error("Error in execution", e);
-                throw new IllegalStateException(e);
             }
         };
     }

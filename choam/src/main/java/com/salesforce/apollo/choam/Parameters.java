@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -82,7 +83,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     }
 
     public int majority() {
-        return runtime.context.majority();
+        return runtime.context.majority(true);
     }
 
     public SigningMember member() {
@@ -91,6 +92,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public ChoamMetrics metrics() {
         return runtime.metrics;
+    }
+
+    public CompletableFuture<Void> onFailure() {
+        return runtime().onFailure();
     }
 
     public TransactionExecutor processor() {
@@ -288,7 +293,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
-                                    FoundationSeal foundation) {
+                                    FoundationSeal foundation, CompletableFuture<Void> onFailure) {
         public static Builder newBuilder() {
             return new Builder();
         }
@@ -325,9 +330,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
             };
 
+            private CompletableFuture<Void> onFailure = new CompletableFuture<>();
+
             public RuntimeParameters build() {
                 return new RuntimeParameters(new DelegatedContext<Member>(context), communications, member, genesisData,
-                                             processor, restorer, checkpointer, metrics, kerl, foundation);
+                                             processor, restorer, checkpointer, metrics, kerl, foundation, onFailure);
             }
 
             @Override
@@ -411,6 +418,15 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
             public Builder setMetrics(ChoamMetrics metrics) {
                 this.metrics = metrics;
+                return this;
+            }
+
+            public CompletableFuture<Void> getOnFailure() {
+                return onFailure;
+            }
+
+            public Builder setOnFailure(CompletableFuture<Void> onFailure) {
+                this.onFailure = onFailure;
                 return this;
             }
 

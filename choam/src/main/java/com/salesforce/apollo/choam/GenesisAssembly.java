@@ -80,7 +80,8 @@ public class GenesisAssembly implements Genesis {
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();
-        fsm.setName("Genesis:" + view.context().getId() + ":" + params().member().getId());
+
+        fsm.setName("Genesis%s on: %s".formatted(view.context().getId(), params().member().getId()));
 
         Config.Builder config = params().producer().ethereal().clone();
 
@@ -105,13 +106,14 @@ public class GenesisAssembly implements Genesis {
     public void certify() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.certifications.size() >= params().majority())
+                 .filter(p -> p.certifications.size() > params().majority())
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
+        assert !slate.isEmpty() : "Slate is empty, no certifications";
         reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
                                                                                    new NullBlock(
                                                                                    params().digestAlgorithm())));
         var validate = view.generateValidation(reconfiguration);
-        log.trace("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
+        log.debug("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
                   slate.size(), params().member().getId());
         ds = new OneShot();
         ds.setValue(validate.toByteString());
@@ -203,9 +205,9 @@ public class GenesisAssembly implements Genesis {
                  .map(Map.Entry::getValue)
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
-        controller.completeIt();
-        log.debug("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
-                  params().member().getId());
+        //        controller.completeIt();
+        log.info("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
+                 params().member().getId());
     }
 
     public void start() {
@@ -240,7 +242,7 @@ public class GenesisAssembly implements Genesis {
         var member = view.context().getMember(Digest.from(v.getWitness().getId()));
         if (member != null) {
             witnesses.put(member, v);
-            if (witnesses.size() >= params().majority()) {
+            if (witnesses.size() > params().majority()) {
                 if (published.compareAndSet(false, true)) {
                     publish();
                 }
@@ -337,13 +339,19 @@ public class GenesisAssembly implements Genesis {
             return; // do not have the join yet
         }
         if (!view.validate(proposed.join.getMember(), v)) {
-            log.warn("Invalid cetification for view join: {} from: {} on: {}", hash,
+            log.warn("Invalid certification for view join: {} from: {} on: {}", hash,
                      Digest.from(v.getWitness().getId()), params().member().getId());
             return;
         }
-        proposed.certifications.put(certifier, v.getWitness());
-        log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), hash,
-                  certifier.getId(), params().member().getId());
+        var prev = proposed.certifications.put(certifier, v.getWitness());
+        if (prev == null) {
+            log.debug("New validation of view member: {} hash: {} using certifier: {} witnesses: {} on: {}",
+                      member.getId(), hash, certifier.getId(), proposed.certifications.values().size(),
+                      params().member().getId());
+        } else {
+            log.debug("Redundant validation of view member: {} hash: {} using certifier: {} on: {}", member.getId(),
+                      hash, certifier.getId(), params().member().getId());
+        }
     }
 
     private record Proposed(Join join, Member member, Map<Member, Certification> certifications) {

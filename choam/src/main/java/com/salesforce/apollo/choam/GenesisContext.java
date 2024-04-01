@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  */
 public class GenesisContext extends ViewContext {
 
-    public GenesisContext(Context<Member> context, Supplier<CHOAM.PendingView> pendingView, Parameters params,
+    public GenesisContext(Context<Member> context, Supplier<Context<Member>> pendingView, Parameters params,
                           Signer signer, BlockProducer blockProducer) {
         super(context, params, pendingView, signer, Collections.emptyMap(), blockProducer);
     }

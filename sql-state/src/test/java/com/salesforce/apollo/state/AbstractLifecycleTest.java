@@ -89,9 +89,10 @@ abstract public class AbstractLifecycleTest {
     protected       Map<Digest, Router>          routers;
     protected       SigningMember                testSubject;
     protected       int                          toleranceLevel;
-    private         File                         baseDir;
-    private         File                         checkpointDirBase;
-    private         List<Transactioneer>         transactioneers;
+    DynamicContextImpl<Member> context;
+    private File                 baseDir;
+    private File                 checkpointDirBase;
+    private List<Transactioneer> transactioneers;
 
     public AbstractLifecycleTest() {
         super();
@@ -122,11 +123,12 @@ abstract public class AbstractLifecycleTest {
         parameters.clear();
         members = null;
         transactioneers = null;
+        context = null;
     }
 
     @BeforeEach
     public void before() throws Exception {
-        checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
+        checkpointOccurred = new CountDownLatch(CARDINALITY);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
@@ -135,7 +137,7 @@ abstract public class AbstractLifecycleTest {
         blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
-        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();
 
         var params = parameters(context);
@@ -144,18 +146,24 @@ abstract public class AbstractLifecycleTest {
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
             return stereotomy.newIdentifier();
         }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        System.out.println("Members: " + members.stream().map(s -> s.getId()).toList());
         members.forEach(m -> context.activate(m));
-        testSubject = members.get(CARDINALITY - 1);
+
+        testSubject = new ControlledIdentifierMember(stereotomy.newIdentifier());
+
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(30));
             return localRouter;
         }));
+        routers.put(testSubject.getId(),
+                    new LocalServer(prefix, testSubject).router(ServerConnectionCache.newBuilder().setTarget(30)));
         choams = members.stream()
                         .collect(Collectors.toMap(m -> m.getId(),
                                                   m -> createChoam(entropy, params, m, m.equals(testSubject),
                                                                    context)));
+        choams.put(testSubject.getId(), createChoam(entropy, params, testSubject, true, context));
         members.stream().filter(m -> !m.equals(testSubject)).forEach(m -> context.activate(m));
         System.out.println(
         "test subject: " + testSubject.getId() + "\nmembers: " + members.stream().map(e -> e.getId()).toList());
@@ -275,7 +283,7 @@ abstract public class AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
-        var txneer = updaters.get(members.get(0));
+        var txneer = updaters.get(members.getLast());
 
         final var activated = Utils.waitForCondition(30_000, 1_000, () -> choams.entrySet()
                                                                                 .stream()
@@ -294,9 +302,9 @@ abstract public class AbstractLifecycleTest {
                                                                        .map(c -> c.logState())
                                                                        .toList()));
 
-        var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
+        var mutator = txneer.getMutator(choams.get(members.getLast().getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown));
-        System.out.println("Transaction member: " + members.get(0).getId());
+        System.out.println("Transaction member: " + members.getLast().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         var success = countdown.await(60, TimeUnit.SECONDS);
@@ -356,6 +364,7 @@ abstract public class AbstractLifecycleTest {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
+        params.getProducer().ethereal().setNumberOfEpochs(10);
 
         params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);

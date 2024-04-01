@@ -10,20 +10,20 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesforce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.state.proto.Statement;
-import com.salesforce.apollo.state.proto.*;
+import com.salesforce.apollo.bloomFilters.Hash.DigestHasher;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.QualifiedBase64;
 import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
 import com.salesforce.apollo.state.liquibase.*;
+import com.salesforce.apollo.state.proto.Statement;
+import com.salesforce.apollo.state.proto.*;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.bloomFilters.Hash.DigestHasher;
 import deterministic.org.h2.api.ErrorCode;
 import deterministic.org.h2.engine.SessionLocal;
 import deterministic.org.h2.jdbc.JdbcConnection;
@@ -206,11 +206,9 @@ public class SqlStateMachine {
                         endBlock(block.height(), block.hash);
                     } catch (SQLException e) {
                         log.error("unable to restore checkpoint: {}", block.height(), e);
-                        return;
                     }
                 } catch (SQLException e) {
                     log.error("unable to restore from checkpoint: {}", block.height(), e);
-                    return;
                 }
             });
         };
@@ -240,7 +238,7 @@ public class SqlStateMachine {
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
                      FileOutputStream fos = new FileOutputStream(checkpoint);
-                     GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
+                     GZIPOutputStream gzos = new GZIPOutputStream(fos)) {
 
                     byte[] buffer = new byte[6 * 1024];
                     for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {
@@ -697,6 +695,10 @@ public class SqlStateMachine {
     }
 
     private void publishEvents() {
+        if (getEvents == null) {
+            log.error("getEvents is null");
+            return;
+        }
         try (ResultSet events = getEvents.executeQuery()) {
             if (events != null) {
                 while (events.next()) {
@@ -787,6 +789,10 @@ public class SqlStateMachine {
     }
 
     private void updateCurrent(ULong height, Digest blkHash, int txn, Digest txnHash) {
+        if (updateCurrent == null) {
+            log.error("update current is null");
+            return;
+        }
         try {
             updateCurrent.setLong(1, height.longValue());
             updateCurrent.setString(2, QualifiedBase64.qb64(blkHash));

@@ -28,17 +28,17 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                      log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer               blockProducer;
-    private final        Context<Member>             context;
-    private final        Parameters                  params;
-    private final        Map<Digest, Short>          roster;
-    private final        Signer                      signer;
-    private final        Map<Member, Verifier>       validators;
-    private final        Supplier<CHOAM.PendingView> pendingView;
+    private final static Logger                    log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer             blockProducer;
+    private final        Context<Member>           context;
+    private final        Parameters                params;
+    private final        Map<Digest, Short>        roster;
+    private final        Signer                    signer;
+    private final        Map<Member, Verifier>     validators;
+    private final        Supplier<Context<Member>> pendingView;
 
-    public ViewContext(Context<Member> context, Parameters params, Supplier<CHOAM.PendingView> pendingView,
-                       Signer signer, Map<Member, Verifier> validators, BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<Context<Member>> pendingView, Signer signer,
+                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
@@ -124,11 +124,18 @@ public class ViewContext {
         return signer;
     }
 
+    /**
+     * The process has failed
+     */
+    public void onFailure() {
+        blockProducer.onFailure();
+    }
+
     public Parameters params() {
         return params;
     }
 
-    public CHOAM.PendingView pendingView() {
+    public Context<Member> pendingView() {
         return pendingView.get();
     }
 
@@ -155,8 +162,12 @@ public class ViewContext {
 
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
-        return v != null && v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                     block.block.getHeader().toByteString());
+        if (v == null) {
+            log.debug("no validation witness: {} for block: {} on: {}", Digest.from(validate.getWitness().getId()),
+                      block.hash, params.member().getId());
+            return false;
+        }
+        return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());
     }
 
     public boolean validate(ViewMember vm, Validate validate) {

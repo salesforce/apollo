@@ -145,7 +145,7 @@ public class SubDomain extends Domain {
 
     private void handle(Optional<DelegationUpdate> result,
                         RingCommunications.Destination<Member, Delegation> destination, Timer.Context timer) {
-        if (!started.get() || destination.link() == null) {
+        if (!started.get() || destination == null || destination.link() == null) {
             if (timer != null) {
                 timer.stop();
             }

@@ -32,11 +32,13 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getJoinsList()
-                          .stream()
-                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
-                                                    e -> new DefaultVerifier(
-                                                    publicKey(e.getMember().getConsensusKey()))));
+        var validators = reconfigure.getJoinsList()
+                                    .stream()
+                                    .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
+                                                              e -> (Verifier) new DefaultVerifier(
+                                                              publicKey(e.getMember().getConsensusKey()))));
+        assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
+        return validators;
     }
 
     /**
@@ -73,7 +75,7 @@ public interface Committee {
 
     Logger log();
 
-    void nextView(CHOAM.PendingView pendingView);
+    void nextView(Context<Member> pendingView);
 
     Parameters params();
 
@@ -137,10 +139,10 @@ public interface Committee {
                 valid++;
             }
         }
-        final int toleranceLevel = params.majority();
+        final int toleranceLevel = params.context().toleranceLevel();
         log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
                     params.member().getId());
-        return valid >= toleranceLevel;
+        return valid > toleranceLevel;
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {
@@ -148,6 +150,7 @@ public interface Committee {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        return validate(hb, validatorsOf(reconfigure, params().context()));
+        var validators = validatorsOf(reconfigure, params().context());
+        return !validators.isEmpty() && validate(hb, validators);
     }
 }

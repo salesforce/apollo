@@ -8,18 +8,11 @@
         <encoder>
             <Pattern>
                 %d{mm:ss.SSS} [%thread] %-5level %logger{0}
-- %msg%n
+                - %msg%n
             </Pattern>
         </encoder>
     </appender>
     <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>
-    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-    <logger name="com.salesforce.apollo.comm" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
 </configuration>

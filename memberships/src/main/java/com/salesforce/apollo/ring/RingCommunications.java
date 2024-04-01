@@ -39,7 +39,7 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     private final boolean                       ignoreSelf;
     private final Lock                          lock           = new ReentrantLock();
     private final List<iteration<T>>            traversalOrder = new ArrayList<>();
-    protected     boolean                       noDuplicates   = false;
+    protected     boolean                       noDuplicates   = true;
     volatile      int                           currentIndex   = -1;
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
@@ -59,6 +59,11 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         this.member = member;
         this.comm = comm;
         this.ignoreSelf = ignoreSelf;
+    }
+
+    public RingCommunications<T, Comm> allowDuplicates() {
+        noDuplicates = false;
+        return this;
     }
 
     public <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler) {
@@ -110,7 +115,9 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                 }
                 return Context.IterateResult.SUCCESS;
             });
-            traversal.add(new iteration<>(successor == null ? (T) member : successor, ring));
+            if (successor != null) {
+                traversal.add(new iteration<>(successor == null ? (T) member : successor, ring));
+            }
         }
         return traversal;
     }
@@ -123,8 +130,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
             if (count == 0 || current == count - 1) {
                 traversalOrder.clear();
                 traversalOrder.addAll(calculateTraversal(digest));
-                assert traversalOrder.size() == context.getRingCount() : "Invalid traversal order size: "
-                + traversalOrder.size() + " expected: " + context.getRingCount();
                 Entropy.secureShuffle(traversalOrder);
                 log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
@@ -156,6 +161,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     }
 
     private Destination<T, Comm> linkFor(Digest digest) {
+        if (traversalOrder.isEmpty()) {
+            log.trace("No members to traverse on: {}", member.getId());
+            return null;
+        }
         final var current = currentIndex;
         iteration<T> successor = null;
         try {
@@ -166,9 +175,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
                           member.getId());
             }
             return new Destination<>(successor.m, link, successor.ring);
-        } catch (IndexOutOfBoundsException e) {
-            log.trace("No members to traver on: {}", member.getId());
-            return null;
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {} on: {}", successor.m == null ? "<null>" : successor.m.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage(), member.getId());

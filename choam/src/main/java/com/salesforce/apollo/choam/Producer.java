@@ -78,7 +78,7 @@ public class Producer {
         // Number of rounds we can provide data for
         final var blocks = ep.getEpochLength() - 2;
         final int maxElements = blocks * lastEpoch;
-        final var name = "Producer" + getViewId() + params().member().getId().toString();
+
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount(),
                               params().drainPolicy().build());
@@ -87,7 +87,7 @@ public class Producer {
                  params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
-        fsm.setName(name);
+        fsm.setName("Producer%s on: %s".formatted(getViewId(), params.member().getId()));
         transitions = fsm.getTransitions();
 
         Config.Builder config = params().producer().ethereal().clone();
@@ -176,7 +176,7 @@ public class Producer {
                  .map(this::validate)
                  .filter(Objects::nonNull)
                  .filter(p -> !p.published.get())
-                 .filter(p -> p.witnesses.size() >= params().majority())
+                 .filter(p -> p.witnesses.size() > params().majority())
                  .forEach(this::publish);
 
         var reass = Reassemble.newBuilder();
@@ -218,8 +218,8 @@ public class Producer {
             final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
-            log.debug("Created block: {} height: {} prev: {} last: {} on: {}", next.hash, next.height(), lb.hash, last,
-                      params().member().getId());
+            log.debug("Created block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
+                      next.hash, next.height(), lb.hash, last, params().member().getId());
         }
         if (last) {
             started.set(true);
@@ -244,14 +244,11 @@ public class Producer {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
-        var diadem = view.pendingView().diadem();
-        log.debug("Assembling: {} diadem: {} on: {}", nextViewId, diadem, params().member().getId());
+        log.debug("Assembling: {} on: {}", nextViewId, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
                                                                                               .setNextView(
                                                                                               vlb.hash.toDigeste())
-                                                                                              .setDiadem(
-                                                                                              diadem.toDigeste())
                                                                                               .build(),
                                                                                       checkpoint.get()));
         previousBlock.set(assemble);
@@ -260,13 +257,13 @@ public class Producer {
         pending.put(assemble.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.debug("View assembly: {} diadem: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, diadem,
-                  assemble.hash, assemble.height(), assemble.block.getBodyCase(), getViewId(),
-                  params().member().getId());
+        log.debug("Produced view assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
+                  assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
     }
 
     private void publish(PendingBlock p) {
-        log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member().getId());
+        log.debug("Published pending: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
+                  p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
         p.published.set(true);
         pending.remove(p.block.hash);
         final var cb = CertifiedBlock.newBuilder()
@@ -284,7 +281,8 @@ public class Producer {
             return null;
         }
         if (!view.validate(p.block, v)) {
-            log.trace("Invalid validate for: {} on: {}", hash, params().member().getId());
+            log.trace("Invalid validate for: {} hash: {} on: {}", p.block.block.getBodyCase(), hash,
+                      params().member().getId());
             return null;
         }
         p.witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);
@@ -311,7 +309,7 @@ public class Producer {
             pending.put(reconfiguration.hash, p);
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
-            controller.completeIt();
+            //            controller.completeIt();
             log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
                      reconfiguration.height(), params().member().getId());
         }
@@ -325,7 +323,8 @@ public class Producer {
             }
             final var viewAssembly = assembly.get();
             if (viewAssembly == null) {
-                log.warn("Assemble block never processed on: {}", params().member().getId());
+                log.error("Assemble block never processed on: {}", params().member().getId());
+                transitions.failed();
                 return;
             }
             viewAssembly.finalElection();
@@ -369,6 +368,7 @@ public class Producer {
         @Override
         public void fail() {
             stop();
+            view.onFailure();
         }
 
         @Override
@@ -378,14 +378,13 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            log.debug("Starting view reconfiguration: {} diadem: {} on: {}", nextViewId, view.pendingView().diadem(),
-                      params().member().getId());
+            log.debug("Starting view reconfiguration: {} on: {}", nextViewId, params().member().getId());
             assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
                 @Override
                 public void complete() {
                     super.complete();
-                    log.debug("View reconfiguration: {} diadem: {} gathered: {} complete on: {}", nextViewId,
-                              view.pendingView().diadem(), getSlate().size(), params().member().getId());
+                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
+                              params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                 }

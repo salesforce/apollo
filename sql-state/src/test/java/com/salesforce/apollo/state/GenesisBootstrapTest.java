@@ -18,6 +18,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         pre();
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
+        context.activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
         post();

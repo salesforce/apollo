@@ -62,8 +62,10 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         this(frequency, direction, context, member, comm, false, scheduler);
     }
 
-    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler) {
-        iterate(digest, null, round, null, handler, null);
+    @Override
+    public RingIterator<T, Comm> allowDuplicates() {
+        super.allowDuplicates();
+        return this;
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler,
@@ -76,9 +78,13 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         AtomicInteger tally = new AtomicInteger(0);
         var traversed = new ConcurrentSkipListSet<Member>();
         Thread.ofVirtual()
-              .start(
-              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed));
+              .start(Utils.wrapped(
+              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed),
+              log));
+    }
 
+    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler) {
+        iterate(digest, null, round, null, handler, null);
     }
 
     public int iteration() {

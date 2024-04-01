@@ -34,8 +34,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
-import static com.salesforce.apollo.choam.support.Bootstrapper.randomCut;
-
 /**
  * @author hal.hildebrand
  */
@@ -115,7 +113,7 @@ public class CheckpointAssembler {
         log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
                  member.getId());
         var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
-        ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
+        ringer.iterate(digestAlgorithm.random(), (link, ring) -> gossip(link),
                        (tally, result, destination) -> gossip(result), t -> scheduler.schedule(
         () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)), duration.toMillis(),
         TimeUnit.MILLISECONDS));

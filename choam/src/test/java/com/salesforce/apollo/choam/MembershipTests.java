@@ -13,10 +13,10 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -32,10 +32,9 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -73,7 +72,7 @@ public class MembershipTests {
     public void genesisBootstrap() throws Exception {
         SigningMember testSubject = initialize(2000, 5);
         System.out.println(
-        "Test subject: " + testSubject.getId() + " membership: " + members.stream().map(e -> e.getId()).toList());
+        "Test subject: " + testSubject.getId() + " membership: " + members.stream().map(Member::getId).toList());
         routers.entrySet()
                .stream()
                .filter(e -> !e.getKey().equals(testSubject.getId()))
@@ -84,7 +83,7 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
 
         final Duration timeout = Duration.ofSeconds(6);
-        var txneer = choams.get(members.get(0).getId());
+        var txneer = choams.get(members.getLast().getId());
 
         System.out.println("Transactioneer: " + txneer.getId());
 
@@ -92,17 +91,16 @@ public class MembershipTests {
                                                                            .stream()
                                                                            .filter(
                                                                            e -> !testSubject.getId().equals(e.getKey()))
-                                                                           .map(e -> e.getValue())
-                                                                           .filter(c -> !c.active())
-                                                                           .count() == 0);
+                                                                           .map(Map.Entry::getValue)
+                                                                           .allMatch(c -> c.active()));
         assertTrue(active,
                    "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
                    + " inactive: " + choams.entrySet()
                                            .stream()
                                            .filter(e -> !testSubject.getId().equals(e.getKey()))
-                                           .map(e -> e.getValue())
+                                           .map(Map.Entry::getValue)
                                            .filter(c -> !c.active())
-                                           .map(c -> c.logState())
+                                           .map(CHOAM::logState)
                                            .toList());
 
         final var countdown = new CountDownLatch(1);
@@ -113,9 +111,9 @@ public class MembershipTests {
 
         var target = choams.values()
                            .stream()
-                           .map(l -> l.currentHeight())
-                           .filter(h -> h != null)
-                           .mapToInt(u -> u.intValue())
+                           .map(CHOAM::currentHeight)
+                           .filter(Objects::nonNull)
+                           .mapToInt(ULong::intValue)
                            .max()
                            .getAsInt();
 
@@ -155,29 +153,21 @@ public class MembershipTests {
 
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> stereotomy.newIdentifier())
-                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(ControlledIdentifierMember::new)
                            .map(e -> (SigningMember) e)
                            .toList();
+        System.out.println("Members: " + members.stream().map(s -> s.getId()).toList());
         var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
-        SigningMember testSubject = members.get(members.size() - 1); // hardwired
+        SigningMember testSubject = members.get(0); // hardwired
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(cardinality));
-            return comm;
-        }));
-        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+        routers = members.stream()
+                         .collect(Collectors.toMap(Member::getId, m -> new LocalServer(prefix, m).router(
+                         ServerConnectionCache.newBuilder().setTarget(cardinality))));
+        choams = members.stream().collect(Collectors.toMap(Member::getId, m -> {
 
-            final TransactionExecutor processor = new TransactionExecutor() {
-                @Override
-                public void endBlock(ULong height, Digest hash) {
-                }
-
-                @SuppressWarnings({ "unchecked", "rawtypes" })
-                @Override
-                public void execute(int index, Digest hash, Transaction t, CompletableFuture f, Executor executor) {
-                    if (f != null) {
-                        f.completeAsync(() -> new Object(), executor);
-                    }
+            final TransactionExecutor processor = (index, hash, t, f, executor) -> {
+                if (f != null) {
+                    f.completeAsync(Object::new, executor);
                 }
             };
             params.getProducer().ethereal().setSigner(m);
@@ -196,7 +186,7 @@ public class MembershipTests {
 
     private void shutdown() {
         if (choams != null) {
-            choams.values().forEach(e -> e.stop());
+            choams.values().forEach(CHOAM::stop);
             choams = null;
         }
         if (routers != null) {

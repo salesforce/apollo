@@ -191,8 +191,8 @@ public class ViewManagement {
         }
 
         log.info(
-        "Installed view: {} from: {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
-        currentView.get(), previousView, diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
+        "Installed view: {} -> {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
+        previousView, currentView.get(), diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
         pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
 
         view.notifyListeners(joining, ballot.leaving);

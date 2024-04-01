@@ -130,7 +130,6 @@ public class ViewAssemblyTest {
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     return ViewMember.newBuilder()
                                      .setId(m.getId().toDigeste())
-                                     .setDiadem(DigestAlgorithm.DEFAULT.getLast().toDigeste())
                                      .setConsensusKey(consensus)
                                      .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
@@ -166,7 +165,7 @@ public class ViewAssemblyTest {
             Router router = communications.get(m);
             ViewContext view = new ViewContext(context, params.build(
             RuntimeParameters.newBuilder().setContext(context).setMember(sm).setCommunications(router).build()),
-                                               () -> new CHOAM.PendingView(context, DigestAlgorithm.DEFAULT.getLast()),
+                                               () -> context,
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate(), ULong.MIN),
                                                validators, null);
             views.put(m, view);

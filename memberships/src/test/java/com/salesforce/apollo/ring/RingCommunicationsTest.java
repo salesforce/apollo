@@ -91,6 +91,7 @@ public class RingCommunicationsTest {
 
             router.start();
             var sync = new RingCommunications<Member, TestItService>(context, serverMember1, commsA);
+            sync.allowDuplicates();
             var countdown = new CountDownLatch(1);
             sync.execute((link, round) -> link.ping(Any.getDefaultInstance()),
                          (result, destination) -> countdown.countDown());
