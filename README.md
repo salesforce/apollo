@@ -2,13 +2,12 @@
 
 The Apollo Delphinius project is an experimental multi-tenant, distributed system platform. Apollo provides a secure
 communications overlay using Fireflies. The consensus layer is supplied by an asynchronous bft consensus protocol. The
-sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpoint CHOAM linear
-logs. Identity and key management are provided as a foundational service and integrated into the MTLS grpc
+sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear
+logs. Decentralized identity and key management are provided as a foundational service and integrated into the MTLS grpc
 communication.
 
-The target service goal is a multi-tenant Zanzibar/KERI integration that provides a wide area replicated, low latency
-service for managing identity, key management, access control and verifiable credentials such as JWT issuance and
-validation.
+The target service goal is a multi-tenant secrets manager that provides a wide area replicated, low latency
+service for managing identity, key management, access control and verifiable credentials.
 
 ## Build Status
 
@@ -19,14 +18,14 @@ builds from the command line maven.
 
 ## Not A Coin Platform™
 
-Apollo isn't designed for coins, rather as essentially a distributed multi-tenant database. Of course, while the systems
-and mechanisms of Apollo can be used for such, the design goals are much different. Thus, no coins for you.
+Apollo is not designed for coins, rather it is a distributed multi-tenant database. While the systems
+and mechanisms of Apollo can be used for coins/etc, the design goals are much different. Thus, no coins for you.
 
 ## Some Features
 
 * Multi tenant isolation enclaves using GraalVM Isolates
-* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters.
-* Decentralized Identifier-based foundation and key management infrastructure, based on
+* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters, windows, etc
+* Decentralized Identifier based foundation and key management infrastructure, based on
   the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity bootstrapping and secrets provisioning
 * MTLS network communication — KERI for MTLS certificate authentication. Local communication simulation for simplified
@@ -36,19 +35,21 @@ and mechanisms of Apollo can be used for such, the design goals are much differe
   membership views.
 * Efficient and easy to reuse communication patterns for Fireflies ring style gossiping on membership contexts
 * Reliable Broadcast — garbage collected, context routed reliable broadcast
-* Efficient atomic broadcast in asynchronous networks with byzantine nodes
-* Dynamic, committee-based, transaction causal ordering service producing linear logs - Replicated State Machines
+* Efficient atomic broadcast in asynchronous networks with byzantine nodes - Consensus
+* Dynamic, committee-based, causal ordering service producing linear logs - Replicated State Machines
 * JDBC accessible, SQL store backed, materialized views maintained by an SQL state machine. Supports DDL, DML, stored
   procedures, functions and triggers.
-* Google Zanzibar functionality providing Relation Based Access Control hosted on SQL state machines.
+* Google Zanzibar like functionality providing Relation Based Access Control hosted on SQL state machines.
 
 ## Requirements
 
-Apollo requires JDK 21+ and [Maven](https://maven.apache.org/) 3.8.1 and above
+Apollo requires JDK 22+ and [Maven](https://maven.apache.org/) 3.9.3 and above
 
 ### Install Maven
 
-See [Installing Apache Maven](https://maven.apache.org/install.html) if you need to install Maven.
+The build includes  _mvnw_, and thus there is not need to install Maven.  Simply use ./mvnw for all your Maven invocation needs.
+
+See [Installing Apache Maven](https://maven.apache.org/install.html) if you prefer to install Maven. 
 
 ### Install GraalVM (Optional)
 
@@ -61,13 +62,13 @@ Apple Silicon, use the [Homebrew Tap for GraalVM](https://github.com/graalvm/hom
 **Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.
 If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
 
-    mvn clean install -Ppre -DskipTests
+    ./mvnw clean install -Ppre -DskipTests
 
 This will perform a full build, including the deterministic SQL execution module. After this is complete, you do not
 need to do this again. You can build Apollo normally, without the deterministic SQL module and to do so cd to the root
 directory of the repository and then:
 
-    mvn clean install
+    ./mvnw clean install
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by
 dependent modules within the rest of the build. You must have invoked maven on the Apollo project root with the "
@@ -80,7 +81,7 @@ without performing the full build.
 
 Generation of Apollo shard enclave shared libraries is delegated to the *isolate*  profile:
 
-    mvn clean install -Pisolates
+    ./mvnw clean install -Pisolates
 
 This will add the *[isolates](isolates/README.md)* modules to the build.
 
@@ -92,7 +93,7 @@ profiles that are activated for the platform the build is running on.
 
 ## Modules
 
-Apollo is reasonably modularized mostly for the purpose of subsystem isolation and reuse. Each module is a Maven module
+Apollo is modularized largely for the purpose of subsystem isolation and reuse. Each module is a Maven module
 under the source root and contains a README.md documenting (such as it is at the moment, lol) the module.
 
 * [CHOAM](choam/README.md) - Committee maintenance of replicated state machines
@@ -139,13 +140,13 @@ so JOOQ code generation is included in the module that defines it.
 
 ## WIP
 
-Note that Apollo Delphinius is very much a  _work_   _in_   _progress_ . There is not yet an official release. Thus, it
+Note that Apollo Delphinius is still a  _work_   _in_   _progress_ . There is not yet an official release. Thus, it
 is by no means a full-featured, hardened distributed systems platform.
 
 ## Requirements
 
-Apollo is a pure Java application The build system uses Maven, and requires Maven 3.8.1+. The Maven enforcer plugin
-enforces dependency convergence, and Apollo is built using Java 17.
+Apollo is a pure Java application The build system is Maven, and requires Maven 3.9.3+. The Maven enforcer plugin
+enforces dependency convergence, and Apollo is built using Java 22.
 
 Apollo is a [multimodule Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html). This means
 that the various modules of Apollo are built and versioned as a whole, rather than being separated out into individual
