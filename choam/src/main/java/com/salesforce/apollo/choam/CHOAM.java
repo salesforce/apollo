@@ -931,8 +931,8 @@ public class CHOAM {
             if (prevHeight == null) {
                 if (!hcb.height().equals(ULong.valueOf(0))) {
                     pending.add(hcb);
-                    log.debug("Deferring block on {}.  Block: {} hash: {} height should be {} and block height is {}",
-                              params.member().getId(), hcb.block.getBodyCase(), hcb.hash, 0, header.getHeight());
+                    log.debug("Deferring block: {} hash: {} height should be {} and block height is {} on: {}",
+                              hcb.block.getBodyCase(), hcb.hash, 0, header.getHeight(), params.member().getId());
                     return;
                 }
             } else {
@@ -943,9 +943,9 @@ public class CHOAM {
                 }
                 if (!hcb.height().equals(prevHeight.add(1))) {
                     pending.add(hcb);
-                    log.debug("Deferring block on {}.  Block: {} hash: {} height should be {} and block height is {}",
-                              params.member().getId(), hcb.block.getBodyCase(), hcb.hash, previousBlock.height().add(1),
-                              header.getHeight());
+                    log.debug("Deferring block: {} hash: {} height should be {} and block height is {} on: {}",
+                              hcb.block.getBodyCase(), hcb.hash, previousBlock.height().add(1), header.getHeight(),
+                              params.member().getId());
                     return;
                 }
             }
