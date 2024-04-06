@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
+import com.salesforce.apollo.context.DynamicContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -18,7 +19,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         pre();
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
-        context.activate(testSubject);
+        ((DynamicContext) choam.context().delegate()).activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
         post();

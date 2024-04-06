@@ -120,9 +120,8 @@ public class ViewAssembly {
 
     Consumer<List<Reassemble>> inbound() {
         return lre -> {
-            lre.stream().flatMap(re -> re.getMembersList().stream()).forEach(this::join);
+            lre.stream().flatMap(re -> re.getMembersList().stream()).forEach(vm -> join(vm, false));
             lre.stream().flatMap(re -> re.getValidationsList().stream()).forEach(this::validate);
-            publisher.accept(getMemberProposal());
         };
     }
 
@@ -136,8 +135,8 @@ public class ViewAssembly {
             retryDelay.accumulateAndGet(Duration.ofMillis(100), Duration::plus);
         }
 
-        log.trace("Proposal incomplete of: {} gathered: {} have: {} required: {}, retrying: {} on: {}", nextViewId,
-                  proposals.keySet().stream().toList(), nextAssembly.size(), params().majority(), delay,
+        log.trace("Proposal incomplete of: {} gathered: {}, required: {} available: {}, retrying: {} on: {}",
+                  nextViewId, proposals.keySet().stream().toList(), nextAssembly.size(), params().majority(), delay,
                   params().member().getId());
         if (!cancelSlice.get()) {
             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
@@ -164,28 +163,28 @@ public class ViewAssembly {
             return !gathered();
         }
         polled.add(vm);
-        join(member);
+        join(member, true);
         return !gathered();
     }
 
     private boolean gathered() {
-        var certified = proposals.values().stream().filter(p -> p.validations.size() >= params().majority()).count();
-        if (certified == nextAssembly.size()) {
+        if (polled.size() == nextAssembly.size()) {
+            log.info("Polled all +");
             cancelSlice.set(true);
+            return true;
         }
-        return certified == nextAssembly.size();
+        return false;
     }
 
     private Reassemble getMemberProposal() {
         return Reassemble.newBuilder()
-                         .setMember(params().member().getId().toDigeste())
                          .addAllMembers(proposals.values().stream().map(p -> p.vm).toList())
                          .addAllValidations(
                          proposals.values().stream().flatMap(p -> p.validations.values().stream()).toList())
                          .build();
     }
 
-    private void join(ViewMember vm) {
+    private void join(ViewMember vm, boolean direct) {
         final var mid = Digest.from(vm.getId());
         final var m = nextAssembly.get(mid);
         if (m == null) {
@@ -223,19 +222,29 @@ public class ViewAssembly {
             newJoin.set(true);
             return new Proposed(vm, m, new ConcurrentSkipListMap<>());
         });
-        proposed.validations.computeIfAbsent(params().member(), k -> view.generateValidation(vm));
+
+        var builder = Reassemble.newBuilder();
+        proposed.validations.computeIfAbsent(params().member(), k -> {
+            var validate = view.generateValidation(vm);
+            builder.addValidations(validate);
+            return validate;
+        });
 
         if (newJoin.get()) {
             if (log.isTraceEnabled()) {
                 log.trace("Adding view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
                           params().member().getId());
             }
+            if (direct) {
+                builder.addMembers(vm);
+            }
             var validations = unassigned.remove(mid);
             if (validations != null) {
                 validations.forEach(this::validate);
             }
-
-            var reass = Reassemble.newBuilder().addMembers(vm).addValidations(proposed.validations.get(m)).build();
+        }
+        var reass = builder.build();
+        if (reass.isInitialized()) {
             publisher.accept(reass);
         }
     }
@@ -336,8 +345,7 @@ public class ViewAssembly {
                      .filter(p -> p.validations.size() >= params().majority())
                      .sorted(Comparator.comparing(p -> p.member.getId()))
                      .forEach(p -> slate.put(p.member(), joinOf(p)));
-            Context<Member> memberContext1 = view.pendingView();
-            if (slate.size() >= memberContext1.majority()) {
+            if (slate.size() >= view.pendingView().majority()) {
                 cancelSlice.set(true);
                 log.debug("Electing: {} of: {} slate: {} proposals: {} on: {}", slate.size(), nextViewId,
                           slate.keySet().stream().map(Member::getId).sorted().toList(), proposals.values()

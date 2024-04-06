@@ -296,7 +296,7 @@ public class Producer {
         @Override
         public void assembled() {
             if (!reconfigured.compareAndSet(false, true)) {
-                log.error("assembly already complete on: {}", params().member().getId());
+                log.debug("assembly already complete on: {}", params().member().getId());
                 return;
             }
             final var slate = assembly.get().getSlate();
@@ -328,7 +328,7 @@ public class Producer {
                 return;
             }
             viewAssembly.finalElection();
-            log.error("Final view assembly election on: {}", params().member().getId());
+            log.debug("Final view assembly election on: {}", params().member().getId());
             if (assembled.get()) {
                 assembled();
             }

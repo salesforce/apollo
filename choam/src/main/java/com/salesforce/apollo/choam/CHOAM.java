@@ -255,7 +255,7 @@ public class CHOAM {
         && c instanceof Administration && h.height().compareTo(ULong.valueOf(1)) >= 0;
     }
 
-    public Context<Member> context() {
+    public DelegatedContext<Member> context() {
         return params.context();
     }
 

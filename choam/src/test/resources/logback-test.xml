@@ -6,9 +6,7 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-                %logger{0} - %msg%n
-            </Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
     <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
@@ -22,7 +20,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -38,7 +36,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="trace" additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

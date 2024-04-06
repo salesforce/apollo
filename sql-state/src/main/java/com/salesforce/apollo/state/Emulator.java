@@ -62,7 +62,8 @@ public class Emulator {
     }
 
     public Emulator(Digest base) throws IOException {
-        this(new SqlStateMachine(String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
+        this(new SqlStateMachine(DigestAlgorithm.DEFAULT.getOrigin(),
+                                 String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
                                  new Properties(), Files.createTempDirectory("emulation").toFile()), base);
     }
 

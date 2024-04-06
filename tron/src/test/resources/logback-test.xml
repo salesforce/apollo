@@ -2,23 +2,20 @@
 <configuration>
 
     <!-- Stop output INFO at start -->
-    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-				%d{mm:ss.SSS} [%thread] %-5level %logger{0} -
-  %msg%n
-			</Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
 
     <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
+        <appender-ref ref="STDOUT"/>
     </logger>
 
     <root level="info">
-        <appender-ref ref="STDOUT" />
+        <appender-ref ref="STDOUT"/>
     </root>
 
 </configuration>

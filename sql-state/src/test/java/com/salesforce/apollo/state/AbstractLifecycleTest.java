@@ -329,7 +329,7 @@ abstract public class AbstractLifecycleTest {
         blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
-        SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+        SqlStateMachine up = new SqlStateMachine(DigestAlgorithm.DEFAULT.getOrigin(), url, new Properties(),
                                                  new File(checkpointDirBase, m.getId().toString()));
         updaters.put(m, up);
 

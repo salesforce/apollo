@@ -17,6 +17,7 @@ import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.QualifiedBase64;
 import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
 import com.salesforce.apollo.state.liquibase.*;
@@ -116,6 +117,7 @@ public class SqlStateMachine {
     private final SecureRandom                  secureEntropy;
     private final EventTrampoline               trampoline     = new EventTrampoline();
     private final String                        url;
+    private final Digest                        id;
     private       PreparedStatement             deleteEvents;
     private       PreparedStatement             getEvents;
     private       PreparedStatement             updateCurrent;
@@ -129,6 +131,11 @@ public class SqlStateMachine {
     }
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
+        this(DigestAlgorithm.DEFAULT.getOrigin(), url, info, cpDir);
+    }
+
+    public SqlStateMachine(Digest id, String url, Properties info, File cpDir) {
+        this.id = id;
         this.url = url;
         this.checkpointDirectory = cpDir;
         if (checkpointDirectory.exists()) {
@@ -151,7 +158,7 @@ public class SqlStateMachine {
             try {
                 c.setAutoCommit(false);
             } catch (SQLException e) {
-                log.error("Unable to set autocommit to false", e);
+                log.error("Unable to set autocommit to false on: {}", id, e);
             }
             return c;
         });
@@ -169,6 +176,7 @@ public class SqlStateMachine {
     }
 
     public void close() {
+        log.info("Closing: {} on: {}", url, id);
         try {
             connection().rollback();
         } catch (SQLException e1) {
@@ -194,21 +202,21 @@ public class SqlStateMachine {
                     try {
                         state.assemble(temp);
                     } catch (IOException e) {
-                        log.error("unable to assemble checkpoint: {} into: {}", block.height(), temp, e);
+                        log.error("unable to assemble checkpoint: {} into: {} on: {}", block.height(), temp, id, e);
                         return;
                     }
                     try {
-                        log.info("Restoring checkpoint: {} ", block.height());
+                        log.info("Restoring checkpoint: {} on: {}", block.height(), id);
                         statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
                         log.info("Restored from checkpoint: {}", block.height());
                         statement.close();
                         initializeStatements();
                         endBlock(block.height(), block.hash);
                     } catch (SQLException e) {
-                        log.error("unable to restore checkpoint: {}", block.height(), e);
+                        log.error("unable to restore checkpoint: {} on: {}", block.height(), id, e);
                     }
                 } catch (SQLException e) {
-                    log.error("unable to restore from checkpoint: {}", block.height(), e);
+                    log.error("unable to restore from checkpoint: {} on: {}", block.height(), id, e);
                 }
             });
         };
@@ -223,11 +231,11 @@ public class SqlStateMachine {
                     statement.execute(String.format("SCRIPT DROP TO '%s'", temp.getAbsolutePath()));
                     statement.close();
                 } catch (SQLException e) {
-                    log.error("unable to checkpoint: {}", height, e);
+                    log.error("unable to checkpoint: {} on: {}", height, id, e);
                     return null;
                 }
                 if (!temp.exists()) {
-                    log.error("Written file does not exist: {}", temp.getAbsolutePath());
+                    log.error("Written file does not exist: {} on: {}", temp.getAbsolutePath(), id);
                     return null;
                 }
                 //                try (FileInputStream fis = new FileInputStream(temp)) {
@@ -248,14 +256,14 @@ public class SqlStateMachine {
                     gzos.flush();
                     fos.flush();
                 } catch (IOException e) {
-                    log.error("unable to checkpoint: {}", height, e);
+                    log.error("unable to checkpoint: {} on: {}", height, id, e);
                 } finally {
                     temp.delete();
                 }
                 assert checkpoint.exists() : "Written file does not exist: " + checkpoint.getAbsolutePath();
                 return checkpoint;
             } catch (SQLException e) {
-                log.error("unable to checkpoint: {}", height, e);
+                log.error("unable to checkpoint: {} on: {}", height, id, e);
                 return null;
             }
         };
@@ -292,12 +300,21 @@ public class SqlStateMachine {
             connection().commit();
             trampoline.evaluate();
         } catch (SQLException e) {
-            log.trace("unable to commit connection", e);
+            log.trace("unable to commit connection on:{}", id, e);
         }
     }
 
     // Test accessible
     JdbcConnection connection() {
+        var closed = false;
+        try {
+            closed = connection.isClosed();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        if (closed) {
+            throw new AssertionError("Connection should not be closed on: " + id);
+        }
         return connection;
     }
 
@@ -316,9 +333,9 @@ public class SqlStateMachine {
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
             initializeStatements();
         } catch (SQLException e) {
-            throw new IllegalStateException("unable to initialize db state", e);
+            throw new IllegalStateException("unable to initialize db state on: " + id, e);
         } catch (LiquibaseException e) {
-            throw new IllegalStateException("unable to initialize db state", e);
+            throw new IllegalStateException("unable to initialize db state on: " + id, e);
         }
         log.debug("Initialized state on: {}", url);
     }
@@ -642,9 +659,9 @@ public class SqlStateMachine {
             rollback();
             exception(onCompletion, e);
             if (e instanceof BatchedTransactionException bte) {
-                log.error("error executing: {}: {}", tx.getExecutionCase(), bte.getCause().getMessage());
+                log.error("error executing: {}: {} on: {}", tx.getExecutionCase(), bte.getCause().getMessage(), id);
             } else {
-                log.error("error executing: {}", tx.getExecutionCase(), e);
+                log.error("error executing: {} on: {}", tx.getExecutionCase(), id, e);
             }
         } finally {
             commit();
@@ -685,6 +702,7 @@ public class SqlStateMachine {
         deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
+        log.info("Engine statements initialized");
     }
 
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
@@ -696,7 +714,7 @@ public class SqlStateMachine {
 
     private void publishEvents() {
         if (getEvents == null) {
-            log.error("getEvents is null");
+            log.error("getEvents is null on: {}", id);
             return;
         }
         try (ResultSet events = getEvents.executeQuery()) {
@@ -707,7 +725,7 @@ public class SqlStateMachine {
                     try {
                         body = MAPPER.readTree(events.getString(3));
                     } catch (JsonProcessingException e) {
-                        log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                        log.warn("cannot deserialize event: {} channel: {} on: {}", events.getInt(1), channel, id, e);
                         continue;
                     }
                     trampoline.publish(new Event(channel, body));
@@ -715,7 +733,7 @@ public class SqlStateMachine {
             }
         } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
         } catch (SQLException e) {
-            log.error("Error retrieving published events", e.getCause());
+            log.error("Error retrieving published events on: {}", id, e.getCause());
             throw new IllegalStateException("Cannot retrieve published events", e.getCause());
         }
 
@@ -723,7 +741,7 @@ public class SqlStateMachine {
             deleteEvents.execute();
         } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
         } catch (SQLException e) {
-            log.error("Error cleaning published events", e);
+            log.error("Error cleaning published events on: {}", id, e);
             throw new IllegalStateException("Cannot clean published events", e);
         }
 
@@ -740,7 +758,7 @@ public class SqlStateMachine {
         try {
             connection().rollback();
         } catch (SQLException e) {
-            log.trace("unable to rollback connection", e);
+            log.trace("unable to rollback connection on: {}", id, e);
         }
     }
 
@@ -754,7 +772,7 @@ public class SqlStateMachine {
                                      new LabelExpression(changeLog.getLabels()));
             }
         } catch (IOException e) {
-            throw new LiquibaseException("unable to update", e);
+            throw new LiquibaseException("unable to update on: " + id, e);
         }
     }
 
@@ -784,14 +802,15 @@ public class SqlStateMachine {
                                    new LabelExpression(changeLog.getLabels()));
             }
         } catch (IOException e) {
-            throw new LiquibaseException("unable to update", e);
+            throw new LiquibaseException("unable to update on: " + id, e);
         }
     }
 
     private void updateCurrent(ULong height, Digest blkHash, int txn, Digest txnHash) {
         if (updateCurrent == null) {
-            log.error("update current is null");
-            return;
+            log.error("Failure to update current block: {} hash: {} txn: {} hash: {}, current block is null on: {}",
+                      height, blkHash, txn, txnHash, id);
+            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + id);
         }
         try {
             updateCurrent.setLong(1, height.longValue());
@@ -800,12 +819,12 @@ public class SqlStateMachine {
             updateCurrent.setString(4, QualifiedBase64.qb64(txnHash));
             updateCurrent.execute();
         } catch (JdbcSQLNonTransientConnectionException e) {
-            log.trace("Connection closed, failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height,
-                      blkHash, txn, txnHash, url);
+            log.error("Connection closed, failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height,
+                      blkHash, txn, txnHash, id);
         } catch (SQLException e) {
-            log.debug("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash, txn,
-                      txnHash, url);
-            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
+            log.error("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash, txn,
+                      txnHash, id);
+            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + id, e);
         }
         commit();
     }
@@ -924,7 +943,7 @@ public class SqlStateMachine {
                     try {
                         handler.accept(pending);
                     } catch (Throwable e) {
-                        log.trace("handler failed for {}", e);
+                        log.trace("handler failed", e);
                     }
                 }
             } finally {
@@ -997,7 +1016,7 @@ public class SqlStateMachine {
             for (Transaction txn : initialization) {
                 execute(i, Digest.NONE, txn, null, r -> r.run());
             }
-            log.debug("Genesis executed on: {}", url);
+            log.debug("Genesis executed on: {}", id);
         }
     }
 }

@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.utils.Utils;
 import org.joou.ULong;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
 
@@ -30,7 +31,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    //    @Test
+    @Test
     public void checkpointBootstrap() throws Exception {
         pre();
 
@@ -40,7 +41,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         assertNotNull(chkptHeight, "Null checkpoint height!");
         System.out.println("Checkpoint at height: " + chkptHeight);
 
-        assertTrue(Utils.waitForCondition(10_000, 1_000, () -> {
+        var processed = Utils.waitForCondition(10_000, 1_000, () -> {
             return members.stream()
                           .filter(m -> !m.equals(testSubject))
                           .map(m -> updaters.get(m))
@@ -48,12 +49,23 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                           .filter(cb -> cb != null)
                           .map(cb -> cb.height())
                           .filter(l -> l.compareTo(chkptHeight) >= 0)
-                          .count() == members.size() - 1;
-        }), "All members did not process the checkpoint");
+                          .count() == members.size();
+        });
+        assertTrue(processed, "All members did not process the checkpoint: " + members.stream()
+                                                                                      .filter(
+                                                                                      m -> !m.equals(testSubject))
+                                                                                      .map(m -> updaters.get(m))
+                                                                                      .map(ssm -> ssm.getCurrentBlock())
+                                                                                      .filter(cb -> cb != null)
+                                                                                      .map(cb -> cb.height())
+                                                                                      .filter(
+                                                                                      l -> l.compareTo(chkptHeight)
+                                                                                      >= 0)
+                                                                                      .count());
 
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
-        ((DynamicContext) choam.context()).activate(testSubject);
+        ((DynamicContext) choam.context().delegate()).activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
 

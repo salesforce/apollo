@@ -40,6 +40,10 @@ public class DelegatedContext<T extends Member> implements Context<T> {
         return delegate.cardinality();
     }
 
+    public <Q extends Context<T>> Q delegate() {
+        return (Q) delegate;
+    }
+
     @Override
     public int diameter() {
         return delegate.diameter();

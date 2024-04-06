@@ -6,15 +6,7 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>%d{mm:ss.SSS} [%thread] %-5level %logger{0} - %msg%n</Pattern>
-        </encoder>
-    </appender>
-
-    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-        <file>ff.log</file>
-        <append>false</append>
-        <encoder>
-            <Pattern>%d{mm:ss.SSS} [%thread] %-5level %logger{0} - %msg%n</Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
 
@@ -24,12 +16,10 @@
 
     <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
-        <!--        <appender-ref ref="FILE" />-->
     </logger>
 
     <logger name="com.salesforce.apollo.archipelago.ServerConnectionCache" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
-        <!--        <appender-ref ref="FILE" />-->
     </logger>
 
     <logger name="com.salesforce.apollo.archipelago" level="warn" additivity="false">
