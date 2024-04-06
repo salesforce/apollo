@@ -291,6 +291,11 @@ public class CHOAM {
         if (c == null) {
             return "No committee on: %s".formatted(params.member().getId());
         }
+        if (h.block == null) {
+            return "block is null, committee: %s state: %s on: %s  ".formatted(c.getClass().getSimpleName(),
+                                                                               transitions.fsm().getCurrentState(),
+                                                                               params.member().getId());
+        }
         return "block: %s hash: %s height: %s committee: %s state: %s on: %s  ".formatted(h.block.getBodyCase(), h.hash,
                                                                                           h.height(),
                                                                                           c.getClass().getSimpleName(),
@@ -908,6 +913,7 @@ public class CHOAM {
         try {
             linear.execute(Utils.wrapped(() -> {
                 transitions.regenerated();
+                transitions.combine();
             }, log));
         } catch (RejectedExecutionException e) {
             // ignore

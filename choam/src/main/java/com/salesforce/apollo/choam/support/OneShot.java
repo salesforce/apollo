@@ -10,22 +10,18 @@ import com.google.protobuf.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Phaser;
 import java.util.function.Supplier;
 
 public class OneShot implements Supplier<ByteString> {
     private static final Logger log = LoggerFactory.getLogger(OneShot.class);
 
-    private final    CountDownLatch latch = new CountDownLatch(1);
-    private volatile ByteString     value;
+    private final    Phaser     phaser = new Phaser(1);
+    private volatile ByteString value;
 
     @Override
     public ByteString get() {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            return ByteString.EMPTY;
-        }
+        phaser.register();
         final var current = value;
         log.trace("providing value: " + (current == null ? "null" : String.valueOf(current.size())));
         value = null;
@@ -35,6 +31,6 @@ public class OneShot implements Supplier<ByteString> {
     public void setValue(ByteString value) {
         log.trace("resetting value: " + (value == null ? "null" : String.valueOf(value.size())));
         this.value = value;
-        latch.countDown();
+        phaser.arriveAndDeregister();
     }
 }

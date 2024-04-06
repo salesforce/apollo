@@ -56,8 +56,8 @@ public class GenesisAssembly implements Genesis {
     private final        Transitions           transitions;
     private final        ViewContext           view;
     private final        Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
+    private final        OneShot               ds;
     private volatile     Thread                blockingThread;
-    private volatile     OneShot               ds;
     private volatile     HashedBlock           reconfiguration;
 
     public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
@@ -115,7 +115,6 @@ public class GenesisAssembly implements Genesis {
         var validate = view.generateValidation(reconfiguration);
         log.debug("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
                   slate.size(), params().member().getId());
-        ds = new OneShot();
         ds.setValue(validate.toByteString());
     }
 
@@ -168,7 +167,6 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void nominate() {
-        ds = new OneShot();
         var validations = Validations.newBuilder();
         proposals.values()
                  .stream()
