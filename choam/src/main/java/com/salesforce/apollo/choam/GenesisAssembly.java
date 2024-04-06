@@ -64,7 +64,7 @@ public class GenesisAssembly implements Genesis {
                            String label) {
         view = vc;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
+        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingView())
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
@@ -106,7 +106,7 @@ public class GenesisAssembly implements Genesis {
     public void certify() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.certifications.size() > params().majority())
+                 .filter(p -> p.certifications.size() >= params().majority())
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
         assert !slate.isEmpty() : "Slate is empty, no certifications";
         reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
@@ -242,7 +242,7 @@ public class GenesisAssembly implements Genesis {
         var member = view.context().getMember(Digest.from(v.getWitness().getId()));
         if (member != null) {
             witnesses.put(member, v);
-            if (witnesses.size() > params().majority()) {
+            if (witnesses.size() >= params().majority()) {
                 if (published.compareAndSet(false, true)) {
                     publish();
                 }

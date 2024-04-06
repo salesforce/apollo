@@ -135,9 +135,8 @@ public class DelegatedContext<T extends Member> implements Context<T> {
         return delegate.majority();
     }
 
-    @Override
     public int majority(boolean bootstrapped) {
-        return delegate.majority(bootstrapped);
+        return delegate.majority();
     }
 
     @Override

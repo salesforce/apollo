@@ -799,7 +799,7 @@ public class KerlDHT implements ProtoKERLService {
                           .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                           .orElse(null);
         if (max != null) {
-            if (max.getCount() >= context.majority(true)) {
+            if (max.getCount() >= context.majority()) {
                 try {
                     result.complete(max.getElement());
                 } catch (Throwable t) {
@@ -809,15 +809,15 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority, max: " + (max == null ? 0 : max.getCount()) + " required: " + context.majority(
-        true) + " on: " + member.getId()));
+        "Unable to achieve majority, max: " + (max == null ? 0 : max.getCount()) + " required: " + context.majority()
+        + " on: " + member.getId()));
     }
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
         log.debug("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
-                  context.majority(true), member.getId());
+                  context.majority(), member.getId());
         return result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority(true)
+        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority()
         + " on: " + member.getId()));
     }
 
@@ -894,7 +894,7 @@ public class KerlDHT implements ProtoKERLService {
         var max = max(gathered);
         if (max != null) {
             tally.set(max.getCount());
-            final var majority = tally.get() >= context.majority(true);
+            final var majority = tally.get() >= context.majority();
             if (majority) {
                 result.complete(max.getElement());
                 log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier, member.getId());

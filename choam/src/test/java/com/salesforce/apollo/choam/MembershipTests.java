@@ -13,7 +13,7 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.context.StaticContext;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
@@ -30,10 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -58,14 +55,16 @@ public class MembershipTests {
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    private Map<Digest, CHOAM>  choams;
-    private List<SigningMember> members;
-    private Map<Digest, Router> routers;
+    private Map<Digest, CHOAM>     choams;
+    private List<Member>           members;
+    private Map<Digest, Router>    routers;
+    private DynamicContext<Member> context;
 
     @AfterEach
     public void after() throws Exception {
         shutdown();
         members = null;
+        context = null;
     }
 
     @Test
@@ -82,7 +81,7 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(6);
+        final Duration timeout = Duration.ofSeconds(3);
         var txneer = choams.get(members.getLast().getId());
 
         System.out.println("Transactioneer: " + txneer.getId());
@@ -119,7 +118,8 @@ public class MembershipTests {
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        final var targetMet = Utils.waitForCondition(30_000, 1_000, () -> {
+        context.activate(testSubject);
+        final var targetMet = Utils.waitForCondition(120_000, 1_000, () -> {
             final var currentHeight = choams.get(testSubject.getId()).currentHeight();
             return currentHeight != null && currentHeight.intValue() >= target;
         });
@@ -154,34 +154,43 @@ public class MembershipTests {
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> stereotomy.newIdentifier())
                            .map(ControlledIdentifierMember::new)
-                           .map(e -> (SigningMember) e)
+                           .map(e -> (Member) e)
                            .toList();
-        System.out.println("Members: " + members.stream().map(s -> s.getId()).toList());
-        var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
-        SigningMember testSubject = members.get(0); // hardwired
+        context = DynamicContext.newBuilder().setpByz(0.2).setBias(3).setCardinality(cardinality).build();
+        context.activate(members);
+
+        SigningMember testSubject = new ControlledIdentifierMember(stereotomy.newIdentifier());
+
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(Member::getId, m -> new LocalServer(prefix, m).router(
                          ServerConnectionCache.newBuilder().setTarget(cardinality))));
-        choams = members.stream().collect(Collectors.toMap(Member::getId, m -> {
-
-            final TransactionExecutor processor = (index, hash, t, f, executor) -> {
-                if (f != null) {
-                    f.completeAsync(Object::new, executor);
-                }
-            };
-            params.getProducer().ethereal().setSigner(m);
-            if (!m.equals(testSubject)) {
-                params.setSynchronizationCycles(1);
-            }
-            return new CHOAM(params.build(RuntimeParameters.newBuilder()
-                                                           .setMember(m)
-                                                           .setCommunications(routers.get(m.getId()))
-                                                           .setProcessor(processor)
-                                                           .setContext(context)
-                                                           .build()));
-        }));
+        routers.put(testSubject.getId(), new LocalServer(prefix, testSubject).router(
+        ServerConnectionCache.newBuilder().setTarget(cardinality)));
+        choams = new HashMap<>();
+        for (Member m : members) {
+            choams.put(m.getId(), constructCHOAM((SigningMember) m, params, false));
+        }
+        choams.put(testSubject.getId(), constructCHOAM(testSubject, params, true));
         return testSubject;
+    }
+
+    private CHOAM constructCHOAM(SigningMember m, Parameters.Builder params, boolean testSubject) {
+        final TransactionExecutor processor = (index, hash, t, f, executor) -> {
+            if (f != null) {
+                f.completeAsync(Object::new, executor);
+            }
+        };
+        params.getProducer().ethereal().setSigner(m);
+        if (testSubject) {
+            params.setSynchronizationCycles(1);
+        }
+        return new CHOAM(params.build(RuntimeParameters.newBuilder()
+                                                       .setMember(m)
+                                                       .setCommunications(routers.get(m.getId()))
+                                                       .setProcessor(processor)
+                                                       .setContext(context)
+                                                       .build()));
     }
 
     private void shutdown() {

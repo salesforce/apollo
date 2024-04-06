@@ -78,11 +78,12 @@ public class ViewContext {
     }
 
     public Validate generateValidation(HashedBlock block) {
-        log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member().getId());
+        log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
+                  params.member().getId());
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
-            log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(),
-                      params.member().getId());
+            log.error("Unable to sign: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash,
+                      block.height(), params.member().getId());
             return null;
         }
         var validation = Validate.newBuilder()
@@ -163,8 +164,8 @@ public class ViewContext {
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {
-            log.debug("no validation witness: {} for block: {} on: {}", Digest.from(validate.getWitness().getId()),
-                      block.hash, params.member().getId());
+            log.debug("no validation witness: {} for: {} block: {} on: {}", Digest.from(validate.getWitness().getId()),
+                      block.block.getBodyCase(), block.hash, params.member().getId());
             return false;
         }
         return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());

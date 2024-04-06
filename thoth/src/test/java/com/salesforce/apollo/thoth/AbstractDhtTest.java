@@ -124,7 +124,7 @@ public class AbstractDhtTest {
         System.out.println();
         System.out.println();
         System.out.printf("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s%n", getCardinality(), PBYZ,
-                          context.getRingCount(), context.majority(true));
+                          context.getRingCount(), context.majority());
         System.out.println();
     }
 

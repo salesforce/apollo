@@ -24,8 +24,9 @@ and mechanisms of Apollo can be used for coins/etc, the design goals are much di
 ## Some Features
 
 * Multi tenant isolation enclaves using GraalVM Isolates
-* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters, windows, etc
-* Decentralized Identifier based foundation and key management infrastructure, based on
+* Self-contained cryptography module — Self describing Digests, Signatures and Identifiers, solid Bloom Filters,
+  windows, etc
+* Decentralized Identifier-based foundation and key management infrastructure, based on
   the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI)
 * Secure and trusted attestation, identity bootstrapping and secrets provisioning
 * MTLS network communication — KERI for MTLS certificate authentication. Local communication simulation for simplified
@@ -47,9 +48,10 @@ Apollo requires JDK 22+ and [Maven](https://maven.apache.org/) 3.9.3 and above
 
 ### Install Maven
 
-The build includes  _mvnw_, and thus there is not need to install Maven.  Simply use ./mvnw for all your Maven invocation needs.
+The build includes  _mvnw_, and thus there is not need to install Maven. Simply use ./mvnw for all your Maven invocation
+needs.
 
-See [Installing Apache Maven](https://maven.apache.org/install.html) if you prefer to install Maven. 
+See [Installing Apache Maven](https://maven.apache.org/install.html) if you prefer to install Maven.
 
 ### Install GraalVM (Optional)
 
@@ -64,17 +66,18 @@ If you are building Apollo for the first time, you  __must__  cd to the root dir
 
     ./mvnw clean install -Ppre -DskipTests
 
-This will perform a full build, including the deterministic SQL execution module. After this is complete, you do not
-need to do this again. You can build Apollo normally, without the deterministic SQL module and to do so cd to the root
+This will perform a full build including the deterministic SQL execution module. After this is complete, you do not
+need to do this again. You can build Apollo normally without the deterministic SQL module and to do so cd to the root
 directory of the repository and then:
 
     ./mvnw clean install
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by
 dependent modules within the rest of the build. You must have invoked maven on the Apollo project root with the "
-install" goal at least once, to correctly build any arbitrary submodule.
+install"
+goal at least once, to correctly build any arbitrary submodule.
 
-You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module
+You can use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module
 without performing the full build.
 
 ### Building Apollo Isolate Enclaves

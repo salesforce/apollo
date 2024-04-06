@@ -291,10 +291,12 @@ public class CHOAM {
         if (c == null) {
             return "No committee on: %s".formatted(params.member().getId());
         }
-        return "block: %s height: %s committee: %s state: %s on: %s  ".formatted(h.hash, h.height(),
-                                                                                 c.getClass().getSimpleName(),
-                                                                                 transitions.fsm().getCurrentState(),
-                                                                                 params.member().getId());
+        return "block: %s hash: %s height: %s committee: %s state: %s on: %s  ".formatted(h.block.getBodyCase(), h.hash,
+                                                                                          h.height(),
+                                                                                          c.getClass().getSimpleName(),
+                                                                                          transitions.fsm()
+                                                                                                     .getCurrentState(),
+                                                                                          params.member().getId());
     }
 
     /**
@@ -345,8 +347,8 @@ public class CHOAM {
         store.put(next);
         final Committee c = current.get();
         c.accept(next);
-        log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                 params.member().getId());
+        log.info("Accepted block: {} hash: {} hash: {} height: {} body: {} on: {}", next.block.getBodyCase(),
+                 next.block.getBodyCase(), next.hash, next.height(), next.block.getBodyCase(), params.member().getId());
     }
 
     private void cancelBootstrap() {
@@ -382,7 +384,7 @@ public class CHOAM {
                       params.member().getId());
             return false;
         }
-        final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
+        final Set<Member> members = Committee.viewMembersOf(nextView, pendingView().get());
         if (!members.contains(params.member())) {
             log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
                       members, params.member().getId());
@@ -442,13 +444,13 @@ public class CHOAM {
                     }
                     accept(nextBlock);
                 } else {
-                    log.debug("Unable to validate block: {} height: {} on: {}", next.hash, next.height(),
-                              params.member().getId());
+                    log.debug("Unable to validate block: {} hash: {} height: {} on: {}", next.block.getBodyCase(),
+                              next.hash, next.height(), params.member().getId());
                     pending.poll();
                 }
             } else {
-                log.trace("Premature block: {} height: {} current: {} on: {}", next.hash, next.height(), h.height(),
-                          params.member().getId());
+                log.trace("Premature block: {} : {} height: {} current: {} on: {}", next.block.getBodyCase(), next.hash,
+                          next.height(), h.height(), params.member().getId());
                 return;
             }
             next = pending.peek();
@@ -472,8 +474,8 @@ public class CHOAM {
             return;
         }
         HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), block);
-        log.trace("Received block: {} height: {} from {} on: {}", hcb.hash, hcb.height(), m.source(),
-                  params.member().getId());
+        log.trace("Received block: {} hash: {} height: {} from {} on: {}", hcb.block.getBodyCase(), hcb.hash,
+                  hcb.height(), m.source(), params.member().getId());
         pending.add(hcb);
     }
 
@@ -514,34 +516,37 @@ public class CHOAM {
             @Override
             public Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                return Block.newBuilder()
-                            .setHeader(
-                            buildHeader(params.digestAlgorithm(), executions, prev, height, checkpoint.height(),
-                                        checkpoint.hash, v.height(), v.hash))
-                            .setExecutions(executions)
-                            .build();
+                var block = Block.newBuilder()
+                                 .setHeader(
+                                 buildHeader(params.digestAlgorithm(), executions, prev, height, checkpoint.height(),
+                                             checkpoint.hash, v.height(), v.hash))
+                                 .setExecutions(executions)
+                                 .build();
+                log.trace("Produced block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
+                          params.member().getId());
+                return block;
             }
 
             @Override
             public void publish(CertifiedBlock cb) {
                 combine.publish(cb, true);
-                log.trace("Published block height: {} on: {}", cb.getBlock().getHeader().getHeight(),
-                          params.member().getId());
+                log.trace("Published: {} hash: {} height: {} on: {}", cb.getBlock().getBodyCase(), cb.hashCode(),
+                          cb.getBlock().getHeader().getHeight(), params.member().getId());
             }
 
             @Override
             public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
                                      HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, checkpoint);
+                return CHOAM.reconfigure(nextViewId, joining, previous, pendingView().get(), v, params, checkpoint);
             }
         };
     }
 
     private void execute(List<Transaction> execs) {
         final var h = head.get();
-        log.info("Executing transactions for block: {} height: {} txns: {} on: {}", h.hash, h.height(), execs.size(),
-                 params.member().getId());
+        log.info("Executing transactions for block: {} hash: {} height: {} txns: {} on: {}", h.block.getBodyCase(),
+                 h.hash, h.height(), execs.size(), params.member().getId());
         for (int i = 0; i < execs.size(); i++) {
             var exec = execs.get(i);
             final var index = i;
@@ -609,8 +614,8 @@ public class CHOAM {
         final Digest prev = next.getPrevious();
         var isNext = h.hash.equals(prev);
         if (!isNext) {
-            log.info("isNext: {} previous: {} block: {} height: {} current: {} height: {} on: {}", isNext, prev,
-                     next.hash, next.height(), h.hash, h.height(), params.member().getId());
+            log.info("isNext: false previous: {} block: {} hash: {} height: {} current: {} height: {} on: {}", prev,
+                     next.block.getBodyCase(), next.hash, next.height(), h.hash, h.height(), params.member().getId());
         }
         return isNext;
     }
@@ -631,9 +636,10 @@ public class CHOAM {
             log.error("Unable to generate and sign consensus key on: {}", params.member().getId());
             return;
         }
-        log.trace("Generated next view consensus key: {} sig: {} diadem: {} on: {}",
+        log.trace("Generated next view consensus key: {} sig: {} committee: {} on: {}",
                   params.digestAlgorithm().digest(pubKey.getEncoded()),
-                  params.digestAlgorithm().digest(signed.toSig().toByteString()), current, params.member().getId());
+                  params.digestAlgorithm().digest(signed.toSig().toByteString()), current.get(),
+                  params.member().getId());
         next.set(new nextView(ViewMember.newBuilder()
                                         .setId(params.member().getId().toDigeste())
                                         .setConsensusKey(pubKey)
@@ -651,8 +657,8 @@ public class CHOAM {
     private void process() {
         final var c = current.get();
         final HashedCertifiedBlock h = head.get();
-        log.info("Begin block: {} height: {} committee: {} on: {}", h.hash, h.height(), c.getClass().getSimpleName(),
-                 params.member().getId());
+        log.info("Begin block: {} hash: {} height: {} committee: {} on: {}", h.block.getBodyCase(), h.hash, h.height(),
+                 c.getClass().getSimpleName(), params.member().getId());
         switch (h.block.getBodyCase()) {
         case ASSEMBLE: {
             params.processor().beginBlock(h.height(), h.hash);
@@ -689,7 +695,8 @@ public class CHOAM {
             break;
         }
         params.processor().endBlock(h.height(), h.hash);
-        log.info("End block: {} height: {} on: {}", h.hash, h.height(), params.member().getId());
+        log.info("End block: {} hash: {} height: {} on: {}", h.block.getBodyCase(), h.hash, h.height(),
+                 params.member().getId());
     }
 
     private void reconfigure(Reconfigure reconfigure) {
@@ -924,8 +931,8 @@ public class CHOAM {
             if (prevHeight == null) {
                 if (!hcb.height().equals(ULong.valueOf(0))) {
                     pending.add(hcb);
-                    log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                              params.member().getId(), hcb.hash, 0, header.getHeight());
+                    log.debug("Deferring block on {}.  Block: {} hash: {} height should be {} and block height is {}",
+                              params.member().getId(), hcb.block.getBodyCase(), hcb.hash, 0, header.getHeight());
                     return;
                 }
             } else {
@@ -936,8 +943,9 @@ public class CHOAM {
                 }
                 if (!hcb.height().equals(prevHeight.add(1))) {
                     pending.add(hcb);
-                    log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                              params.member().getId(), hcb.hash, previousBlock.height().add(1), header.getHeight());
+                    log.debug("Deferring block on {}.  Block: {} hash: {} height should be {} and block height is {}",
+                              params.member().getId(), hcb.block.getBodyCase(), hcb.hash, previousBlock.height().add(1),
+                              header.getHeight());
                     return;
                 }
             }
@@ -949,19 +957,20 @@ public class CHOAM {
             }
             final var c = current.get();
             if (!c.validate(hcb)) {
-                log.error("Protocol violation on {}. New block is not validated {}", params.member().getId(), hcb.hash);
+                log.error("Protocol violation. New block is not validated: {} hash: {} on {}", hcb.block.getBodyCase(),
+                          hcb.hash, params.member().getId());
                 return;
             }
         } else {
             if (!block.hasGenesis()) {
                 pending.add(hcb);
-                log.info("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                         params.member().getId(), hcb.hash, 0, header.getHeight());
+                log.info("Deferring block on {}.  Block: {} hash: {} height should be {} and block height is {}",
+                         params.member().getId(), hcb.block.getBodyCase(), hcb.hash, 0, header.getHeight());
                 return;
             }
             if (!current.get().validateRegeneration(hcb)) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", params.member().getId(),
-                          hcb.hash);
+                log.error("Protocol violation. Genesis block is not validated: {} hash {} on: {}",
+                          hcb.block.getBodyCase(), hcb.hash, params.member().getId());
                 return;
             }
         }
@@ -1055,7 +1064,7 @@ public class CHOAM {
                     final var c = current.get();
                     log.debug(
                     "Synchronization quorum formation failed: {}, members: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                    e.getMessage(), context().totalCount(), context().getRingCount(), Math.max(4, params.majority()),
+                    e.getMessage(), context().totalCount(), context().getRingCount(), params.majority(),
                     c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                     awaitSynchronization();
                 }
@@ -1081,7 +1090,8 @@ public class CHOAM {
 
         @Override
         public void recover(HashedCertifiedBlock anchor) {
-            log.info("Anchor discovered: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
+            log.info("Anchor discovered: {} hash: {} height: {} on: {}", anchor.block.getBodyCase(), anchor.hash,
+                     anchor.height(), params.member().getId());
             current.set(new Formation());
             CHOAM.this.recover(anchor);
         }
@@ -1095,15 +1105,15 @@ public class CHOAM {
             cancelSynchronization();
             var activeCount = context().totalCount();
             var majority = params.majority();
-            if (params.generateGenesis() && activeCount > majority) {
+            if (params.generateGenesis() && activeCount >= majority) {
                 if (current.get() == null && current.compareAndSet(null, new Formation())) {
                     log.info(
                     "Quorum achieved, triggering regeneration. members: {} required: {} forming Genesis committee on: {}",
-                    activeCount, majority + 1, params.member().getId());
+                    activeCount, majority, params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, members: {} required: {} existing committee: {} on: {}", activeCount,
-                             majority + 1, current.get().getClass().getSimpleName(), params.member().getId());
+                             majority, current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();

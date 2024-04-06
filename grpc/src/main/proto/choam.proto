@@ -147,8 +147,9 @@ message Validate {
 }
 
 message Reassemble {
-  repeated ViewMember members = 1;
-  repeated Validate validations = 2;
+  crypto.Digeste member = 1;
+  repeated ViewMember members = 2;
+  repeated Validate validations = 3;
 }
 
 message ViewMembers {

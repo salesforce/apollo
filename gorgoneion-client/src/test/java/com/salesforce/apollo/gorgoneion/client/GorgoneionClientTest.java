@@ -185,7 +185,7 @@ public class GorgoneionClientTest {
         var invitation = gorgoneionClient.apply(Duration.ofSeconds(2_000));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
-        assertTrue(invitation.getValidationsCount() >= context.majority(true));
+        assertTrue(invitation.getValidationsCount() >= context.majority());
 
         assertTrue(countdown.await(1, TimeUnit.SECONDS));
     }

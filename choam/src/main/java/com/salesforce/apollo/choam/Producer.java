@@ -176,24 +176,22 @@ public class Producer {
                  .map(this::validate)
                  .filter(Objects::nonNull)
                  .filter(p -> !p.published.get())
-                 .filter(p -> p.witnesses.size() > params().majority())
+                 .filter(p -> p.witnesses.size() >= params().majority())
                  .forEach(this::publish);
 
         var reass = Reassemble.newBuilder();
         aggregate.stream()
                  .flatMap(e -> e.getReassembliesList().stream())
                  .forEach(r -> reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList()));
-        if (reass.getMembersCount() > 0 || reass.getValidationsCount() > 0) {
-            final var ass = assembly.get();
-            if (ass != null) {
-                log.trace("Consuming reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                          reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-                ass.inbound().accept(Collections.singletonList(reass.build()));
-            } else {
-                log.trace("Pending reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                          reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-                pendingReassembles.add(reass.build());
-            }
+        final var ass = assembly.get();
+        if (ass != null) {
+            log.trace("Consuming reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
+                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
+            ass.inbound().accept(Collections.singletonList(reass.build()));
+        } else {
+            log.trace("Pending reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
+                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
+            pendingReassembles.add(reass.build());
         }
 
         HashedBlock lb = previousBlock.get();
@@ -243,7 +241,7 @@ public class Producer {
     private void produceAssemble() {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
-        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
+        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, view.pendingView()));
         log.debug("Assembling: {} on: {}", nextViewId, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
@@ -298,6 +296,7 @@ public class Producer {
         @Override
         public void assembled() {
             if (!reconfigured.compareAndSet(false, true)) {
+                log.error("assembly already complete on: {}", params().member().getId());
                 return;
             }
             final var slate = assembly.get().getSlate();
@@ -310,8 +309,9 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
             //            controller.completeIt();
-            log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
-                     reconfiguration.height(), params().member().getId());
+            log.info("Reconfiguration block: {} height: {} slate: {} produced on: {}", reconfiguration.hash,
+                     reconfiguration.height(), slate.keySet().stream().map(m -> m.getId()).sorted().toList(),
+                     params().member().getId());
         }
 
         @Override
@@ -328,6 +328,7 @@ public class Producer {
                 return;
             }
             viewAssembly.finalElection();
+            log.error("Final view assembly election on: {}", params().member().getId());
             if (assembled.get()) {
                 assembled();
             }

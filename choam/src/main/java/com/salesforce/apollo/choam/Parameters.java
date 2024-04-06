@@ -83,7 +83,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     }
 
     public int majority() {
-        return runtime.context.majority(true);
+        return runtime.context.majority();
     }
 
     public SigningMember member() {
