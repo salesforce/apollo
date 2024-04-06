@@ -808,9 +808,9 @@ public class SqlStateMachine {
 
     private void updateCurrent(ULong height, Digest blkHash, int txn, Digest txnHash) {
         if (updateCurrent == null) {
-            log.error("Failure to update current block: {} hash: {} txn: {} hash: {}, current block is null on: {}",
-                      height, blkHash, txn, txnHash, id);
-            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + id);
+            log.error("Failure to update current block: {} hash: {} txn: {} hash: {}, statement is null on: {}", height,
+                      blkHash, txn, txnHash, id);
+            throw new IllegalStateException("Cannot update the CURRENT BLOCK, statement is null on: " + id);
         }
         try {
             updateCurrent.setLong(1, height.longValue());
