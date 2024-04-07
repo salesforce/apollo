@@ -7,7 +7,10 @@
 package com.salesforce.apollo.state;
 
 import com.salesforce.apollo.context.DynamicContext;
+import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
@@ -22,11 +25,20 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         ((DynamicContext) choam.context().delegate()).activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
+
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choam.active()),
+                   "Test subject did not become active: " + choam.logState());
+        members.add(testSubject);
         post();
     }
 
     @Override
     protected int checkpointBlockSize() {
         return 1000;
+    }
+
+    @Override
+    protected byte disc() {
+        return 2;
     }
 }

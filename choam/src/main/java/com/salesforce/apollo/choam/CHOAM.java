@@ -896,7 +896,6 @@ public class CHOAM {
         CertifiedBlock current1;
         if (state.lastCheckpoint() == null) {
             log.info("Synchronizing from genesis: {} on: {}", state.genesis().hash, params.member().getId());
-            restore();
             current1 = state.genesis().certifiedBlock;
         } else {
             log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint().hash, params.member().getId());

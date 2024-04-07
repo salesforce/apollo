@@ -10,7 +10,6 @@ import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.CHOAM;
-import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -41,8 +40,8 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -82,7 +81,6 @@ abstract public class AbstractLifecycleTest {
     protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
     protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
     private final   Map<Member, Parameters>      parameters       = new HashMap<>();
-    protected       Map<Digest, AtomicInteger>   blocks;
     protected       CountDownLatch               checkpointOccurred;
     protected       Map<Digest, CHOAM>           choams;
     protected       List<SigningMember>          members;
@@ -134,9 +132,8 @@ abstract public class AbstractLifecycleTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[] { 6, 6, 6 });
+        entropy.setSeed(new byte[] { 6, 6, 6, disc() });
         context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();
 
@@ -145,7 +142,7 @@ abstract public class AbstractLifecycleTest {
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
             return stereotomy.newIdentifier();
-        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).toList();
+        }).map(cpk -> new ControlledIdentifierMember(cpk)).map(e -> (SigningMember) e).collect(Collectors.toList());
         System.out.println("Members: " + members.stream().map(s -> s.getId()).toList());
         members.forEach(m -> context.activate(m));
 
@@ -171,14 +168,16 @@ abstract public class AbstractLifecycleTest {
 
     protected abstract int checkpointBlockSize();
 
+    abstract protected byte disc();
+
     protected void post() throws Exception {
 
-        final var clearTxns = Utils.waitForCondition(120_000, 1000, () ->
+        final var clearTxns = Utils.waitForCondition(30_000, 1000, () ->
         transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).count() == transactioneers.size());
         assertTrue(clearTxns, "Transactions did not clear: " + Collections.singletonList(
         transactioneers.stream().mapToInt(t -> t.inFlight()).filter(t -> t == 0).toArray()));
 
-        final var synchd = Utils.waitForCondition(120_000, 1000, () -> {
+        final var synchd = Utils.waitForCondition(30_000, 1000, () -> {
 
             var max = members.stream()
                              .map(m -> updaters.get(m))
@@ -326,10 +325,9 @@ abstract public class AbstractLifecycleTest {
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
                               Context<Member> context) {
-        blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
-        SqlStateMachine up = new SqlStateMachine(DigestAlgorithm.DEFAULT.getOrigin(), url, new Properties(),
+        SqlStateMachine up = new SqlStateMachine(m.getId(), url, new Properties(),
                                                  new File(checkpointDirBase, m.getId().toString()));
         updaters.put(m, up);
 
@@ -342,7 +340,7 @@ abstract public class AbstractLifecycleTest {
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))
                                                        .setRestorer(up.getBootstrapper())
-                                                       .setProcessor(wrap(m, up))
+                                                       .setProcessor(up.getExecutor())
                                                        .build()));
     }
 
@@ -364,39 +362,11 @@ abstract public class AbstractLifecycleTest {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
-        params.getProducer().ethereal().setNumberOfEpochs(10);
 
         params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
 
         return params;
-    }
-
-    private TransactionExecutor wrap(SigningMember m, SqlStateMachine up) {
-        return new TransactionExecutor() {
-            @Override
-            public void beginBlock(ULong height, Digest hash) {
-                blocks.get(m.getId()).incrementAndGet();
-                up.getExecutor().beginBlock(height, hash);
-            }
-
-            @Override
-            public void endBlock(ULong height, Digest hash) {
-                up.getExecutor().endBlock(height, hash);
-            }
-
-            @Override
-            public void execute(int i, Digest hash, Transaction tx,
-                                @SuppressWarnings("rawtypes") CompletableFuture onComplete, Executor executor) {
-                up.getExecutor().execute(i, hash, tx, onComplete, executor);
-            }
-
-            @Override
-            public void genesis(Digest hash, List<Transaction> initialization) {
-                blocks.get(m.getId()).incrementAndGet();
-                up.getExecutor().genesis(hash, initialization);
-            }
-        };
     }
 
     private Function<ULong, File> wrap(SqlStateMachine up) {

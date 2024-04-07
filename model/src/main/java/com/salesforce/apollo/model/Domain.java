@@ -83,7 +83,7 @@ abstract public class Domain {
             throw new IllegalArgumentException("Must be a directory: " + checkpointBaseDir);
         }
         var checkpointDir = new File(dir, qb64(member.getIdentifier().getDigest()));
-        sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
+        sqlStateMachine = new SqlStateMachine(member.getId(), dbURL, new Properties(), checkpointDir);
 
         paramsClone.getProducer().ethereal().setSigner(member);
         this.params = paramsClone.build(runtimeClone.setCheckpointer(sqlStateMachine.getCheckpointer())

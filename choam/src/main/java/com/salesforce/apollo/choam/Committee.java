@@ -115,10 +115,10 @@ public interface Committee {
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
         if (!verified) {
-            log().debug("Failed verification: {} using: {} key: {} on: {}", verified, witness.getId(),
+            log().debug("Failed verification: false using: {} key: {} on: {}", witness.getId(),
                         DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
         } else {
-            log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
+            log().trace("Verified: true using: {} key: {} on: {}", witness.getId(),
                         DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
         }
         return verified;

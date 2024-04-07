@@ -71,12 +71,17 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choam.active()),
                    "Test subject did not become active: " + choam.logState());
-
+        members.add(testSubject);
         post();
     }
 
     @Override
     protected int checkpointBlockSize() {
         return 3;
+    }
+
+    @Override
+    protected byte disc() {
+        return 1;
     }
 }

@@ -44,6 +44,10 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <logger name="com.chiralbehaviors.tron" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
     <logger name="com.salesforce.apollo.choam.Session" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>

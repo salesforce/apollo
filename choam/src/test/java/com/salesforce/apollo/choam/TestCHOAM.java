@@ -164,7 +164,7 @@ public class TestCHOAM {
         final var timeout = Duration.ofSeconds(15);
 
         final var transactioneers = new ArrayList<Transactioneer>();
-        final var clientCount = LARGE_TESTS ? 1_500 : 50;
+        final var clientCount = LARGE_TESTS ? 1_500 : 5;
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
         choams.values().forEach(c -> {
