@@ -98,13 +98,14 @@ public class CHOAM {
 
         nextView();
         var bContext = new DelegatedContext<>(params.context());
+        var adapter = new MessageAdapter(any -> true, (Function<ByteString, Digest>) this::signatureHash,
+                                         (Function<ByteString, List<Digest>>) any -> Collections.emptyList(),
+                                         (m, any) -> any,
+                                         (Function<AgedMessageOrBuilder, ByteString>) AgedMessageOrBuilder::getContent);
+
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
-                                          new MessageAdapter(any -> true,
-                                                             (Function<ByteString, Digest>) any -> signatureHash(any),
-                                                             (Function<ByteString, List<Digest>>) any -> Collections.emptyList(),
-                                                             (m, any) -> any,
-                                                             (Function<AgedMessageOrBuilder, ByteString>) am -> am.getContent()));
+                                          adapter);
         linear = Executors.newSingleThreadExecutor(
         Thread.ofVirtual().name("Linear " + params.member().getId()).factory());
         combine.registerHandler((ctx, messages) -> {

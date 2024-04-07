@@ -55,12 +55,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author hal.hildebrand
  */
 abstract public class AbstractLifecycleTest {
-    protected static final int               CARDINALITY = 5;
-    protected static final Random            entropy     = new Random();
-    private static final   List<Transaction> GENESIS_DATA;
-
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    protected static final int               CARDINALITY     = 5;
+    private static final   Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
     "Give me food or give me slack or kill me".getBytes());
+    protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
+    protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
     //    static {
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
@@ -71,16 +70,9 @@ abstract public class AbstractLifecycleTest {
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TxDataSource.class)).setLevel(Level.TRACE);
     //    }
-
-    static {
-        var txns = MigrationTest.initializeBookSchema();
-        txns.add(initialInsert());
-        GENESIS_DATA = CHOAM.toGenesisData(txns);
-    }
-
-    protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
-    protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
+    private final          List<Transaction> GENESIS_DATA;
     private final   Map<Member, Parameters>      parameters       = new HashMap<>();
+    protected       SecureRandom                 entropy;
     protected       CountDownLatch               checkpointOccurred;
     protected       Map<Digest, CHOAM>           choams;
     protected       List<SigningMember>          members;
@@ -91,6 +83,12 @@ abstract public class AbstractLifecycleTest {
     private File                 baseDir;
     private File                 checkpointDirBase;
     private List<Transactioneer> transactioneers;
+
+    {
+        var txns = MigrationTest.initializeBookSchema();
+        txns.add(initialInsert());
+        GENESIS_DATA = CHOAM.toGenesisData(txns);
+    }
 
     public AbstractLifecycleTest() {
         super();
@@ -132,7 +130,7 @@ abstract public class AbstractLifecycleTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6, disc() });
         context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();

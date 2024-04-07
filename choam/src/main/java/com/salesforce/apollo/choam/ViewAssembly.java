@@ -162,7 +162,6 @@ public class ViewAssembly {
                       params().member().getId());
             return !gathered();
         }
-        polled.add(vm);
         join(member, true);
         return !gathered();
     }
@@ -243,6 +242,7 @@ public class ViewAssembly {
                 validations.forEach(this::validate);
             }
         }
+        polled.add(mid);
         var reass = builder.build();
         if (reass.isInitialized()) {
             publisher.accept(reass);
