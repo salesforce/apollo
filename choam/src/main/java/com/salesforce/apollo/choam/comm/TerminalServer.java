@@ -70,7 +70,7 @@ public class TerminalServer extends TerminalImplBase {
     }
 
     @Override
-    public void join(Digeste nextView, StreamObserver<ViewMember> responseObserver) {
+    public void join(Digeste nextView, StreamObserver<SignedViewMember> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));

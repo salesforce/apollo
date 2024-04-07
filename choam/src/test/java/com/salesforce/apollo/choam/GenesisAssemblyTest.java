@@ -76,6 +76,7 @@ public class GenesisAssemblyTest {
         var committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
+                                              .setGenesisViewId(DigestAlgorithm.DEFAULT.getLast())
                                               .setGenerateGenesis(true)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
@@ -173,10 +174,15 @@ public class GenesisAssemblyTest {
             final PubKey consensus = bs(keyPair.getPublic());
             var vm = ViewMember.newBuilder()
                                .setId(m.getId().toDigeste())
+                               .setView(params.getGenesisViewId().toDigeste())
                                .setConsensusKey(consensus)
                                .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, m.getId().toString()));
+            var svm = SignedViewMember.newBuilder()
+                                      .setVm(vm)
+                                      .setSignature(((SigningMember) m).sign(vm.toByteString()).toSig())
+                                      .build();
+            genii.put(m, new GenesisAssembly(view, comms.get(m), svm, m.getId().toString()));
         });
 
         try {

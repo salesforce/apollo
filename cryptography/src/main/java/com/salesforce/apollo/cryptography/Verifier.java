@@ -130,7 +130,8 @@ public interface Verifier {
 
         @Override
         public String toString() {
-            return "V[" + keys.values().stream().map(k -> ":" + k.getEncoded()).toList() + "]";
+            return "V[" + keys.values().stream().map(k -> ":" + DigestAlgorithm.DEFAULT.digest(k.getEncoded())).toList()
+            + "]";
         }
 
         @Override
@@ -144,7 +145,7 @@ public interface Verifier {
         }
     }
 
-    public class MockVerifier implements Verifier {
+    class MockVerifier implements Verifier {
 
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {

@@ -30,7 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,8 +53,9 @@ public class Producer {
     private final        TxDataSource                      ds;
     private final        int                               lastEpoch;
     private final        Set<Member>                       nextAssembly       = new HashSet<>();
-    private final        Map<Digest, PendingBlock>         pending            = new ConcurrentHashMap<>();
+    private final        Map<Digest, PendingBlock>         pending            = new ConcurrentSkipListMap<>();
     private final        BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
+    private final        Map<Digest, List<Validate>>       pendingValidations = new ConcurrentSkipListMap<>();
     private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
     private final        AtomicBoolean                     reconfigured       = new AtomicBoolean();
     private final        AtomicBoolean                     started            = new AtomicBoolean(false);
@@ -218,6 +220,7 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             log.debug("Created block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
                       next.hash, next.height(), lb.hash, last, params().member().getId());
+            processPendingValidations(next, p);
         }
         if (last) {
             started.set(true);
@@ -236,6 +239,16 @@ public class Producer {
 
     private Parameters params() {
         return view.params();
+    }
+
+    private void processPendingValidations(HashedBlock block, PendingBlock p) {
+        var pending = pendingValidations.remove(block.hash);
+        if (pending != null) {
+            pending.forEach(v -> validate(v, p, block.hash));
+            if (p.witnesses.size() >= params().majority()) {
+                publish(p);
+            }
+        }
     }
 
     private void produceAssemble() {
@@ -257,13 +270,13 @@ public class Producer {
         ds.offer(validation);
         log.debug("Produced view assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
                   assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
+        processPendingValidations(assemble, p);
     }
 
     private void publish(PendingBlock p) {
         log.debug("Published pending: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
                   p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
         p.published.set(true);
-        pending.remove(p.block.hash);
         final var cb = CertifiedBlock.newBuilder()
                                      .setBlock(p.block.block)
                                      .addAllCertifications(
@@ -276,8 +289,13 @@ public class Producer {
         Digest hash = Digest.from(v.getHash());
         var p = pending.get(hash);
         if (p == null) {
+            pendingValidations.computeIfAbsent(hash, h -> new CopyOnWriteArrayList<>()).add(v);
             return null;
         }
+        return validate(v, p, hash);
+    }
+
+    private PendingBlock validate(Validate v, PendingBlock p, Digest hash) {
         if (!view.validate(p.block, v)) {
             log.trace("Invalid validate for: {} hash: {} on: {}", p.block.block.getBodyCase(), hash,
                       params().member().getId());
@@ -312,6 +330,7 @@ public class Producer {
             log.info("Reconfiguration block: {} height: {} slate: {} produced on: {}", reconfiguration.hash,
                      reconfiguration.height(), slate.keySet().stream().map(m -> m.getId()).sorted().toList(),
                      params().member().getId());
+            processPendingValidations(reconfiguration, p);
         }
 
         @Override
@@ -353,6 +372,7 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             log.info("Produced checkpoint: {} height: {} for: {} on: {}", next.hash, next.height(), getViewId(),
                      params().member().getId());
+            processPendingValidations(next, p);
             transitions.checkpointed();
         }
 

@@ -15,6 +15,7 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
@@ -145,24 +146,24 @@ public class ViewAssembly {
         }
     }
 
-    private boolean consider(Optional<ViewMember> futureSailor, Terminal term, Member m) {
+    private boolean consider(Optional<SignedViewMember> futureSailor, Terminal term, Member m) {
         if (futureSailor.isEmpty()) {
             return !gathered();
         }
-        ViewMember member;
-        member = futureSailor.get();
+        SignedViewMember signedViewMember;
+        signedViewMember = futureSailor.get();
         log.debug("Join reply from: {} on: {}", term.getMember().getId(), params().member().getId());
-        if (member.equals(ViewMember.getDefaultInstance())) {
+        if (signedViewMember.equals(SignedViewMember.getDefaultInstance())) {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
             return !gathered();
         }
-        var vm = new Digest(member.getId());
+        var vm = new Digest(signedViewMember.getVm().getId());
         if (!m.getId().equals(vm)) {
             log.debug("Invalid join response from: {} expected: {} on: {}", term.getMember().getId(), vm,
                       params().member().getId());
             return !gathered();
         }
-        join(member, true);
+        join(signedViewMember, true);
         return !gathered();
     }
 
@@ -183,26 +184,43 @@ public class ViewAssembly {
                          .build();
     }
 
-    private void join(ViewMember vm, boolean direct) {
-        final var mid = Digest.from(vm.getId());
+    private void join(SignedViewMember svm, boolean direct) {
+        final var mid = Digest.from(svm.getVm().getId());
         final var m = nextAssembly.get(mid);
         if (m == null) {
             if (log.isTraceEnabled()) {
-                log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                log.trace("Invalid view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
+                          params().member().getId());
+            }
+            return;
+        }
+        var viewId = Digest.from(svm.getVm().getView());
+        if (!nextViewId.equals(viewId)) {
+            if (log.isTraceEnabled()) {
+                log.trace("Invalid view id for member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
                           params().member().getId());
             }
             return;
         }
         if (log.isDebugEnabled()) {
             log.debug("Join request from: {} vm: {} on: {}", m.getId(),
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+                      ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
         }
-        PubKey encoded = vm.getConsensusKey();
 
-        if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
+        if (!m.verify(JohnHancock.from(svm.getSignature()), svm.getVm().toByteString())) {
+            if (log.isTraceEnabled()) {
+                log.trace("Invalid signature for view member: {} on: {}",
+                          ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
+            }
+            return;
+        }
+
+        PubKey encoded = svm.getVm().getConsensusKey();
+
+        if (!m.verify(signature(svm.getVm().getSignature()), encoded.toByteString())) {
             if (log.isTraceEnabled()) {
                 log.trace("Could not verify consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+                          ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
             }
             return;
         }
@@ -211,7 +229,7 @@ public class ViewAssembly {
         if (consensusKey == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
+                          ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
             }
             return;
         }
@@ -219,23 +237,23 @@ public class ViewAssembly {
 
         var proposed = proposals.computeIfAbsent(mid, k -> {
             newJoin.set(true);
-            return new Proposed(vm, m, new ConcurrentSkipListMap<>());
+            return new Proposed(svm, m, new ConcurrentSkipListMap<>());
         });
 
         var builder = Reassemble.newBuilder();
         proposed.validations.computeIfAbsent(params().member(), k -> {
-            var validate = view.generateValidation(vm);
+            var validate = view.generateValidation(svm);
             builder.addValidations(validate);
             return validate;
         });
 
         if (newJoin.get()) {
             if (log.isTraceEnabled()) {
-                log.trace("Adding view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                log.trace("Adding view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
                           params().member().getId());
             }
             if (direct) {
-                builder.addMembers(vm);
+                builder.addMembers(svm);
             }
             var validations = unassigned.remove(mid);
             if (validations != null) {
@@ -256,11 +274,7 @@ public class ViewAssembly {
                                                                    .sorted(
                                                                    Comparator.comparing(c -> new Digest(c.getId())))
                                                                    .toList();
-        return Join.newBuilder()
-                   .setMember(candidate.vm)
-                   .setView(nextViewId.toDigeste())
-                   .addAllEndorsements(witnesses)
-                   .build();
+        return Join.newBuilder().setMember(candidate.vm).addAllEndorsements(witnesses).build();
     }
 
     private Parameters params() {
@@ -303,7 +317,7 @@ public class ViewAssembly {
         }
     }
 
-    private record Proposed(ViewMember vm, Member member, Map<Member, Validate> validations) {
+    private record Proposed(SignedViewMember vm, Member member, Map<Member, Validate> validations) {
     }
 
     private class Recon implements Reconfiguration {

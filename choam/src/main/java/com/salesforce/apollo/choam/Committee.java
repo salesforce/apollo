@@ -12,7 +12,6 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
@@ -34,9 +33,10 @@ public interface Committee {
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
         var validators = reconfigure.getJoinsList()
                                     .stream()
-                                    .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
-                                                              e -> (Verifier) new DefaultVerifier(
-                                                              publicKey(e.getMember().getConsensusKey()))));
+                                    .collect(
+                                    Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getVm().getId())),
+                                                     e -> (Verifier) new DefaultVerifier(
+                                                     publicKey(e.getMember().getVm().getConsensusKey()))));
         assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
         return validators;
     }
@@ -71,7 +71,7 @@ public interface Committee {
 
     boolean isMember();
 
-    ViewMember join(Digest nextView, Digest from);
+    SignedViewMember join(Digest nextView, Digest from);
 
     Logger log();
 
@@ -115,11 +115,11 @@ public interface Committee {
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
         if (!verified) {
-            log().debug("Failed verification: false using: {} key: {} on: {}", witness.getId(),
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
-        } else {
-            log().trace("Verified: true using: {} key: {} on: {}", witness.getId(),
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
+            log().debug("Failed verification: {} hash: {} height: {} using: {} : {} on: {}", hb.block.getBodyCase(),
+                        hb.hash, hb.height(), witness.getId(), verify, params.member().getId());
+        } else if (log().isTraceEnabled()) {
+            log().trace("Verified: {} hash: {} height: {} using: {} : {} on: {}", hb.block.getBodyCase(), hb.hash,
+                        hb.height(), witness.getId(), verify, params.member().getId());
         }
         return verified;
     }

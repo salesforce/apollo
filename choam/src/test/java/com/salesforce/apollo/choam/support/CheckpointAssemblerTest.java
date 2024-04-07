@@ -93,7 +93,8 @@ public class CheckpointAssemblerTest {
         var context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
 
         Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE,
-                                                 DigestAlgorithm.DEFAULT.getOrigin(), 2);
+                                                 DigestAlgorithm.DEFAULT.getOrigin(), 2,
+                                                 DigestAlgorithm.DEFAULT.getOrigin());
 
         SigningMember bootstrapping = (SigningMember) members.get(0);
 

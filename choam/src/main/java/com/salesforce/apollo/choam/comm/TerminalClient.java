@@ -60,7 +60,7 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ViewMember join(Digest nextView) {
+    public SignedViewMember join(Digest nextView) {
         return client.join(nextView.toDigeste());
     }
 

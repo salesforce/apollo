@@ -63,8 +63,12 @@ public class ViewContext {
                              algo.digest(v.getWitness().getSignature().toByteString()));
     }
 
+    public static String print(SignedViewMember svm, DigestAlgorithm algo) {
+        return print(svm.getVm(), algo);
+    }
+
     public static String print(ViewMember vm, DigestAlgorithm algo) {
-        return String.format("id: %s key: %s sig: %s", Digest.from(vm.getId()),
+        return String.format("id: %s vid: %s key: %s sig: %s", Digest.from(vm.getId()), Digest.from(vm.getView()),
                              algo.digest(publicKey(vm.getConsensusKey()).getEncoded()),
                              algo.digest(vm.getSignature().toByteString()));
     }
@@ -96,19 +100,19 @@ public class ViewContext {
         return validation;
     }
 
-    public Validate generateValidation(ViewMember vm) {
-        JohnHancock signature = signer.sign(vm.getSignature().toByteString());
+    public Validate generateValidation(SignedViewMember svm) {
+        JohnHancock signature = signer.sign(svm.getVm().toByteString());
         if (signature == null) {
-            log.error("Unable to sign view member: {} on: {}", print(vm, params.digestAlgorithm()),
+            log.error("Unable to sign view member: {} on: {}", print(svm, params.digestAlgorithm()),
                       params.member().getId());
             return null;
         }
         if (log.isTraceEnabled()) {
-            log.trace("Signed view member: {} with sig: {} on: {}", print(vm, params.digestAlgorithm()),
+            log.trace("Signed view member: {} with sig: {} on: {}", print(svm, params.digestAlgorithm()),
                       params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member().getId());
         }
         var validation = Validate.newBuilder()
-                                 .setHash(vm.getId())
+                                 .setHash(svm.getVm().getId())
                                  .setWitness(Certification.newBuilder()
                                                           .setId(params.member().getId().toDigeste())
                                                           .setSignature(signature.toSig())
@@ -171,17 +175,16 @@ public class ViewContext {
         return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());
     }
 
-    public boolean validate(ViewMember vm, Validate validate) {
+    public boolean validate(SignedViewMember svm, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {
             return false;
         }
-        final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                   vm.getSignature().toByteString());
+        final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()), svm.getVm().toByteString());
         if (!valid) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
-                          print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
+                log.debug("Unable to validate view member: {} from validation: [{}] key: {} on: {}",
+                          print(svm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
                           params.digestAlgorithm().digest(v.toString()), params.member().getId());
             }
         }
@@ -193,7 +196,7 @@ public class ViewContext {
         var m = context.getMember(mid);
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
@@ -201,7 +204,7 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;

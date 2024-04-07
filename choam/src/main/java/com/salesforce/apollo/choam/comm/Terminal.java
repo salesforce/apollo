@@ -47,7 +47,7 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public ViewMember join(Digest nextView) {
+            public SignedViewMember join(Digest nextView) {
                 return service.join(nextView, member.getId());
             }
 
@@ -64,7 +64,7 @@ public interface Terminal extends Link {
 
     Blocks fetchViewChain(BlockReplication replication);
 
-    ViewMember join(Digest nextView);
+    SignedViewMember join(Digest nextView);
 
     Initial sync(Synchronize sync);
 }
