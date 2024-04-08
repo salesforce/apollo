@@ -153,7 +153,7 @@ public class ViewContext {
     }
 
     public void publish(HashedCertifiedBlock block) {
-        blockProducer.publish(block.certifiedBlock);
+        blockProducer.publish(block.hash, block.certifiedBlock);
     }
 
     public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,

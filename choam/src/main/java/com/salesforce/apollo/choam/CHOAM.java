@@ -515,12 +515,15 @@ public class CHOAM {
             @Override
             public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                return Block.newBuilder()
-                            .setHeader(
-                            buildHeader(params.digestAlgorithm(), assemble, prev, height, checkpoint.height(),
-                                        checkpoint.hash, v.height(), v.hash))
-                            .setAssemble(assemble)
-                            .build();
+                var block = Block.newBuilder()
+                                 .setHeader(
+                                 buildHeader(params.digestAlgorithm(), assemble, prev, height, checkpoint.height(),
+                                             checkpoint.hash, v.height(), v.hash))
+                                 .setAssemble(assemble)
+                                 .build();
+                log.trace("Produced block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
+                          params.member().getId());
+                return block;
             }
 
             @Override
@@ -538,9 +541,9 @@ public class CHOAM {
             }
 
             @Override
-            public void publish(CertifiedBlock cb) {
+            public void publish(Digest hash, CertifiedBlock cb) {
                 log.info("Publishing: {} hash: {} height: {} certifications: {} on: {}", cb.getBlock().getBodyCase(),
-                         cb.hashCode(), cb.getBlock().getHeader().getHeight(), cb.getCertificationsCount(),
+                         hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()), cb.getCertificationsCount(),
                          params.member().getId());
                 combine.publish(cb, true);
             }
@@ -549,7 +552,11 @@ public class CHOAM {
             public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
                                      HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                return CHOAM.reconfigure(nextViewId, joining, previous, pendingView().get(), v, params, checkpoint);
+                var block = CHOAM.reconfigure(nextViewId, joining, previous, pendingView().get(), v, params,
+                                              checkpoint);
+                log.trace("Produced block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
+                          params.member().getId());
+                return block;
             }
         };
     }
@@ -648,10 +655,11 @@ public class CHOAM {
             log.error("Unable to generate and sign consensus key on: {}", params.member().getId());
             return;
         }
+        var committee = current.get();
         log.trace("Generated next view consensus key: {} sig: {} committee: {} on: {}",
                   params.digestAlgorithm().digest(pubKey.getEncoded()),
-                  params.digestAlgorithm().digest(signed.toSig().toByteString()), current.get(),
-                  params.member().getId());
+                  params.digestAlgorithm().digest(signed.toSig().toByteString()),
+                  committee == null ? "<no formation>" : committee.getClass().getSimpleName(), params.member().getId());
         next.set(new nextView(ViewMember.newBuilder()
                                         .setId(params.member().getId().toDigeste())
                                         .setConsensusKey(pubKey)
@@ -727,22 +735,26 @@ public class CHOAM {
         final HashedCertifiedBlock h = head.get();
         view.set(h);
         session.setView(h);
-        try {
-            if (validators.containsKey(params.member())) {
+        if (validators.containsKey(params.member())) {
+            try {
                 current.set(new Associate(h, validators, currentView));
-            } else {
+            } catch (IllegalArgumentException e) {
                 current.set(new Client(validators, getViewId()));
+                log.debug("unable to create consensus: {} defaulting to committee: {} on: {}", e.getMessage(),
+                          current.get().getClass().getSimpleName(), params.member().getId());
             }
-        } catch (IllegalArgumentException e) {
-            log.debug("unable to create consensus: {} committee: {} on: {}", e.getMessage(), current.get(),
-                      params.member().getId());
+        } else {
+            current.set(new Client(validators, getViewId()));
         }
         log.info("Reconfigured to view: {} committee: {} validators: {} on: {}", new Digest(reconfigure.getId()),
-                 current.get(), validators.entrySet()
-                                          .stream()
-                                          .map(e -> String.format("id: %s key: %s", e.getKey().getId(),
-                                                                  params.digestAlgorithm().digest(e.toString())))
-                                          .toList(), params.member().getId());
+                 current.get().getClass().getSimpleName(), validators.entrySet()
+                                                                     .stream()
+                                                                     .map(e -> String.format("id: %s key: %s",
+                                                                                             e.getKey().getId(),
+                                                                                             params.digestAlgorithm()
+                                                                                                   .digest(
+                                                                                                   e.toString())))
+                                                                     .toList(), params.member().getId());
     }
 
     private void recover(HashedCertifiedBlock anchor) {
@@ -965,7 +977,7 @@ public class CHOAM {
             }
             if (!previousBlock.hash.equals(prev)) {
                 log.error(
-                "Protocol violation on: {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {} on: {}",
+                "Protocol violation on: {}. New block does not refer to current block hash. Should be: {} and next block's prev is: {}, current height: {} next height: {} on: {}",
                 params.member().getId(), previousBlock.hash, prev, prevHeight, hcb.height(), params.member().getId());
                 return;
             }
@@ -1004,7 +1016,7 @@ public class CHOAM {
 
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
-        void publish(CertifiedBlock cb);
+        void publish(Digest hash, CertifiedBlock cb);
 
         Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
     }

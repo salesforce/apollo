@@ -20,6 +20,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.cryptography.Digest;
+import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -163,12 +164,15 @@ public class Producer {
     }
 
     private void create(List<ByteString> preblock, boolean last) {
-        log.debug("preblock produced, last: {} on: {}", last, params().member().getId());
+        if (log.isDebugEnabled()) {
+            log.debug("emit last: {} preblock: {} on: {}", last,
+                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
+        }
         var aggregate = preblock.stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
             } catch (InvalidProtocolBufferException ex) {
-                log.error("Error parsing unit data on: {}", params().member().getId());
+                log.error("Error parsing unit data on: {}", params().member().getId(), ex);
                 return null;
             }
         }).filter(Objects::nonNull).toList();
@@ -218,7 +222,7 @@ public class Producer {
             final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
-            log.debug("Created block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
+            log.debug("Produced block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
                       next.hash, next.height(), lb.hash, last, params().member().getId());
             processPendingValidations(next, p);
         }
@@ -268,12 +272,13 @@ public class Producer {
         pending.put(assemble.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.debug("Produced view assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
-                  assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
+        log.debug("Produced block: {} hash: {} height: {} from: {} on: {}", assemble.block.getBodyCase(), assemble.hash,
+                  assemble.height(), getViewId(), params().member().getId());
         processPendingValidations(assemble, p);
     }
 
     private void publish(PendingBlock p) {
+        assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
         log.debug("Published pending: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
                   p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
         p.published.set(true);
@@ -327,9 +332,9 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
             //            controller.completeIt();
-            log.info("Reconfiguration block: {} height: {} slate: {} produced on: {}", reconfiguration.hash,
-                     reconfiguration.height(), slate.keySet().stream().map(m -> m.getId()).sorted().toList(),
-                     params().member().getId());
+            log.info("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
+                     reconfiguration.hash, reconfiguration.height(),
+                     slate.keySet().stream().map(m -> m.getId()).sorted().toList(), params().member().getId());
             processPendingValidations(reconfiguration, p);
         }
 
@@ -370,8 +375,8 @@ public class Producer {
             final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
-            log.info("Produced checkpoint: {} height: {} for: {} on: {}", next.hash, next.height(), getViewId(),
-                     params().member().getId());
+            log.info("Produced: {} hash: {} height: {} for: {} on: {}", next.block.getBodyCase(), next.hash,
+                     next.height(), getViewId(), params().member().getId());
             processPendingValidations(next, p);
             transitions.checkpointed();
         }

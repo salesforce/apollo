@@ -158,7 +158,7 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public void publish(CertifiedBlock cb) {
+                public void publish(Digest hash, CertifiedBlock cb) {
                     complete.countDown();
                 }
 

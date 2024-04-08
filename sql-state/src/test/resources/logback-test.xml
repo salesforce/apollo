@@ -44,6 +44,18 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <logger name="com.salesforce.apollo.choam.support.BatchingQueue" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support.OneShot" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
     <logger name="com.chiralbehaviors.tron" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
