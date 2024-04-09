@@ -196,12 +196,12 @@ public class GenesisAssembly implements Genesis {
     @Override
     public void publish() {
         if (witnesses.size() < params().majority()) {
-            log.warn("Cannot publish genesis: {} with: {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
-                     params().member().getId());
+            log.trace("Cannot publish genesis: {} with: {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
+                      params().member().getId());
             return;
         }
         if (!published.compareAndSet(false, true)) {
-            log.debug("already published genesis: {} with {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
+            log.trace("already published genesis: {} with {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
                       params().member().getId());
             return;
         }

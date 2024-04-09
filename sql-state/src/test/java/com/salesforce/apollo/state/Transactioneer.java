@@ -54,7 +54,7 @@ class Transactioneer {
 
     void decorate(CompletableFuture<?> fs) {
         final var futureSailor = new AtomicReference<CompletableFuture<?>>();
-        futureSailor.set(fs.whenComplete((o, t) -> {
+        fs.whenComplete((o, t) -> {
             inFlight.set(null);
             if (t != null) {
                 if (completed.get() < max) {
@@ -81,7 +81,8 @@ class Transactioneer {
                     countdown.countDown();
                 }
             }
-        }));
+        });
+        futureSailor.set(fs);
         inFlight.set(futureSailor.get());
     }
 

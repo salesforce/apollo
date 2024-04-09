@@ -762,7 +762,8 @@ public class CHOAM {
         log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
         cancelSynchronization();
         cancelBootstrap();
-        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize());
+        futureBootstrap.get().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -774,7 +775,7 @@ public class CHOAM {
                 log.error("Synchronization failed on: {}", params.member().getId(), t);
                 transitions.fail();
             }
-        }));
+        });
     }
 
     private void restore() throws IllegalStateException {
@@ -1044,8 +1045,10 @@ public class CHOAM {
         @Override
         public void anchor() {
             HashedCertifiedBlock anchor = pending.poll();
-            if (anchor != null) {
-                log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member().getId());
+            var pending = pendingView().get();
+            if (anchor != null && pending.totalCount() >= pending.majority()) {
+                log.info("Synchronizing from anchor: {} cardinality: {} on: {}", anchor.hash, pending.totalCount(),
+                         params.member().getId());
                 transitions.bootstrap(anchor);
             }
         }

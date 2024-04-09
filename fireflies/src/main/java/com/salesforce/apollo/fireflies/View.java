@@ -376,6 +376,7 @@ public class View {
                 log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          observations.size(), superMajority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
+                observations.clear();
             }
 
             scheduleViewChange();

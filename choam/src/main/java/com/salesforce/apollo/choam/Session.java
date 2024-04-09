@@ -181,11 +181,11 @@ public class Session {
                         params.metrics().transactionComplete(to);
                     }
                 }, log)), timeout.toMillis(), TimeUnit.MILLISECONDS);
-
-                return result.whenComplete((r, t) -> {
+                result.whenComplete((r, t) -> {
                     futureTimeout.cancel(true);
                     complete(hash, timer, t);
                 });
+                return result;
             }
             case RATE_LIMITED -> {
                 if (params.metrics() != null) {
