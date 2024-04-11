@@ -8,15 +8,14 @@ package com.salesforce.apollo.stereotomy.services.grpc.binder;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.stereotomy.event.proto.Binding;
-import com.salesforce.apollo.stereotomy.event.proto.Ident;
-import com.salesforce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.stereotomy.event.proto.Binding;
+import com.salesforce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
-
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -26,7 +25,7 @@ public class BinderServer extends BinderImplBase {
 
     private final StereotomyMetrics            metrics;
     private final RoutableService<ProtoBinder> routing;
-    private       ClientIdentity               identity;
+    private final ClientIdentity               identity;
 
     public BinderServer(RoutableService<ProtoBinder> router, ClientIdentity identity, StereotomyMetrics metrics) {
         this.metrics = metrics;
@@ -47,8 +46,7 @@ public class BinderServer extends BinderImplBase {
             return;
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.bind(request);
-            result.whenComplete((b, t) -> {
+            s.bind(request).whenComplete((b, t) -> {
                 if (timer != null) {
                     timer.stop();
                 }
@@ -75,8 +73,7 @@ public class BinderServer extends BinderImplBase {
             return;
         }
         routing.evaluate(responseObserver, s -> {
-            var result = s.unbind(request);
-            result.whenComplete((b, t) -> {
+            s.unbind(request).whenComplete((b, t) -> {
                 if (timer != null) {
                     timer.stop();
                 }

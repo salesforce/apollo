@@ -762,8 +762,7 @@ public class CHOAM {
         log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
         cancelSynchronization();
         cancelBootstrap();
-        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize());
-        futureBootstrap.get().whenComplete((s, t) -> {
+        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -775,7 +774,7 @@ public class CHOAM {
                 log.error("Synchronization failed on: {}", params.member().getId(), t);
                 transitions.fail();
             }
-        });
+        }));
     }
 
     private void restore() throws IllegalStateException {

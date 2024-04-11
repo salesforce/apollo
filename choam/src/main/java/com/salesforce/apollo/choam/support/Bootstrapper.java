@@ -128,8 +128,7 @@ public class Bootstrapper {
                                                                 params.digestAlgorithm());
 
         // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration());
-        checkpointAssembled.whenComplete((cps, t) -> {
+        checkpointAssembled = assembler.assemble(scheduler, params.gossipDuration()).whenComplete((cps, t) -> {
             if (!cps.validate(diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()))) {
                 throw new IllegalStateException("Cannot validate checkpoint: " + checkpoint.height());
             }
@@ -321,6 +320,12 @@ public class Bootstrapper {
         CompletableFuture<Void> completion =
         !genesisBootstrap ? CompletableFuture.allOf(checkpointAssembled, viewChainSynchronized, anchorSynchronized)
                           : CompletableFuture.allOf(anchorSynchronized);
+
+        if (genesisBootstrap) {
+            log.info("Genesis bootstrapped on: {}", params.member().getId());
+        } else {
+            log.info("Checkpoint bootstrapped on: {}", params.member().getId());
+        }
 
         completion.whenComplete((v, t) -> {
             if (t == null) {
