@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.state;
 
+import ch.qos.logback.classic.Level;
+import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
     static {
-        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
