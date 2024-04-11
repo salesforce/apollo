@@ -106,15 +106,21 @@ public class GenesisAssembly implements Genesis {
     public void certify() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.certifications.size() >= params().majority())
+                 .filter(p -> p.certifications.size() == nextAssembly.size())
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
-        assert !slate.isEmpty() : "Slate is empty, no certifications";
+        if (slate.size() != nextAssembly.size()) {
+            log.info("Not certifying genesis for: {} slate incomplete: {} on: {}", view.context().getId(),
+                     slate.keySet().stream().map(m -> m.getId()).toList(), params().member().getId());
+            return;
+        }
+        assert slate.size() == nextAssembly.size() : "Expected: %s members, slate: %s".formatted(nextAssembly.size(),
+                                                                                                 slate.size());
         reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
                                                                                    new NullBlock(
                                                                                    params().digestAlgorithm())));
         var validate = view.generateValidation(reconfiguration);
-        log.debug("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
-                  slate.size(), params().member().getId());
+        log.debug("Certifying genesis block: {} for: {} slate: {} on: {}", reconfiguration.hash, view.context().getId(),
+                  slate.keySet().stream().map(m -> m.getId()).toList(), params().member().getId());
         ds.setValue(validate.toByteString());
     }
 
@@ -124,6 +130,7 @@ public class GenesisAssembly implements Genesis {
             try {
                 return Validate.parseFrom(bs);
             } catch (InvalidProtocolBufferException e) {
+                log.warn("Unable to parse preblock: {} on: {}", bs, params().member().getId(), e);
                 return null;
             }
         }).filter(Objects::nonNull).filter(v -> !v.equals(Validate.getDefaultInstance())).forEach(this::certify);
@@ -131,7 +138,7 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void gather() {
-        log.info("Gathering next assembly on: " + params().member().getId());
+        log.info("Gathering next assembly on: {}", params().member().getId());
         var certification = view.generateValidation(genesisMember).getWitness();
         var join = Join.newBuilder()
                        .setMember(genesisMember)
@@ -154,6 +161,7 @@ public class GenesisAssembly implements Genesis {
                     try {
                         return Join.parseFrom(bs);
                     } catch (InvalidProtocolBufferException e) {
+                        log.warn("error parsing join: {} on: {}", bs, params().member().getId(), e);
                         return null;
                     }
                 })
@@ -184,6 +192,7 @@ public class GenesisAssembly implements Genesis {
                     try {
                         return Validations.parseFrom(bs);
                     } catch (InvalidProtocolBufferException e) {
+                        log.warn("error parsing validations: {} on: {}", bs, params().member().getId(), e);
                         return null;
                     }
                 })
@@ -195,13 +204,23 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void publish() {
-        if (witnesses.size() < params().majority()) {
+        if (reconfiguration == null) {
+            log.trace("Cannot publish genesis, reconfiguration is NULL on: {}", params().member().getId());
+            return;
+        }
+        if (witnesses.size() < nextAssembly.size()) {
             log.trace("Cannot publish genesis: {} with: {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
                       params().member().getId());
             return;
         }
+        if (reconfiguration.block.getGenesis().getInitialView().getJoinsCount() < nextAssembly.size()) {
+            log.trace("Cannot publish genesis: {} with: {} joins on: {}", reconfiguration.hash,
+                      reconfiguration.block.getGenesis().getInitialView().getJoinsCount(), params().member().getId());
+            return;
+        }
         if (!published.compareAndSet(false, true)) {
-            log.trace("already published genesis: {} with {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
+            log.trace("already published genesis: {} with {} witnesses {} joins on: {}", reconfiguration.hash,
+                      witnesses.size(), reconfiguration.block.getGenesis().getInitialView().getJoinsCount(),
                       params().member().getId());
             return;
         }
@@ -212,7 +231,7 @@ public class GenesisAssembly implements Genesis {
                  .map(Map.Entry::getValue)
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
-        //        controller.completeIt();
+        controller.completeIt();
         log.info("Genesis block: {} published with {} witnesses for: {} on: {}", reconfiguration.hash, witnesses.size(),
                  view.context().getId(), params().member().getId());
     }
@@ -248,7 +267,7 @@ public class GenesisAssembly implements Genesis {
         }
         var member = view.context().getMember(Digest.from(v.getWitness().getId()));
         if (member != null) {
-            witnesses.put(member, v);
+            witnesses.putIfAbsent(member, v);
             publish();
         }
     }
@@ -354,9 +373,8 @@ public class GenesisAssembly implements Genesis {
         }
         var prev = proposed.certifications.put(certifier, v.getWitness());
         if (prev == null) {
-            log.debug("New validation of view member: {} hash: {} using certifier: {} witnesses: {} on: {}",
-                      member.getId(), vid, certifier.getId(), proposed.certifications.values().size(),
-                      params().member().getId());
+            log.debug("New validation of view member: {} using certifier: {} witnesses: {} on: {}", member.getId(),
+                      certifier.getId(), proposed.certifications.values().size(), params().member().getId());
         } else {
             log.debug("Redundant validation of view member: {} hash: {} using certifier: {} on: {}", member.getId(),
                       vid, certifier.getId(), params().member().getId());

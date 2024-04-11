@@ -107,7 +107,7 @@ public interface Combine {
             public Transitions bootstrap(HashedCertifiedBlock anchor) {
                 try {
                     context().recover(anchor);
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     LoggerFactory.getLogger(Mercantile.class).info("Unable to recover anchor: {}", anchor, e);
                     return null;
                 }

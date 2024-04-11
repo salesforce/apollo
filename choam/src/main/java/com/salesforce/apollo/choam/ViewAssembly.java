@@ -111,7 +111,7 @@ public class ViewAssembly {
                                                                                   p.validations.size()))
                                                           .sorted()
                                                           .toList(), nextViewId, params().member().getId());
-            transitions.failed();
+            transitions.complete();
         }
     }
 
@@ -136,8 +136,8 @@ public class ViewAssembly {
             retryDelay.accumulateAndGet(Duration.ofMillis(100), Duration::plus);
         }
 
-        log.trace("Proposal incomplete of: {} gathered: {}, required: {} available: {}, retrying: {} on: {}",
-                  nextViewId, proposals.keySet().stream().toList(), nextAssembly.size(), params().majority(), delay,
+        log.trace("Proposal incomplete of: {} polled: {}, total: {} majority: {}, retrying: {} on: {}", nextViewId,
+                  polled.stream().sorted().toList(), nextAssembly.size(), params().majority(), delay,
                   params().member().getId());
         if (!cancelSlice.get()) {
             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
@@ -169,7 +169,7 @@ public class ViewAssembly {
 
     private boolean gathered() {
         if (polled.size() == nextAssembly.size()) {
-            log.info("Polled all +");
+            log.trace("Polled all +");
             cancelSlice.set(true);
             return true;
         }

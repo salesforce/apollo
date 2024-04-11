@@ -147,9 +147,8 @@ message CheckpointProcessing {
 }
 
 message Validate {
-  crypto.Digeste id = 1;
-  crypto.Digeste hash = 2;
-  Certification witness = 3;
+  crypto.Digeste hash = 1;
+  Certification witness = 2;
 }
 
 message Reassemble {

@@ -235,7 +235,7 @@ public class CHOAM {
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
 
         // Canonical labeling of the view members for Ethereal
-        return members.stream().collect(Collectors.toMap(m -> baseContext.hashFor(m.getId(), 0), m -> m));
+        return members.stream().collect(Collectors.toMap(Member::getId, m -> m));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
@@ -920,6 +920,7 @@ public class CHOAM {
             current1 = state.genesis().certifiedBlock;
         } else {
             log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint().hash, params.member().getId());
+            assert state.checkpoint() != null : "checkpoint is null";
             restoreFrom(state.lastCheckpoint(), state.checkpoint());
             current1 = store.getCertifiedBlock(state.lastCheckpoint().height().add(1));
         }
@@ -1109,7 +1110,7 @@ public class CHOAM {
 
         @Override
         public void combine() {
-            linear.execute(Utils.wrapped(() -> CHOAM.this.combine(), log));
+            CHOAM.this.combine();
         }
 
         @Override
