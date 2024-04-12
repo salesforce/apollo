@@ -12,11 +12,11 @@ import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.*;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -163,10 +163,10 @@ public class SwarmTest {
         + " members");
 
         if (!largeTests) {
+            final var reference = views.get(0).getContext().stream(0).collect(Collectors.toSet());
             for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
-                final var reference = views.get(0).getContext().ring(i).getRing();
                 for (View view : views) {
-                    assertEquals(reference, view.getContext().ring(i).getRing());
+                    assertTrue(reference.containsAll(view.getContext().stream(i).toList()));
                 }
             }
 
@@ -180,7 +180,7 @@ public class SwarmTest {
             for (View v : views) {
                 Graph<Participant> testGraph = new Graph<>();
                 for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
-                    testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
+                    testGraph.addEdge(v.getNode(), v.getContext().successor(i, v.getNode()));
                 }
                 assertTrue(testGraph.isSC());
             }
@@ -211,13 +211,16 @@ public class SwarmTest {
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        var ctxBuilder = Context.<Participant>newBuilder().setBias(BIAS).setpByz(P_BYZ).setCardinality(CARDINALITY);
+        var ctxBuilder = DynamicContext.<Participant>newBuilder()
+                                       .setBias(BIAS)
+                                       .setpByz(P_BYZ)
+                                       .setCardinality(CARDINALITY);
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
-            Context<Participant> context = ctxBuilder.build();
+            DynamicContext<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalServer(prefix, node).router(ServerConnectionCache.newBuilder()

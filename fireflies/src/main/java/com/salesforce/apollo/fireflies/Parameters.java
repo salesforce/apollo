@@ -49,7 +49,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          */
         private int      minimumBiffCardinality = 1025;
         /**
-         * Number of TTL rounds an accussed has to rebut the accusation
+         * Number of TTL rounds an accused has to rebut the accusation
          */
         private int      rebuttalTimeout        = 2;
         /**

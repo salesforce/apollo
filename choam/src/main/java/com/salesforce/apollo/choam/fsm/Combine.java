@@ -10,6 +10,7 @@ import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author hal.hildebrand
@@ -27,6 +28,8 @@ public interface Combine {
     void cancelTimer(String timer);
 
     void combine();
+
+    void fail();
 
     void recover(HashedCertifiedBlock anchor);
 
@@ -94,10 +97,20 @@ public interface Combine {
                 return null;
             }
 
-        }, PROTOCOL_FAILURE, RECOVERING {
+        }, PROTOCOL_FAILURE {
+            @Entry
+            public void failIt() {
+                context().fail();
+            }
+        }, RECOVERING {
             @Override
             public Transitions bootstrap(HashedCertifiedBlock anchor) {
-                context().recover(anchor);
+                try {
+                    context().recover(anchor);
+                } catch (Throwable e) {
+                    LoggerFactory.getLogger(Mercantile.class).info("Unable to recover anchor: {}", anchor, e);
+                    return null;
+                }
                 return BOOTSTRAPPING;
             }
 
@@ -131,6 +144,11 @@ public interface Combine {
             public Transitions combine() {
                 context().combine();
                 return null;
+            }
+
+            @Override
+            public Transitions nextView() {
+                return RECOVERING;
             }
 
             @Entry
@@ -169,6 +187,10 @@ public interface Combine {
 
         default Transitions finishCheckpoint() {
             throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions nextView() {
+            return null;
         }
 
         default Transitions regenerate() {

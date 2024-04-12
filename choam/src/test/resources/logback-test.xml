@@ -6,25 +6,33 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-                %d{mm:ss.SSS} [%thread] %-5level %logger{0}
-                - %msg%n
-            </Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
     <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <logger name="com.salesforce.apollo.archipelago" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
     <logger name="com.salesforce.apollo.membership" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support.BatchingQueue" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support.OneShot" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

@@ -76,7 +76,7 @@ public class FernetTest {
         final var memberB = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
         final var ctxA = DigestAlgorithm.DEFAULT.getOrigin().prefix(0x666);
         final var prefix = UUID.randomUUID().toString();
-        Predicate<Token> validator = t -> {
+        Predicate<FernetServerInterceptor.HashedToken> validator = t -> {
             assertNotNull(t, "Token is null");
             var result = token.validateAndDecrypt(key, new StringValidator() {
             });

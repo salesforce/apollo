@@ -14,18 +14,17 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.ProcessContainerDomain;
 import com.salesforce.apollo.model.ProcessDomain;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
@@ -41,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -195,7 +194,7 @@ public class FireFliesTrace {
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var sealed = FoundationSeal.newBuilder().build();
         identities.forEach((digest, id) -> {
-            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
+            var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
             var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var pdParams = new ProcessDomain.ProcessDomainParameters("jdbc:h2:mem:%s-state".formatted(digest),
@@ -224,22 +223,17 @@ public class FireFliesTrace {
         final var seeds = Collections.singletonList(
         new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
         domains.forEach(d -> {
-            var listener = new View.ViewLifecycleListener() {
-
-                @Override
-                public void viewChange(Function<SelfAddressingIdentifier, View.Participant> context, Digest viewId,
-                                       int cardinality, List<SelfAddressingIdentifier> joins, List<Digest> leaves) {
-                    if (cardinality == CARDINALITY) {
-                        System.out.printf("Full view: %s members: %s on: %s%n", viewId, cardinality,
-                                          d.getMember().getId());
-                        countdown.countDown();
-                    } else {
-                        System.out.printf("Members joining: %s members: %s on: %s%n", viewId, cardinality,
-                                          d.getMember().getId());
-                    }
+            BiConsumer<Context, Digest> c = (context, viewId) -> {
+                if (context.cardinality() == CARDINALITY) {
+                    System.out.printf("Full view: %s members: %s on: %s%n", viewId, context.cardinality(),
+                                      d.getMember().getId());
+                    countdown.countDown();
+                } else {
+                    System.out.printf("Members joining: %s members: %s on: %s%n", viewId, context.cardinality(),
+                                      d.getMember().getId());
                 }
             };
-            d.getFoundation().register(listener);
+            d.getFoundation().register(c);
         });
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));

@@ -9,10 +9,10 @@ package com.salesforce.apollo.thoth;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -60,7 +60,7 @@ public class AbstractDhtTest {
     protected final Map<SigningMember, Router>                                         routers = new HashMap<>();
     protected final AtomicBoolean                                                      gate    = new AtomicBoolean(
     false);
-    protected       Context<Member>                                                    context;
+    protected       DynamicContext<Member>                                             context;
     protected       Map<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     protected       MemKERL                                                            kerl;
     protected       String                                                             prefix;
@@ -117,14 +117,14 @@ public class AbstractDhtTest {
                               .mapToObj(i -> stereotomy.newIdentifier())
                               .collect(Collectors.toMap(controlled -> new ControlledIdentifierMember(controlled),
                                                         controlled -> controlled));
-        context = Context.newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
+        context = DynamicContext.newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         ConcurrentSkipListMap<Digest, Member> serverMembers = new ConcurrentSkipListMap<>();
         identities.keySet().forEach(member -> instantiate(member, context, serverMembers));
 
         System.out.println();
         System.out.println();
         System.out.printf("Cardinality: %s, Prob Byz: %s, Rings: %s Majority: %s%n", getCardinality(), PBYZ,
-                          context.getRingCount(), context.majority(true));
+                          context.getRingCount(), context.majority());
         System.out.println();
     }
 
@@ -132,7 +132,7 @@ public class AbstractDhtTest {
         return LARGE_TESTS ? 10 : 5;
     }
 
-    protected void instantiate(SigningMember member, Context<Member> context,
+    protected void instantiate(SigningMember member, DynamicContext<Member> context,
                                ConcurrentSkipListMap<Digest, Member> serverMembers) {
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);

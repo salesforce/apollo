@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership;
+package com.salesforce.apollo.context;
 
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -26,10 +28,10 @@ public class ContextTests {
 
     @Test
     public void consistency() throws Exception {
-        Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
-        entropy.setSeed(new byte[]{6, 6, 6});
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         for (int i = 0; i < 10; i++) {
@@ -43,6 +45,6 @@ public class ContextTests {
 
         List<Member> successors = context.successors(members.get(1));
         assertEquals(members.get(0), successors.get(0));
-        assertEquals(members.get(1), context.ring(1).successor(members.get(0)));
+        assertEquals(members.get(1), context.successor(1, members.get(0)));
     }
 }

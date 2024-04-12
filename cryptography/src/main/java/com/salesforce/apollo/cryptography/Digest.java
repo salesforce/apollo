@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.cryptography;
 
+import com.salesforce.apollo.bloomFilters.Hash;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.cryptography.proto.Digeste.Builder;
-import com.salesforce.apollo.bloomFilters.Hash;
 import com.salesforce.apollo.utils.BUZ;
 import com.salesforce.apollo.utils.Hex;
 
@@ -114,9 +114,7 @@ public class Digest implements Comparable<Digest> {
             throw new IllegalArgumentException();
         }
         byte[] hash = new byte[digestAlgorithm.digestLength()];
-        for (int i = 0; i < bs.length; i++) {
-            hash[i] = bs[i];
-        }
+        System.arraycopy(bs, 0, hash, 0, bs.length);
         return new Digest(digestAlgorithm, hash);
     }
 
@@ -292,7 +290,7 @@ public class Digest implements Comparable<Digest> {
     @Override
     public String toString() {
         String hexString = Hex.hex(getBytes());
-        return "[" + hexString.substring(0, Math.min(hexString.length(), 12)) + ":" + algorithm.digestCode() + "]";
+        return "[" + hexString.substring(0, Math.min(hexString.length(), 12)) + "]";
     }
 
     public UUID toUUID() {

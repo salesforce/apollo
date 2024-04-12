@@ -128,7 +128,8 @@ public class TestChain {
                                                                                                    CHOAM.checkpoint(
                                                                                                    DigestAlgorithm.DEFAULT,
                                                                                                    null, 1,
-                                                                                                   checkpoint.hash, 2))
+                                                                                                   checkpoint.hash, 2,
+                                                                                                   DigestAlgorithm.DEFAULT.getOrigin()))
                                                                                                    .build())
                                                                                     .build());
         store.put(lastBlock);

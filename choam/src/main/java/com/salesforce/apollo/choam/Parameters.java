@@ -20,11 +20,12 @@ import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -40,6 +41,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -54,7 +56,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
                          ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
-                         ExponentialBackoffPolicy.Builder drainPolicy) {
+                         ExponentialBackoffPolicy.Builder drainPolicy, boolean generateGenesis) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -68,7 +70,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.communications;
     }
 
-    public Context<Member> context() {
+    public DelegatedContext<Member> context() {
         return runtime.context;
     }
 
@@ -90,6 +92,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public ChoamMetrics metrics() {
         return runtime.metrics;
+    }
+
+    public CompletableFuture<Void> onFailure() {
+        return runtime().onFailure();
     }
 
     public TransactionExecutor processor() {
@@ -283,11 +289,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         }
     }
 
-    public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
+    public record RuntimeParameters(DelegatedContext<Member> context, Router communications, SigningMember member,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Supplier<KERL_> kerl,
-                                    FoundationSeal foundation) {
+                                    FoundationSeal foundation, CompletableFuture<Void> onFailure) {
         public static Builder newBuilder() {
             return new Builder();
         }
@@ -324,9 +330,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
             };
 
+            private CompletableFuture<Void> onFailure = new CompletableFuture<>();
+
             public RuntimeParameters build() {
-                return new RuntimeParameters(context, communications, member, genesisData, processor, restorer,
-                                             checkpointer, metrics, kerl, foundation);
+                return new RuntimeParameters(new DelegatedContext<Member>(context), communications, member, genesisData,
+                                             processor, restorer, checkpointer, metrics, kerl, foundation, onFailure);
             }
 
             @Override
@@ -410,6 +418,15 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
             public Builder setMetrics(ChoamMetrics metrics) {
                 this.metrics = metrics;
+                return this;
+            }
+
+            public CompletableFuture<Void> getOnFailure() {
+                return onFailure;
+            }
+
+            public Builder setOnFailure(CompletableFuture<Void> onFailure) {
+                this.onFailure = onFailure;
                 return this;
             }
 
@@ -678,12 +695,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
         private int                              crowns                = 2;
+        private boolean                          generateGenesis       = false;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, crowns, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, regenerationCycles, bootstrap, producer, mvBuilder,
-                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy);
+                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy, generateGenesis);
         }
 
         @Override
@@ -855,6 +873,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
-    }
 
+        public boolean isGenerateGenesis() {
+            return generateGenesis;
+        }
+
+        public Builder setGenerateGenesis(boolean generateGenesis) {
+            this.generateGenesis = generateGenesis;
+            return this;
+        }
+    }
 }

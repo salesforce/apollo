@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -30,11 +31,14 @@ import java.util.function.Consumer;
  * @author hal.hildebrand
  */
 public class SliceIterator<Comm extends Link> {
-    private static final Logger                        log = LoggerFactory.getLogger(SliceIterator.class);
+    private static final Logger                        log       = LoggerFactory.getLogger(SliceIterator.class);
     private final        CommonCommunications<Comm, ?> comm;
     private final        String                        label;
     private final        SigningMember                 member;
     private final        List<? extends Member>        slice;
+    private final        ScheduledExecutorService      scheduler = Executors.newScheduledThreadPool(1,
+                                                                                                    Thread.ofVirtual()
+                                                                                                          .factory());
     private              Member                        current;
     private              Iterator<? extends Member>    currentIteration;
 
@@ -51,22 +55,21 @@ public class SliceIterator<Comm extends Link> {
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
-                            Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
+                            Runnable onComplete, Duration frequency) {
         log.trace("Starting iteration of: <{}> on: {}", label, member.getId());
-        Thread.ofVirtual()
-              .start(Utils.wrapped(() -> internalIterate(round, handler, onComplete, scheduler, frequency), log));
+        Thread.ofVirtual().start(Utils.wrapped(() -> internalIterate(round, handler, onComplete, frequency), log));
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
-                            ScheduledExecutorService scheduler, Duration frequency) {
-        iterate(round, handler, null, scheduler, frequency);
+                            Duration frequency) {
+        iterate(round, handler, null, frequency);
     }
 
     private <T> void internalIterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
-                                     Runnable onComplete, ScheduledExecutorService scheduler, Duration frequency) {
-        Runnable proceed = () -> internalIterate(round, handler, onComplete, scheduler, frequency);
+                                     Runnable onComplete, Duration frequency) {
+        Runnable proceed = () -> internalIterate(round, handler, onComplete, frequency);
 
-        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, scheduler, frequency);
+        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, frequency);
         try (Comm link = next()) {
             if (link == null) {
                 log.trace("No link for iteration of: <{}> on: {}", label, member.getId());
@@ -109,8 +112,7 @@ public class SliceIterator<Comm extends Link> {
         return linkFor(current);
     }
 
-    private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, ScheduledExecutorService scheduler,
-                         Duration frequency) {
+    private void proceed(final boolean allow, Runnable proceed, Runnable onComplete, Duration frequency) {
         log.trace("Determining continuation for: <{}> final itr: {} allow: {} on: {}", label,
                   !currentIteration.hasNext(), allow, member.getId());
         if (!currentIteration.hasNext() && allow) {

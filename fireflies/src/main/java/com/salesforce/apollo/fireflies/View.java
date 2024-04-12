@@ -16,6 +16,9 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DynamicContext;
+import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.fireflies.Binding.Bound;
@@ -28,7 +31,10 @@ import com.salesforce.apollo.fireflies.comm.gossip.FFService;
 import com.salesforce.apollo.fireflies.comm.gossip.FfServer;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
-import com.salesforce.apollo.membership.*;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.membership.RoundScheduler;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.stereotomy.EventValidation;
@@ -54,7 +60,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -86,11 +91,11 @@ public class View {
     final                CommonCommunications<Fireflies, Service>    comm;
     final                AtomicBoolean                               started               = new AtomicBoolean();
     private final        CommonCommunications<Entrance, Service>     approaches;
-    private final        Context<Participant>                        context;
+    private final        DynamicContext<Participant>                 context;
     private final        DigestAlgorithm                             digestAlgo;
     private final        RingCommunications<Participant, Fireflies>  gossiper;
     private final        AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final        List<ViewLifecycleListener>                 lifecycleListeners    = new CopyOnWriteArrayList<>();
+    private final        List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
     private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
     Thread.ofVirtual().factory());
     private final        FireflyMetrics                              metrics;
@@ -108,14 +113,14 @@ public class View {
     private final        Verifiers                                   verifiers;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
-    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this(context, member, endpoint, validation, verifiers, communications, params, communications, digestAlgo,
              metrics);
     }
 
-    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 Router gateway, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
@@ -149,7 +154,7 @@ public class View {
      * @param mask
      * @return
      */
-    public static boolean isValidMask(BitSet mask, Context<?> context) {
+    public static boolean isValidMask(BitSet mask, DynamicContext<?> context) {
         if (mask.cardinality() == context.majority()) {
             if (mask.length() <= context.getRingCount()) {
                 return true;
@@ -165,14 +170,14 @@ public class View {
     /**
      * Deregister the listener
      */
-    public void deregister(ViewLifecycleListener listener) {
-        lifecycleListeners.remove(listener);
+    public void deregister(BiConsumer<Context, Digest> listener) {
+        viewChangeListeners.remove(listener);
     }
 
     /**
      * @return the context of the view
      */
-    public Context<Participant> getContext() {
+    public DynamicContext<Participant> getContext() {
         return context;
     }
 
@@ -184,12 +189,10 @@ public class View {
     }
 
     /**
-     * Register the listener to receive view change events
-     *
-     * @param listener - the ViewChangeListener to receive events
+     * Register the listener to receive view changes
      */
-    public void register(ViewLifecycleListener listener) {
-        lifecycleListeners.add(listener);
+    public void register(BiConsumer<Context, Digest> listener) {
+        viewChangeListeners.add(listener);
     }
 
     /**
@@ -373,6 +376,7 @@ public class View {
                 log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          observations.size(), superMajority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
+                observations.clear();
             }
 
             scheduleViewChange();
@@ -408,13 +412,13 @@ public class View {
 
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
         final var current = currentView();
+        var sc = context.asStatic();
         viewNotificationQueue.execute(Utils.wrapped(() -> {
-            lifecycleListeners.forEach(listener -> {
+            viewChangeListeners.forEach(listener -> {
                 try {
                     log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
                               currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
-                    listener.viewChange(i -> context.getMember(i.getDigest()), current, viewManagement.cardinality(),
-                                        joining, leaving);
+                    listener.accept(sc, current);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
                 }
@@ -725,12 +729,12 @@ public class View {
         if (!context.validRing(accusation.getRingNumber())) {
             return false;
         }
-        Ring<Participant> ring = context.ring(accusation.getRingNumber());
 
-        if (accused.isAccusedOn(ring.getIndex())) {
-            Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
+        if (accused.isAccusedOn(accusation.getRingNumber())) {
+            Participant currentAccuser = context.getMember(
+            accused.getAccusation(accusation.getRingNumber()).getAccuser());
             if (!currentAccuser.equals(accuser)) {
-                if (ring.isBetween(currentAccuser, accuser, accused)) {
+                if (context.isBetween(accusation.getRingNumber(), currentAccuser, accuser, accused)) {
                     if (!accused.verify(accusation.getSignature(),
                                         accusation.getWrapped().getAccusation().toByteString())) {
                         log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
@@ -741,7 +745,7 @@ public class View {
                     pendingRebuttals.computeIfAbsent(accused.getId(), d -> roundTimers.schedule(() -> gc(accused),
                                                                                                 params.rebuttalTimeout()));
                     log.debug("{} accused by: {} on ring: {} (replacing: {}) on: {}", accused.getId(), accuser.getId(),
-                              ring.getIndex(), currentAccuser.getId(), node.getId());
+                              accusation.getRingNumber(), currentAccuser.getId(), node.getId());
                     if (metrics != null) {
                         metrics.accusations().mark();
                     }
@@ -764,7 +768,8 @@ public class View {
                 }
                 return false;
             }
-            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
+            Participant predecessor = context.predecessor(accusation.getRingNumber(), accused,
+                                                          m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId())) {
@@ -1128,7 +1133,7 @@ public class View {
      * @param ring
      * @param check
      */
-    private void invalidate(Participant q, Ring<Participant> ring, Deque<Participant> check) {
+    private void invalidate(Participant q, DynamicContextImpl.Ring<Participant> ring, Deque<Participant> check) {
         AccusationWrapper qa = q.getAccusation(ring.getIndex());
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());
@@ -1471,23 +1476,6 @@ public class View {
         return verifier.get().verify(threshold, signature, message);
     }
 
-    @FunctionalInterface
-    public interface ViewLifecycleListener {
-
-        /**
-         * Notification of a view change event
-         *
-         * @param members     - the source of Members for supplied identifiers
-         * @param viewId      - the compact Digest identifying the new view
-         * @param cardinality - the cardinality of the new view
-         * @param joins       - the list of joining member's id
-         * @param leaves      - the list of leaving member's id
-         */
-        void viewChange(Function<SelfAddressingIdentifier, Participant> members, Digest viewId, int cardinality,
-                        List<SelfAddressingIdentifier> joins, List<Digest> leaves);
-
-    }
-
     public record Seed(SelfAddressingIdentifier identifier, InetSocketAddress endpoint) {
     }
 
@@ -1512,11 +1500,11 @@ public class View {
         }
 
         /**
-         * Create a mask of length Context.majority() randomly disabled rings
+         * Create a mask of length DynamicContext.majority() randomly disabled rings
          *
          * @return the mask
          */
-        public static BitSet createInitialMask(Context<?> context) {
+        public static BitSet createInitialMask(DynamicContext<?> context) {
             int nbits = context.getRingCount();
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();
@@ -1932,7 +1920,7 @@ public class View {
                     }
                 }
 
-                Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+                Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No active successor on ring: {} from: {} on: {}", ring, from, node.getId());
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
@@ -1994,7 +1982,7 @@ public class View {
                     Status.INVALID_ARGUMENT.withDescription("No successor of: " + from));
                 }
                 Participant member = context.getActiveMember(from);
-                Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+                Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No successor, invalid update from: {} on ring: {} on: {}", from, ring, node.getId());
                     throw new StatusRuntimeException(

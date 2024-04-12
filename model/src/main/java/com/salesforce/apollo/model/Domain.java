@@ -12,11 +12,11 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.Join;
 import com.salesforce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -83,7 +83,7 @@ abstract public class Domain {
             throw new IllegalArgumentException("Must be a directory: " + checkpointBaseDir);
         }
         var checkpointDir = new File(dir, qb64(member.getIdentifier().getDigest()));
-        sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
+        sqlStateMachine = new SqlStateMachine(member.getId(), dbURL, new Properties(), checkpointDir);
 
         paramsClone.getProducer().ethereal().setSigner(member);
         this.params = paramsClone.build(runtimeClone.setCheckpointer(sqlStateMachine.getCheckpointer())
@@ -204,9 +204,9 @@ abstract public class Domain {
 
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        log.info("Genesis joins: {} on: {}", members.keySet().stream().map(Member::getId).toList(), params.member());
         var sorted = new ArrayList<>(members.keySet());
         sorted.sort(Comparator.naturalOrder());
+        log.info("Genesis joins: {} on: {}", sorted.stream().map(m -> m.getId()).toList(), params.member().getId());
         List<Transaction> transactions = new ArrayList<>();
         // Schemas
         transactions.add(transactionOf(boostrapMigration()));
@@ -236,7 +236,7 @@ abstract public class Domain {
     }
 
     // Manifest the transactions that instantiate the KERL for this Join. The Join
-    // is validated as a side effect and if invalid, NULL is returned.
+    // is validated as a side effect, and if invalid, NULL is returned.
     private List<Transaction> manifest(Join join) {
         return join.getKerl().getEventsList().stream().map(this::transactionOf).toList();
     }

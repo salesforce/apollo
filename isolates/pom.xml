@@ -91,7 +91,7 @@
                                 </requireMavenVersion>
                                 <dependencyConvergence/>
                                 <requireJavaVersion>
-                                    <version>[20,)</version>
+                                    <version>[22,)</version>
                                 </requireJavaVersion>
                                 <requireJavaVendor>
                                     <includes>

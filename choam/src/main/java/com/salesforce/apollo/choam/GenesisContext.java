@@ -8,20 +8,22 @@ package com.salesforce.apollo.choam;
 
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.Verifier;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 
 import java.util.Collections;
+import java.util.function.Supplier;
 
 /**
  * @author hal.hildebrand
  */
 public class GenesisContext extends ViewContext {
 
-    public GenesisContext(Context<Member> context, Parameters params, Signer signer, BlockProducer blockProducer) {
-        super(context, params, signer, Collections.emptyMap(), blockProducer);
+    public GenesisContext(Context<Member> context, Supplier<Context<Member>> pendingView, Parameters params,
+                          Signer signer, BlockProducer blockProducer) {
+        super(context, params, pendingView, signer, Collections.emptyMap(), blockProducer);
     }
 
     @Override

@@ -76,8 +76,8 @@ class Transactioneer {
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
-                    }, log)), entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                } else if (finished.compareAndSet(false, true)) {
+                    }, log)), entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+                } else {
                     countdown.countDown();
                 }
             }

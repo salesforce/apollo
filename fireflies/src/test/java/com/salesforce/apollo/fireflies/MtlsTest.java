@@ -11,6 +11,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -18,7 +19,6 @@ import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Seed;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.*;
@@ -108,7 +108,7 @@ public class MtlsTest {
         var node0Registry = new MetricRegistry();
 
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
-        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
+        var ctxBuilder = DynamicContext.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var seeds = members.stream()
                            .map(m -> new Seed(m.getIdentifier().getIdentifier(), endpoints.get(m.getId())))
@@ -121,7 +121,7 @@ public class MtlsTest {
 
         var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {
-            Context<Participant> context = ctxBuilder.build();
+            DynamicContext<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = new StandardEpProvider(endpoints.get(node.getId()), ClientAuth.REQUIRE,

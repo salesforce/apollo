@@ -4,7 +4,7 @@ import com.google.protobuf.Any;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -70,7 +69,7 @@ public class SliceIteratorTest {
             }
         };
         final var name = UUID.randomUUID().toString();
-        Context<Member> context = Context.newBuilder().build();
+        DynamicContext<Member> context = DynamicContext.newBuilder().build();
         context.activate(serverMember1);
         context.activate(serverMember2);
 
@@ -98,7 +97,7 @@ public class SliceIteratorTest {
             slice.iterate((link, member) -> link.ping(Any.getDefaultInstance()), (result, comms, member) -> true,
                           () -> {
                               countdown.countDown();
-                          }, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()), Duration.ofMillis(1));
+                          }, Duration.ofMillis(1));
             boolean finished = countdown.await(3, TimeUnit.SECONDS);
             assertTrue(finished, "completed: " + countdown.getCount());
             assertTrue(pinged1.get());

@@ -12,15 +12,14 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Multiset.Entry;
 import com.google.common.collect.Ordering;
 import com.google.protobuf.Empty;
-import com.macasaet.fernet.Token;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.ring.RingIterator;
@@ -89,28 +88,27 @@ import static com.salesforce.apollo.thoth.schema.Tables.IDENTIFIER_LOCATION_HASH
  * @author hal.hildebrand
  */
 public class KerlDHT implements ProtoKERLService {
-    private final static Logger                                                      log            = LoggerFactory.getLogger(
-    KerlDHT.class);
-    private final static Logger                                                      reconcileLog   = LoggerFactory.getLogger(
-    KerlSpace.class);
-    private final        Ani                                                         ani;
-    private final        CachingKERL                                                 cache;
-    private final        JdbcConnectionPool                                          connectionPool;
-    private final        Context<Member>                                             context;
-    private final        CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
-    private final        double                                                      fpr;
-    private final        Duration                                                    operationsFrequency;
-    private final        CachingKERL                                                 kerl;
-    private final        UniKERLDirectPooled                                         kerlPool;
-    private final        KerlSpace                                                   kerlSpace;
-    private final        SigningMember                                               member;
-    private final        RingCommunications<Member, ReconciliationService>           reconcile;
-    private final        CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
-    private final        Reconcile                                                   reconciliation = new Reconcile();
-    private final        ScheduledExecutorService                                    scheduler;
-    private final        Service                                                     service        = new Service();
-    private final        AtomicBoolean                                               started        = new AtomicBoolean();
-    private final        TemporalAmount                                              operationTimeout;
+    private final static Logger log          = LoggerFactory.getLogger(KerlDHT.class);
+    private final static Logger reconcileLog = LoggerFactory.getLogger(KerlSpace.class);
+
+    private final Ani                                                         ani;
+    private final CachingKERL                                                 cache;
+    private final JdbcConnectionPool                                          connectionPool;
+    private final Context<Member>                                             context;
+    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
+    private final double                                                      fpr;
+    private final Duration                                                    operationsFrequency;
+    private final CachingKERL                                                 kerl;
+    private final UniKERLDirectPooled                                         kerlPool;
+    private final KerlSpace                                                   kerlSpace;
+    private final SigningMember                                               member;
+    private final RingCommunications<Member, ReconciliationService>           reconcile;
+    private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
+    private final Reconcile                                                   reconciliation = new Reconcile();
+    private final ScheduledExecutorService                                    scheduler;
+    private final Service                                                     service        = new Service();
+    private final AtomicBoolean                                               started        = new AtomicBoolean();
+    private final TemporalAmount                                              operationTimeout;
 
     public KerlDHT(Duration operationsFrequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
@@ -199,8 +197,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
+        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
                                                                                               (link, r) -> link.append(
                                                                                               Collections.emptyList(),
                                                                                               Collections.singletonList(
@@ -241,8 +238,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
+        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
                                                                                               (link, r) -> link.append(
                                                                                               kerl), null,
                                                                                               (tally, futureSailor, destination) -> mutate(
@@ -275,8 +271,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
+        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
                                                                                               (link, r) -> link.append(
                                                                                               Collections.singletonList(
                                                                                               event)), null,
@@ -338,8 +333,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
+        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
                                                                                               (link, r) -> link.appendAttachments(
                                                                                               events), null,
                                                                                               (tally, futureSailor, destination) -> mutate(
@@ -377,8 +371,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
-        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).noDuplicates()
-                                                                                     .iterate(identifier, null,
+        new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms).iterate(identifier, null,
                                                                                               (link, r) -> link.appendValidations(
                                                                                               validations), null,
                                                                                               (tally, futureSailor, destination) -> mutate(
@@ -436,8 +429,7 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<Attachment> gathered = HashMultiset.create();
         var operation = "getAttachment(%s)".formatted(EventCoordinates.from(coordinates));
         var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.noDuplicates()
-                .iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
+        iterator.iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
                                                                     isTimedOut, destination, "get attachment",
@@ -472,8 +464,7 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KERL_> gathered = HashMultiset.create();
         var operation = "getKerl(%s)".formatted(Identifier.from(identifier));
         var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.noDuplicates()
-                .iterate(digest, null, (link, r) -> link.getKERL(identifier),
+        iterator.iterate(digest, null, (link, r) -> link.getKERL(identifier),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                     isTimedOut, destination, operation,
@@ -512,8 +503,7 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyEvent_>();
         HashMultiset<KeyEvent_> gathered = HashMultiset.create();
         var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.noDuplicates()
-                .iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
+        iterator.iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                     isTimedOut, destination, operation,
@@ -549,8 +539,7 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.noDuplicates()
-                .iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
+        iterator.iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                     isTimedOut, destination, operation,
@@ -587,8 +576,7 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.noDuplicates()
-                .iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
+        iterator.iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
                                                                     isTimedOut, destination, operation,
@@ -779,7 +767,7 @@ public class KerlDHT implements ProtoKERLService {
         start(duration, null);
     }
 
-    public void start(Duration duration, Predicate<Token> validator) {
+    public void start(Duration duration, Predicate<FernetServerInterceptor.HashedToken> validator) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -811,7 +799,7 @@ public class KerlDHT implements ProtoKERLService {
                           .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                           .orElse(null);
         if (max != null) {
-            if (max.getCount() >= context.majority(true)) {
+            if (max.getCount() >= context.majority()) {
                 try {
                     result.complete(max.getElement());
                 } catch (Throwable t) {
@@ -821,15 +809,15 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority, max: " + (max == null ? 0 : max.getCount()) + " required: " + context.majority(
-        true) + " on: " + member.getId()));
+        "Unable to achieve majority, max: " + (max == null ? 0 : max.getCount()) + " required: " + context.majority()
+        + " on: " + member.getId()));
     }
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
-        log.error("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
-                  context.majority(true), member.getId());
+        log.debug("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
+                  context.majority(), member.getId());
         return result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority(true)
+        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority()
         + " on: " + member.getId()));
     }
 
@@ -856,14 +844,13 @@ public class KerlDHT implements ProtoKERLService {
     private CombinedIntervals keyIntervals() {
         List<KeyInterval> intervals = new ArrayList<>();
         for (int i = 0; i < context.getRingCount(); i++) {
-            Ring<Member> ring = context.ring(i);
-            Member predecessor = ring.predecessor(member);
+            Member predecessor = context.predecessor(i, member);
             if (predecessor == null) {
                 continue;
             }
 
-            Digest begin = ring.hash(predecessor);
-            Digest end = ring.hash(member);
+            Digest begin = context.hashFor(predecessor, i);
+            Digest end = context.hashFor(member, i);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
                 intervals.add(new KeyInterval(end, digestAlgorithm().getLast()));
@@ -907,7 +894,7 @@ public class KerlDHT implements ProtoKERLService {
         var max = max(gathered);
         if (max != null) {
             tally.set(max.getCount());
-            final var majority = tally.get() >= context.majority(true);
+            final var majority = tally.get() >= context.majority();
             if (majority) {
                 result.complete(max.getElement());
                 log.debug("Majority: {} achieved: {}: {} on: {}", max.getCount(), action, identifier, member.getId());
@@ -987,7 +974,7 @@ public class KerlDHT implements ProtoKERLService {
         if (fromMember == null) {
             return false;
         }
-        Member successor = context.ring(ring).successor(fromMember, m -> context.isActive(m.getId()));
+        Member successor = context.successor(ring, fromMember);
         if (successor == null) {
             return false;
         }

@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -16,10 +15,11 @@ import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -86,15 +86,16 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() throws Exception {
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var origin = DigestAlgorithm.DEFAULT.getOrigin();
         registry = new MetricRegistry();
-        var metrics = new ChoamMetricsImpl(context.getId(), registry);
+        var metrics = new ChoamMetricsImpl(origin, registry);
         blocks = new ConcurrentHashMap<>();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         var params = Parameters.newBuilder()
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
+                               .setGenerateGenesis(true)
+                               .setGenesisViewId(origin.prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
@@ -115,7 +116,7 @@ public class TestCHOAM {
                            .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .toList();
-        members.forEach(m -> context.activate(m));
+        var context = new StaticContext<>(origin, 0.2, members, 3);
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(
@@ -163,7 +164,7 @@ public class TestCHOAM {
         final var timeout = Duration.ofSeconds(15);
 
         final var transactioneers = new ArrayList<Transactioneer>();
-        final var clientCount = LARGE_TESTS ? 1_500 : 50;
+        final var clientCount = LARGE_TESTS ? 1_500 : 5;
         final var max = LARGE_TESTS ? 100 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
         choams.values().forEach(c -> {

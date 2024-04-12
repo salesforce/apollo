@@ -10,8 +10,8 @@ import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.*;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 
@@ -27,22 +28,24 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer         blockProducer;
-    private final        Context<Member>       context;
-    private final        Parameters            params;
-    private final        Map<Digest, Short>    roster;
-    private final        Signer                signer;
-    private final        Map<Member, Verifier> validators;
+    private final static Logger                    log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer             blockProducer;
+    private final        Context<Member>           context;
+    private final        Parameters                params;
+    private final        Map<Digest, Short>        roster;
+    private final        Signer                    signer;
+    private final        Map<Member, Verifier>     validators;
+    private final        Supplier<Context<Member>> pendingView;
 
-    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
-                       BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<Context<Member>> pendingView, Signer signer,
+                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
+        this.pendingView = pendingView;
 
         var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
         short pid = 0;
@@ -60,8 +63,12 @@ public class ViewContext {
                              algo.digest(v.getWitness().getSignature().toByteString()));
     }
 
+    public static String print(SignedViewMember svm, DigestAlgorithm algo) {
+        return print(svm.getVm(), algo);
+    }
+
     public static String print(ViewMember vm, DigestAlgorithm algo) {
-        return String.format("id: %s key: %s sig: %s", Digest.from(vm.getId()),
+        return String.format("id: %s vid: %s key: %s sig: %s", Digest.from(vm.getId()), Digest.from(vm.getView()),
                              algo.digest(publicKey(vm.getConsensusKey()).getEncoded()),
                              algo.digest(vm.getSignature().toByteString()));
     }
@@ -74,16 +81,13 @@ public class ViewContext {
         return context;
     }
 
-    public Digest diadem() {
-        return blockProducer == null ? DigestAlgorithm.DEFAULT.getLast() : blockProducer.diadem();
-    }
-
     public Validate generateValidation(HashedBlock block) {
-        log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member().getId());
+        log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
+                  params.member().getId());
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
-            log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(),
-                      params.member().getId());
+            log.error("Unable to sign: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash,
+                      block.height(), params.member().getId());
             return null;
         }
         var validation = Validate.newBuilder()
@@ -96,19 +100,19 @@ public class ViewContext {
         return validation;
     }
 
-    public Validate generateValidation(ViewMember vm) {
-        JohnHancock signature = signer.sign(vm.getSignature().toByteString());
+    public Validate generateValidation(SignedViewMember svm) {
+        JohnHancock signature = signer.sign(svm.getVm().toByteString());
         if (signature == null) {
-            log.error("Unable to sign view member: {} on: {}", print(vm, params.digestAlgorithm()),
+            log.error("Unable to sign view member: {} on: {}", print(svm, params.digestAlgorithm()),
                       params.member().getId());
             return null;
         }
         if (log.isTraceEnabled()) {
-            log.trace("Signed view member: {} with sig: {} on: {}", print(vm, params.digestAlgorithm()),
+            log.trace("Signed view member: {} with sig: {} on: {}", print(svm, params.digestAlgorithm()),
                       params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member().getId());
         }
         var validation = Validate.newBuilder()
-                                 .setHash(vm.getId())
+                                 .setHash(svm.getVm().getId())
                                  .setWitness(Certification.newBuilder()
                                                           .setId(params.member().getId().toDigeste())
                                                           .setSignature(signature.toSig())
@@ -125,8 +129,19 @@ public class ViewContext {
         return signer;
     }
 
+    /**
+     * The process has failed
+     */
+    public void onFailure() {
+        blockProducer.onFailure();
+    }
+
     public Parameters params() {
         return params;
+    }
+
+    public Context<Member> pendingView() {
+        return pendingView.get();
     }
 
     public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {
@@ -138,7 +153,7 @@ public class ViewContext {
     }
 
     public void publish(HashedCertifiedBlock block) {
-        blockProducer.publish(block.certifiedBlock);
+        blockProducer.publish(block.hash, block.certifiedBlock);
     }
 
     public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
@@ -152,21 +167,24 @@ public class ViewContext {
 
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
-        return v != null && v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                     block.block.getHeader().toByteString());
+        if (v == null) {
+            log.debug("no validation witness: {} for: {} block: {} on: {}", Digest.from(validate.getWitness().getId()),
+                      block.block.getBodyCase(), block.hash, params.member().getId());
+            return false;
+        }
+        return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());
     }
 
-    public boolean validate(ViewMember vm, Validate validate) {
+    public boolean validate(SignedViewMember svm, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {
             return false;
         }
-        final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                   vm.getSignature().toByteString());
+        final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()), svm.getVm().toByteString());
         if (!valid) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
-                          print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
+                log.debug("Unable to validate view member: {} from validation: [{}] key: {} on: {}",
+                          print(svm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
                           params.digestAlgorithm().digest(v.toString()), params.member().getId());
             }
         }
@@ -178,7 +196,7 @@ public class ViewContext {
         var m = context.getMember(mid);
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
@@ -186,7 +204,7 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;

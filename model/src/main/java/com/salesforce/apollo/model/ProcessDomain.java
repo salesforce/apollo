@@ -8,14 +8,14 @@ package com.salesforce.apollo.model;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
 import com.salesforce.apollo.cryptography.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.fireflies.View.ViewLifecycleListener;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Verifiers;
@@ -29,13 +29,17 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BiConsumer;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
  * <p>
  * The ProcessDomain represents a member node in the top level domain and represents the top level container model for
- * the distributed system. The Context of this domain is the foundational fireflies membership domain for the group id.
+ * the distributed system. The DynamicContext of this domain is the foundational fireflies membership domain for the
+ * group id.
  *
  * @author hal.hildebrand
  */
@@ -47,18 +51,17 @@ public class ProcessDomain extends Domain {
     private final   EventValidation.DelegatedValidation validations;
     private final   Verifiers.DelegatedVerifiers        verifiers;
     private final   ProcessDomainParameters             parameters;
-    private final   ViewLifecycleListener               listener = listener();
+    private final   List<BiConsumer<Context, Digest>>   lifecycleListeners = new CopyOnWriteArrayList<>();
+    private final   BiConsumer<Context, Digest>         listener           = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
         super(member, builder, pdParams.dbURL, pdParams.checkpointBaseDir, runtime);
         parameters = pdParams;
-        var base = Context.<Participant>newBuilder()
-                          .setBias(parameters.dhtBias)
-                          .setpByz(parameters.dhtPbyz)
-                          .setId(group)
-                          .build();
+        var b = DynamicContext.<Participant>newBuilder();
+        b.setBias(parameters.dhtBias).setpByz(parameters.dhtPbyz).setId(group);
+        var base = b.build();
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(parameters.dhtDbUrl, "", "");
         connectionPool.setMaxConnections(parameters.jdbcMaxConnections());
         dht = new KerlDHT(parameters.dhtOpsFrequency, params.context(), member, connectionPool,
@@ -116,18 +119,12 @@ public class ProcessDomain extends Domain {
         }
     }
 
-    protected ViewLifecycleListener listener() {
-        return (context, id, cardinality, join, leaving) -> {
-            for (var d : join) {
-                params.context().activate(context.apply(d));
-            }
-            for (var d : leaving) {
-                params.context().remove(d);
-            }
-            choam.setDiadem(id);
+    protected BiConsumer<Context, Digest> listener() {
+        return (context, diadem) -> {
+            choam.nextView(context, diadem);
 
-            log.info("View change: {} for: {} joining: {} leaving: {} on: {}", id, params.context().getId(),
-                     join.size(), leaving.size(), params.member().getId());
+            log.info("View change: {} for: {} cardinality: {} on: {}", diadem, params.context().getId(),
+                     context.totalCount(), params.member().getId());
         };
     }
 

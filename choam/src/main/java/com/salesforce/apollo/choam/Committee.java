@@ -9,13 +9,12 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 
@@ -32,21 +31,23 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getJoinsList()
-                          .stream()
-                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
-                                                    e -> new DefaultVerifier(
-                                                    publicKey(e.getMember().getConsensusKey()))));
+        var validators = reconfigure.getJoinsList()
+                                    .stream()
+                                    .collect(
+                                    Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getVm().getId())),
+                                                     e -> (Verifier) new DefaultVerifier(
+                                                     publicKey(e.getMember().getVm().getConsensusKey()))));
+        assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
+        return validators;
     }
 
     /**
      * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
-                                                    baseContext.getProbabilityByzantine(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
-        successors.forEach(e -> newView.activate(e));
+        var newView = new StaticContext<>(hash, baseContext.getProbabilityByzantine(), 3, successors,
+                                          baseContext.getEpsilon(), successors.size());
         return newView;
     }
 
@@ -70,9 +71,11 @@ public interface Committee {
 
     boolean isMember();
 
-    ViewMember join(Digest nextView, Digest from);
+    SignedViewMember join(Digest nextView, Digest from);
 
     Logger log();
+
+    void nextView(Context<Member> pendingView);
 
     Parameters params();
 
@@ -112,11 +115,11 @@ public interface Committee {
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
         if (!verified) {
-            log().debug("Failed verification: {} using: {} key: {} on: {}", verified, witness.getId(),
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
-        } else {
-            log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
+            log().debug("Failed verification: {} hash: {} height: {} using: {} : {} on: {}", hb.block.getBodyCase(),
+                        hb.hash, hb.height(), witness.getId(), verify, params.member().getId());
+        } else if (log().isTraceEnabled()) {
+            log().trace("Verified: {} hash: {} height: {} using: {} : {} on: {}", hb.block.getBodyCase(), hb.hash,
+                        hb.height(), witness.getId(), verify, params.member().getId());
         }
         return verified;
     }
@@ -136,10 +139,10 @@ public interface Committee {
                 valid++;
             }
         }
-        final int toleranceLevel = params.majority();
+        final int toleranceLevel = params.context().toleranceLevel();
         log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
                     params.member().getId());
-        return valid >= toleranceLevel;
+        return valid > toleranceLevel;
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {
@@ -147,6 +150,7 @@ public interface Committee {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        return validate(hb, validatorsOf(reconfigure, params().context()));
+        var validators = validatorsOf(reconfigure, params().context());
+        return !validators.isEmpty() && validate(hb, validators);
     }
 }

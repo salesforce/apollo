@@ -8,8 +8,8 @@ package com.salesforce.apollo.ring;
 
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
@@ -62,8 +62,10 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         this(frequency, direction, context, member, comm, false, scheduler);
     }
 
-    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler) {
-        iterate(digest, null, round, null, handler, null);
+    @Override
+    public RingIterator<T, Comm> allowDuplicates() {
+        super.allowDuplicates();
+        return this;
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler,
@@ -76,9 +78,13 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         AtomicInteger tally = new AtomicInteger(0);
         var traversed = new ConcurrentSkipListSet<Member>();
         Thread.ofVirtual()
-              .start(
-              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed));
+              .start(Utils.wrapped(
+              () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, traversed),
+              log));
+    }
 
+    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, Q> round, ResultConsumer<T, Q, Comm> handler) {
+        iterate(digest, null, round, null, handler, null);
     }
 
     public int iteration() {
@@ -111,8 +117,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                   tally.get(), digest, context.getId(), next.ring(), member.getId());
         if (next == null || next.link() == null) {
             log.trace("No successor found for digest: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
-                      context.getId(), iteration(), traversed, context.ring(currentIndex).stream().toList(),
-                      member.getId());
+                      context.getId(), iteration(), traversed, currentIndex, member.getId());
             final boolean allow = handler.handle(tally, Optional.empty(), next);
             allowed.accept(allow);
             if (allow) {
@@ -174,16 +179,16 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         if (!finalIteration) {
             log.trace(
             "Determining: {} continuation of: {} for digest: {} tally: {} majority: {} final itr: {} allow: {} on: {}",
-            current, key, context.getId(), tally.get(), context.majority(true), finalIteration, allow, member.getId());
+            current, key, context.getId(), tally.get(), context.majority(), finalIteration, allow, member.getId());
         }
         if (finalIteration && allow) {
             log.trace("Completing iteration: {} of: {} for digest: {} tally: {} on: {}", iteration(), key,
                       context.getId(), tally.get(), member.getId());
             if (failedMajority != null && !majorityFailed) {
-                if (tally.get() < context.majority(true)) {
+                if (tally.get() < context.majority()) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for digest: {} tally: {} required: {} on: {}", key,
-                              context.getId(), tally.get(), context.majority(true), member.getId());
+                              context.getId(), tally.get(), context.majority(), member.getId());
                     failedMajority.run();
                 }
             }
@@ -195,7 +200,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                       member.getId());
         } else {
             if (onMajority != null && !majoritySucceed) {
-                if (tally.get() >= context.majority(true)) {
+                if (tally.get() >= context.majority()) {
                     majoritySucceed = true;
                     log.debug("Obtained: {} majority of: {} for digest: {} tally: {} on: {}", current, key,
                               context.getId(), tally.get(), member.getId());

@@ -2,37 +2,33 @@
 <configuration>
 
     <!-- Stop output INFO at start -->
-    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
 
     <appender name="STDOUT"
-        class="ch.qos.logback.core.ConsoleAppender">
+              class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-                %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
-  %msg%n
-            </Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
 
     <logger name="org.jooq.Constants" level="warn"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
+            additivity="false">
+        <appender-ref ref="STDOUT"/>
     </logger>
-    
+
     <logger name="liquibase" level="warn"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
+            additivity="false">
+        <appender-ref ref="STDOUT"/>
     </logger>
 
     <logger name="com.salesforce.apollo.delphinius" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
+            additivity="false">
+        <appender-ref ref="STDOUT"/>
     </logger>
-    
-    
+
 
     <root level="INFO">
-        <appender-ref ref="STDOUT" />
+        <appender-ref ref="STDOUT"/>
     </root>
 
 </configuration>

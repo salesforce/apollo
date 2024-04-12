@@ -1,0 +1,435 @@
+02:49.510 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[1d280b434f2f:1] coordinates: [SA[1d280b434f2f:1]:0:[:0]:icp]
+02:49.515 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[beecf93ea56b:1] coordinates: [SA[beecf93ea56b:1]:0:[:0]:icp]
+02:49.518 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[0814d638bbbd:1] coordinates: [SA[0814d638bbbd:1]:0:[:0]:icp]
+02:49.521 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[e7f022fd73bd:1] coordinates: [SA[e7f022fd73bd:1]:0:[:0]:icp]
+02:49.523 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[927e5634f9ed:1] coordinates: [SA[927e5634f9ed:1]:0:[:0]:icp]
+Members: [[1d280b434f2f:1], [beecf93ea56b:1], [0814d638bbbd:1], [e7f022fd73bd:1], [927e5634f9ed:1]]
+02:49.528 [main] INFO  StereotomyImpl -
+                New Private identifier: SA[fe1f79616ebd:1] coordinates: [SA[fe1f79616ebd:1]:0:[:0]:icp]
+DB URL: jdbc:h2:mem:test_engine-[1d280b434f2f:1]--5204846659158128215
+02:49.786 [main] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+02:49.791 [main] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+02:49.794 [main] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+DB URL: jdbc:h2:mem:test_engine-[beecf93ea56b:1]--2423199100981284683
+02:49.801 [main] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+02:49.801 [main] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+02:49.801 [main] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+DB URL: jdbc:h2:mem:test_engine-[0814d638bbbd:1]-7849679209103347010
+02:49.805 [main] INFO  RouterImpl -
+                Communications created for: [0814d638bbbd:1]
+02:49.805 [main] INFO  RouterImpl -
+                Communications created for: [0814d638bbbd:1]
+02:49.805 [main] INFO  RouterImpl -
+                Communications created for: [0814d638bbbd:1]
+DB URL: jdbc:h2:mem:test_engine-[e7f022fd73bd:1]--9076455500634737662
+02:49.807 [main] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:49.807 [main] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:49.807 [main] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+DB URL: jdbc:h2:mem:test_engine-[927e5634f9ed:1]--2777977495470199366
+02:49.810 [main] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:49.810 [main] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:49.810 [main] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+DB URL: jdbc:h2:mem:test_engine-[fe1f79616ebd:1]--8643257875754328965
+02:49.813 [main] INFO  RouterImpl -
+                Communications created for: [fe1f79616ebd:1]
+02:49.813 [main] INFO  RouterImpl -
+                Communications created for: [fe1f79616ebd:1]
+02:49.813 [main] INFO  RouterImpl -
+                Communications created for: [fe1f79616ebd:1]
+test subject: [fe1f79616ebd:1]
+members: [[1d280b434f2f:1], [beecf93ea56b:1], [0814d638bbbd:1], [e7f022fd73bd:1], [927e5634f9ed:1]]
+02:49.818 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-FHSgLQ08vwXalGwEBHMbEh-h5wn-qyqlVOh7Jma9WVKM]
+02:49.818 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-Fkn5WNPntHpPCJPLExG_qbdIFJ7ExfBYG18Aw0yK2IVc]
+02:49.818 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-FCBTWOLu9qBLdGJsYRAHe6Xu3_7pVTCbtnp5ZhQ6aLFM]
+02:49.818 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-F5_Ai_XO9jJsYZIwFxzPYOPZGRbKqDEGjmLlS-z3cAEE]
+02:49.818 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-Fvuz5PqVrXHgm-AthjXRo-l-X7iZj6doBWBcH4JmU4b8]
+02:49.818 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [1d280b434f2f:1]
+02:49.822 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [927e5634f9ed:1]
+02:49.822 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [0814d638bbbd:1]
+02:49.822 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [e7f022fd73bd:1]
+02:49.822 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [beecf93ea56b:1]
+02:50.481 [] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+02:50.481 [] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:50.481 [] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+02:50.481 [] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:52.442 [Linear [e7f022fd73bd:1]] INFO  ReplicatedChangeLogHistoryService -
+                Creating database history table with name: PUBLIC.DATABASECHANGELOG
+02:52.442 [Linear [1d280b434f2f:1]] INFO  ReplicatedChangeLogHistoryService -
+                Creating database history table with name: PUBLIC.DATABASECHANGELOG
+02:52.442 [Linear [beecf93ea56b:1]] INFO  ReplicatedChangeLogHistoryService -
+                Creating database history table with name: PUBLIC.DATABASECHANGELOG
+02:52.442 [Linear [0814d638bbbd:1]] INFO  ReplicatedChangeLogHistoryService -
+                Creating database history table with name: PUBLIC.DATABASECHANGELOG
+02:52.442 [Linear [927e5634f9ed:1]] INFO  ReplicatedChangeLogHistoryService -
+                Creating database history table with name: PUBLIC.DATABASECHANGELOG
+02:52.450 [Linear [e7f022fd73bd:1]] INFO  ReplicatedChangeLogHistoryService -
+                Reading from PUBLIC.DATABASECHANGELOG
+02:52.451 [Linear [927e5634f9ed:1]] INFO  ReplicatedChangeLogHistoryService -
+                Reading from PUBLIC.DATABASECHANGELOG
+02:52.451 [Linear [1d280b434f2f:1]] INFO  ReplicatedChangeLogHistoryService -
+                Reading from PUBLIC.DATABASECHANGELOG
+02:52.453 [Linear [0814d638bbbd:1]] INFO  ReplicatedChangeLogHistoryService -
+                Reading from PUBLIC.DATABASECHANGELOG
+02:52.453 [Linear [beecf93ea56b:1]] INFO  ReplicatedChangeLogHistoryService -
+                Reading from PUBLIC.DATABASECHANGELOG
+Running Changeset: sql-state/internal.xml::apollo_internal-1::hhildebrand
+Running Changeset: sql-state/internal.xml::apollo_internal-1::hhildebrand
+Running Changeset: sql-state/internal.xml::apollo_internal-1::hhildebrand
+Running Changeset: sql-state/internal.xml::apollo_internal-1::hhildebrand
+Running Changeset: sql-state/internal.xml::apollo_internal-1::hhildebrand
+02:52.604 [Linear [beecf93ea56b:1]] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+02:52.604 [Linear [e7f022fd73bd:1]] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:52.604 [Linear [1d280b434f2f:1]] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+02:52.604 [Linear [927e5634f9ed:1]] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:53.726 [Linear [0814d638bbbd:1]] INFO  RouterImpl -
+                Communications created for: [0814d638bbbd:1]
+02:53.737 [Linear [e7f022fd73bd:1]] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:53.740 [Linear [927e5634f9ed:1]] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:53.748 [Linear [beecf93ea56b:1]] INFO  RouterImpl -
+                Communications created for: [beecf93ea56b:1]
+Transaction member: [927e5634f9ed:1]
+Starting txns
+02:55.467 [Linear [e7f022fd73bd:1]] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:55.478 [Linear [0814d638bbbd:1]] INFO  RouterImpl -
+                Communications created for: [0814d638bbbd:1]
+02:55.478 [Linear [927e5634f9ed:1]] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:55.478 [Linear [1d280b434f2f:1]] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+Starting late joining node
+02:56.321 [main] INFO  ReliableBroadcaster -
+                Starting Reliable Broadcaster[[000000000000:1]] for [fe1f79616ebd:1]
+02:56.321 [main] INFO  RouterImpl -
+                Started router: [ac066f34-554e-4a58-bdd4-7c5f55c6da6d-F_h95YW69hF8EI482rjdvBIcWMI3Jqq3prsYZo9NVEYQ]
+02:56.332 [Linear [fe1f79616ebd:1]] INFO  RouterImpl -
+                Communications created for: [fe1f79616ebd:1]
+02:56.702 [Linear [1d280b434f2f:1]] INFO  RouterImpl -
+                Communications created for: [1d280b434f2f:1]
+02:56.712 [Linear [927e5634f9ed:1]] INFO  RouterImpl -
+                Communications created for: [927e5634f9ed:1]
+02:56.723 [Linear [e7f022fd73bd:1]] INFO  RouterImpl -
+                Communications created for: [e7f022fd73bd:1]
+02:56.721 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:658)
+	at com.salesforce.apollo.choam.CHOAM$Synchronizer.accept(CHOAM.java:1396)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.725 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:665)
+	at com.salesforce.apollo.choam.CHOAM$Synchronizer.accept(CHOAM.java:1396)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.728 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:658)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.729 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:665)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.732 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:658)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.734 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:678)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.734 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.execute(SqlStateMachine.java:625)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.lambda$execute$0(SqlStateMachine.java:978)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.execute(SqlStateMachine.java:977)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.execute(AbstractLifecycleTest.java:391)
+	at com.salesforce.apollo.choam.CHOAM.execute(CHOAM.java:552)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:679)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:56.736 [Linear [fe1f79616ebd:1]] ERROR SqlStateMachine -
+                Error in call
+java.lang.NullPointerException: Cannot invoke "java.sql.PreparedStatement.setLong(int, long)" because "this.updateCurrent" is null
+	at com.salesforce.apollo.state.SqlStateMachine.updateCurrent(SqlStateMachine.java:791)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$beginBlock$7(SqlStateMachine.java:549)
+	at com.salesforce.apollo.state.SqlStateMachine.lambda$withContext$9(SqlStateMachine.java:824)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$0(Utils.java:189)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:813)
+	at com.salesforce.apollo.state.SqlStateMachine.withContext(SqlStateMachine.java:823)
+	at com.salesforce.apollo.state.SqlStateMachine.beginBlock(SqlStateMachine.java:548)
+	at com.salesforce.apollo.state.SqlStateMachine$TxnExec.beginBlock(SqlStateMachine.java:949)
+	at com.salesforce.apollo.state.AbstractLifecycleTest$1.beginBlock(AbstractLifecycleTest.java:380)
+	at com.salesforce.apollo.choam.CHOAM.process(CHOAM.java:665)
+	at com.salesforce.apollo.choam.CHOAM$Administration.accept(CHOAM.java:1159)
+	at com.salesforce.apollo.choam.CHOAM.accept(CHOAM.java:347)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:443)
+	at com.salesforce.apollo.choam.CHOAM$Combiner.combine(CHOAM.java:1072)
+	at com.salesforce.apollo.choam.fsm.Combine$Mercantile$5.combine(Combine.java:96)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.chiralbehaviors.tron.Fsm.fireTransition(Fsm.java:466)
+	at com.chiralbehaviors.tron.Fsm.fire(Fsm.java:422)
+	at com.chiralbehaviors.tron.Fsm$1.lambda$invoke$0(Fsm.java:665)
+	at com.chiralbehaviors.tron.Fsm.locked(Fsm.java:494)
+	at com.chiralbehaviors.tron.Fsm$1.invoke(Fsm.java:665)
+	at jdk.proxy2/jdk.proxy2.$Proxy12.combine(Unknown Source)
+	at com.salesforce.apollo.choam.CHOAM.combine(CHOAM.java:463)
+	at com.salesforce.apollo.choam.CHOAM.lambda$new$5(CHOAM.java:112)
+	at com.salesforce.apollo.utils.Utils.lambda$wrapped$2(Utils.java:210)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:329)
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [1d280b434f2f:1]
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [927e5634f9ed:1]
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [0814d638bbbd:1]
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [e7f022fd73bd:1]
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [fe1f79616ebd:1]
+02:57.340 [main] INFO  ReliableBroadcaster -
+                Stopping Reliable Broadcaster[[000000000000:1]] on: [beecf93ea56b:1]
+02:57.340 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [1d280b434f2f:1]
+02:57.341 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [927e5634f9ed:1]
+02:57.342 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [0814d638bbbd:1]
+02:57.342 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [e7f022fd73bd:1]
+02:57.342 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [fe1f79616ebd:1]
+02:57.342 [main] INFO  ServerConnectionCache -
+                Closing connection cache on: [beecf93ea56b:1]
+Final state: [7, 7, 7, 7, 7]
+
+
+
+Checking replica consistency

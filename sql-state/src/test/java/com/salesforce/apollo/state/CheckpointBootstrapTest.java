@@ -6,32 +6,31 @@
  */
 package com.salesforce.apollo.state;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.salesforce.apollo.context.DynamicContext;
+import com.salesforce.apollo.utils.Utils;
+import org.joou.ULong;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import org.joou.ULong;
-
-import com.salesforce.apollo.utils.Utils;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author hal.hildebrand
- *
  */
 public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
     static {
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+        //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-//    @Test
+    @Test
     public void checkpointBootstrap() throws Exception {
         pre();
 
@@ -41,7 +40,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         assertNotNull(chkptHeight, "Null checkpoint height!");
         System.out.println("Checkpoint at height: " + chkptHeight);
 
-        assertTrue(Utils.waitForCondition(10_000, 1_000, () -> {
+        var processed = Utils.waitForCondition(10_000, 1_000, () -> {
             return members.stream()
                           .filter(m -> !m.equals(testSubject))
                           .map(m -> updaters.get(m))
@@ -49,23 +48,39 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                           .filter(cb -> cb != null)
                           .map(cb -> cb.height())
                           .filter(l -> l.compareTo(chkptHeight) >= 0)
-                          .count() == members.size() - 1;
-        }), "All members did not process the checkpoint");
+                          .count() == members.size();
+        });
+        assertTrue(processed, "All members did not process the checkpoint: " + members.stream()
+                                                                                      .filter(
+                                                                                      m -> !m.equals(testSubject))
+                                                                                      .map(m -> updaters.get(m))
+                                                                                      .map(ssm -> ssm.getCurrentBlock())
+                                                                                      .filter(cb -> cb != null)
+                                                                                      .map(cb -> cb.height())
+                                                                                      .filter(
+                                                                                      l -> l.compareTo(chkptHeight)
+                                                                                      >= 0)
+                                                                                      .count());
 
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
-        choam.context().activate(testSubject);
+        ((DynamicContext) choam.context().delegate()).activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
 
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choam.active()),
                    "Test subject did not become active: " + choam.logState());
-
+        members.add(testSubject);
         post();
     }
 
     @Override
     protected int checkpointBlockSize() {
         return 3;
+    }
+
+    @Override
+    protected byte disc() {
+        return 1;
     }
 }

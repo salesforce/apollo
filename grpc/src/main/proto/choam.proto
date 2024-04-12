@@ -15,7 +15,7 @@ service TransactionSubmission {
 
 service Terminal {
   /* reconfiguration */
-  rpc join (crypto.Digeste) returns (ViewMember) {}
+  rpc join (crypto.Digeste) returns (SignedViewMember) {}
 
   /* bootstrapping */
   rpc sync(Synchronize) returns (Initial) {}
@@ -69,9 +69,8 @@ message Genesis {
 
 message Reconfigure {
   crypto.Digeste id = 1;
-  crypto.Digeste view = 2;
-  int32 checkpointTarget = 3;
-  repeated Join joins = 4;
+  int32 checkpointTarget = 2;
+  repeated Join joins = 3;
 }
 
 message Checkpoint {
@@ -87,7 +86,6 @@ message Executions {
 
 message Assemble {
   crypto.Digeste nextView = 1;
-  crypto.Digeste diadem = 2;
 }
 
 message FoundationSeal {
@@ -109,17 +107,21 @@ message UnitData {
 }
 
 message Join {
-  crypto.Digeste view = 1;
-  ViewMember member = 2;
-  repeated Certification endorsements = 3;
-  stereotomy.KERL_ kerl = 4;
+  SignedViewMember member = 1;
+  repeated Certification endorsements = 2;
+  stereotomy.KERL_ kerl = 3;
 }
 
 message ViewMember {
   crypto.Digeste id = 1;
-  crypto.Digeste diadem = 2;
+  crypto.Digeste view = 2;
   crypto.PubKey consensusKey = 3;
   crypto.Sig signature = 4;
+}
+
+message SignedViewMember {
+  ViewMember vm = 1;
+  crypto.Sig signature = 2;
 }
 
 message Certification {
@@ -150,12 +152,8 @@ message Validate {
 }
 
 message Reassemble {
-  repeated ViewMember members = 1;
+  repeated SignedViewMember members = 1;
   repeated Validate validations = 2;
-}
-
-message ViewMembers {
-  repeated ViewMember members = 1;
 }
 
 message Validations {

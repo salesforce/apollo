@@ -20,7 +20,7 @@ public interface Concierge {
 
     Blocks fetchViewChain(BlockReplication request, Digest from);
 
-    ViewMember join(Digest nextView, Digest from);
+    SignedViewMember join(Digest nextView, Digest from);
 
     Initial sync(Synchronize request, Digest from);
 

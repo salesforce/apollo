@@ -13,10 +13,10 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.proto.Checkpoint;
 import com.salesforce.apollo.choam.proto.CheckpointReplication;
 import com.salesforce.apollo.choam.proto.CheckpointSegments;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.HexBloom;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.ring.RingIterator;
@@ -33,8 +33,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-
-import static com.salesforce.apollo.choam.support.Bootstrapper.randomCut;
 
 /**
  * @author hal.hildebrand
@@ -115,7 +113,7 @@ public class CheckpointAssembler {
         log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
                  member.getId());
         var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
-        ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
+        ringer.iterate(digestAlgorithm.random(), (link, ring) -> gossip(link),
                        (tally, result, destination) -> gossip(result), t -> scheduler.schedule(
         () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)), duration.toMillis(),
         TimeUnit.MILLISECONDS));

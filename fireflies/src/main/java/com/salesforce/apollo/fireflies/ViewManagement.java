@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Objects;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.HexBloom;
@@ -18,7 +19,6 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -52,7 +52,7 @@ public class ViewManagement {
     final                AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
     private final        AtomicInteger                                 attempt      = new AtomicInteger();
     private final        Digest                                        bootstrapView;
-    private final        Context<Participant>                          context;
+    private final        DynamicContext<Participant>                   context;
     private final        DigestAlgorithm                               digestAlgo;
     private final        ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
     private final        FireflyMetrics                                metrics;
@@ -66,7 +66,7 @@ public class ViewManagement {
     private              boolean                                       bootstrap;
     private              CompletableFuture<Void>                       onJoined;
 
-    ViewManagement(View view, Context<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
+    ViewManagement(View view, DynamicContext<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
         this.node = node;
         this.view = view;
@@ -191,8 +191,8 @@ public class ViewManagement {
         }
 
         log.info(
-        "Installed view: {} from: {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
-        currentView.get(), previousView, diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
+        "Installed view: {} -> {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
+        previousView, currentView.get(), diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
         pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
 
         view.notifyListeners(joining, ballot.leaving);
@@ -281,7 +281,7 @@ public class ViewManagement {
             if (!View.isValidMask(note.getMask(), context)) {
                 log.warn(
                 "Invalid join mask: {} majority: {} from member: {} view: {}  context: {} cardinality: {} on: {}",
-                note.getMask(), context.majority(true), from, thisView, context.getId(), cardinality(), node.getId());
+                note.getMask(), context.majority(), from, thisView, context.getId(), cardinality(), node.getId());
             }
             if (pendingJoins.size() >= params.maxPending()) {
                 responseObserver.onError(
@@ -387,7 +387,7 @@ public class ViewManagement {
                 scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
                                    TimeUnit.MILLISECONDS);
             }
-        }, scheduler, Duration.ofMillis(500)));
+        }, Duration.ofMillis(500)));
         repopulate.get().run();
     }
 
@@ -530,7 +530,11 @@ public class ViewManagement {
         log.info("Gateway initial seeding: {} successors: {} for: {} on: {}", gateway.getInitialSeedSetCount(),
                  successors.size(), from, node.getId());
         responseObserver.onNext(gateway);
-        responseObserver.onCompleted();
+        try {
+            responseObserver.onCompleted();
+        } catch (RejectedExecutionException e) {
+            log.trace("in shutdown on: {}", node.getId());
+        }
         if (timer != null) {
             var serializedSize = gateway.getSerializedSize();
             metrics.outboundBandwidth().mark(serializedSize);

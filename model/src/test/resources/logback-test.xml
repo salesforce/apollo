@@ -6,10 +6,7 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>
-                %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
-                %msg%n
-            </Pattern>
+            <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
 
@@ -25,19 +22,19 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Session" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.support" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -45,11 +42,11 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -57,7 +54,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

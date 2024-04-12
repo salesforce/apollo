@@ -18,12 +18,11 @@ import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.cryptography.proto.PubKey;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -70,14 +69,15 @@ public class GenesisAssemblyTest {
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> stereotomy.newIdentifier())
-                                        .map(cpk -> new ControlledIdentifierMember(cpk))
+                                        .map(ControlledIdentifierMember::new)
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
-        base.activate(members);
-        Context<Member> committee = Committee.viewFor(viewId, base);
+        var base = new StaticContext<>(viewId, 0.2, members, 3);
+        var committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
+                                              .setGenesisViewId(DigestAlgorithm.DEFAULT.getLast())
+                                              .setGenerateGenesis(true)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
@@ -104,11 +104,11 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder());
-            return comm;
-        }));
-        CountDownLatch complete = new CountDownLatch(committee.activeCount());
+        Map<Member, Router> communications = members.stream()
+                                                    .collect(Collectors.toMap(m -> m,
+                                                                              m -> new LocalServer(prefix, m).router(
+                                                                              ServerConnectionCache.newBuilder())));
+        CountDownLatch complete = new CountDownLatch(committee.memberCount());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m, m -> communications.get(m)
                                                                                 .create(m, base.getId(), servers.get(m),
@@ -123,7 +123,7 @@ public class GenesisAssemblyTest {
                                                                                         Terminal.getLocalLoopback(
                                                                                         (SigningMember) m,
                                                                                         servers.get(m)))));
-        committee.active().forEach(m -> {
+        committee.getAllMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -137,14 +137,14 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Digest diadem() {
-                    return DigestAlgorithm.DEFAULT.getLast();
+                public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                    return CHOAM.genesis(viewId, joining, previous, committee, previous, built, previous,
+                                         Collections.emptyList());
                 }
 
                 @Override
-                public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                    return CHOAM.genesis(viewId, DigestAlgorithm.DEFAULT.getLast(), joining, previous, committee,
-                                         previous, built, previous, Collections.emptyList());
+                public void onFailure() {
+                    // do nothing
                 }
 
                 @Override
@@ -158,7 +158,7 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public void publish(CertifiedBlock cb) {
+                public void publish(Digest hash, CertifiedBlock cb) {
                     complete.countDown();
                 }
 
@@ -168,25 +168,30 @@ public class GenesisAssemblyTest {
                     return null;
                 }
             };
-            var view = new GenesisContext(committee, built, sm, reconfigure);
+            var view = new GenesisContext(committee, () -> base, built, sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());
             var vm = ViewMember.newBuilder()
                                .setId(m.getId().toDigeste())
+                               .setView(params.getGenesisViewId().toDigeste())
                                .setConsensusKey(consensus)
                                .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, m.getId().toString()));
+            var svm = SignedViewMember.newBuilder()
+                                      .setVm(vm)
+                                      .setSignature(((SigningMember) m).sign(vm.toByteString()).toSig())
+                                      .build();
+            genii.put(m, new GenesisAssembly(view, comms.get(m), svm, m.getId().toString()));
         });
 
         try {
-            communications.values().forEach(r -> r.start());
-            genii.values().forEach(r -> r.start());
+            communications.values().forEach(Router::start);
+            genii.values().forEach(GenesisAssembly::start);
             complete.await(15, TimeUnit.SECONDS);
         } finally {
             communications.values().forEach(r -> r.close(Duration.ofSeconds(1)));
-            genii.values().forEach(r -> r.stop());
+            genii.values().forEach(GenesisAssembly::stop);
         }
     }
 }

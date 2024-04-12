@@ -79,6 +79,10 @@ public interface Driven {
                 return SPICE;
             }
         }, COMPLETE {
+            @Entry
+            public void complete() {
+                context().complete();
+            }
         }, INITIAL {
             @Override
             public Transitions checkpoint() {

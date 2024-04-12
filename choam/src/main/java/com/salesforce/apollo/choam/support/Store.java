@@ -75,8 +75,8 @@ public class Store {
             int remaining = max;
 
             {
-                next = from;
-                while (!blocks.containsKey(next) && remaining > 0 && next.compareTo(to) >= 0) {
+                next = from == null ? ULong.valueOf(0) : from;
+                while (!blocks.containsKey(next) && remaining > 0 && next.compareTo(to) > 0) {
                     next = next.subtract(1);
                     remaining--;
                 }

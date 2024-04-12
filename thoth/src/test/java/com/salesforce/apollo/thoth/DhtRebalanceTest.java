@@ -9,8 +9,8 @@ package com.salesforce.apollo.thoth;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -41,15 +41,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author hal.hildebrand
  */
 public class DhtRebalanceTest {
-    public static final int                                                                             CARDINALITY = 23;
-    private final       TreeMap<SigningMember, Router>                                                  routers     = new TreeMap<>();
-    private final       TreeMap<SigningMember, KerlDHT>                                                 dhts        = new TreeMap<>();
-    private final       TreeMap<SigningMember, Context<Member>>                                         contexts    = new TreeMap<>();
-    private             String                                                                          prefix;
-    private             SecureRandom                                                                    entropy;
-    private             StereotomyImpl                                                                  stereotomy;
-    private             MemKERL                                                                         kerl;
-    private             Map<ControlledIdentifierMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    public static final int CARDINALITY = 23;
+
+    private final TreeMap<SigningMember, Router>                                                  routers  = new TreeMap<>();
+    private final TreeMap<SigningMember, KerlDHT>                                                 dhts     = new TreeMap<>();
+    private final TreeMap<SigningMember, DynamicContext<Member>>                                  contexts = new TreeMap<>();
+    private       String                                                                          prefix;
+    private       SecureRandom                                                                    entropy;
+    private       StereotomyImpl                                                                  stereotomy;
+    private       MemKERL                                                                         kerl;
+    private       Map<ControlledIdentifierMember, ControlledIdentifier<SelfAddressingIdentifier>> identities;
 
     @AfterEach
     public void afterIt() throws Exception {
@@ -130,7 +131,7 @@ public class DhtRebalanceTest {
     }
 
     protected void instantiate(SigningMember member) {
-        var context = Context.<Member>newBuilder().build();
+        var context = DynamicContext.newBuilder().build();
         contexts.put(member, context);
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_ON_EXIT=FALSE", member.getId(), prefix);

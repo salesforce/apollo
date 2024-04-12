@@ -66,19 +66,19 @@ public class TxDataSource implements DataSource {
             metrics.dropped(processing.size(), validations.size(), reassemblies.size());
         }
         log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
-                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
+                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member.getId());
     }
 
     public void drain() {
         draining.set(true);
         log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
-                  processing.taken(), member);
+                  processing.taken(), member.getId());
     }
 
     @Override
     public ByteString getData() {
         var builder = UnitData.newBuilder();
-        log.trace("Requesting unit data on: {}", member);
+        log.trace("Requesting unit data on: {}", member.getId());
         blockingThread = Thread.currentThread();
         try {
             var r = new ArrayList<Reassemble>();
