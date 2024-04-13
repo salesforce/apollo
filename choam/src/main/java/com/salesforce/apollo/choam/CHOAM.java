@@ -23,9 +23,11 @@ import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DelegatedContext;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.proto.PubKey;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.RoundScheduler;
@@ -44,7 +46,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -394,12 +399,6 @@ public class CHOAM {
                       source.getId(), params.member().getId());
             return false;
         }
-        final Set<Member> members = Committee.viewMembersOf(nextView, pendingView().get());
-        if (!members.contains(params.member())) {
-            log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView,
-                      source.getId(), members.stream().map(m -> m.getId()).toList(), params.member().getId());
-            return false;
-        }
         return true;
     }
 
@@ -736,12 +735,12 @@ public class CHOAM {
         view.set(h);
         session.setView(h);
         if (validators.containsKey(params.member())) {
-            try {
+            if (Dag.validate(validators.size())) {
                 current.set(new Associate(h, validators, currentView));
-            } catch (IllegalArgumentException e) {
+            } else {
+                log.warn("Reconfiguration to associate failed: {} in view: {} on:{}", validators.size(),
+                         new Digest(reconfigure.getId()), params.member().getId());
                 current.set(new Client(validators, getViewId()));
-                log.debug("unable to create consensus: {} defaulting to committee: {} on: {}", e.getMessage(),
-                          current.get().getClass().getSimpleName(), params.member().getId());
             }
         } else {
             current.set(new Client(validators, getViewId()));
@@ -1262,6 +1261,8 @@ public class CHOAM {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member().getId());
                     return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
                 }
+                log.trace("Submitting txn: {} to: {} in view: {} on: {}", hashOf(transaction, params.digestAlgorithm()),
+                          link.getMember().getId(), viewId, params.member().getId());
                 return link.submit(transaction);
             } catch (StatusRuntimeException e) {
                 log.trace("Failed submitting txn: {} status:{} to: {} in: {} on: {}",
@@ -1294,7 +1295,8 @@ public class CHOAM {
             super(validators, new Digest(
             viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                           : viewChange.block.getReconfigure().getId()));
-            var context = Committee.viewFor(viewId, params.context());
+            var context = new StaticContext<>(viewId, params.context().getProbabilityByzantine(), 3,
+                                              validators.keySet(), params.context().getEpsilon(), validators.size());
             log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,

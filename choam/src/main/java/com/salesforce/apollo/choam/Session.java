@@ -89,9 +89,11 @@ public class Session {
     public static <T> CompletableFuture<T> retryNesting(Supplier<CompletableFuture<T>> supplier, int maxRetries) {
         CompletableFuture<T> cf = supplier.get();
         for (int i = 0; i < maxRetries; i++) {
-            cf = cf.thenApply(CompletableFuture::completedFuture)
-                   .exceptionally(__ -> supplier.get())
-                   .thenCompose(java.util.function.Function.identity());
+            final var attempt = i;
+            cf = cf.thenApply(CompletableFuture::completedFuture).exceptionally(__ -> {
+                log.warn("resubmitting, next attempt: {}", attempt);
+                return supplier.get();
+            }).thenCompose(java.util.function.Function.identity());
         }
         return cf;
     }
@@ -310,6 +312,7 @@ public class Session {
             return new Submission(SubmitResult.newBuilder().setResult(SubmitResult.Result.RATE_LIMITED).build(),
                                   listener);
         }
+        log.debug("Submitting txn: {} on: {}", stx.hash(), params.member().getId());
         return new Submission(service.apply(stx), listener);
     }
 
