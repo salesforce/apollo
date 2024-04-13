@@ -1508,7 +1508,7 @@ public class View {
             int nbits = context.getRingCount();
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();
-            for (int i = 0; i < ((context.getBias() - 1) * context.toleranceLevel()) + 1; i++) {
+            for (int i = 0; i < context.majority(); i++) {
                 random.add(true);
             }
             for (int i = 0; i < context.toleranceLevel(); i++) {

@@ -91,7 +91,7 @@ public class Session {
         for (int i = 0; i < maxRetries; i++) {
             final var attempt = i;
             cf = cf.thenApply(CompletableFuture::completedFuture).exceptionally(__ -> {
-                log.warn("resubmitting, next attempt: {}", attempt);
+                log.trace("resubmitting after attempt: {}", attempt + 1);
                 return supplier.get();
             }).thenCompose(java.util.function.Function.identity());
         }

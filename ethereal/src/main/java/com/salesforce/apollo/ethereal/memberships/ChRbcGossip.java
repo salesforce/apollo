@@ -145,7 +145,7 @@ public class ChRbcGossip {
      */
     private void handle(Optional<Update> result, RingCommunications.Destination<Member, Gossiper> destination,
                         Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
-        if (!started.get() || destination.link() == null) {
+        if (!started.get() || destination == null || destination.link() == null) {
             if (timer != null) {
                 timer.stop();
             }

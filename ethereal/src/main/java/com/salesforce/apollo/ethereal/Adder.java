@@ -294,7 +294,7 @@ public class Adder {
             return;
         }
 
-        // Check for existing proposal
+        // Check for an existing proposal
         if (wpu == null) {
             log.trace("Committed, but no proposal: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
             return;

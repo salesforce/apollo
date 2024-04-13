@@ -154,6 +154,7 @@ message Validate {
 message Reassemble {
   repeated SignedViewMember members = 1;
   repeated Validate validations = 2;
+  repeated crypto.Digeste slate = 3;
 }
 
 message Validations {

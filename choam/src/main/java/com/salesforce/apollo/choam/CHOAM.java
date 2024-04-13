@@ -1237,7 +1237,9 @@ public class CHOAM {
         @Override
         public void nextView(Context<Member> pendingView) {
             var previous = CHOAM.this.pendingView.getAndSet(pendingView);
-            log.info("Pending view: {} size: {} on: {}", nextViewId.get(), pendingView.size(), params.member().getId());
+            log.info("Pending context for view: {} size: {} on: {}",
+                     nextViewId.get() == null ? "<null>" : nextViewId.get(), pendingView.size(),
+                     params.member().getId());
         }
 
         @Override
