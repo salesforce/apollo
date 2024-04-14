@@ -137,7 +137,7 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                public Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous) {
                     return CHOAM.genesis(viewId, joining, previous, committee, previous, built, previous,
                                          Collections.emptyList());
                 }
@@ -163,7 +163,7 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
+                public Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous,
                                          HashedBlock checkpoint) {
                     return null;
                 }

@@ -21,6 +21,7 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -30,10 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -53,9 +52,9 @@ public class Producer {
     private final        ChRbcGossip                       coordinator;
     private final        TxDataSource                      ds;
     private final        int                               lastEpoch;
-    private final        Set<Member>                       nextAssembly       = new HashSet<>();
+    private final        Map<Digest, Member>               nextAssembly       = new HashMap<>();
     private final        Map<Digest, PendingBlock>         pending            = new ConcurrentSkipListMap<>();
-    private final        BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
+    private final        List<SignedJoin>                  pendingJoins       = new CopyOnWriteArrayList<>();
     private final        Map<Digest, List<Validate>>       pendingValidations = new ConcurrentSkipListMap<>();
     private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
     private final        AtomicBoolean                     reconfigured       = new AtomicBoolean();
@@ -161,9 +160,11 @@ public class Producer {
     }
 
     private void addReassemble(Reassemble r) {
-        log.trace("Adding reassembly members: {} validations: {} on: {}", r.getMembersCount(), r.getValidationsCount(),
-                  params().member().getId());
-        ds.offer(r);
+        if (ds.offer(r)) {
+            log.trace("Adding joins: {} on: {}", r.getMembersList(), params().member().getId());
+        } else {
+            log.trace("Cannot add joins: {}  on: {}", r.getMembersCount(), params().member().getId());
+        }
     }
 
     private void create(List<ByteString> preblock, boolean last) {
@@ -188,19 +189,14 @@ public class Producer {
                  .filter(p -> p.witnesses.size() >= params().majority())
                  .forEach(this::publish);
 
-        var reass = Reassemble.newBuilder();
-        aggregate.stream()
-                 .flatMap(e -> e.getReassembliesList().stream())
-                 .forEach(r -> reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList()));
+        var joins = aggregate.stream().flatMap(e -> e.getJoinsList().stream()).filter(j -> validate(j)).toList();
         final var ass = assembly.get();
         if (ass != null) {
-            log.trace("Consuming reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-            ass.inbound().accept(Collections.singletonList(reass.build()));
+            log.trace("Consuming joins: {} on: {}", aggregate.size(), joins.size(), params().member().getId());
+            ass.inbound().accept(joins);
         } else {
-            log.trace("Pending reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-            pendingReassembles.add(reass.build());
+            log.trace("Pending joins: {}   on: {}", aggregate.size(), joins.size(), params().member().getId());
+            pendingJoins.addAll(joins);
         }
 
         HashedBlock lb = previousBlock.get();
@@ -261,7 +257,9 @@ public class Producer {
     private void produceAssemble() {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
-        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, view.pendingView()));
+        for (var m : Committee.viewMembersOf(nextViewId, view.pendingView())) {
+            nextAssembly.put(m.getId(), m);
+        }
         log.debug("Assembling: {} on: {}", nextViewId, params().member().getId());
         final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
                                                                                       Assemble.newBuilder()
@@ -291,6 +289,28 @@ public class Producer {
                                      p.witnesses.values().stream().map(Validate::getWitness).toList())
                                      .build();
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));
+    }
+
+    private boolean validate(SignedJoin join) {
+        var mid = Digest.from(join.getMember());
+        var m = nextAssembly.get(mid);
+        if (m == null) {
+            log.trace("Cannot validate join view: {} of: {} signed by: {} on: {}",
+                      Digest.from(join.getJoin().getVm().getView()), Digest.from(join.getJoin().getVm().getId()), mid,
+                      params().member().getId());
+            return false;
+        }
+        var validated = m.verify(JohnHancock.from(join.getSignature()), join.getJoin().toByteString());
+        if (!validated) {
+            log.trace("Cannot validate view join: {} of: {} signed by: {} on: {}",
+                      Digest.from(join.getJoin().getVm().getView()), Digest.from(join.getJoin().getVm().getId()), mid,
+                      params().member().getId());
+        } else {
+            log.trace("Validated view join: {} of: {} signed by: {} on: {}",
+                      Digest.from(join.getJoin().getVm().getView()), Digest.from(join.getJoin().getVm().getId()), mid,
+                      params().member().getId());
+        }
+        return validated;
     }
 
     private PendingBlock validate(Validate v) {
@@ -336,8 +356,8 @@ public class Producer {
             ds.offer(validation);
             //            controller.completeIt();
             log.info("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
-                     reconfiguration.hash, reconfiguration.height(),
-                     slate.keySet().stream().map(m -> m.getId()).sorted().toList(), params().member().getId());
+                     reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
+                     params().member().getId());
             processPendingValidations(reconfiguration, p);
         }
 
@@ -420,9 +440,9 @@ public class Producer {
             });
             assembly.get().start();
             assembly.get().assembled();
-            List<Reassemble> reasses = new ArrayList<>();
-            pendingReassembles.drainTo(reasses);
-            assembly.get().inbound().accept(reasses);
+            var joins = new ArrayList<>(pendingJoins);
+            pendingJoins.clear();
+            assembly.get().inbound().accept(joins);
         }
 
         @Override

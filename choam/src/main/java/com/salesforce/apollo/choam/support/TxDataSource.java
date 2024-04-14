@@ -156,8 +156,8 @@ public class TxDataSource implements DataSource {
         return validations.size();
     }
 
-    public void offer(Reassemble reassembly) {
-        reassemblies.offer(reassembly);
+    public boolean offer(Reassemble reassembly) {
+        return reassemblies.offer(reassembly);
     }
 
     public boolean offer(Transaction txn) {

@@ -104,12 +104,18 @@ message UnitData {
   repeated Validate validations = 1;
   repeated Transaction transactions = 2;
   repeated Reassemble reassemblies = 3;
+  repeated SignedJoin joins = 4;
 }
 
 message Join {
   SignedViewMember member = 1;
-  repeated Certification endorsements = 2;
-  stereotomy.KERL_ kerl = 3;
+  stereotomy.KERL_ kerl = 2;
+}
+
+message SignedJoin {
+  crypto.Digeste member = 1;
+  SignedViewMember join = 2;
+  crypto.Sig signature = 3;
 }
 
 message ViewMember {

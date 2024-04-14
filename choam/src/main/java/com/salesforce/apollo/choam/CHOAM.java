@@ -184,7 +184,7 @@ public class CHOAM {
         return cp;
     }
 
-    public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
+    public static Block genesis(Digest id, Map<Digest, Join> joins, HashedBlock head, Context<Member> context,
                                 HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
                                 Iterable<Transaction> initialization) {
         var reconfigure = reconfigure(id, joins, context, params.checkpointBlockDelta());
@@ -202,26 +202,23 @@ public class CHOAM {
 
     public static String print(Join join, DigestAlgorithm da) {
         return "J[view: " + Digest.from(join.getMember().getVm().getView()) + " member: " + ViewContext.print(
-        join.getMember(), da) + "certifications: " + join.getEndorsementsList()
-                                                         .stream()
-                                                         .map(c -> ViewContext.print(c, da))
-                                                         .toList() + "]";
+        join.getMember(), da) + "]";
     }
 
-    public static Reconfigure reconfigure(Digest nextViewId, Map<Member, Join> joins, Context<Member> context,
+    public static Reconfigure reconfigure(Digest nextViewId, Map<Digest, Join> joins, Context<Member> context,
                                           int checkpointTarget) {
         var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(nextViewId.toDigeste());
 
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
 
-        remapped.keySet().stream().sorted().map(remapped::get).forEach(m -> builder.addJoins(joins.get(m)));
+        remapped.keySet().stream().sorted().map(remapped::get).forEach(m -> builder.addJoins(joins.get(m.getId())));
 
         var reconfigure = builder.build();
         return reconfigure;
     }
 
-    public static Block reconfigure(Digest nextViewId, Map<Member, Join> joins, HashedBlock head,
+    public static Block reconfigure(Digest nextViewId, Map<Digest, Join> joins, HashedBlock head,
                                     Context<Member> context, HashedBlock lastViewChange, Parameters params,
                                     HashedBlock lastCheckpoint) {
         final Block lvc = lastViewChange.block;
@@ -237,10 +234,8 @@ public class CHOAM {
                     .build();
     }
 
-    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
-
-        // Canonical labeling of the view members for Ethereal
-        return members.stream().collect(Collectors.toMap(Member::getId, m -> m));
+    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
+        return members.stream().collect(Collectors.toMap(m -> m, m -> baseContext.getMember(m)));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
@@ -497,11 +492,17 @@ public class CHOAM {
             }
 
             @Override
-            public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+            public Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous) {
                 final HashedCertifiedBlock cp = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
                 var g = CHOAM.genesis(nextViewId, joining, previous, params.context(), v, params, cp,
-                                      params.genesisData().apply(joining));
+                                      params.genesisData()
+                                            .apply(joining.keySet()
+                                                          .stream()
+                                                          .map(m -> params.context().getMember(m))
+                                                          .filter(m -> m != null)
+                                                          .collect(
+                                                          Collectors.toMap(m -> m, m -> joining.get(m.getId())))));
                 log.info("Create genesis: {} on: {}", nextViewId, params.member().getId());
                 return g;
             }
@@ -548,7 +549,7 @@ public class CHOAM {
             }
 
             @Override
-            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
+            public Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous,
                                      HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
                 var block = CHOAM.reconfigure(nextViewId, joining, previous, pendingView().get(), v, params,
@@ -1008,7 +1009,7 @@ public class CHOAM {
     public interface BlockProducer {
         Block checkpoint();
 
-        Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
+        Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous);
 
         void onFailure();
 
@@ -1018,7 +1019,7 @@ public class CHOAM {
 
         void publish(Digest hash, CertifiedBlock cb);
 
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
+        Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
     }
 
     @FunctionalInterface

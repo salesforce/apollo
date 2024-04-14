@@ -47,7 +47,7 @@ public class ViewContext {
         this.validators = validators;
         this.pendingView = pendingView;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
+        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().map(m -> m.getId()).toList());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
@@ -121,7 +121,7 @@ public class ViewContext {
         return validation;
     }
 
-    public Block genesis(Map<Member, Join> slate, Digest nextViewId, HashedBlock previous) {
+    public Block genesis(Map<Digest, Join> slate, Digest nextViewId, HashedBlock previous) {
         return blockProducer.genesis(slate, nextViewId, previous);
     }
 
@@ -156,7 +156,7 @@ public class ViewContext {
         blockProducer.publish(block.hash, block.certifiedBlock);
     }
 
-    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
+    public Block reconfigure(Map<Digest, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
                              HashedBlock checkpoint) {
         return blockProducer.reconfigure(aggregate, nextViewId, lastBlock, checkpoint);
     }
