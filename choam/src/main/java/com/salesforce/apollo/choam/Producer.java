@@ -52,7 +52,7 @@ public class Producer {
     private final        int                               lastEpoch;
     private final        Map<Digest, Member>               nextAssembly       = new HashMap<>();
     private final        Map<Digest, PendingBlock>         pending            = new ConcurrentSkipListMap<>();
-    private final        List<SignedJoin>                  pendingJoins       = new CopyOnWriteArrayList<>();
+    private final        List<Assemblies>                  pendingAssemblies  = new CopyOnWriteArrayList<>();
     private final        Map<Digest, List<Validate>>       pendingValidations = new ConcurrentSkipListMap<>();
     private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
     private final        AtomicBoolean                     reconfigured       = new AtomicBoolean();
@@ -151,8 +151,8 @@ public class Producer {
         }
     }
 
-    private void addJoin(SignedJoin signedJoin) {
-        if (ds.offer(signedJoin)) {
+    private void addAssembly(Assemblies assemblies) {
+        if (ds.offer(assemblies)) {
             log.trace("Adding on: {}", params().member().getId());
         } else {
             log.trace("Cannot add join on: {}", params().member().getId());
@@ -181,14 +181,14 @@ public class Producer {
                  .filter(p -> p.witnesses.size() >= params().majority())
                  .forEach(this::publish);
 
-        var joins = aggregate.stream().flatMap(e -> e.getJoinsList().stream()).filter(view::validate).toList();
+        var joins = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
         final var ass = assembly;
         if (ass != null) {
             log.trace("Consuming {} units, {} joins on: {}", aggregate.size(), joins.size(), params().member().getId());
             ass.inbound().accept(joins);
         } else {
             log.trace("Pending {} units, {} joins on: {}", aggregate.size(), joins.size(), params().member().getId());
-            pendingJoins.addAll(joins);
+            pendingAssemblies.addAll(joins);
         }
 
         HashedBlock lb = previousBlock.get();
@@ -261,7 +261,7 @@ public class Producer {
 
     private void reconfigure() {
         log.debug("Starting view reconfiguration: {} on: {}", nextViewId, params().member().getId());
-        assembly = new ViewAssembly(nextViewId, view, Producer.this::addJoin, comms) {
+        assembly = new ViewAssembly(nextViewId, view, Producer.this::addAssembly, comms) {
             @Override
             public void complete() {
                 super.complete();
@@ -273,8 +273,8 @@ public class Producer {
         };
         assembly.start();
         assembly.assembled();
-        var joins = new ArrayList<>(pendingJoins);
-        pendingJoins.clear();
+        var joins = new ArrayList<>(pendingAssemblies);
+        pendingAssemblies.clear();
         assembly.inbound().accept(joins);
     }
 

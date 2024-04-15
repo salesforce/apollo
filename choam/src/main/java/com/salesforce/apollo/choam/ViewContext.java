@@ -223,35 +223,44 @@ public class ViewContext {
         return validated;
     }
 
-    protected Verifier verifierOf(Validate validate) {
-        final var mid = Digest.from(validate.getWitness().getId());
-        var m = context.getMember(mid);
-        if (m == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("Unable to get verifier by non existent member: [{}] on: {}",
-                          print(validate, params.digestAlgorithm()), params.member().getId());
-            }
-            return null;
-        }
-        Verifier v = validators.get(m);
+    public boolean validate(SignedViews sv) {
+        Verifier v = verifierOf(sv);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to get verifier by non existent validator: [{}] on: {}",
-                          print(validate, params.digestAlgorithm()), params.member().getId());
+                log.debug("no verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
+                          params.member().getId());
             }
-            return null;
+            return false;
         }
-        return v;
+        var validated = v.verify(JohnHancock.from(sv.getSignature()), sv.getViews().toByteString());
+        if (!validated) {
+            if (log.isTraceEnabled()) {
+                log.trace("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                          params().member().getId());
+            }
+        } else if (log.isTraceEnabled()) {
+            log.trace("Validated views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                      params().member().getId());
+        }
+        return validated;
+    }
+
+    protected Verifier verifierOf(Validate validate) {
+        return getVerifier(context.getMember(Digest.from(validate.getWitness().getId())));
     }
 
     protected Verifier verifierOf(SignedJoin sj) {
-        final var mid = Digest.from(sj.getMember());
-        var m = context.getMember(mid);
+        return getVerifier(context.getMember(Digest.from(sj.getMember())));
+    }
+
+    protected Verifier verifierOf(SignedViews sv) {
+        return getVerifier(context.getMember(Digest.from(sv.getViews().getMember())));
+    }
+
+    private Verifier getVerifier(Member m) {
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to get verifier by non existent member: [{}] on: {}",
-                          String.format("id: %s sig: %s", Digest.from(sj.getMember()),
-                                        params.digestAlgorithm().digest(sj.getSignature().toByteString())),
+                log.debug("Unable to get verifier by non existent member: {} on: {}", m.getId(),
                           params.member().getId());
             }
             return null;
@@ -259,9 +268,7 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
-                          String.format("id: %s sig: %s", Digest.from(sj.getMember()),
-                                        params.digestAlgorithm().digest(sj.getSignature().toByteString())),
+                log.debug("Unable to validate key by non existent validator: {} on: {}", m.getId(),
                           params.member().getId());
             }
             return null;

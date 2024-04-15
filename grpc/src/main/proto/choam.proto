@@ -98,7 +98,12 @@ message Transaction {
 message UnitData {
   repeated Validate validations = 1;
   repeated Transaction transactions = 2;
-  repeated SignedJoin joins = 3;
+  repeated Assemblies assemblies = 3;
+}
+
+message Assemblies {
+  repeated SignedJoin joins = 1;
+  repeated SignedViews views = 2;
 }
 
 message Join {
@@ -110,6 +115,22 @@ message SignedJoin {
   crypto.Digeste member = 1;
   SignedViewMember join = 2;
   crypto.Sig signature = 3;
+}
+
+message SignedViews {
+  Views views = 1;
+  crypto.Sig signature = 2;
+}
+
+message Views {
+  crypto.Digeste member = 1;
+  crypto.Digeste vid = 2;
+  repeated View views = 3;
+}
+
+message View {
+  crypto.Digeste diadem = 1;
+  repeated crypto.Digeste committee = 2;
 }
 
 message ViewMember {

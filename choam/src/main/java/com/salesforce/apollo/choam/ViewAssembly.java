@@ -12,6 +12,7 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
+import com.salesforce.apollo.choam.proto.Assemblies;
 import com.salesforce.apollo.choam.proto.Join;
 import com.salesforce.apollo.choam.proto.SignedJoin;
 import com.salesforce.apollo.choam.proto.SignedViewMember;
@@ -54,7 +55,7 @@ public class ViewAssembly {
     private final        AtomicBoolean                     cancelSlice = new AtomicBoolean();
     private final        Digest                            nextViewId;
     private final        Map<Digest, SignedViewMember>     proposals   = new ConcurrentHashMap<>();
-    private final        Consumer<SignedJoin>              publisher;
+    private final        Consumer<Assemblies>              publisher;
     private final        Map<Digest, Join>                 slate       = new ConcurrentSkipListMap<>();
     private final        ViewContext                       view;
     private final        CommonCommunications<Terminal, ?> comms;
@@ -62,7 +63,7 @@ public class ViewAssembly {
     new ConcurrentSkipListMap<>());
     private volatile     Map<Digest, Member>               nextAssembly;
 
-    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<SignedJoin> publisher,
+    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Assemblies> publisher,
                         CommonCommunications<Terminal, ?> comms) {
         view = vc;
         this.nextViewId = nextViewId;
@@ -111,10 +112,15 @@ public class ViewAssembly {
         transitions.complete();
     }
 
-    Consumer<List<SignedJoin>> inbound() {
+    Consumer<List<Assemblies>> inbound() {
         return lre -> {
-            lre.forEach(vm -> join(vm.getJoin(), false));
+            lre.forEach(ass -> assemble(ass));
         };
+    }
+
+    private void assemble(Assemblies ass) {
+        ass.getJoinsList().stream().filter(sj -> view.validate(sj)).forEach(sj -> join(sj.getJoin(), false));
+        ass.getViewsList().stream().filter(sv -> view.validate(sv));
     }
 
     private void completeSlice(Duration retryDelay, AtomicReference<Runnable> reiterate) {
@@ -214,10 +220,12 @@ public class ViewAssembly {
         if (proposals.putIfAbsent(mid, svm) == null) {
             if (direct) {
                 var signature = view.sign(svm);
-                publisher.accept(SignedJoin.newBuilder()
-                                           .setJoin(svm)
-                                           .setMember(params().member().getId().toDigeste())
-                                           .setSignature(signature.toSig())
+                publisher.accept(Assemblies.newBuilder()
+                                           .addJoins(SignedJoin.newBuilder()
+                                                               .setJoin(svm)
+                                                               .setMember(params().member().getId().toDigeste())
+                                                               .setSignature(signature.toSig())
+                                                               .build())
                                            .build());
                 if (log.isTraceEnabled()) {
                     log.trace("Publishing view member: {} sig: {} on: {}",
@@ -306,8 +314,12 @@ public class ViewAssembly {
 
         @Override
         public void nominate() {
-            //            publisher.accept(getMemberProposal());
             transitions.nominated();
+        }
+
+        @Override
+        public void viewAgreement() {
+
         }
 
         private Join joinOf(SignedViewMember vm) {

@@ -7,7 +7,7 @@
 package com.salesforce.apollo.choam.support;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.choam.proto.SignedJoin;
+import com.salesforce.apollo.choam.proto.Assemblies;
 import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.proto.UnitData;
 import com.salesforce.apollo.choam.proto.Validate;
@@ -42,7 +42,7 @@ public class TxDataSource implements DataSource {
     private final    Member                     member;
     private final    ChoamMetrics               metrics;
     private final    BatchingQueue<Transaction> processing;
-    private final    BlockingQueue<SignedJoin>  joins       = new LinkedBlockingQueue<>();
+    private final    BlockingQueue<Assemblies>  assemblies  = new LinkedBlockingQueue<>();
     private final    BlockingQueue<Validate>    validations = new LinkedBlockingQueue<>();
     private volatile Thread                     blockingThread;
 
@@ -63,10 +63,10 @@ public class TxDataSource implements DataSource {
         }
         blockingThread = null;
         if (metrics != null) {
-            metrics.dropped(processing.size(), validations.size(), joins.size());
+            metrics.dropped(processing.size(), validations.size(), assemblies.size());
         }
-        log.trace("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
-                  processing.added(), processing.taken(), validations.size(), joins.size(), member.getId());
+        log.trace("Closing with remaining txns: {}({}:{}) validations: {} assemblies: {} on: {}", processing.size(),
+                  processing.added(), processing.taken(), validations.size(), assemblies.size(), member.getId());
     }
 
     public void drain() {
@@ -81,23 +81,23 @@ public class TxDataSource implements DataSource {
         log.trace("Requesting unit data on: {}", member.getId());
         blockingThread = Thread.currentThread();
         try {
-            var r = new ArrayList<SignedJoin>();
+            var r = new ArrayList<Assemblies>();
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
                 var target = Instant.now().plus(drainPolicy.nextBackoff());
-                while (target.isAfter(Instant.now()) && builder.getJoinsCount() == 0
+                while (target.isAfter(Instant.now()) && builder.getAssembliesCount() == 0
                 && builder.getValidationsCount() == 0) {
                     // rinse and repeat
                     r = new ArrayList<>();
-                    joins.drainTo(r);
-                    builder.addAllJoins(r);
+                    assemblies.drainTo(r);
+                    builder.addAllAssemblies(r);
 
                     v = new ArrayList<Validate>();
                     validations.drainTo(v);
                     builder.addAllValidations(v);
 
-                    if (builder.getJoinsCount() != 0 || builder.getValidationsCount() != 0) {
+                    if (builder.getAssembliesCount() != 0 || builder.getValidationsCount() != 0) {
                         break;
                     }
 
@@ -123,8 +123,8 @@ public class TxDataSource implements DataSource {
 
             // One more time into ye breech
             r = new ArrayList<>();
-            joins.drainTo(r);
-            builder.addAllJoins(r);
+            assemblies.drainTo(r);
+            builder.addAllAssemblies(r);
 
             v = new ArrayList<Validate>();
             validations.drainTo(v);
@@ -133,11 +133,11 @@ public class TxDataSource implements DataSource {
             ByteString bs = builder.build().toByteString();
             if (metrics != null) {
                 metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount(),
-                                       builder.getJoinsCount());
+                                       builder.getAssembliesCount());
             }
-            log.trace("Unit data: {} txns, {} validations, {} joins totalling: {} bytes  on: {}",
-                      builder.getTransactionsCount(), builder.getValidationsCount(), builder.getJoinsCount(), bs.size(),
-                      member.getId());
+            log.trace("Unit data: {} txns, {} validations, {} assemblies totalling: {} bytes  on: {}",
+                      builder.getTransactionsCount(), builder.getValidationsCount(), builder.getAssembliesCount(),
+                      bs.size(), member.getId());
             return bs;
         } finally {
             blockingThread = null;
@@ -145,7 +145,7 @@ public class TxDataSource implements DataSource {
     }
 
     public int getRemainingReassemblies() {
-        return joins.size();
+        return assemblies.size();
     }
 
     public int getRemainingTransactions() {
@@ -156,8 +156,8 @@ public class TxDataSource implements DataSource {
         return validations.size();
     }
 
-    public boolean offer(SignedJoin signedJoin) {
-        return joins.offer(signedJoin);
+    public boolean offer(Assemblies assemblies) {
+        return this.assemblies.offer(assemblies);
     }
 
     public boolean offer(Transaction txn) {
