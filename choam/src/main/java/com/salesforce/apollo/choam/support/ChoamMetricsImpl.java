@@ -35,7 +35,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final EtherealMetrics genesisMetrics;
     private final EtherealMetrics producerMetrics;
     private final Histogram       publishedBytes;
-    private final Meter           publishedReassemblies;
+    private final Meter           publishedJoins;
     private final Meter           publishedTransactions;
     private final Meter           publishedValidations;
     private final MetricRegistry  registry;
@@ -67,7 +67,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         cancelledTransactions = registry.meter(name(context.shortString(), "transactions.cancelled"));
         publishedTransactions = registry.meter(name(context.shortString(), "transactions.published"));
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
-        publishedReassemblies = registry.meter(name(context.shortString(), "reassemblies.published"));
+        publishedJoins = registry.meter(name(context.shortString(), "joins.published"));
         publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
         transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
         transactionSubmitRetry = registry.meter(name(context.shortString(), "transaction.submit.retry"));
@@ -117,11 +117,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void publishedBatch(int transactions, int byteSize, int validations, int reassemblies) {
+    public void publishedBatch(int transactions, int byteSize, int validations, int joins) {
         publishedTransactions.mark(transactions);
         publishedBytes.update(byteSize);
         publishedValidations.mark(validations);
-        publishedReassemblies.mark(reassemblies);
+        publishedJoins.mark(joins);
     }
 
     @Override

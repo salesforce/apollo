@@ -27,7 +27,7 @@ public interface ChoamMetrics extends EndpointMetrics {
 
     EtherealMetrics getProducerMetrics();
 
-    void publishedBatch(int batchSize, int byteSize, int validations, int reassemblies);
+    void publishedBatch(int batchSize, int byteSize, int validations, int joins);
 
     void transactionCancelled();
 

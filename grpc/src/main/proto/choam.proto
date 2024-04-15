@@ -47,7 +47,6 @@ message Block {
     Reconfigure reconfigure = 3;
     Checkpoint checkpoint = 4;
     Executions executions = 5;
-    Assemble assemble = 6;
   }
 }
 
@@ -84,10 +83,6 @@ message Executions {
   repeated Transaction executions = 1;
 }
 
-message Assemble {
-  crypto.Digeste nextView = 1;
-}
-
 message FoundationSeal {
   stereotomy.KeyEvent_ foundation = 1;
   crypto.Sig signature = 2;
@@ -103,8 +98,7 @@ message Transaction {
 message UnitData {
   repeated Validate validations = 1;
   repeated Transaction transactions = 2;
-  repeated Reassemble reassemblies = 3;
-  repeated SignedJoin joins = 4;
+  repeated SignedJoin joins = 3;
 }
 
 message Join {
@@ -155,12 +149,6 @@ message CheckpointProcessing {
 message Validate {
   crypto.Digeste hash = 1;
   Certification witness = 2;
-}
-
-message Reassemble {
-  repeated SignedViewMember members = 1;
-  repeated Validate validations = 2;
-  repeated crypto.Digeste slate = 3;
 }
 
 message Validations {

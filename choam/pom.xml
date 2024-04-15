@@ -30,6 +30,10 @@
             <groupId>org.jooq</groupId>
             <artifactId>joou</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.googlecode.concurrentlinkedhashmap</groupId>
+            <artifactId>concurrentlinkedhashmap-lru</artifactId>
+        </dependency>
 
         <!-- Test only deps below this line -->
         <dependency>

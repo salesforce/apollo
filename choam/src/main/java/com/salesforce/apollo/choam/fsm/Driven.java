@@ -33,20 +33,10 @@ public interface Driven {
 
     void fail();
 
-    void produceAssemble();
-
-    void reconfigure();
-
     void startProduction();
 
     enum Earner implements Driven.Transitions {
         AWAIT_VIEW {
-            @Override
-            public Transitions assembled() {
-                context().assembled();
-                return null;
-            }
-
             @Entry
             public void checkAssembly() {
                 context().checkAssembly();
@@ -126,20 +116,8 @@ public interface Driven {
             }
         }, SPICE {
             @Override
-            public Transitions assembled() {
-                context().reconfigure();
-                return null;
-            }
-
-            @Override
             public Transitions newEpoch(int epoch, int lastEpoch) {
-                if (lastEpoch == epoch) {
-                    return AWAIT_VIEW;
-                }
-                if (epoch == 0) {
-                    context().produceAssemble();
-                }
-                return null;
+                return (lastEpoch == epoch) ? AWAIT_VIEW : null;
             }
 
             @Entry
@@ -157,10 +135,6 @@ public interface Driven {
     /** Transition events for the Producer FSM */
     interface Transitions extends FsmExecutor<Driven, Transitions> {
         Logger log = LoggerFactory.getLogger(Transitions.class);
-
-        default Transitions assembled() {
-            return null;
-        }
 
         default Transitions checkpoint() {
             throw fsm().invalidTransitionOn();

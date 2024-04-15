@@ -11,6 +11,7 @@ import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.choam.comm.*;
@@ -95,11 +96,15 @@ public class CHOAM {
     private final TransSubmission                                       txnSubmission         = new TransSubmission();
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final AtomicReference<Context<Member>>                      pendingView           = new AtomicReference<>();
+    private final ConcurrentLinkedHashMap<Digest, Context<Member>>      pendingViews;
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
         this.params = params;
         executions = Executors.newVirtualThreadPerTaskExecutor();
+        pendingViews = new ConcurrentLinkedHashMap.Builder<Digest, Context<Member>>().maximumWeightedCapacity(100)
+                                                                                     .initialCapacity(10)
+                                                                                     .build();
 
         nextView();
         var bContext = new DelegatedContext<>(params.context());
@@ -321,10 +326,15 @@ public class CHOAM {
         if (c != null) {
             c.nextView(context);
         } else {
-            log.info("Acquiring new view, diadem: {} size: {} on: {}", diadem, context.size(), params.member().getId());
+            log.info("Acquiring new view of: {}, diadem: {} size: {} on: {}", context.getId(), diadem, context.size(),
+                     params.member().getId());
             params.context().setContext(context);
             pendingView.set(null);
         }
+
+        log.info("Pushing pending view of: {}, diadem: {} size: {} on: {}", context.getId(), diadem, context.size(),
+                 params.member().getId());
+        pendingViews.putIfAbsent(diadem, context);
     }
 
     public void start() {
@@ -513,20 +523,6 @@ public class CHOAM {
             }
 
             @Override
-            public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
-                final HashedCertifiedBlock v = view.get();
-                var block = Block.newBuilder()
-                                 .setHeader(
-                                 buildHeader(params.digestAlgorithm(), assemble, prev, height, checkpoint.height(),
-                                             checkpoint.hash, v.height(), v.hash))
-                                 .setAssemble(assemble)
-                                 .build();
-                log.trace("Produced block: {} height: {} on: {}", block.getBodyCase(), block.getHeader().getHeight(),
-                          params.member().getId());
-                return block;
-            }
-
-            @Override
             public Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
                 var block = Block.newBuilder()
@@ -674,22 +670,19 @@ public class CHOAM {
         };
     }
 
+    private Supplier<ConcurrentLinkedHashMap<Digest, Context<Member>>> pendingViews() {
+        return () -> pendingViews;
+    }
+
     private void process() {
         final var c = current.get();
         final HashedCertifiedBlock h = head.get();
         log.info("Begin block: {} hash: {} height: {} committee: {} on: {}", h.block.getBodyCase(), h.hash, h.height(),
                  c.getClass().getSimpleName(), params.member().getId());
         switch (h.block.getBodyCase()) {
-        case ASSEMBLE: {
-            params.processor().beginBlock(h.height(), h.hash);
-            nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
-            log.info("Assembled next view id: {} on: {}", nextViewId.get(), params.member().getId());
-            c.assembled();
-            break;
-        }
         case RECONFIGURE: {
             params.processor().beginBlock(h.height(), h.hash);
-            reconfigure(h.block.getReconfigure());
+            reconfigure(h.hash, h.block.getReconfigure());
             break;
         }
         case GENESIS: {
@@ -697,7 +690,7 @@ public class CHOAM {
             cancelBootstrap();
             transitions.regenerated();
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
-            reconfigure(h.block.getGenesis().getInitialView());
+            reconfigure(h.hash, h.block.getGenesis().getInitialView());
             break;
         }
         case EXECUTIONS: {
@@ -719,9 +712,9 @@ public class CHOAM {
                  params.member().getId());
     }
 
-    private void reconfigure(Reconfigure reconfigure) {
-        log.info("Clearing next view id on: {}", params.member().getId());
-        nextViewId.set(null);
+    private void reconfigure(Digest hash, Reconfigure reconfigure) {
+        log.info("Setting next view id: {} on: {}", hash, params.member().getId());
+        nextViewId.set(hash);
         var pv = pendingView.getAndSet(null);
         if (pv != null) {
             // always advance view.
@@ -741,7 +734,7 @@ public class CHOAM {
             } else {
                 log.warn("Reconfiguration to associate failed: {} in view: {} on:{}", validators.size(),
                          new Digest(reconfigure.getId()), params.member().getId());
-                current.set(new Client(validators, getViewId()));
+                transitions.fail();
             }
         } else {
             current.set(new Client(validators, getViewId()));
@@ -1012,8 +1005,6 @@ public class CHOAM {
         Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous);
 
         void onFailure();
-
-        Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint);
 
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
@@ -1306,14 +1297,10 @@ public class CHOAM {
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate(), ULong.MIN);
             Supplier<Context<Member>> pv = pendingView();
-            producer = new Producer(new ViewContext(context, params, pv, signer, validators, constructBlock()),
+            producer = new Producer(nextViewId.get(),
+                                    new ViewContext(context, params, pv, signer, validators, constructBlock()),
                                     head.get(), checkpoint.get(), comm, getLabel());
             producer.start();
-        }
-
-        @Override
-        public void assembled() {
-            producer.assembled();
         }
 
         @Override

@@ -144,10 +144,6 @@ public class ViewContext {
         return pendingView.get();
     }
 
-    public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {
-        return blockProducer.produce(l, hash, assemble, checkpoint);
-    }
-
     public Block produce(ULong l, Digest hash, Executions executions, HashedBlock checkpoint) {
         return blockProducer.produce(l, hash, executions, checkpoint);
     }
@@ -191,12 +187,35 @@ public class ViewContext {
         return valid;
     }
 
+    public boolean validate(SignedJoin join) {
+        if (true) {
+            return true;
+        }
+        Verifier v = verifierOf(join);
+        if (v == null) {
+            log.debug("no verifier: {} for join: {} on: {}", Digest.from(join.getMember()),
+                      Digest.from(join.getJoin().getVm().getId()), params.member().getId());
+            return false;
+        }
+        var validated = v.verify(JohnHancock.from(join.getSignature()), join.getJoin().toByteString());
+        if (!validated) {
+            log.trace("Cannot validate view join: [{}] sig: {} signed by: {} on: {}",
+                      print(join.getJoin(), params.digestAlgorithm()),
+                      params.digestAlgorithm().digest(join.getSignature().toByteString()),
+                      Digest.from(join.getMember()), params().member().getId());
+        } else {
+            log.trace("Validated view join: [{}] signed by: {} on: {}", print(join.getJoin(), params.digestAlgorithm()),
+                      Digest.from(join.getMember()), params().member().getId());
+        }
+        return validated;
+    }
+
     protected Verifier verifierOf(Validate validate) {
         final var mid = Digest.from(validate.getWitness().getId());
         var m = context.getMember(mid);
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
+                log.debug("Unable to get verifier by non existent member: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
@@ -204,8 +223,33 @@ public class ViewContext {
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
+                log.debug("Unable to get verifier by non existent validator: [{}] on: {}",
                           print(validate, params.digestAlgorithm()), params.member().getId());
+            }
+            return null;
+        }
+        return v;
+    }
+
+    protected Verifier verifierOf(SignedJoin sj) {
+        final var mid = Digest.from(sj.getMember());
+        var m = context.getMember(mid);
+        if (m == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to get verifier by non existent member: [{}] on: {}",
+                          String.format("id: %s sig: %s", Digest.from(sj.getMember()),
+                                        params.digestAlgorithm().digest(sj.getSignature().toByteString())),
+                          params.member().getId());
+            }
+            return null;
+        }
+        Verifier v = validators.get(m);
+        if (v == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
+                          String.format("id: %s sig: %s", Digest.from(sj.getMember()),
+                                        params.digestAlgorithm().digest(sj.getSignature().toByteString())),
+                          params.member().getId());
             }
             return null;
         }

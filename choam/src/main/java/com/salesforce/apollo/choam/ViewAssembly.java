@@ -13,7 +13,6 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.choam.proto.Join;
-import com.salesforce.apollo.choam.proto.Reassemble;
 import com.salesforce.apollo.choam.proto.SignedJoin;
 import com.salesforce.apollo.choam.proto.SignedViewMember;
 import com.salesforce.apollo.context.Context;
@@ -55,7 +54,7 @@ public class ViewAssembly {
     private final        AtomicBoolean                     cancelSlice = new AtomicBoolean();
     private final        Digest                            nextViewId;
     private final        Map<Digest, SignedViewMember>     proposals   = new ConcurrentHashMap<>();
-    private final        Consumer<Reassemble>              publisher;
+    private final        Consumer<SignedJoin>              publisher;
     private final        Map<Digest, Join>                 slate       = new ConcurrentSkipListMap<>();
     private final        ViewContext                       view;
     private final        CommonCommunications<Terminal, ?> comms;
@@ -63,7 +62,7 @@ public class ViewAssembly {
     new ConcurrentSkipListMap<>());
     private volatile     Map<Digest, Member>               nextAssembly;
 
-    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Reassemble> publisher,
+    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<SignedJoin> publisher,
                         CommonCommunications<Terminal, ?> comms) {
         view = vc;
         this.nextViewId = nextViewId;
@@ -118,23 +117,17 @@ public class ViewAssembly {
         };
     }
 
-    private void completeSlice(AtomicReference<Duration> retryDelay, AtomicReference<Runnable> reiterate) {
+    private void completeSlice(Duration retryDelay, AtomicReference<Runnable> reiterate) {
         if (gathered()) {
             return;
         }
 
-        final var delay = retryDelay.get();
-        if (delay.compareTo(params().producer().maxGossipDelay()) < 0) {
-            retryDelay.accumulateAndGet(Duration.ofMillis(100), Duration::plus);
-        }
-
-        log.trace("Proposal incomplete of: {} polled: {}, total: {} majority: {}, retrying: {} on: {}", nextViewId,
-                  polled.stream().sorted().toList(), nextAssembly.size(), params().majority(), delay,
-                  params().member().getId());
+        log.trace("Proposal incomplete of: {} polled: {}, total: {}  retrying: {} on: {}", nextViewId,
+                  polled.stream().sorted().toList(), nextAssembly.size(), retryDelay, params().member().getId());
         if (!cancelSlice.get()) {
             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
-                     .schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reiterate.get(), log)), delay.toMillis(),
-                               TimeUnit.MILLISECONDS);
+                     .schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reiterate.get(), log)),
+                               retryDelay.toNanos(), TimeUnit.NANOSECONDS);
         }
     }
 
@@ -217,16 +210,25 @@ public class ViewAssembly {
             }
             return;
         }
+        polled.add(mid);
         if (proposals.putIfAbsent(mid, svm) == null) {
-            if (log.isTraceEnabled()) {
-                log.trace("Adding view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
-                          params().member().getId());
-            }
             if (direct) {
-                publisher.accept(Reassemble.newBuilder().addMembers(svm).build());
+                var sig = params().member().sign(svm.toByteString()).toSig();
+                publisher.accept(SignedJoin.newBuilder()
+                                           .setJoin(svm)
+                                           .setMember(params().member().getId().toDigeste())
+                                           .setSignature(sig)
+                                           .build());
+                if (log.isTraceEnabled()) {
+                    log.trace("Publishing view member: {} sig: {} on: {}",
+                              ViewContext.print(svm, params().digestAlgorithm()),
+                              params().digestAlgorithm().digest(sig.toByteString()), params().member().getId());
+                }
+            } else if (log.isTraceEnabled()) {
+                log.trace("Adding discovered view member: {} on: {}",
+                          ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
             }
         }
-        polled.add(mid);
     }
 
     private Parameters params() {
@@ -262,13 +264,12 @@ public class ViewAssembly {
             proposals.entrySet().stream().forEach(e -> slate.put(e.getKey(), joinOf(e.getValue())));
             if (slate.size() == view.pendingView().getRingCount()) {
                 cancelSlice.set(true);
-                log.debug("Electing: {} of: {} slate: {} proposals: {} on: {}", slate.size(), nextViewId,
-                          slate.keySet().stream().sorted().toList(), proposals.keySet().stream().sorted().toList(),
-                          params().member().getId());
+                log.debug("Electing: {} of: {} slate: {} on: {}", slate.size(), nextViewId,
+                          slate.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.complete();
             } else {
                 Context<Member> memberContext = view.pendingView();
-                log.error("Failed election, required: {} slate: {} of: {} on: {}", memberContext.majority(),
+                log.error("Failed election, required: {} slate: {} of: {} on: {}", view.pendingView().getRingCount(),
                           proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
         }
@@ -284,7 +285,7 @@ public class ViewAssembly {
         public void gather() {
             log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member().getId());
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
-            AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
+            var retryDelay = Duration.ofMillis(10);
             reiterate.set(() -> {
                 nextAssembly = Committee.viewMembersOf(nextViewId, view.pendingView())
                                         .stream()

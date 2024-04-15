@@ -64,9 +64,6 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
-    default void assembled() {
-    }
-
     void complete();
 
     boolean isMember();

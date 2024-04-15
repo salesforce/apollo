@@ -148,11 +148,6 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
-                    return null;
-                }
-
-                @Override
                 public Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint) {
                     return null;
                 }
