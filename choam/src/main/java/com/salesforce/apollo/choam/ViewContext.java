@@ -82,8 +82,10 @@ public class ViewContext {
     }
 
     public Validate generateValidation(HashedBlock block) {
-        log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
-                  params.member().getId());
+        if (log.isTraceEnabled()) {
+            log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
+                      params.member().getId());
+        }
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
             log.error("Unable to sign: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash,
@@ -161,11 +163,21 @@ public class ViewContext {
         return roster;
     }
 
+    public JohnHancock sign(SignedViewMember svm) {
+        if (log.isTraceEnabled()) {
+            log.trace("Signing: {} on: {}", print(svm, params.digestAlgorithm()), params.member().getId());
+        }
+        return signer.sign(svm.toByteString());
+    }
+
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {
-            log.debug("no validation witness: {} for: {} block: {} on: {}", Digest.from(validate.getWitness().getId()),
-                      block.block.getBodyCase(), block.hash, params.member().getId());
+            if (log.isDebugEnabled()) {
+                log.debug("no validation witness: {} for: {} block: {} on: {}",
+                          Digest.from(validate.getWitness().getId()), block.block.getBodyCase(), block.hash,
+                          params.member().getId());
+            }
             return false;
         }
         return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());
@@ -188,22 +200,23 @@ public class ViewContext {
     }
 
     public boolean validate(SignedJoin join) {
-        if (true) {
-            return true;
-        }
         Verifier v = verifierOf(join);
         if (v == null) {
-            log.debug("no verifier: {} for join: {} on: {}", Digest.from(join.getMember()),
-                      Digest.from(join.getJoin().getVm().getId()), params.member().getId());
+            if (log.isDebugEnabled()) {
+                log.debug("no verifier: {} for join: {} on: {}", Digest.from(join.getMember()),
+                          Digest.from(join.getJoin().getVm().getId()), params.member().getId());
+            }
             return false;
         }
         var validated = v.verify(JohnHancock.from(join.getSignature()), join.getJoin().toByteString());
         if (!validated) {
-            log.trace("Cannot validate view join: [{}] sig: {} signed by: {} on: {}",
-                      print(join.getJoin(), params.digestAlgorithm()),
-                      params.digestAlgorithm().digest(join.getSignature().toByteString()),
-                      Digest.from(join.getMember()), params().member().getId());
-        } else {
+            if (log.isTraceEnabled()) {
+                log.trace("Cannot validate view join: [{}] sig: {} signed by: {} on: {}",
+                          print(join.getJoin(), params.digestAlgorithm()),
+                          params.digestAlgorithm().digest(join.getSignature().toByteString()),
+                          Digest.from(join.getMember()), params().member().getId());
+            }
+        } else if (log.isTraceEnabled()) {
             log.trace("Validated view join: [{}] signed by: {} on: {}", print(join.getJoin(), params.digestAlgorithm()),
                       Digest.from(join.getMember()), params().member().getId());
         }

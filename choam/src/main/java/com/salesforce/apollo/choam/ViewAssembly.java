@@ -213,16 +213,17 @@ public class ViewAssembly {
         polled.add(mid);
         if (proposals.putIfAbsent(mid, svm) == null) {
             if (direct) {
-                var sig = params().member().sign(svm.toByteString()).toSig();
+                var signature = view.sign(svm);
                 publisher.accept(SignedJoin.newBuilder()
                                            .setJoin(svm)
                                            .setMember(params().member().getId().toDigeste())
-                                           .setSignature(sig)
+                                           .setSignature(signature.toSig())
                                            .build());
                 if (log.isTraceEnabled()) {
                     log.trace("Publishing view member: {} sig: {} on: {}",
                               ViewContext.print(svm, params().digestAlgorithm()),
-                              params().digestAlgorithm().digest(sig.toByteString()), params().member().getId());
+                              params().digestAlgorithm().digest(signature.toSig().toByteString()),
+                              params().member().getId());
                 }
             } else if (log.isTraceEnabled()) {
                 log.trace("Adding discovered view member: {} on: {}",
