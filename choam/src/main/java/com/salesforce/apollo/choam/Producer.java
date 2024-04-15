@@ -343,6 +343,7 @@ public class Producer {
             log.debug("Final view assembly election on: {}", params().member().getId());
             if (assembled.get()) {
                 assembled();
+                controller.completeIt();
             }
         }
 

@@ -262,7 +262,7 @@ public class CHOAM {
         final var c = current.get();
         HashedCertifiedBlock h = head.get();
         return (c != null && h != null && transitions.fsm().getCurrentState() == Mercantile.OPERATIONAL)
-        && c instanceof Administration && h.height().compareTo(ULong.valueOf(1)) >= 0;
+        && c instanceof Administration && h.height().compareTo(ULong.valueOf(0)) >= 0;
     }
 
     public DelegatedContext<Member> context() {

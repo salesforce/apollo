@@ -131,7 +131,7 @@ public class ContainmentDomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockDelta(200);
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setEpochLength(4).setNumberOfEpochs(4);
         return params;
     }
 }
