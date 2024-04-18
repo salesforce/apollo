@@ -133,6 +133,12 @@ message View {
   repeated crypto.Digeste committee = 2;
 }
 
+message SignedView {
+  crypto.Digeste member = 1;
+  View view = 2;
+  crypto.Sig signature = 3;
+}
+
 message ViewMember {
   crypto.Digeste id = 1;
   crypto.Digeste view = 2;

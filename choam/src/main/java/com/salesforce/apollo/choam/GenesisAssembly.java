@@ -64,7 +64,7 @@ public class GenesisAssembly implements Genesis {
                            String label) {
         view = vc;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingView())
+        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingViews().last().context())
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {

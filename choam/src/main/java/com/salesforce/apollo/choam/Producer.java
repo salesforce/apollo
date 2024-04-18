@@ -159,11 +159,7 @@ public class Producer {
         }
     }
 
-    private void create(List<ByteString> preblock, boolean last) {
-        if (log.isDebugEnabled()) {
-            log.debug("emit last: {} preblock: {} on: {}", last,
-                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
-        }
+    private List<UnitData> aggregate(List<ByteString> preblock) {
         var aggregate = preblock.stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
@@ -180,43 +176,17 @@ public class Producer {
                  .filter(p -> !p.published.get())
                  .filter(p -> p.witnesses.size() >= params().majority())
                  .forEach(this::publish);
+        return aggregate;
+    }
 
-        var joins = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
-        final var ass = assembly;
-        if (ass != null) {
-            log.trace("Consuming {} units, {} joins on: {}", aggregate.size(), joins.size(), params().member().getId());
-            ass.inbound().accept(joins);
-        } else {
-            log.trace("Pending {} units, {} joins on: {}", aggregate.size(), joins.size(), params().member().getId());
-            pendingAssemblies.addAll(joins);
+    private void create(List<ByteString> preblock, boolean last) {
+        if (log.isDebugEnabled()) {
+            log.debug("emit last: {} preblock: {} on: {}", last,
+                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
         }
-
-        HashedBlock lb = previousBlock.get();
-        final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
-
-        if (!txns.isEmpty()) {
-            log.trace("transactions: {} comb hash: {} height: {} on: {}", txns.size(), txns.stream()
-                                                                                           .map(t -> CHOAM.hashOf(t,
-                                                                                                                  params().digestAlgorithm()))
-                                                                                           .reduce(Digest::xor)
-                                                                                           .orElse(null),
-                      lb.height().add(1), params().member().getId());
-            var builder = Executions.newBuilder();
-            txns.forEach(builder::addExecutions);
-
-            var next = new HashedBlock(params().digestAlgorithm(),
-                                       view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
-            previousBlock.set(next);
-
-            final var validation = view.generateValidation(next);
-            ds.offer(validation);
-            final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
-            pending.put(next.hash, p);
-            p.witnesses.put(params().member(), validation);
-            log.debug("Produced block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
-                      next.hash, next.height(), lb.hash, last, params().member().getId());
-            processPendingValidations(next, p);
-        }
+        var aggregate = aggregate(preblock);
+        processAssemblies(aggregate);
+        processTransactions(last, aggregate);
         if (last) {
             started.set(true);
             transitions.lastBlock();
@@ -236,6 +206,20 @@ public class Producer {
         return view.params();
     }
 
+    private void processAssemblies(List<UnitData> aggregate) {
+        var joins = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
+        final var ass = assembly;
+        if (ass != null) {
+            log.trace("Consuming {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
+                      params().member().getId());
+            ass.inbound().accept(joins);
+        } else {
+            log.trace("Pending {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
+                      params().member().getId());
+            pendingAssemblies.addAll(joins);
+        }
+    }
+
     private void processPendingValidations(HashedBlock block, PendingBlock p) {
         var pending = pendingValidations.remove(block.hash);
         if (pending != null) {
@@ -243,6 +227,35 @@ public class Producer {
             if (p.witnesses.size() >= params().majority()) {
                 publish(p);
             }
+        }
+    }
+
+    private void processTransactions(boolean last, List<UnitData> aggregate) {
+        HashedBlock lb = previousBlock.get();
+        final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
+
+        if (!txns.isEmpty()) {
+            log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(), txns.stream()
+                                                                                               .map(t -> CHOAM.hashOf(t,
+                                                                                                                      params().digestAlgorithm()))
+                                                                                               .reduce(Digest::xor)
+                                                                                               .orElse(null),
+                      lb.height().add(1), params().member().getId());
+            var builder = Executions.newBuilder();
+            txns.forEach(builder::addExecutions);
+
+            var next = new HashedBlock(params().digestAlgorithm(),
+                                       view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
+            previousBlock.set(next);
+
+            final var validation = view.generateValidation(next);
+            ds.offer(validation);
+            final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
+            pending.put(next.hash, p);
+            p.witnesses.put(params().member(), validation);
+            log.debug("Produced block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
+                      next.hash, next.height(), lb.hash, last, params().member().getId());
+            processPendingValidations(next, p);
         }
     }
 

@@ -72,7 +72,7 @@ public interface Committee {
 
     Logger log();
 
-    void nextView(Context<Member> pendingView);
+    void nextView(Digest diadem, Context<Member> pendingView);
 
     Parameters params();
 

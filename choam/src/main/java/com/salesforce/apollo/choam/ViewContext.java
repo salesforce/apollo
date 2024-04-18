@@ -28,26 +28,26 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                    log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer             blockProducer;
-    private final        Context<Member>           context;
-    private final        Parameters                params;
-    private final        Map<Digest, Short>        roster;
-    private final        Signer                    signer;
-    private final        Map<Member, Verifier>     validators;
-    private final        Supplier<Context<Member>> pendingView;
+    private final static Logger                       log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer                blockProducer;
+    private final        Context<Member>              context;
+    private final        Parameters                   params;
+    private final        Map<Digest, Short>           roster;
+    private final        Signer                       signer;
+    private final        Map<Member, Verifier>        validators;
+    private final        Supplier<CHOAM.PendingViews> pendingViews;
 
-    public ViewContext(Context<Member> context, Parameters params, Supplier<Context<Member>> pendingView, Signer signer,
-                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<CHOAM.PendingViews> pendingViews,
+                       Signer signer, Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
-        this.pendingView = pendingView;
+        this.pendingViews = pendingViews;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().map(m -> m.getId()).toList());
+        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().map(Member::getId).toList());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
@@ -142,8 +142,8 @@ public class ViewContext {
         return params;
     }
 
-    public Context<Member> pendingView() {
-        return pendingView.get();
+    public CHOAM.PendingViews pendingViews() {
+        return pendingViews.get();
     }
 
     public Block produce(ULong l, Digest hash, Executions executions, HashedBlock checkpoint) {
