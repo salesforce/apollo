@@ -170,6 +170,13 @@ public class ViewContext {
         return signer.sign(svm.toByteString());
     }
 
+    public JohnHancock sign(Views views) {
+        if (log.isTraceEnabled()) {
+            log.trace("Signing views on: {}", params.member().getId());
+        }
+        return signer.sign(views.toByteString());
+    }
+
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {

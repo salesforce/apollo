@@ -31,7 +31,7 @@ public interface Reconfiguration {
         AWAIT_ASSEMBLY {
             @Override
             public Transitions assembled() {
-                return GATHER;
+                return VIEW_AGREEMENT;
             }
         }, CERTIFICATION {
             @Override
@@ -62,6 +62,11 @@ public interface Reconfiguration {
             @Override
             public Transitions gathered() {
                 return NOMINATION;
+            }
+
+            @Override
+            public Transitions viewDetermined() {
+                return null;
             }
         }, NOMINATION {
             @Entry

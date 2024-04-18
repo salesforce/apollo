@@ -1061,6 +1061,12 @@ public class CHOAM {
             return views.get(diadem);
         }
 
+        public Views.Builder getViews(Digest hash) {
+            var builder = Views.newBuilder();
+            views.values().stream().map(pv -> pv.getView(hash)).forEach(v -> builder.addViews(v));
+            return builder;
+        }
+
         public PendingView last() {
             final var l = lock.readLock();
             try {
