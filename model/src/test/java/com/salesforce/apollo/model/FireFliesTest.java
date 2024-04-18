@@ -181,7 +181,7 @@ public class FireFliesTest {
                                                               .build())
                                .setCheckpointBlockDelta(200);
 
-        params.getProducer().ethereal().setNumberOfEpochs(5);
+        params.getProducer().ethereal().setEpochLength(7).setNumberOfEpochs(3);
         return params;
     }
 }

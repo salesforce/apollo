@@ -30,10 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -46,31 +44,32 @@ public class Producer {
 
     private static final Logger                            log                = LoggerFactory.getLogger(Producer.class);
     private final        AtomicBoolean                     assembled          = new AtomicBoolean();
-    private final        AtomicReference<ViewAssembly>     assembly           = new AtomicReference<>();
     private final        AtomicReference<HashedBlock>      checkpoint         = new AtomicReference<>();
     private final        CommonCommunications<Terminal, ?> comms;
     private final        Ethereal                          controller;
     private final        ChRbcGossip                       coordinator;
     private final        TxDataSource                      ds;
     private final        int                               lastEpoch;
-    private final        Set<Member>                       nextAssembly       = new HashSet<>();
+    private final        Map<Digest, Member>               nextAssembly       = new HashMap<>();
     private final        Map<Digest, PendingBlock>         pending            = new ConcurrentSkipListMap<>();
-    private final        BlockingQueue<Reassemble>         pendingReassembles = new LinkedBlockingQueue<>();
+    private final        List<Assemblies>                  pendingAssemblies  = new CopyOnWriteArrayList<>();
     private final        Map<Digest, List<Validate>>       pendingValidations = new ConcurrentSkipListMap<>();
     private final        AtomicReference<HashedBlock>      previousBlock      = new AtomicReference<>();
     private final        AtomicBoolean                     reconfigured       = new AtomicBoolean();
     private final        AtomicBoolean                     started            = new AtomicBoolean(false);
     private final        Transitions                       transitions;
     private final        ViewContext                       view;
-    private volatile     Digest                            nextViewId;
+    private final        Digest                            nextViewId;
+    private              ViewAssembly                      assembly;
 
-    public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
+    public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms, String label) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.comms = comms;
         this.checkpoint.set(checkpoint);
+        this.nextViewId = nextViewId;
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
@@ -113,22 +112,14 @@ public class Producer {
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 
-    public void assembled() {
-        transitions.assembled();
-    }
-
-    public Digest getNextViewId() {
-        final Digest current = nextViewId;
-        return current;
-    }
-
     public void start() {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        reconfigure();
         final Block prev = previousBlock.get().block;
-        if (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0) { // genesis block won't ever be
-            // 0
+        // genesis block won't ever be 0
+        if (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0) {
             transitions.checkpoint();
         } else {
             transitions.start();
@@ -142,7 +133,7 @@ public class Producer {
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
         controller.stop();
         coordinator.stop();
-        final var c = assembly.get();
+        final var c = assembly;
         if (c != null) {
             c.stop();
         }
@@ -150,6 +141,9 @@ public class Producer {
     }
 
     public SubmitResult submit(Transaction transaction) {
+        if (!started.get()) {
+            return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
+        }
         if (ds.offer(transaction)) {
             return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         } else {
@@ -157,17 +151,15 @@ public class Producer {
         }
     }
 
-    private void addReassemble(Reassemble r) {
-        log.trace("Adding reassembly members: {} validations: {} on: {}", r.getMembersCount(), r.getValidationsCount(),
-                  params().member().getId());
-        ds.offer(r);
+    private void addAssembly(Assemblies assemblies) {
+        if (ds.offer(assemblies)) {
+            log.trace("Adding on: {}", params().member().getId());
+        } else {
+            log.trace("Cannot add join on: {}", params().member().getId());
+        }
     }
 
-    private void create(List<ByteString> preblock, boolean last) {
-        if (log.isDebugEnabled()) {
-            log.debug("emit last: {} preblock: {} on: {}", last,
-                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
-        }
+    private List<UnitData> aggregate(List<ByteString> preblock) {
         var aggregate = preblock.stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
@@ -184,48 +176,17 @@ public class Producer {
                  .filter(p -> !p.published.get())
                  .filter(p -> p.witnesses.size() >= params().majority())
                  .forEach(this::publish);
+        return aggregate;
+    }
 
-        var reass = Reassemble.newBuilder();
-        aggregate.stream()
-                 .flatMap(e -> e.getReassembliesList().stream())
-                 .forEach(r -> reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList()));
-        final var ass = assembly.get();
-        if (ass != null) {
-            log.trace("Consuming reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-            ass.inbound().accept(Collections.singletonList(reass.build()));
-        } else {
-            log.trace("Pending reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
-                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-            pendingReassembles.add(reass.build());
+    private void create(List<ByteString> preblock, boolean last) {
+        if (log.isDebugEnabled()) {
+            log.debug("emit last: {} preblock: {} on: {}", last,
+                      preblock.stream().map(DigestAlgorithm.DEFAULT::digest).toList(), params().member().getId());
         }
-
-        HashedBlock lb = previousBlock.get();
-        final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
-
-        if (!txns.isEmpty()) {
-            log.trace("transactions: {} comb hash: {} height: {} on: {}", txns.size(), txns.stream()
-                                                                                           .map(t -> CHOAM.hashOf(t,
-                                                                                                                  params().digestAlgorithm()))
-                                                                                           .reduce(Digest::xor)
-                                                                                           .orElse(null),
-                      lb.height().add(1), params().member().getId());
-            var builder = Executions.newBuilder();
-            txns.forEach(builder::addExecutions);
-
-            var next = new HashedBlock(params().digestAlgorithm(),
-                                       view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
-            previousBlock.set(next);
-
-            final var validation = view.generateValidation(next);
-            ds.offer(validation);
-            final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
-            pending.put(next.hash, p);
-            p.witnesses.put(params().member(), validation);
-            log.debug("Produced block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
-                      next.hash, next.height(), lb.hash, last, params().member().getId());
-            processPendingValidations(next, p);
-        }
+        var aggregate = aggregate(preblock);
+        processAssemblies(aggregate);
+        processTransactions(last, aggregate);
         if (last) {
             started.set(true);
             transitions.lastBlock();
@@ -245,6 +206,20 @@ public class Producer {
         return view.params();
     }
 
+    private void processAssemblies(List<UnitData> aggregate) {
+        var joins = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
+        final var ass = assembly;
+        if (ass != null) {
+            log.trace("Consuming {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
+                      params().member().getId());
+            ass.inbound().accept(joins);
+        } else {
+            log.trace("Pending {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
+                      params().member().getId());
+            pendingAssemblies.addAll(joins);
+        }
+    }
+
     private void processPendingValidations(HashedBlock block, PendingBlock p) {
         var pending = pendingValidations.remove(block.hash);
         if (pending != null) {
@@ -255,26 +230,33 @@ public class Producer {
         }
     }
 
-    private void produceAssemble() {
-        final var vlb = previousBlock.get();
-        nextViewId = vlb.hash;
-        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, view.pendingView()));
-        log.debug("Assembling: {} on: {}", nextViewId, params().member().getId());
-        final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height().add(1), vlb.hash,
-                                                                                      Assemble.newBuilder()
-                                                                                              .setNextView(
-                                                                                              vlb.hash.toDigeste())
-                                                                                              .build(),
-                                                                                      checkpoint.get()));
-        previousBlock.set(assemble);
-        final var validation = view.generateValidation(assemble);
-        final var p = new PendingBlock(assemble, new HashMap<>(), new AtomicBoolean());
-        pending.put(assemble.hash, p);
-        p.witnesses.put(params().member(), validation);
-        ds.offer(validation);
-        log.debug("Produced block: {} hash: {} height: {} from: {} on: {}", assemble.block.getBodyCase(), assemble.hash,
-                  assemble.height(), getViewId(), params().member().getId());
-        processPendingValidations(assemble, p);
+    private void processTransactions(boolean last, List<UnitData> aggregate) {
+        HashedBlock lb = previousBlock.get();
+        final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
+
+        if (!txns.isEmpty()) {
+            log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(), txns.stream()
+                                                                                               .map(t -> CHOAM.hashOf(t,
+                                                                                                                      params().digestAlgorithm()))
+                                                                                               .reduce(Digest::xor)
+                                                                                               .orElse(null),
+                      lb.height().add(1), params().member().getId());
+            var builder = Executions.newBuilder();
+            txns.forEach(builder::addExecutions);
+
+            var next = new HashedBlock(params().digestAlgorithm(),
+                                       view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
+            previousBlock.set(next);
+
+            final var validation = view.generateValidation(next);
+            ds.offer(validation);
+            final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
+            pending.put(next.hash, p);
+            p.witnesses.put(params().member(), validation);
+            log.debug("Produced block: {} hash: {} height: {} prev: {} last: {} on: {}", next.block.getBodyCase(),
+                      next.hash, next.height(), lb.hash, last, params().member().getId());
+            processPendingValidations(next, p);
+        }
     }
 
     private void publish(PendingBlock p) {
@@ -288,6 +270,25 @@ public class Producer {
                                      p.witnesses.values().stream().map(Validate::getWitness).toList())
                                      .build();
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));
+    }
+
+    private void reconfigure() {
+        log.debug("Starting view reconfiguration: {} on: {}", nextViewId, params().member().getId());
+        assembly = new ViewAssembly(nextViewId, view, Producer.this::addAssembly, comms) {
+            @Override
+            public void complete() {
+                super.complete();
+                log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
+                          params().member().getId());
+                assembled.set(true);
+                Producer.this.transitions.viewComplete();
+            }
+        };
+        assembly.start();
+        assembly.assembled();
+        var joins = new ArrayList<>(pendingAssemblies);
+        pendingAssemblies.clear();
+        assembly.inbound().accept(joins);
     }
 
     private PendingBlock validate(Validate v) {
@@ -322,7 +323,7 @@ public class Producer {
                 log.debug("assembly already complete on: {}", params().member().getId());
                 return;
             }
-            final var slate = assembly.get().getSlate();
+            final var slate = assembly.getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get(),
                                                                    checkpoint.get()));
@@ -333,8 +334,8 @@ public class Producer {
             ds.offer(validation);
             //            controller.completeIt();
             log.info("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
-                     reconfiguration.hash, reconfiguration.height(),
-                     slate.keySet().stream().map(m -> m.getId()).sorted().toList(), params().member().getId());
+                     reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
+                     params().member().getId());
             processPendingValidations(reconfiguration, p);
         }
 
@@ -345,7 +346,7 @@ public class Producer {
             if (dropped != 0) {
                 log.warn("Dropped txns: {} on: {}", dropped, params().member().getId());
             }
-            final var viewAssembly = assembly.get();
+            final var viewAssembly = assembly;
             if (viewAssembly == null) {
                 log.error("Assemble block never processed on: {}", params().member().getId());
                 transitions.failed();
@@ -355,6 +356,7 @@ public class Producer {
             log.debug("Final view assembly election on: {}", params().member().getId());
             if (assembled.get()) {
                 assembled();
+                controller.completeIt();
             }
         }
 
@@ -395,31 +397,6 @@ public class Producer {
         public void fail() {
             stop();
             view.onFailure();
-        }
-
-        @Override
-        public void produceAssemble() {
-            Producer.this.produceAssemble();
-        }
-
-        @Override
-        public void reconfigure() {
-            log.debug("Starting view reconfiguration: {} on: {}", nextViewId, params().member().getId());
-            assembly.set(new ViewAssembly(nextViewId, view, Producer.this::addReassemble, comms) {
-                @Override
-                public void complete() {
-                    super.complete();
-                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                              params().member().getId());
-                    assembled.set(true);
-                    Producer.this.transitions.viewComplete();
-                }
-            });
-            assembly.get().start();
-            assembly.get().assembled();
-            List<Reassemble> reasses = new ArrayList<>();
-            pendingReassembles.drainTo(reasses);
-            assembly.get().inbound().accept(reasses);
         }
 
         @Override

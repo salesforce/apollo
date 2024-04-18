@@ -553,11 +553,6 @@
                 <version>${graal.vm.version}</version>
                 <scope>provided</scope>
             </dependency>
-            <dependency>
-                <groupId>org.netbeans.api</groupId>
-                <artifactId>org-netbeans-modules-keyring</artifactId>
-                <version>RELEASE200</version>
-            </dependency>
 
             <!-- Test dependencies only below this line! -->
             <dependency>

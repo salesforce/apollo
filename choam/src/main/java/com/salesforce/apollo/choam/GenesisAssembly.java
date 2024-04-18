@@ -44,19 +44,19 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
  * @author hal.hildebrand
  */
 public class GenesisAssembly implements Genesis {
-    private static final Logger                log       = LoggerFactory.getLogger(GenesisAssembly.class);
+    private static final Logger                log                = LoggerFactory.getLogger(GenesisAssembly.class);
     private final        Ethereal              controller;
     private final        ChRbcGossip           coordinator;
     private final        SignedViewMember      genesisMember;
     private final        Map<Digest, Member>   nextAssembly;
-    private final        Map<Digest, Proposed> proposals = new ConcurrentHashMap<>();
-    private final        AtomicBoolean         published = new AtomicBoolean();
-    private final        Map<Member, Join>     slate     = new ConcurrentHashMap<>();
-    private final        AtomicBoolean         started   = new AtomicBoolean();
+    private final        AtomicBoolean         published          = new AtomicBoolean();
+    private final        Map<Digest, Join>     slate              = new ConcurrentHashMap<>();
+    private final        AtomicBoolean         started            = new AtomicBoolean();
     private final        Transitions           transitions;
     private final        ViewContext           view;
-    private final        Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
+    private final        Map<Member, Validate> witnesses          = new ConcurrentHashMap<>();
     private final        OneShot               ds;
+    private final        List<Validate>        pendingValidations = new ArrayList<>();
     private volatile     Thread                blockingThread;
     private volatile     HashedBlock           reconfiguration;
 
@@ -64,7 +64,7 @@ public class GenesisAssembly implements Genesis {
                            String label) {
         view = vc;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingView())
+        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingViews().last().context())
                                 .stream()
                                 .collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
@@ -104,13 +104,9 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void certify() {
-        proposals.values()
-                 .stream()
-                 .filter(p -> p.certifications.size() == nextAssembly.size())
-                 .forEach(p -> slate.put(p.member(), joinOf(p)));
         if (slate.size() != nextAssembly.size()) {
             log.info("Not certifying genesis for: {} slate incomplete: {} on: {}", view.context().getId(),
-                     slate.keySet().stream().map(m -> m.getId()).toList(), params().member().getId());
+                     slate.keySet().stream().sorted().toList(), params().member().getId());
             return;
         }
         assert slate.size() == nextAssembly.size() : "Expected: %s members, slate: %s".formatted(nextAssembly.size(),
@@ -120,8 +116,10 @@ public class GenesisAssembly implements Genesis {
                                                                                    params().digestAlgorithm())));
         var validate = view.generateValidation(reconfiguration);
         log.debug("Certifying genesis block: {} for: {} slate: {} on: {}", reconfiguration.hash, view.context().getId(),
-                  slate.keySet().stream().map(m -> m.getId()).toList(), params().member().getId());
+                  slate.keySet().stream().sorted().toList(), params().member().getId());
         ds.setValue(validate.toByteString());
+        witnesses.put(params().member(), validate);
+        pendingValidations.forEach(v -> certify(v));
     }
 
     @Override
@@ -139,15 +137,8 @@ public class GenesisAssembly implements Genesis {
     @Override
     public void gather() {
         log.info("Gathering next assembly on: {}", params().member().getId());
-        var certification = view.generateValidation(genesisMember).getWitness();
-        var join = Join.newBuilder()
-                       .setMember(genesisMember)
-                       .addEndorsements(certification)
-                       .setKerl(params().kerl().get())
-                       .build();
-        var proposed = new Proposed(join, params().member());
-        proposed.certifications.put(params().member(), certification);
-        proposals.put(params().member().getId(), proposed);
+        var join = Join.newBuilder().setMember(genesisMember).setKerl(params().kerl().get()).build();
+        slate.put(params().member().getId(), join);
 
         ds.setValue(join.toByteString());
         coordinator.start(params().producer().gossipDuration());
@@ -173,19 +164,6 @@ public class GenesisAssembly implements Genesis {
     }
 
     @Override
-    public void nominate() {
-        var validations = Validations.newBuilder();
-        proposals.values()
-                 .stream()
-                 .filter(p -> !p.member.equals(params().member()))
-                 .map(p -> view.generateValidation(p.join.getMember()))
-                 .forEach(validations::addValidations);
-        ds.setValue(validations.build().toByteString());
-        log.info("Nominations of: {} validations: {} on: {}", params().context().getId(),
-                 validations.getValidationsCount(), params().member().getId());
-    }
-
-    @Override
     public void nominations(List<ByteString> preblock, boolean last) {
         preblock.stream()
                 .map(bs -> {
@@ -198,8 +176,7 @@ public class GenesisAssembly implements Genesis {
                 })
                 .filter(Objects::nonNull)
                 .flatMap(vs -> vs.getValidationsList().stream())
-                .filter(v -> !v.equals(Validate.getDefaultInstance()))
-                .forEach(this::validate);
+                .filter(v -> !v.equals(Validate.getDefaultInstance()));
     }
 
     @Override
@@ -258,6 +235,9 @@ public class GenesisAssembly implements Genesis {
     }
 
     private void certify(Validate v) {
+        if (reconfiguration == null) {
+            pendingValidations.add(v);
+        }
         log.trace("Validating reconfiguration block: {} height: {} on: {}", reconfiguration.hash,
                   reconfiguration.height(), params().member().getId());
         if (!view.validate(reconfiguration, v)) {
@@ -326,64 +306,15 @@ public class GenesisAssembly implements Genesis {
                      ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
             return;
         }
-        if (log.isTraceEnabled()) {
-            log.trace("Valid view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
-                      params().member().getId());
+        if (slate.putIfAbsent(m.getId(), join) == null) {
+            if (log.isTraceEnabled()) {
+                log.trace("Add view member: {} to slate on: {}", ViewContext.print(svm, params().digestAlgorithm()),
+                          params().member().getId());
+            }
         }
-        var proposed = proposals.computeIfAbsent(mid, k -> new Proposed(join, m));
-        if (join.getEndorsementsList().size() == 1) {
-            proposed.certifications.computeIfAbsent(m, k -> join.getEndorsements(0));
-        }
-    }
-
-    private Join joinOf(Proposed candidate) {
-        final List<Certification> witnesses = candidate.certifications.values()
-                                                                      .stream()
-                                                                      .sorted(
-                                                                      Comparator.comparing(c -> new Digest(c.getId())))
-                                                                      .collect(Collectors.toList());
-        return Join.newBuilder(candidate.join).clearEndorsements().addAllEndorsements(witnesses).build();
     }
 
     private Parameters params() {
         return view.params();
-    }
-
-    private void validate(Validate v) {
-        final var cid = Digest.from(v.getWitness().getId());
-        var certifier = view.context().getMember(cid);
-        if (certifier == null) {
-            log.warn("Unknown certifier: {} on: {}", cid, params().member().getId());
-            return; // do not have the join yet
-        }
-        final var vid = Digest.from(v.getHash());
-        final var member = nextAssembly.get(vid);
-        if (member == null) {
-            return;
-        }
-        var proposed = proposals.get(vid);
-        if (proposed == null) {
-            log.warn("Invalid certification, unknown view join: {} on: {}", vid, params().member().getId());
-            return; // do not have the join yet
-        }
-        if (!view.validate(proposed.join.getMember(), v)) {
-            log.warn("Invalid certification for view join: {} from: {} on: {}", vid,
-                     Digest.from(v.getWitness().getId()), params().member().getId());
-            return;
-        }
-        var prev = proposed.certifications.put(certifier, v.getWitness());
-        if (prev == null) {
-            log.debug("New validation of view member: {} using certifier: {} witnesses: {} on: {}", member.getId(),
-                      certifier.getId(), proposed.certifications.values().size(), params().member().getId());
-        } else {
-            log.debug("Redundant validation of view member: {} hash: {} using certifier: {} on: {}", member.getId(),
-                      vid, certifier.getId(), params().member().getId());
-        }
-    }
-
-    private record Proposed(Join join, Member member, Map<Member, Certification> certifications) {
-        public Proposed(Join join, Member member) {
-            this(join, member, new HashMap<>());
-        }
     }
 }

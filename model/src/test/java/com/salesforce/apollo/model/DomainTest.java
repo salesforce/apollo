@@ -258,7 +258,7 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockDelta(200);
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setEpochLength(7).setNumberOfEpochs(3);
         return params;
     }
 }

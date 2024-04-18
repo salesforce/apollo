@@ -123,6 +123,9 @@ public class Digest implements Comparable<Digest> {
         if (id == this) {
             return 0;
         }
+        if (hash.length != id.hash.length) {
+            throw new IllegalArgumentException("hash length incorrect for algorithm");
+        }
         for (int i = 0; i < hash.length; i++) {
             int compare = Long.compareUnsigned(hash[i], id.hash[i]);
             if (compare != 0) {

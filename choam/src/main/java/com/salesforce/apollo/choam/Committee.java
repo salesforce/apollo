@@ -64,9 +64,6 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
-    default void assembled() {
-    }
-
     void complete();
 
     boolean isMember();
@@ -75,7 +72,7 @@ public interface Committee {
 
     Logger log();
 
-    void nextView(Context<Member> pendingView);
+    void nextView(Digest diadem, Context<Member> pendingView);
 
     Parameters params();
 

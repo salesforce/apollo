@@ -24,8 +24,6 @@ public interface Genesis {
 
     void gather(List<ByteString> preblock, boolean last);
 
-    void nominate();
-
     void nominations(List<ByteString> preblock, boolean last);
 
     void publish();
@@ -52,29 +50,13 @@ public interface Genesis {
 
             @Override
             public Transitions nextEpoch(Integer epoch) {
-                return epoch.equals(0) ? null : NOMINATION;
+                return epoch.equals(0) ? null : CERTIFICATION;
 
             }
 
             @Override
             public Transitions process(List<ByteString> preblock, boolean last) {
                 context().gather(preblock, last);
-                return null;
-            }
-        }, NOMINATION {
-            @Override
-            public Transitions nextEpoch(Integer epoch) {
-                return CERTIFICATION;
-            }
-
-            @Entry
-            public void nominate() {
-                context().nominate();
-            }
-
-            @Override
-            public Transitions process(List<ByteString> preblock, boolean last) {
-                context().nominations(preblock, last);
                 return null;
             }
         }, PUBLISH {

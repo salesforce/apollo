@@ -137,19 +137,13 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                    return CHOAM.genesis(viewId, joining, previous, committee, previous, built, previous,
-                                         Collections.emptyList());
+                public Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous) {
+                    return CHOAM.genesis(viewId, joining, previous, previous, built, previous, Collections.emptyList());
                 }
 
                 @Override
                 public void onFailure() {
                     // do nothing
-                }
-
-                @Override
-                public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
-                    return null;
                 }
 
                 @Override
@@ -163,12 +157,14 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
+                public Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous,
                                          HashedBlock checkpoint) {
                     return null;
                 }
             };
-            var view = new GenesisContext(committee, () -> base, built, sm, reconfigure);
+            var pending = new CHOAM.PendingViews();
+            pending.add(base.getId(), base);
+            var view = new GenesisContext(committee, () -> pending, built, sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());

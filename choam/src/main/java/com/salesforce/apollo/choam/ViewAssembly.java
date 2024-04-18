@@ -7,15 +7,17 @@
 package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Reconfigure;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 import com.salesforce.apollo.choam.proto.*;
-import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.JohnHancock;
+import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.ring.SliceIterator;
@@ -26,7 +28,10 @@ import org.slf4j.LoggerFactory;
 import java.security.PublicKey;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -36,29 +41,31 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
 
 /**
- * View reconfiguration. Attempts to create a new view reconfiguration. View reconfiguration needs at least 2f+1
- * certified members from the next view. The protocol finishes with a list of at least 2f+1 Joins with at least 2f+1
- * certifications from the current view, or fails
+ * View reconfiguration. Attempts to create a new view reconfiguration. The protocol comes to an agreement on the
+ * underlying Context membership view diadem and thus the membership of the next assembly.  Members propose their
+ * current views and reach 2/3 agreement on the diadem.  The next assembly members are contacted to retrieve their view
+ * keys and signed commitments on such.  Protocol terminates after this next slate of members stabilizes or the last
+ * epoch occurs.
  *
  * @author hal.hildebrand
  */
 public class ViewAssembly {
 
-    private final static Logger                            log         = LoggerFactory.getLogger(ViewAssembly.class);
+    private final static Logger                            log           = LoggerFactory.getLogger(ViewAssembly.class);
     protected final      Transitions                       transitions;
-    private final        AtomicBoolean                     cancelSlice = new AtomicBoolean();
+    private final        AtomicBoolean                     cancelSlice   = new AtomicBoolean();
     private final        Digest                            nextViewId;
-    private final        Map<Digest, Proposed>             proposals   = new ConcurrentHashMap<>();
-    private final        Consumer<Reassemble>              publisher;
-    private final        Map<Member, Join>                 slate       = new ConcurrentSkipListMap<>();
-    private final        Map<Digest, List<Validate>>       unassigned  = new ConcurrentHashMap<>();
+    private final        Map<Digest, Views>                viewProposals = new ConcurrentHashMap<>();
+    private final        Map<Digest, SignedViewMember>     proposals     = new ConcurrentHashMap<>();
+    private final        Consumer<Assemblies>              publisher;
+    private final        Map<Digest, Join>                 slate         = new HashMap<>();
     private final        ViewContext                       view;
     private final        CommonCommunications<Terminal, ?> comms;
-    private final        Set<Digest>                       polled      = Collections.newSetFromMap(
+    private final        Set<Digest>                       polled        = Collections.newSetFromMap(
     new ConcurrentSkipListMap<>());
-    private volatile     Map<Digest, Member>               nextAssembly;
+    private volatile     View                              selected;
 
-    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Reassemble> publisher,
+    public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Assemblies> publisher,
                         CommonCommunications<Terminal, ?> comms) {
         view = vc;
         this.nextViewId = nextViewId;
@@ -69,15 +76,11 @@ public class ViewAssembly {
                                                                     Reconfigure.AWAIT_ASSEMBLY, true);
         this.transitions = fsm.getTransitions();
         fsm.setName("View Assembly%s on: %s".formatted(nextViewId, params().member().getId()));
-
-        nextAssembly = Committee.viewMembersOf(nextViewId, view.pendingView())
-                                .stream()
-                                .collect(Collectors.toMap(Member::getId, m -> m));
-        log.debug("View reconfiguration from: {} to: {}, next assembly: {} on: {}", view.context().getId(), nextViewId,
-                  nextAssembly.keySet(), params().member().getId());
+        log.debug("View reconfiguration from: {} to: {} on: {}", view.context().getId(), nextViewId,
+                  params().member().getId());
     }
 
-    public Map<Member, Join> getSlate() {
+    public Map<Digest, Join> getSlate() {
         return slate;
     }
 
@@ -95,54 +98,87 @@ public class ViewAssembly {
 
     void complete() {
         cancelSlice.set(true);
-        proposals.values()
+        proposals.entrySet()
                  .stream()
-                 .filter(p -> p.validations.size() >= params().majority())
-                 .forEach(p -> slate.put(p.member(), joinOf(p)));
-        Context<Member> pendingContext = view.pendingView();
-        if (slate.size() >= pendingContext.majority()) {
-            log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
-                      params().member().getId());
-        } else {
-            log.debug("Failed view assembly completion, election required: {} slate: {} of: {} on: {}",
-                      pendingContext.majority(), proposals.values()
-                                                          .stream()
-                                                          .map(p -> String.format("%s:%s", p.member.getId(),
-                                                                                  p.validations.size()))
-                                                          .sorted()
-                                                          .toList(), nextViewId, params().member().getId());
-            transitions.complete();
-        }
+                 .forEach(e -> slate.put(e.getKey(), Join.newBuilder().setMember(e.getValue()).build()));
+        log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
+                  params().member().getId());
     }
 
     void finalElection() {
         transitions.complete();
     }
 
-    Consumer<List<Reassemble>> inbound() {
-        return lre -> {
-            lre.stream().flatMap(re -> re.getMembersList().stream()).forEach(vm -> join(vm, false));
-            lre.stream().flatMap(re -> re.getValidationsList().stream()).forEach(this::validate);
-        };
+    Consumer<List<Assemblies>> inbound() {
+        return lre -> lre.forEach(this::assemble);
     }
 
-    private void completeSlice(AtomicReference<Duration> retryDelay, AtomicReference<Runnable> reiterate) {
+    private void assemble(Assemblies ass) {
+        log.info("Assembling {} joins and {} views on: {}", ass.getJoinsCount(), ass.getViewsCount(),
+                 params().member().getId());
+        ass.getJoinsList().stream().filter(view::validate).forEach(sj -> join(sj.getJoin(), false));
+        if (selected != null) {
+            log.info("View already selected: {} on: {}", selected.diadem, params().member().getId());
+            return;
+        }
+        for (SignedViews svs : ass.getViewsList()) {
+            if (view.validate(svs)) {
+                viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
+            }
+        }
+        vote();
+    }
+
+    private Map<Digest, Member> assemblyOf(List<Digeste> committee) {
+        var last = view.pendingViews().last();
+        return committee.stream()
+                        .map(d -> last.context().getMember(Digest.from(d)))
+                        .collect(Collectors.toMap(m -> m.getId(), m -> m));
+    }
+
+    private void castVote() {
+        var views = view.pendingViews()
+                        .getViews(nextViewId)
+                        .setMember(params().member().getId().toDigeste())
+                        .setVid(nextViewId.toDigeste())
+                        .build();
+        log.info("Voting for: {} on: {}", nextViewId, params().member().getId());
+        publisher.accept(Assemblies.newBuilder()
+                                   .addViews(
+                                   SignedViews.newBuilder().setViews(views).setSignature(view.sign(views).toSig()))
+                                   .build());
+    }
+
+    private void castVote(Views vs, List<com.salesforce.apollo.choam.proto.View> majorities,
+                          Multiset<com.salesforce.apollo.choam.proto.View> consensus) {
+        var ordered = vs.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList();
+        var lastIndex = -1;
+        com.salesforce.apollo.choam.proto.View last = null;
+        for (var v : majorities) {
+            var i = ordered.indexOf(Digest.from(v.getDiadem()));
+            if (i != -1) {
+                if (i > lastIndex) {
+                    last = v;
+                    lastIndex = i;
+                }
+            }
+        }
+        if (last != null) {
+            consensus.add(last);
+        }
+    }
+
+    private void completeSlice(Duration retryDelay, AtomicReference<Runnable> reiterate) {
         if (gathered()) {
             return;
         }
 
-        final var delay = retryDelay.get();
-        if (delay.compareTo(params().producer().maxGossipDelay()) < 0) {
-            retryDelay.accumulateAndGet(Duration.ofMillis(100), Duration::plus);
-        }
-
-        log.trace("Proposal incomplete of: {} polled: {}, total: {} majority: {}, retrying: {} on: {}", nextViewId,
-                  polled.stream().sorted().toList(), nextAssembly.size(), params().majority(), delay,
-                  params().member().getId());
+        log.trace("Proposal incomplete of: {} polled: {}, total: {}  retrying: {} on: {}", nextViewId,
+                  polled.stream().sorted().toList(), selected.assembly.size(), retryDelay, params().member().getId());
         if (!cancelSlice.get()) {
             Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory())
-                     .schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reiterate.get(), log)), delay.toMillis(),
-                               TimeUnit.MILLISECONDS);
+                     .schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reiterate.get(), log)),
+                               retryDelay.toNanos(), TimeUnit.NANOSECONDS);
         }
     }
 
@@ -152,7 +188,6 @@ public class ViewAssembly {
         }
         SignedViewMember signedViewMember;
         signedViewMember = futureSailor.get();
-        log.debug("Join reply from: {} on: {}", term.getMember().getId(), params().member().getId());
         if (signedViewMember.equals(SignedViewMember.getDefaultInstance())) {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
             return !gathered();
@@ -163,12 +198,13 @@ public class ViewAssembly {
                       params().member().getId());
             return !gathered();
         }
+        log.debug("Join reply from: {} on: {}", term.getMember().getId(), params().member().getId());
         join(signedViewMember, true);
         return !gathered();
     }
 
     private boolean gathered() {
-        if (polled.size() == nextAssembly.size()) {
+        if (polled.size() == selected.assembly.size()) {
             log.trace("Polled all +");
             cancelSlice.set(true);
             return true;
@@ -176,17 +212,9 @@ public class ViewAssembly {
         return false;
     }
 
-    private Reassemble getMemberProposal() {
-        return Reassemble.newBuilder()
-                         .addAllMembers(proposals.values().stream().map(p -> p.vm).toList())
-                         .addAllValidations(
-                         proposals.values().stream().flatMap(p -> p.validations.values().stream()).toList())
-                         .build();
-    }
-
     private void join(SignedViewMember svm, boolean direct) {
         final var mid = Digest.from(svm.getVm().getId());
-        final var m = nextAssembly.get(mid);
+        final var m = selected.assembly.get(mid);
         if (m == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Invalid view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
@@ -233,117 +261,99 @@ public class ViewAssembly {
             }
             return;
         }
-        AtomicBoolean newJoin = new AtomicBoolean();
-
-        var proposed = proposals.computeIfAbsent(mid, k -> {
-            newJoin.set(true);
-            return new Proposed(svm, m, new ConcurrentSkipListMap<>());
-        });
-
-        var builder = Reassemble.newBuilder();
-        proposed.validations.computeIfAbsent(params().member(), k -> {
-            var validate = view.generateValidation(svm);
-            builder.addValidations(validate);
-            return validate;
-        });
-
-        if (newJoin.get()) {
-            if (log.isTraceEnabled()) {
-                log.trace("Adding view member: {} on: {}", ViewContext.print(svm, params().digestAlgorithm()),
-                          params().member().getId());
-            }
-            if (direct) {
-                builder.addMembers(svm);
-            }
-            var validations = unassigned.remove(mid);
-            if (validations != null) {
-                validations.forEach(this::validate);
-            }
-        }
         polled.add(mid);
-        var reass = builder.build();
-        if (reass.isInitialized()) {
-            publisher.accept(reass);
+        if (proposals.putIfAbsent(mid, svm) == null) {
+            if (direct) {
+                var signature = view.sign(svm);
+                publisher.accept(Assemblies.newBuilder()
+                                           .addJoins(SignedJoin.newBuilder()
+                                                               .setJoin(svm)
+                                                               .setMember(params().member().getId().toDigeste())
+                                                               .setSignature(signature.toSig())
+                                                               .build())
+                                           .build());
+                if (log.isTraceEnabled()) {
+                    log.trace("Publishing view member: {} sig: {} on: {}",
+                              ViewContext.print(svm, params().digestAlgorithm()),
+                              params().digestAlgorithm().digest(signature.toSig().toByteString()),
+                              params().member().getId());
+                }
+            } else if (log.isTraceEnabled()) {
+                log.trace("Adding discovered view member: {} on: {}",
+                          ViewContext.print(svm, params().digestAlgorithm()), params().member().getId());
+            }
         }
-    }
-
-    private Join joinOf(Proposed candidate) {
-        final List<Certification> witnesses = candidate.validations.values()
-                                                                   .stream()
-                                                                   .map(Validate::getWitness)
-                                                                   .sorted(
-                                                                   Comparator.comparing(c -> new Digest(c.getId())))
-                                                                   .toList();
-        return Join.newBuilder().setMember(candidate.vm).addAllEndorsements(witnesses).build();
     }
 
     private Parameters params() {
         return view.params();
     }
 
-    private void validate(Validate v) {
-        final var cid = Digest.from(v.getWitness().getId());
-        var certifier = view.context().getMember(cid);
-        if (certifier == null) {
-            log.warn("Unknown certifier: {} on: {}", cid, params().member().getId());
+    private void vote() {
+        Multiset<com.salesforce.apollo.choam.proto.View> candidates = HashMultiset.create();
+        viewProposals.values().forEach(v -> candidates.addAll(v.getViewsList()));
+        var majority = params().majority();
+        var majorities = candidates.entrySet()
+                                   .stream()
+                                   .filter(e -> e.getCount() >= majority)
+                                   .map(e -> e.getElement())
+                                   .toList();
+        if (majorities.isEmpty()) {
+            log.info("No majority views on: {}", params().member().getId());
             return;
         }
-        final var digest = Digest.from(v.getHash());
-        final var member = nextAssembly.get(digest);
-        if (member == null) {
-            log.warn("Unknown next view member: {} on: {}", digest, params().member().getId());
-            return;
+        if (log.isTraceEnabled()) {
+            log.trace("Majority views: {} on: {}", majorities.stream().map(v -> Digest.from(v.getDiadem())),
+                      params().member().getId());
         }
-        var proposed = proposals.get(digest);
-        if (proposed == null) {
-            log.warn("Unassigned certification, unknown view join: {} on: {}", digest, params().member().getId());
-            unassigned.computeIfAbsent(digest, d -> new CopyOnWriteArrayList<>()).add(v);
-            return;
-        }
-        if (!view.validate(proposed.vm, v)) {
-            log.warn("Invalid certification for view join: {} from: {} on: {}", digest,
-                     Digest.from(v.getWitness().getId()), params().member().getId());
-            return;
-        }
-        var newCertifier = new AtomicBoolean();
-        proposed.validations.computeIfAbsent(certifier, k -> {
-            log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), digest,
-                      certifier.getId(), params().member().getId());
-            newCertifier.set(true);
-            return v;
+        Multiset<com.salesforce.apollo.choam.proto.View> consensus = HashMultiset.create();
+        viewProposals.values().forEach(vs -> {
+            castVote(vs, majorities, consensus);
         });
-        if (newCertifier.get()) {
-            transitions.validation();
+        var ratification = consensus.entrySet()
+                                    .stream()
+                                    .filter(e -> e.getCount() >= majority)
+                                    .map(e -> e.getElement())
+                                    .collect(Collectors.toList());
+        if (consensus.isEmpty()) {
+            log.info("No consensus views on: {}", params().member().getId());
+            return;
+        } else if (log.isTraceEnabled()) {
+            log.trace("Consensus views: {} on: {}", ratification.stream().map(v -> Digest.from(v.getDiadem())),
+                      params().member().getId());
         }
+        ratification.sort(Comparator.comparing(v -> Digest.from(v.getDiadem())));
+        var winner = ratification.getFirst();
+        selected = new View(Digest.from(winner.getDiadem()), assemblyOf(winner.getCommitteeList()));
+        if (log.isDebugEnabled()) {
+            log.debug("Selected view: {} on: {}", selected, params().member().getId());
+        }
+        transitions.viewDetermined();
     }
 
-    private record Proposed(SignedViewMember vm, Member member, Map<Member, Validate> validations) {
+    private record View(Digest diadem, Map<Digest, Member> assembly) {
+        public View(CHOAM.PendingView view, Digest viewId) {
+            this(view.diadem(), Committee.viewMembersOf(viewId, view.context())
+                                         .stream()
+                                         .collect(Collectors.toMap(m -> m.getId(), m -> m)));
+
+        }
     }
 
     private class Recon implements Reconfiguration {
 
         @Override
         public void certify() {
-            var certified = proposals.entrySet()
-                                     .stream()
-                                     .filter(p -> p.getValue().validations.size() >= params().majority())
-                                     .map(Map.Entry::getKey)
-                                     .sorted()
-                                     .toList();
-            Context<Member> memberContext = view.pendingView();
-            var required = memberContext.majority();
-            if (certified.size() >= required) {
+            if (proposals.size() == selected.assembly.size()) {
                 cancelSlice.set(true);
-                log.debug("Certifying: {} required: {} of: {} slate: {}  on: {}", certified.size(), required,
-                          nextViewId, certified, params().member().getId());
+                log.debug("Certifying: {} required: {} of: {} slate: {}  on: {}", proposals.size(),
+                          selected.assembly.size(), nextViewId, proposals.keySet().stream().sorted().toList(),
+                          params().member().getId());
                 transitions.certified();
             } else {
-                log.debug("Not certifying: {} required: {} slate: {} of: {} on: {}", certified.size(), required,
-                          proposals.entrySet()
-                                   .stream()
-                                   .map(e -> String.format("%s:%s", e.getKey(), e.getValue().validations.size()))
-                                   .sorted()
-                                   .toList(), nextViewId, params().member().getId());
+                log.debug("Not certifying: {} required: {} slate: {} of: {} on: {}", proposals.size(),
+                          selected.assembly.size(), proposals.entrySet().stream().sorted().toList(), nextViewId,
+                          params().member().getId());
             }
         }
 
@@ -354,33 +364,15 @@ public class ViewAssembly {
 
         @Override
         public void elect() {
-            proposals.values()
-                     .stream()
-                     .filter(p -> p.validations.size() >= params().majority())
-                     .sorted(Comparator.comparing(p -> p.member.getId()))
-                     .forEach(p -> slate.put(p.member(), joinOf(p)));
-            if (slate.size() >= view.pendingView().majority()) {
+            proposals.entrySet().forEach(e -> slate.put(e.getKey(), joinOf(e.getValue())));
+            if (slate.size() == view.context().getRingCount()) {
                 cancelSlice.set(true);
-                log.debug("Electing: {} of: {} slate: {} proposals: {} on: {}", slate.size(), nextViewId,
-                          slate.keySet().stream().map(Member::getId).sorted().toList(), proposals.values()
-                                                                                                 .stream()
-                                                                                                 .map(
-                                                                                                 p -> String.format(
-                                                                                                 "%s:%s",
-                                                                                                 p.member.getId(),
-                                                                                                 p.validations.size()))
-                                                                                                 .sorted()
-                                                                                                 .toList(),
-                          params().member().getId());
+                log.debug("Electing: {} of: {} slate: {} on: {}", slate.size(), nextViewId,
+                          slate.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.complete();
             } else {
-                Context<Member> memberContext = view.pendingView();
-                log.error("Failed election, required: {} slate: {} of: {} on: {}", memberContext.majority(),
-                          proposals.values()
-                                   .stream()
-                                   .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
-                                   .sorted()
-                                   .toList(), nextViewId, params().member().getId());
+                log.error("Failed election, required: {} slate: {} of: {} on: {}", view.context().getRingCount(),
+                          proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
         }
 
@@ -393,14 +385,14 @@ public class ViewAssembly {
 
         @Override
         public void gather() {
+            if (selected == null) {
+                selected = new View(view.pendingViews().last(), nextViewId);
+            }
             log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member().getId());
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
-            AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
+            var retryDelay = Duration.ofMillis(10);
             reiterate.set(() -> {
-                nextAssembly = Committee.viewMembersOf(nextViewId, view.pendingView())
-                                        .stream()
-                                        .collect(Collectors.toMap(Member::getId, m -> m));
-                var slice = new ArrayList<>(nextAssembly.values());
+                var slice = new ArrayList<>(selected.assembly.values());
                 var committee = new SliceIterator<>("Committee for " + nextViewId, params().member(), slice, comms);
                 committee.iterate((term, m) -> {
                     if (polled.contains(m.getId())) {
@@ -415,8 +407,16 @@ public class ViewAssembly {
 
         @Override
         public void nominate() {
-            publisher.accept(getMemberProposal());
             transitions.nominated();
+        }
+
+        @Override
+        public void viewAgreement() {
+            ViewAssembly.this.castVote();
+        }
+
+        private Join joinOf(SignedViewMember vm) {
+            return Join.newBuilder().setMember(vm).build();
         }
     }
 }

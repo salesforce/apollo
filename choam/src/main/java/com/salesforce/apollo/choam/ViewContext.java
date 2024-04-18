@@ -28,26 +28,26 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public class ViewContext {
 
-    private final static Logger                    log = LoggerFactory.getLogger(ViewContext.class);
-    private final        BlockProducer             blockProducer;
-    private final        Context<Member>           context;
-    private final        Parameters                params;
-    private final        Map<Digest, Short>        roster;
-    private final        Signer                    signer;
-    private final        Map<Member, Verifier>     validators;
-    private final        Supplier<Context<Member>> pendingView;
+    private final static Logger                       log = LoggerFactory.getLogger(ViewContext.class);
+    private final        BlockProducer                blockProducer;
+    private final        Context<Member>              context;
+    private final        Parameters                   params;
+    private final        Map<Digest, Short>           roster;
+    private final        Signer                       signer;
+    private final        Map<Member, Verifier>        validators;
+    private final        Supplier<CHOAM.PendingViews> pendingViews;
 
-    public ViewContext(Context<Member> context, Parameters params, Supplier<Context<Member>> pendingView, Signer signer,
-                       Map<Member, Verifier> validators, BlockProducer blockProducer) {
+    public ViewContext(Context<Member> context, Parameters params, Supplier<CHOAM.PendingViews> pendingViews,
+                       Signer signer, Map<Member, Verifier> validators, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
-        this.pendingView = pendingView;
+        this.pendingViews = pendingViews;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
+        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().map(Member::getId).toList());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
@@ -82,8 +82,10 @@ public class ViewContext {
     }
 
     public Validate generateValidation(HashedBlock block) {
-        log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
-                  params.member().getId());
+        if (log.isTraceEnabled()) {
+            log.trace("Signing: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash, block.height(),
+                      params.member().getId());
+        }
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
             log.error("Unable to sign: {} block: {} height: {} on: {}", block.block.getBodyCase(), block.hash,
@@ -121,7 +123,7 @@ public class ViewContext {
         return validation;
     }
 
-    public Block genesis(Map<Member, Join> slate, Digest nextViewId, HashedBlock previous) {
+    public Block genesis(Map<Digest, Join> slate, Digest nextViewId, HashedBlock previous) {
         return blockProducer.genesis(slate, nextViewId, previous);
     }
 
@@ -140,12 +142,8 @@ public class ViewContext {
         return params;
     }
 
-    public Context<Member> pendingView() {
-        return pendingView.get();
-    }
-
-    public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {
-        return blockProducer.produce(l, hash, assemble, checkpoint);
+    public CHOAM.PendingViews pendingViews() {
+        return pendingViews.get();
     }
 
     public Block produce(ULong l, Digest hash, Executions executions, HashedBlock checkpoint) {
@@ -156,7 +154,7 @@ public class ViewContext {
         blockProducer.publish(block.hash, block.certifiedBlock);
     }
 
-    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
+    public Block reconfigure(Map<Digest, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
                              HashedBlock checkpoint) {
         return blockProducer.reconfigure(aggregate, nextViewId, lastBlock, checkpoint);
     }
@@ -165,11 +163,28 @@ public class ViewContext {
         return roster;
     }
 
+    public JohnHancock sign(SignedViewMember svm) {
+        if (log.isTraceEnabled()) {
+            log.trace("Signing: {} on: {}", print(svm, params.digestAlgorithm()), params.member().getId());
+        }
+        return signer.sign(svm.toByteString());
+    }
+
+    public JohnHancock sign(Views views) {
+        if (log.isTraceEnabled()) {
+            log.trace("Signing views on: {}", params.member().getId());
+        }
+        return signer.sign(views.toByteString());
+    }
+
     public boolean validate(HashedBlock block, Validate validate) {
         Verifier v = verifierOf(validate);
         if (v == null) {
-            log.debug("no validation witness: {} for: {} block: {} on: {}", Digest.from(validate.getWitness().getId()),
-                      block.block.getBodyCase(), block.hash, params.member().getId());
+            if (log.isDebugEnabled()) {
+                log.debug("no validation witness: {} for: {} block: {} on: {}",
+                          Digest.from(validate.getWitness().getId()), block.block.getBodyCase(), block.hash,
+                          params.member().getId());
+            }
             return false;
         }
         return v.verify(JohnHancock.from(validate.getWitness().getSignature()), block.block.getHeader().toByteString());
@@ -191,21 +206,77 @@ public class ViewContext {
         return valid;
     }
 
+    public boolean validate(SignedJoin join) {
+        Verifier v = verifierOf(join);
+        if (v == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("no verifier: {} for join: {} on: {}", Digest.from(join.getMember()),
+                          Digest.from(join.getJoin().getVm().getId()), params.member().getId());
+            }
+            return false;
+        }
+        var validated = v.verify(JohnHancock.from(join.getSignature()), join.getJoin().toByteString());
+        if (!validated) {
+            if (log.isTraceEnabled()) {
+                log.trace("Cannot validate view join: [{}] sig: {} signed by: {} on: {}",
+                          print(join.getJoin(), params.digestAlgorithm()),
+                          params.digestAlgorithm().digest(join.getSignature().toByteString()),
+                          Digest.from(join.getMember()), params().member().getId());
+            }
+        } else if (log.isTraceEnabled()) {
+            log.trace("Validated view join: [{}] signed by: {} on: {}", print(join.getJoin(), params.digestAlgorithm()),
+                      Digest.from(join.getMember()), params().member().getId());
+        }
+        return validated;
+    }
+
+    public boolean validate(SignedViews sv) {
+        Verifier v = verifierOf(sv);
+        if (v == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("no verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
+                          params.member().getId());
+            }
+            return false;
+        }
+        var validated = v.verify(JohnHancock.from(sv.getSignature()), sv.getViews().toByteString());
+        if (!validated) {
+            if (log.isTraceEnabled()) {
+                log.trace("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                          params().member().getId());
+            }
+        } else if (log.isTraceEnabled()) {
+            log.trace("Validated views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                      params().member().getId());
+        }
+        return validated;
+    }
+
     protected Verifier verifierOf(Validate validate) {
-        final var mid = Digest.from(validate.getWitness().getId());
-        var m = context.getMember(mid);
+        return getVerifier(context.getMember(Digest.from(validate.getWitness().getId())));
+    }
+
+    protected Verifier verifierOf(SignedJoin sj) {
+        return getVerifier(context.getMember(Digest.from(sj.getMember())));
+    }
+
+    protected Verifier verifierOf(SignedViews sv) {
+        return getVerifier(context.getMember(Digest.from(sv.getViews().getMember())));
+    }
+
+    private Verifier getVerifier(Member m) {
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
-                          print(validate, params.digestAlgorithm()), params.member().getId());
+                log.debug("Unable to get verifier by non existent member: {} on: {}", m.getId(),
+                          params.member().getId());
             }
             return null;
         }
         Verifier v = validators.get(m);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to validate key by non existent validator: [{}] on: {}",
-                          print(validate, params.digestAlgorithm()), params.member().getId());
+                log.debug("Unable to validate key by non existent validator: {} on: {}", m.getId(),
+                          params.member().getId());
             }
             return null;
         }

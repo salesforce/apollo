@@ -25,11 +25,13 @@ public interface Reconfiguration {
 
     void nominate();
 
+    void viewAgreement();
+
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
             @Override
             public Transitions assembled() {
-                return GATHER;
+                return VIEW_AGREEMENT;
             }
         }, CERTIFICATION {
             @Override
@@ -60,6 +62,11 @@ public interface Reconfiguration {
             @Override
             public Transitions gathered() {
                 return NOMINATION;
+            }
+
+            @Override
+            public Transitions viewDetermined() {
+                return null;
             }
         }, NOMINATION {
             @Entry
@@ -131,6 +138,16 @@ public interface Reconfiguration {
             public void completion() {
                 context().complete();
             }
+        }, VIEW_AGREEMENT {
+            @Entry
+            public void viewConsensus() {
+                context().viewAgreement();
+            }
+
+            @Override
+            public Transitions viewDetermined() {
+                return GATHER;
+            }
         }
     }
 
@@ -161,6 +178,10 @@ public interface Reconfiguration {
 
         default Transitions validation() {
             return null;
+        }
+
+        default Transitions viewDetermined() {
+            throw fsm().invalidTransitionOn();
         }
     }
 }

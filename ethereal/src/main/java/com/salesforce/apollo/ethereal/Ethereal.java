@@ -68,6 +68,8 @@ public class Ethereal {
             log.trace("Sending: {} on: {}", u, config.logLabel());
             insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
+
+        log.trace("Configured {} processes {}", config.nProc(), config.logLabel());
     }
 
     private static ThreadPoolExecutor consumer(String label) {
