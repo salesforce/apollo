@@ -385,9 +385,7 @@ public class ViewAssembly {
 
         @Override
         public void gather() {
-            if (selected == null) {
-                selected = new View(view.pendingViews().last(), nextViewId);
-            }
+            assert selected != null : "Have not selected a view";
             log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member().getId());
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             var retryDelay = Duration.ofMillis(10);
