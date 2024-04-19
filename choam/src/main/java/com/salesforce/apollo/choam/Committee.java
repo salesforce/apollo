@@ -16,6 +16,7 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.MockMember;
 import org.slf4j.Logger;
 
 import java.util.HashSet;
@@ -31,12 +32,14 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        var validators = reconfigure.getJoinsList()
-                                    .stream()
-                                    .collect(
-                                    Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getVm().getId())),
-                                                     e -> (Verifier) new DefaultVerifier(
-                                                     publicKey(e.getMember().getVm().getConsensusKey()))));
+        var validators = reconfigure.getJoinsList().stream().collect(Collectors.toMap(e -> {
+            var id = new Digest(e.getMember().getVm().getId());
+            var m = context.getMember(id);
+            return m == null ? new MockMember(id) : m;
+        }, e -> {
+            var vm = e.getMember().getVm();
+            return vm.hasConsensusKey() ? new DefaultVerifier(publicKey(vm.getConsensusKey())) : Verifier.NO_VERIFIER;
+        }));
         assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
         return validators;
     }

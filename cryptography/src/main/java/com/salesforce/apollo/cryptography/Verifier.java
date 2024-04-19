@@ -22,6 +22,8 @@ import java.util.Map;
  * @author hal.hildebrand
  */
 public interface Verifier {
+    Verifier NO_VERIFIER = new NoVerifier();
+
     default Filtered filtered(SigningThreshold threshold, JohnHancock signature, byte[]... message) {
         return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
     }
@@ -143,6 +145,25 @@ public interface Verifier {
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             return signature.verify(threshold, keys, message);
         }
+    }
+
+    class NoVerifier implements Verifier {
+
+        @Override
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return new Filtered(false, signature.signatureCount(), signature);
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return false;
+        }
+
+        @Override
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return false;
+        }
+
     }
 
     class MockVerifier implements Verifier {

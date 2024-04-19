@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
+import com.google.common.collect.Sets;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
@@ -98,9 +99,16 @@ public class ViewAssembly {
 
     void complete() {
         cancelSlice.set(true);
-        proposals.entrySet()
-                 .stream()
-                 .forEach(e -> slate.put(e.getKey(), Join.newBuilder().setMember(e.getValue()).build()));
+        proposals.entrySet().forEach(e -> slate.put(e.getKey(), Join.newBuilder().setMember(e.getValue()).build()));
+        // Fill out the slate with the unreachable members of the next assembly
+        Sets.difference(selected.assembly.keySet(), proposals.keySet())
+            .forEach(m -> slate.put(m, Join.newBuilder()
+                                           .setMember(SignedViewMember.newBuilder()
+                                                                      .setVm(ViewMember.newBuilder()
+                                                                                       .setId(m.toDigeste())
+                                                                                       .setView(
+                                                                                       nextViewId.toDigeste())))
+                                           .build()));
         log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
                   params().member().getId());
     }
