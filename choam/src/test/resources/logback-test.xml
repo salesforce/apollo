@@ -20,11 +20,15 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="warn" additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="trace" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="trace" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="trace" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -40,11 +44,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <root level="info">
+    <root level="warn">
         <appender-ref ref="STDOUT"/>
     </root>
 

@@ -172,7 +172,9 @@ public class ViewContext {
 
     public JohnHancock sign(Views views) {
         if (log.isTraceEnabled()) {
-            log.trace("Signing views on: {}", params.member().getId());
+            log.trace("Signing views: {} on: {}",
+                      views.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                      params.member().getId());
         }
         return signer.sign(views.toByteString());
     }

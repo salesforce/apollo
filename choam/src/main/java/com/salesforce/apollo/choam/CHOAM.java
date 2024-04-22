@@ -101,11 +101,11 @@ public class CHOAM {
         executions = Executors.newVirtualThreadPerTaskExecutor();
         pendingViews.add(params.context().getId(), params.context().delegate());
 
-        nextView();
+        rotateViewKeys();
         var bContext = new DelegatedContext<>(params.context());
-        var adapter = new MessageAdapter(any -> true, (Function<ByteString, Digest>) this::signatureHash,
-                                         (Function<ByteString, List<Digest>>) any -> Collections.emptyList(),
-                                         (m, any) -> any,
+        var adapter = new MessageAdapter(_ -> true, (Function<ByteString, Digest>) this::signatureHash,
+                                         (Function<ByteString, List<Digest>>) _ -> Collections.emptyList(),
+                                         (_, any) -> any,
                                          (Function<AgedMessageOrBuilder, ByteString>) AgedMessageOrBuilder::getContent);
 
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
@@ -141,7 +141,7 @@ public class CHOAM {
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
                                             params.context().timeToLive());
-        combine.register(i -> roundScheduler.tick());
+        combine.register(_ -> roundScheduler.tick());
         session = new Session(params, service());
     }
 
@@ -228,7 +228,7 @@ public class CHOAM {
     }
 
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
-        return members.stream().collect(Collectors.toMap(m -> m, m -> baseContext.getMember(m)));
+        return members.stream().collect(Collectors.toMap(m -> m, baseContext::getMember));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
@@ -308,7 +308,7 @@ public class CHOAM {
      * @param context - the new membership context
      * @param diadem  - the compact HexBloom of the context view
      */
-    public void nextView(Context<Member> context, Digest diadem) {
+    public void rotateViewKeys(Context<Member> context, Digest diadem) {
         ((DelegatedContext<Member>) combine.getContext()).setContext(context);
         var c = current.get();
         if (c != null) {
@@ -374,26 +374,6 @@ public class CHOAM {
             fs.cancel(true);
             futureSynchronization.set(null);
         }
-    }
-
-    private boolean checkJoin(Digest nextView, Digest from) {
-        Member source = params.context().getMember(from);
-        if (source == null) {
-            log.debug("Request to join from non member: {} on: {}", from, params.member().getId());
-            return false;
-        }
-        final var nextId = nextViewId.get();
-        if (nextId == null) {
-            log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source.getId(),
-                      params.member().getId());
-            return false;
-        }
-        if (!nextId.equals(nextView)) {
-            log.debug("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId,
-                      source.getId(), params.member().getId());
-            return false;
-        }
-        return true;
     }
 
     private Block checkpoint() {
@@ -502,7 +482,7 @@ public class CHOAM {
                                                                                                                    .getMember(
                                                                                                                    m))
                                                                                                         .filter(
-                                                                                                        m -> m != null)
+                                                                                                        Objects::nonNull)
                                                                                                         .collect(
                                                                                                         Collectors.toMap(
                                                                                                         m -> m,
@@ -630,37 +610,21 @@ public class CHOAM {
     }
 
     private SignedViewMember join(Digest nextView, Digest from) {
-        final var c = current.get();
-        if (c == null) {
-            return SignedViewMember.getDefaultInstance();
-        }
-        return c.join(nextView, from);
-    }
+        final var c = next.get();
+        var inView = ViewMember.newBuilder(c.member).setView(nextView.toDigeste()).build();
 
-    private void nextView() {
-        KeyPair keyPair = params.viewSigAlgorithm().generateKeyPair();
-        PubKey pubKey = bs(keyPair.getPublic());
-        JohnHancock signed = params.member().sign(pubKey.toByteString());
-        if (signed == null) {
-            log.error("Unable to generate and sign consensus key on: {}", params.member().getId());
-            return;
+        if (log.isDebugEnabled()) {
+            log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
+                      ViewContext.print(inView, params.digestAlgorithm()), params.member().getId());
         }
-        var committee = current.get();
-        log.trace("Generated next view consensus key: {} sig: {} committee: {} on: {}",
-                  params.digestAlgorithm().digest(pubKey.getEncoded()),
-                  params.digestAlgorithm().digest(signed.toSig().toByteString()),
-                  committee == null ? "<no formation>" : committee.getClass().getSimpleName(), params.member().getId());
-        next.set(new nextView(ViewMember.newBuilder()
-                                        .setId(params.member().getId().toDigeste())
-                                        .setConsensusKey(pubKey)
-                                        .setSignature(signed.toSig())
-                                        .build(), keyPair));
+        return SignedViewMember.newBuilder()
+                               .setVm(inView)
+                               .setSignature(params.member().sign(inView.toByteString()).toSig())
+                               .build();
     }
 
     private Supplier<PendingViews> pendingViews() {
-        return () -> {
-            return pendingViews;
-        };
+        return () -> pendingViews;
     }
 
     private void process() {
@@ -677,7 +641,6 @@ public class CHOAM {
         case GENESIS: {
             cancelSynchronization();
             cancelBootstrap();
-            transitions.regenerated();
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
             reconfigure(h.hash, h.block.getGenesis().getInitialView());
             break;
@@ -706,14 +669,13 @@ public class CHOAM {
         nextViewId.set(hash);
         var pv = pendingViews.advance();
         if (pv != null) {
-            // always advance view.
             params.context().setContext(pv.context);
         }
         final Committee c = current.get();
         c.complete();
-        var validators = validatorsOf(reconfigure, params.context());
+        var validators = validatorsOf(reconfigure, params.context(), params.member().getId(), log);
         final var currentView = next.get();
-        nextView();
+        transitions.rotateViewKeys();
         final HashedCertifiedBlock h = head.get();
         view.set(h);
         session.setView(h);
@@ -781,7 +743,7 @@ public class CHOAM {
             Reconfigure reconfigure = lastView.block.hasGenesis() ? lastView.block.getGenesis().getInitialView()
                                                                   : lastView.block.getReconfigure();
             view.set(lastView);
-            var validators = validatorsOf(reconfigure, params.context());
+            var validators = validatorsOf(reconfigure, params.context(), params.member().getId(), log);
             current.set(new Synchronizer(validators));
             log.info("Reconfigured to checkpoint view: {} on: {}", new Digest(reconfigure.getId()),
                      params.member().getId());
@@ -795,6 +757,29 @@ public class CHOAM {
         cachedCheckpoints.put(block.height(), checkpoint);
         params.restorer().accept(block, checkpoint);
         restore();
+    }
+
+    private void rotateViewKeys() {
+        //        if (current.get() != null && !(current.get() instanceof Associate)) {
+        //            log.info("rotate view calls on: {}", params.member().getId(), new Exception("Rotate view keys"));
+        //        }
+        KeyPair keyPair = params.viewSigAlgorithm().generateKeyPair();
+        PubKey pubKey = bs(keyPair.getPublic());
+        JohnHancock signed = params.member().sign(pubKey.toByteString());
+        if (signed == null) {
+            log.error("Unable to generate and sign consensus key on: {}", params.member().getId());
+            return;
+        }
+        var committee = current.get();
+        log.trace("Generated next view consensus key: {} sig: {} committee: {} on: {}",
+                  params.digestAlgorithm().digest(pubKey.getEncoded()),
+                  params.digestAlgorithm().digest(signed.toSig().toByteString()),
+                  committee == null ? "<no formation>" : committee.getClass().getSimpleName(), params.member().getId());
+        next.set(new nextView(ViewMember.newBuilder()
+                                        .setId(params.member().getId().toDigeste())
+                                        .setConsensusKey(pubKey)
+                                        .setSignature(signed.toSig())
+                                        .build(), keyPair));
     }
 
     private Function<SubmittedTransaction, SubmitResult> service() {
@@ -832,7 +817,7 @@ public class CHOAM {
     /**
      * Submit a transaction from a client
      *
-     * @return
+     * @return the SubmitResult describing the outcome
      */
     private SubmitResult submit(Transaction request, Digest from) {
         if (from == null) {
@@ -914,7 +899,7 @@ public class CHOAM {
                  params.member().getId());
         try {
             linear.execute(Utils.wrapped(() -> {
-                transitions.regenerated();
+                transitions.synchd();
                 transitions.combine();
             }, log));
         } catch (RejectedExecutionException e) {
@@ -1063,7 +1048,7 @@ public class CHOAM {
 
         public Views.Builder getViews(Digest hash) {
             var builder = Views.newBuilder();
-            views.values().stream().map(pv -> pv.getView(hash)).forEach(v -> builder.addViews(v));
+            views.values().stream().map(pv -> pv.getView(hash)).forEach(builder::addViews);
             return builder;
         }
 
@@ -1073,17 +1058,6 @@ public class CHOAM {
                 l.lock();
                 var last = views.lastEntry();
                 return last == null ? null : last.getValue();
-            } finally {
-                l.unlock();
-            }
-        }
-
-        public PendingView pop() {
-            final var l = lock.writeLock();
-            try {
-                l.lock();
-                var v = views.pollFirstEntry();
-                return v == null ? null : v.getValue();
             } finally {
                 l.unlock();
             }
@@ -1200,6 +1174,11 @@ public class CHOAM {
             current.get().regenerate();
         }
 
+        @Override
+        public void rotateViewKeys() {
+            CHOAM.this.rotateViewKeys();
+        }
+
         private void synchronizationFailed() {
             cancelSynchronization();
             var activeCount = context().totalCount();
@@ -1276,26 +1255,6 @@ public class CHOAM {
         @Override
         public boolean isMember() {
             return validators.containsKey(params.member());
-        }
-
-        @Override
-        public SignedViewMember join(Digest nextView, Digest from) {
-            if (!checkJoin(nextView, from)) {
-                log.debug("Join requested for invalid view: {} from: {} on: {}", nextView, from,
-                          params.member().getId());
-                return SignedViewMember.getDefaultInstance();
-            }
-            final var c = next.get();
-            var inView = ViewMember.newBuilder(c.member).setView(nextView.toDigeste()).build();
-
-            if (log.isDebugEnabled()) {
-                log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
-                          ViewContext.print(inView, params.digestAlgorithm()), params.member().getId());
-            }
-            return SignedViewMember.newBuilder()
-                                   .setVm(inView)
-                                   .setSignature(params.member().sign(inView.toByteString()).toSig())
-                                   .build();
         }
 
         @Override
@@ -1452,24 +1411,6 @@ public class CHOAM {
         }
 
         @Override
-        public SignedViewMember join(Digest nextView, Digest from) {
-            if (!checkJoin(nextView, from)) {
-                return SignedViewMember.getDefaultInstance();
-            }
-            final var c = next.get();
-            var inView = ViewMember.newBuilder(c.member).setView(nextView.toDigeste()).build();
-
-            if (log.isDebugEnabled()) {
-                log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
-                          ViewContext.print(inView, params.digestAlgorithm()), params.member().getId());
-            }
-            return SignedViewMember.newBuilder()
-                                   .setVm(inView)
-                                   .setSignature(params.member().sign(inView.toByteString()).toSig())
-                                   .build();
-        }
-
-        @Override
         public Logger log() {
             return log;
         }
@@ -1528,11 +1469,6 @@ public class CHOAM {
         @Override
         public boolean isMember() {
             return false;
-        }
-
-        @Override
-        public SignedViewMember join(Digest nextView, Digest from) {
-            return SignedViewMember.getDefaultInstance();
         }
 
         @Override

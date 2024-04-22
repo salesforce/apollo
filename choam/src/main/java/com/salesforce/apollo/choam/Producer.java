@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -60,6 +61,7 @@ public class Producer {
     private final        Transitions                       transitions;
     private final        ViewContext                       view;
     private final        Digest                            nextViewId;
+    private final        Semaphore                         serialize          = new Semaphore(1);
     private              ViewAssembly                      assembly;
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
@@ -106,7 +108,7 @@ public class Producer {
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
-                                  transitions::create, this::newEpoch, label);
+                                  (preblock, last) -> serial(preblock, last), this::newEpoch, label);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
@@ -289,6 +291,24 @@ public class Producer {
         var joins = new ArrayList<>(pendingAssemblies);
         pendingAssemblies.clear();
         assembly.inbound().accept(joins);
+    }
+
+    private void serial(List<ByteString> preblock, Boolean last) {
+        Thread.ofVirtual().start(() -> {
+            try {
+                serialize.acquire();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            try {
+                transitions.create(preblock, last);
+            } catch (Throwable t) {
+                log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
+            } finally {
+                serialize.release();
+            }
+        });
     }
 
     private PendingBlock validate(Validate v) {

@@ -35,6 +35,8 @@ public interface Combine {
 
     void regenerate();
 
+    void rotateViewKeys();
+
     enum Mercantile implements Transitions {
         AWAITING_REGENERATION {
             @Exit
@@ -97,6 +99,12 @@ public interface Combine {
                 return null;
             }
 
+            @Override
+            public Transitions rotateViewKeys() {
+                context().rotateViewKeys();
+                return null;
+            }
+
         }, PROTOCOL_FAILURE {
             @Entry
             public void failIt() {
@@ -151,6 +159,17 @@ public interface Combine {
                 return RECOVERING;
             }
 
+            @Override
+            public Transitions regenerated() {
+                return OPERATIONAL;
+            }
+
+            @Override
+            public Transitions rotateViewKeys() {
+                context().rotateViewKeys();
+                return OPERATIONAL;
+            }
+
             @Entry
             public void regenerateView() {
                 context().regenerate();
@@ -160,11 +179,11 @@ public interface Combine {
             public Transitions combine() {
                 return null; // Just queue up any blocks
             }
-        };
 
-        @Override
-        public Transitions regenerated() {
-            return OPERATIONAL;
+            @Override
+            public Transitions synchd() {
+                return OPERATIONAL;
+            }
         }
     }
 
@@ -201,7 +220,15 @@ public interface Combine {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions rotateViewKeys() {
+            return null;
+        }
+
         default Transitions start() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions synchd() {
             throw fsm().invalidTransitionOn();
         }
 

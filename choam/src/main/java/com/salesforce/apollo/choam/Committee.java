@@ -6,8 +6,11 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.salesforce.apollo.choam.proto.*;
+import com.salesforce.apollo.choam.proto.Certification;
+import com.salesforce.apollo.choam.proto.Reconfigure;
+import com.salesforce.apollo.choam.proto.SubmitResult;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
+import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.StaticContext;
@@ -31,14 +34,26 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
  */
 public interface Committee {
 
-    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
+    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context, Digest member,
+                                              Logger log) {
         var validators = reconfigure.getJoinsList().stream().collect(Collectors.toMap(e -> {
             var id = new Digest(e.getMember().getVm().getId());
             var m = context.getMember(id);
-            return m == null ? new MockMember(id) : m;
+            if (m == null) {
+                log.info("No member for validator: {}, returning mock on: {}", id, member);
+                return new MockMember(id);
+            } else {
+                return m;
+            }
         }, e -> {
             var vm = e.getMember().getVm();
-            return vm.hasConsensusKey() ? new DefaultVerifier(publicKey(vm.getConsensusKey())) : Verifier.NO_VERIFIER;
+            if (vm.hasConsensusKey()) {
+
+                return new DefaultVerifier(publicKey(vm.getConsensusKey()));
+            } else {
+                log.info("No member for validator: {}, returning mock on: {}", Digest.from(vm.getId()), member);
+                return Verifier.NO_VERIFIER;
+            }
         }));
         assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
         return validators;
@@ -70,8 +85,6 @@ public interface Committee {
     void complete();
 
     boolean isMember();
-
-    SignedViewMember join(Digest nextView, Digest from);
 
     Logger log();
 
@@ -126,8 +139,8 @@ public interface Committee {
 
     default boolean validate(HashedCertifiedBlock hb, Map<Member, Verifier> validators) {
         Parameters params = params();
-
-        log().trace("Validating block: {} height: {} certs: {} on: {}", hb.hash, hb.height(),
+        log().trace("Validating block: {} hash: {} height: {} certs: {} on: {}", hb.block.getBodyCase(), hb.hash,
+                    hb.height(),
                     hb.certifiedBlock.getCertificationsList().stream().map(c -> new Digest(c.getId())).toList(),
                     params.member().getId());
         int valid = 0;
@@ -150,7 +163,7 @@ public interface Committee {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        var validators = validatorsOf(reconfigure, params().context());
+        var validators = validatorsOf(reconfigure, params().context(), params().member().getId(), log());
         return !validators.isEmpty() && validate(hb, validators);
     }
 }
