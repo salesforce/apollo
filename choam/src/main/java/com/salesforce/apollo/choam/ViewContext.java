@@ -150,6 +150,10 @@ public class ViewContext {
         return blockProducer.produce(l, hash, executions, checkpoint);
     }
 
+    public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
+        return blockProducer.produce(height, prev, assemble, checkpoint);
+    }
+
     public void publish(HashedCertifiedBlock block) {
         blockProducer.publish(block.hash, block.certifiedBlock);
     }

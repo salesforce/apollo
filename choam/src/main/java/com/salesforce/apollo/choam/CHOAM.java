@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
@@ -61,6 +62,8 @@ import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
 import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.bs;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.digest;
+import static io.grpc.Status.FAILED_PRECONDITION;
+import static io.grpc.Status.INVALID_ARGUMENT;
 
 /**
  * Combine Honnete Ober Advancer Mercantiles.
@@ -94,6 +97,7 @@ public class CHOAM {
     private final TransSubmission                                       txnSubmission         = new TransSubmission();
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final PendingViews                                          pendingViews          = new PendingViews();
+    private final AtomicReference<CompletableFuture<Void>>              join                  = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
@@ -244,6 +248,17 @@ public class CHOAM {
                                  .map(m -> (Message) m)
                                  .map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer))
                                  .toList();
+    }
+
+    private static Block assembly(AtomicReference<Digest> nextViewId, View view, HashedBlock head,
+                                  HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint) {
+        var body = Assemble.newBuilder().setView(view).build();
+        return Block.newBuilder()
+                    .setHeader(
+                    buildHeader(params.digestAlgorithm(), body, head.hash, ULong.valueOf(0), lastCheckpoint.height(),
+                                lastCheckpoint.hash, lastViewChange.height(), lastViewChange.hash))
+                    .setAssemble(body)
+                    .build();
     }
 
     public boolean active() {
@@ -464,7 +479,6 @@ public class CHOAM {
 
     private BlockProducer constructBlock() {
         return new BlockProducer() {
-
             @Override
             public Block checkpoint() {
                 return CHOAM.this.checkpoint();
@@ -495,6 +509,17 @@ public class CHOAM {
             @Override
             public void onFailure() {
                 transitions.fail();
+            }
+
+            @Override
+            public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
+                final HashedCertifiedBlock v = view.get();
+                return Block.newBuilder()
+                            .setHeader(
+                            buildHeader(params.digestAlgorithm(), assemble, prev, height, checkpoint.height(),
+                                        checkpoint.hash, v.height(), v.hash))
+                            .setAssemble(assemble)
+                            .build();
             }
 
             @Override
@@ -609,18 +634,16 @@ public class CHOAM {
         return isNext;
     }
 
-    private SignedViewMember join(Digest nextView, Digest from) {
-        final var c = next.get();
-        var inView = ViewMember.newBuilder(c.member).setView(nextView.toDigeste()).build();
-
-        if (log.isDebugEnabled()) {
-            log.debug("Joining view: {} from: {} view member: {} on: {}", nextView, from,
-                      ViewContext.print(inView, params.digestAlgorithm()), params.member().getId());
+    private Empty join(SignedViewMember nextView, Digest from) {
+        var c = current.get();
+        if (c == null) {
+            log.trace("No committee for: {} to join: {} diadem: {} on: {}", from,
+                      Digest.from(nextView.getVm().getView()), Digest.from(nextView.getVm().getDiadem()),
+                      params.member().getId());
+            throw new StatusRuntimeException(FAILED_PRECONDITION);
         }
-        return SignedViewMember.newBuilder()
-                               .setVm(inView)
-                               .setSignature(params.member().sign(inView.toByteString()).toSig())
-                               .build();
+        c.join(nextView, from);
+        return Empty.getDefaultInstance();
     }
 
     private Supplier<PendingViews> pendingViews() {
@@ -645,6 +668,11 @@ public class CHOAM {
             reconfigure(h.hash, h.block.getGenesis().getInitialView());
             break;
         }
+        case ASSEMBLE: {
+            params.processor().beginBlock(h.height(), h.hash);
+            c.assemble(h.block.getAssemble());
+            break;
+        }
         case EXECUTIONS: {
             params.processor().beginBlock(h.height(), h.hash);
             execute(h.block.getExecutions().getExecutionsList());
@@ -666,6 +694,10 @@ public class CHOAM {
 
     private void reconfigure(Digest hash, Reconfigure reconfigure) {
         log.info("Setting next view id: {} on: {}", hash, params.member().getId());
+        var j = join.getAndSet(null);
+        if (j != null) {
+            j.cancel(true);
+        }
         nextViewId.set(hash);
         var pv = pendingViews.advance();
         if (pv != null) {
@@ -683,8 +715,9 @@ public class CHOAM {
             if (Dag.validate(validators.size())) {
                 current.set(new Associate(h, validators, currentView));
             } else {
-                log.warn("Reconfiguration to associate failed: {} in view: {} on:{}", validators.size(),
-                         new Digest(reconfigure.getId()), params.member().getId());
+                log.warn("Reconfiguration to associate failed: {} committee: {} in view: {} on:{}", validators.size(),
+                         new Digest(reconfigure.getId()), current.get().getClass().getSimpleName(),
+                         params.member().getId());
                 transitions.fail();
             }
         } else {
@@ -745,8 +778,8 @@ public class CHOAM {
             view.set(lastView);
             var validators = validatorsOf(reconfigure, params.context(), params.member().getId(), log);
             current.set(new Synchronizer(validators));
-            log.info("Reconfigured to checkpoint view: {} on: {}", new Digest(reconfigure.getId()),
-                     params.member().getId());
+            log.info("Reconfigured to checkpoint view: {} committee: {} on: {}", new Digest(reconfigure.getId()),
+                     current.get().getClass().getSimpleName(), params.member().getId());
         }
 
         log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", geni.hash, view.get().hash,
@@ -980,6 +1013,8 @@ public class CHOAM {
 
         void onFailure();
 
+        Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint);
+
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
         void publish(Digest hash, CertifiedBlock cb);
@@ -1073,7 +1108,7 @@ public class CHOAM {
          * @return the View determined by this Context and the supplied hash value
          */
         public View getView(Digest hash) {
-            var builder = View.newBuilder().setDiadem(diadem.toDigeste());
+            var builder = View.newBuilder().setDiadem(diadem.toDigeste()).setMajority(context.majority());
             Committee.viewMembersOf(hash, context).forEach(d -> builder.addCommittee(d.getId().toDigeste()));
             return builder.build();
         }
@@ -1163,9 +1198,9 @@ public class CHOAM {
 
         @Override
         public void recover(HashedCertifiedBlock anchor) {
-            log.info("Anchor discovered: {} hash: {} height: {} on: {}", anchor.block.getBodyCase(), anchor.hash,
-                     anchor.height(), params.member().getId());
             current.set(new Formation());
+            log.info("Anchor discovered: {} hash: {} height: {} committee: {} on: {}", anchor.block.getBodyCase(),
+                     anchor.hash, anchor.height(), current.get().getClass().getSimpleName(), params.member().getId());
             CHOAM.this.recover(anchor);
         }
 
@@ -1220,8 +1255,9 @@ public class CHOAM {
         }
 
         @Override
-        public SignedViewMember join(Digest nextView, Digest from) {
-            return CHOAM.this.join(nextView, from);
+        public Empty join(SignedViewMember nextView, Digest from) {
+            CHOAM.this.join(nextView, from);
+            return Empty.getDefaultInstance();
         }
 
         @Override
@@ -1246,6 +1282,19 @@ public class CHOAM {
         @Override
         public void accept(HashedCertifiedBlock hb) {
             process();
+        }
+
+        @Override
+        public void assemble(Assemble assemble) {
+            var mid = params.member().getId();
+            var view = assemble.getView();
+            if (view.getCommitteeList().stream().map(Digest::from).noneMatch(mid::equals)) {
+                log.info("Assemble view: {}; Not associate: {} in diadem: {} on: {}", viewId,
+                         getClass().getSimpleName(), Digest.from(view.getDiadem()), mid);
+                return;
+            }
+            log.info("Assemble view: {}; Associate in diadem: {} on: {}", viewId, Digest.from(view.getDiadem()), mid);
+            join(view);
         }
 
         @Override
@@ -1314,6 +1363,56 @@ public class CHOAM {
         public boolean validate(HashedCertifiedBlock hb) {
             return validate(hb, validators);
         }
+
+        private void join(View view) {
+            var joining = new CompletableFuture<Void>();
+            if (!join.compareAndSet(null, joining)) {
+                log.info("Ongoing join of: {} should have been cancelled on: {}", Digest.from(view.getDiadem()),
+                         params.member().getId());
+                transitions.fail();
+                return;
+            }
+            var servers = new GroupIterator(validators.keySet());
+            var joined = new HashSet<Member>();
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                while (!joining.isDone() && joined.size() < view.getMajority() && servers.hasNext()) {
+                    Member target = servers.next();
+                    try (var link = comm.connect(target)) {
+                        if (link == null) {
+                            log.debug("No link for: {} for joining: {} on: {}", target.getId(),
+                                      Digest.from(view.getDiadem()), params.member().getId());
+                            continue;
+                        }
+                        log.trace("Joining view: {} diadem: {} on: {}", viewId, Digest.from(view.getDiadem()),
+                                  params.member().getId());
+                        final var c = next.get();
+                        var inView = ViewMember.newBuilder(c.member)
+                                               .setDiadem(view.getDiadem())
+                                               .setView(nextViewId.get().toDigeste())
+                                               .build();
+                        var svm = SignedViewMember.newBuilder()
+                                                  .setVm(inView)
+                                                  .setSignature(params.member().sign(inView.toByteString()).toSig())
+                                                  .build();
+                        try {
+                            link.join(svm);
+                            joined.add(target);
+                        } catch (Throwable t) {
+                            log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target, nextViewId,
+                                      Digest.from(view.getDiadem()), params.member().getId(), t);
+                        }
+                    } catch (StatusRuntimeException e) {
+                        log.trace("Failed join attempt with: {} view: {} diadem: {} status:{} on: {}", target,
+                                  nextViewId, Digest.from(view.getDiadem()), e.getStatus(), params.member().getId());
+                    } catch (Throwable e) {
+                        log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target, nextViewId,
+                                  Digest.from(view.getDiadem()), params.member().getId(), e);
+                    }
+                }
+                joining.complete(null);
+                log.info("Finishing join of: {} on: {}", Digest.from(view.getDiadem()), params.member().getId());
+            }, log));
+        }
     }
 
     /** a member of the current committee */
@@ -1335,13 +1434,24 @@ public class CHOAM {
             var pv = pendingViews();
             producer = new Producer(nextViewId.get(),
                                     new ViewContext(context, params, pv, signer, validators, constructBlock()),
-                                    head.get(), checkpoint.get(), comm, getLabel());
+                                    head.get(), checkpoint.get(), getLabel());
             producer.start();
         }
 
         @Override
         public void complete() {
             producer.stop();
+        }
+
+        @Override
+        public void join(SignedViewMember nextView, Digest from) {
+            if (!from.equals(Digest.from(nextView.getVm().getId()))) {
+                log.trace("Join from: {} does not match {} from join: {} diadem: {} on: {}", from,
+                          Digest.from(nextView.getVm().getId()), Digest.from(nextView.getVm().getView()),
+                          Digest.from(nextView.getVm().getDiadem()), params.member().getId());
+                throw new StatusRuntimeException(INVALID_ARGUMENT);
+            }
+            producer.join(nextView);
         }
 
         @Override

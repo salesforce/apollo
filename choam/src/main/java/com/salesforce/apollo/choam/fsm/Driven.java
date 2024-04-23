@@ -21,9 +21,7 @@ import java.util.List;
  */
 public interface Driven {
 
-    void assembled();
-
-    void checkAssembly();
+    void assemble();
 
     void checkpoint();
 
@@ -33,30 +31,25 @@ public interface Driven {
 
     void fail();
 
+    void reconfigure();
+
     void startProduction();
 
     enum Earner implements Driven.Transitions {
-        AWAIT_VIEW {
+        ASSEMBLE {
             @Entry
-            public void checkAssembly() {
-                context().checkAssembly();
+            public void assemble() {
+                context().assemble();
             }
 
             @Override
-            public Transitions create(List<ByteString> preblock, boolean last) {
-                context().checkAssembly();
-                return super.create(preblock, last);
+            public Transitions assembled() {
+                return SPICE;
             }
 
             @Override
-            public Transitions lastBlock() {
-                return COMPLETE;
-            }
-
-            @Override
-            public Transitions viewComplete() {
-                context().assembled();
-                return null;
+            public Transitions newEpoch(int epoch, boolean lastEpoch) {
+                return lastEpoch ? PROTOCOL_FAILURE : null;
             }
         }, CHECKPOINTING {
             @Entry
@@ -66,7 +59,7 @@ public interface Driven {
 
             @Override
             public Transitions checkpointed() {
-                return SPICE;
+                return ASSEMBLE;
             }
         }, COMPLETE {
             @Entry
@@ -81,7 +74,20 @@ public interface Driven {
 
             @Override
             public Transitions start() {
-                return SPICE;
+                return ASSEMBLE;
+            }
+        }, END_EPOCHS {
+            @Override
+            public Transitions newEpoch(int epoch, boolean lastEpoch) {
+                if (lastEpoch) {
+                    context().reconfigure();
+                }
+                return null;
+            }
+
+            @Override
+            public Transitions lastBlock() {
+                return COMPLETE;
             }
         }, PROTOCOL_FAILURE {
             @Override
@@ -116,18 +122,13 @@ public interface Driven {
             }
         }, SPICE {
             @Override
-            public Transitions newEpoch(int epoch, int lastEpoch) {
-                return (lastEpoch == epoch) ? AWAIT_VIEW : null;
-            }
-
-            @Entry
-            public void startProduction() {
-                context().startProduction();
+            public Transitions newEpoch(int epoch, boolean lastEpoch) {
+                return lastEpoch ? PROTOCOL_FAILURE : null;
             }
 
             @Override
             public Transitions viewComplete() {
-                return null;
+                return END_EPOCHS;
             }
         }
     }
@@ -135,6 +136,10 @@ public interface Driven {
     /** Transition events for the Producer FSM */
     interface Transitions extends FsmExecutor<Driven, Transitions> {
         Logger log = LoggerFactory.getLogger(Transitions.class);
+
+        default Transitions assembled() {
+            throw fsm().invalidTransitionOn();
+        }
 
         default Transitions checkpoint() {
             throw fsm().invalidTransitionOn();
@@ -161,7 +166,7 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions newEpoch(int epoch, int lastEpoch) {
+        default Transitions newEpoch(int epoch, boolean lastEpoch) {
             throw fsm().invalidTransitionOn();
         }
 

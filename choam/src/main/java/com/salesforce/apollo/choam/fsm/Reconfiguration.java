@@ -21,10 +21,6 @@ public interface Reconfiguration {
 
     void failed();
 
-    void gather();
-
-    void nominate();
-
     void viewAgreement();
 
     enum Reconfigure implements Transitions {
@@ -48,35 +44,15 @@ public interface Reconfiguration {
             public Transitions gathered() {
                 return CERTIFICATION;
             }
-
-            @Override
-            public Transitions validation() {
-                return CERTIFICATION;
-            }
         }, GATHER {
-            @Entry
-            public void assembly() {
-                context().gather();
-            }
-
             @Override
             public Transitions gathered() {
-                return NOMINATION;
+                return CERTIFICATION;
             }
 
             @Override
             public Transitions viewDetermined() {
                 return null;
-            }
-        }, NOMINATION {
-            @Entry
-            public void nominate() {
-                context().nominate();
-            }
-
-            @Override
-            public Transitions nominated() {
-                return CERTIFICATION;
             }
         }, PROTOCOL_FAILURE {
             @Override
@@ -99,24 +75,9 @@ public interface Reconfiguration {
                 return null;
             }
 
-            @Override
-            public Transitions gathered() {
-                return null;
-            }
-
-            @Override
-            public Transitions nominated() {
-                return null;
-            }
-
             @Entry
             public void terminate() {
                 context().failed();
-            }
-
-            @Override
-            public Transitions validation() {
-                return null;
             }
         }, RECONFIGURE {
             @Override
@@ -161,7 +122,7 @@ public interface Reconfiguration {
         }
 
         default Transitions complete() {
-            return Reconfigure.RECONFIGURE;
+            throw fsm().invalidTransitionOn();
         }
 
         default Transitions failed() {
@@ -169,14 +130,6 @@ public interface Reconfiguration {
         }
 
         default Transitions gathered() {
-            return null;
-        }
-
-        default Transitions nominated() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions validation() {
             return null;
         }
 

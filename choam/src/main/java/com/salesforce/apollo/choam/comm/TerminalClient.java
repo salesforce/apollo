@@ -6,11 +6,11 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
-import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -60,8 +60,8 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public SignedViewMember join(Digest nextView) {
-        return client.join(nextView.toDigeste());
+    public Empty join(SignedViewMember vm) {
+        return client.join(vm);
     }
 
     public void release() {

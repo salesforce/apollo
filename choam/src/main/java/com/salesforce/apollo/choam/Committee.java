@@ -6,11 +6,8 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.salesforce.apollo.choam.proto.Certification;
-import com.salesforce.apollo.choam.proto.Reconfigure;
-import com.salesforce.apollo.choam.proto.SubmitResult;
+import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.SubmitResult.Result;
-import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.StaticContext;
@@ -20,14 +17,17 @@ import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.MockMember;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
+import static io.grpc.Status.ABORTED;
 
 /**
  * @author hal.hildebrand
@@ -82,9 +82,16 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
+    default void assemble(Assemble assemble) {
+    }
+
     void complete();
 
     boolean isMember();
+
+    default void join(SignedViewMember nextView, Digest from) {
+        throw new StatusRuntimeException(ABORTED);
+    }
 
     Logger log();
 
@@ -153,17 +160,18 @@ public interface Committee {
             }
         }
         final int toleranceLevel = params.context().toleranceLevel();
-        log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
+        log().trace("Validate: {} height: {} count: {} needed: {} on: {}", hb.hash, hb.height(), valid, toleranceLevel,
                     params.member().getId());
         return valid > toleranceLevel;
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {
-        if (!hb.block.hasGenesis()) {
+        if (!Objects.requireNonNull(hb.block).hasGenesis()) {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
         var validators = validatorsOf(reconfigure, params().context(), params().member().getId(), log());
         return !validators.isEmpty() && validate(hb, validators);
     }
+
 }

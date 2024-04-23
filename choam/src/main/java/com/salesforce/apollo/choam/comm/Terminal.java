@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.choam.proto.*;
-import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
@@ -47,8 +47,8 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public SignedViewMember join(Digest nextView) {
-                return service.join(nextView, member.getId());
+            public Empty join(SignedViewMember join) {
+                return service.join(join, member.getId());
             }
 
             @Override
@@ -64,7 +64,7 @@ public interface Terminal extends Link {
 
     Blocks fetchViewChain(BlockReplication replication);
 
-    SignedViewMember join(Digest nextView);
+    Empty join(SignedViewMember join);
 
     Initial sync(Synchronize sync);
 }
