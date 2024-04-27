@@ -77,6 +77,10 @@ public class ViewContext {
         return blockProducer.checkpoint();
     }
 
+    public int committeeSize() {
+        return validators.size();
+    }
+
     public Context<Member> context() {
         return context;
     }

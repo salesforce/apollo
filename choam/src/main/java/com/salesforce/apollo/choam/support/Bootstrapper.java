@@ -120,7 +120,8 @@ public class Bootstrapper {
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
         var diadem = HexBloom.from(checkpoint.block.getCheckpoint().getCrown());
         log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
-                 diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()), params.member().getId());
+                 diadem.compactWrapped(), Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()),
+                 params.member().getId());
 
         CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
@@ -132,7 +133,7 @@ public class Bootstrapper {
             if (!cps.validate(diadem, Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()))) {
                 throw new IllegalStateException("Cannot validate checkpoint: " + checkpoint.height());
             }
-            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem.compact(),
+            log.info("Restored checkpoint: {} diadem: {} on: {}", checkpoint.height(), diadem.compactWrapped(),
                      params.member().getId());
             checkpointState = cps;
         });

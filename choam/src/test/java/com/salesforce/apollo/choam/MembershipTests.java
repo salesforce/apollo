@@ -33,6 +33,8 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -56,16 +58,18 @@ public class MembershipTests {
         //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    private Map<Digest, CHOAM>     choams;
-    private List<Member>           members;
-    private Map<Digest, Router>    routers;
-    private DynamicContext<Member> context;
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+    private       Map<Digest, CHOAM>       choams;
+    private       List<Member>             members;
+    private       Map<Digest, Router>      routers;
+    private       DynamicContext<Member>   context;
 
     @AfterEach
     public void after() throws Exception {
         shutdown();
         members = null;
         context = null;
+        scheduler.shutdownNow();
     }
 
     @Test
@@ -104,7 +108,7 @@ public class MembershipTests {
                                            .toList());
 
         final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, countdown);
+        var transactioneer = new Transactioneer(scheduler, txneer.getSession(), timeout, 1, countdown);
 
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");

@@ -35,7 +35,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     public void checkpointBootstrap() throws Exception {
         pre();
 
-        checkpointOccurred.await(30, TimeUnit.SECONDS);
+        checkpointOccurred.await(10, TimeUnit.SECONDS);
 
         ULong chkptHeight = checkpointHeight.get();
         assertNotNull(chkptHeight, "No checkpoint");
@@ -77,7 +77,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
     @Override
     protected int checkpointBlockSize() {
-        return 2;
+        return 3;
     }
 
     @Override

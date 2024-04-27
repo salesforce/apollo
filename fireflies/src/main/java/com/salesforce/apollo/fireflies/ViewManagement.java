@@ -192,8 +192,8 @@ public class ViewManagement {
 
         log.info(
         "Installed view: {} -> {} crown: {} for context: {} cardinality: {} count: {} pending: {} leaving: {} joining: {} on: {}",
-        previousView, currentView.get(), diadem.get(), context.getId(), cardinality(), context.allMembers().count(),
-        pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
+        previousView, currentView.get(), diadem.get().compactWrapped(), context.getId(), cardinality(),
+        context.allMembers().count(), pending.size(), ballot.leaving.size(), ballot.joining.size(), node.getId());
 
         view.notifyListeners(joining, ballot.leaving);
     }
@@ -311,7 +311,7 @@ public class ViewManagement {
                     final var hex = bound.view();
 
                     log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
-                             hex.compact(), context.getId(), node.getId());
+                             hex.compactWrapped(), context.getId(), node.getId());
                     context.rebalance(hex.getCardinality());
                     context.activate(node);
                     diadem.set(hex);

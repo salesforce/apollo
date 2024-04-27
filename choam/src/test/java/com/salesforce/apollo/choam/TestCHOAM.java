@@ -70,6 +70,7 @@ public class TestCHOAM {
     private   List<SigningMember>        members;
     private   MetricRegistry             registry;
     private   Map<Digest, Router>        routers;
+    private   ScheduledExecutorService   scheduler;
 
     @AfterEach
     public void after() throws Exception {
@@ -81,12 +82,16 @@ public class TestCHOAM {
             choams.values().forEach(e -> e.stop());
             choams = null;
         }
+        if (scheduler != null) {
+            scheduler.shutdown();
+        }
         members = null;
         registry = null;
     }
 
     @BeforeEach
     public void before() throws Exception {
+        scheduler = Executors.newScheduledThreadPool(10);
         var origin = DigestAlgorithm.DEFAULT.getOrigin();
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(origin, registry);
@@ -170,7 +175,7 @@ public class TestCHOAM {
         final var countdown = new CountDownLatch(clientCount * choams.size());
         choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(), timeout, max, countdown));
+                transactioneers.add(new Transactioneer(scheduler, c.getSession(), timeout, max, countdown));
             }
         });
 

@@ -182,11 +182,11 @@ public class CHOAM {
         }
         var crown = accumulator.build();
         log.info("Checkpoint length: {} segment size: {} count: {} crown: {} initial: {} on: {}", length, segmentSize,
-                 builder.getCount(), crown, initial, id);
+                 builder.getCount(), crown.compactWrapped(), initial, id);
         var cp = builder.setCrown(crown.toHexBloome()).build();
 
         var deserialized = HexBloom.from(cp.getCrown());
-        log.info("Deserialized checkpoint crown: {} initial: {} on: {}", deserialized, initial, id);
+        log.info("Deserialized checkpoint crown: {} initial: {} on: {}", deserialized.compactWrapped(), initial, id);
         return cp;
     }
 
@@ -490,6 +490,8 @@ public class CHOAM {
             public Block genesis(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous) {
                 final HashedCertifiedBlock cp = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
+                log.trace("Genesis cp: {} view: {} previous: {} on: {}", cp.hash, v.hash, previous.hash,
+                          params.member().getId());
                 var g = CHOAM.genesis(nextViewId, joining, previous, v, params, cp, params.genesisData()
                                                                                           .apply(joining.keySet()
                                                                                                         .stream()
@@ -1372,8 +1374,6 @@ public class CHOAM {
         }
 
         private void join(View view) {
-            log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
-                     params.member().getId());
             var joining = new CompletableFuture<Void>();
             if (!join.compareAndSet(null, joining)) {
                 log.info("Ongoing join of: {} should have been cancelled on: {}", Digest.from(view.getDiadem()),
@@ -1381,6 +1381,8 @@ public class CHOAM {
                 transitions.fail();
                 return;
             }
+            log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                     params.member().getId());
             var servers = new GroupIterator(validators.keySet());
             var joined = new HashSet<Member>();
 
@@ -1444,6 +1446,9 @@ public class CHOAM {
                 joined.add(target);
                 log.trace("Joined with: {} view: {} diadem: {} on: {}", target.getId(), viewId,
                           Digest.from(view.getDiadem()), params.member().getId());
+            } catch (StatusRuntimeException sre) {
+                log.trace("Failed join attempt: {} with: {} view: {} diadem: {} on: {}", sre.getStatus(),
+                          target.getId(), nextViewId, Digest.from(view.getDiadem()), params.member().getId(), sre);
             } catch (Throwable t) {
                 log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
                           Digest.from(view.getDiadem()), params.member().getId(), t);

@@ -70,13 +70,13 @@ public class DynamicTest {
         var template = Parameters.newBuilder()
                                  .setGenerateGenesis(true)
                                  .setBootstrap(Parameters.BootstrapParameters.newBuilder()
-                                                                             .setGossipDuration(Duration.ofMillis(5))
+                                                                             .setGossipDuration(Duration.ofMillis(50))
                                                                              .build())
                                  .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                                 .setGossipDuration(Duration.ofMillis(10))
+                                 .setGossipDuration(Duration.ofMillis(50))
                                  .setProducer(Parameters.ProducerParameters.newBuilder()
-                                                                           .setGossipDuration(Duration.ofMillis(5))
-                                                                           .setBatchInterval(Duration.ofMillis(5))
+                                                                           .setGossipDuration(Duration.ofMillis(50))
+                                                                           .setBatchInterval(Duration.ofMillis(50))
                                                                            .setMaxBatchByteSize(1024 * 1024)
                                                                            .setMaxBatchCount(10_000)
                                                                            .setEthereal(Config.newBuilder()
@@ -132,7 +132,7 @@ public class DynamicTest {
         Thread.sleep(2000);
 
         System.out.println("**");
-        System.out.println("** Starting: " + next.stream().map(Member::getId).toList());
+        System.out.println("** Starting next 3: " + next.stream().map(Member::getId).toList());
         System.out.println("**");
         next.parallelStream().forEach(member -> {
             routers.get(member).start();
@@ -141,7 +141,7 @@ public class DynamicTest {
         Thread.sleep(2000);
 
         System.out.println("**");
-        System.out.println("** Next 3 joining");
+        System.out.println("** Next 3 joining: " + next.stream().map(Member::getId).toList());
         System.out.println("**");
         // now let the next members know about the bootstrap group
         next.forEach(member -> bootstrap.forEach(m -> contexts.get(member).activate(m)));
@@ -154,7 +154,7 @@ public class DynamicTest {
                                                                             .map(CHOAM::logState)
                                                                             .toList());
         System.out.println("**");
-        System.out.println("** Next 3 active: " + bootstrap.stream().map(Member::getId).toList());
+        System.out.println("** Next 3 active: " + next.stream().map(Member::getId).toList());
         System.out.println("**");
 
         var remaining = members.subList(7, members.size());
@@ -179,7 +179,7 @@ public class DynamicTest {
         Thread.sleep(2000);
 
         System.out.println("**");
-        System.out.println("** Remaining group joining");
+        System.out.println("** Remaining group joining: " + remaining.stream().map(Member::getId).toList());
         System.out.println("**");
         // now let the remaining members know about the bootstrap group
         remaining.forEach(member -> bootstrap.forEach(m -> contexts.get(member).activate(m)));

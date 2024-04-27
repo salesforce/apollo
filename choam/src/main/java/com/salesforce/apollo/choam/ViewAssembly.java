@@ -123,16 +123,19 @@ public class ViewAssembly {
                          svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
                          Digest.from(svs.getViews().getMember()), params().member().getId());
                 viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
-                if (viewProposals.size() == params().context().getRingCount()) {
-                    transitions.certified();
-                    countdown.set(-1);
-                }
             } else {
                 log.info("Invalid views: {} from: {} on: {}",
                          svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
                          Digest.from(svs.getViews().getMember()), params().member().getId());
             }
         });
+        if (viewProposals.size() >= params().majority()) {
+            transitions.proposed();
+        } else {
+            log.trace("Incomplete view proposals: {} is less than majority: {} views: {} on: {}", viewProposals.size(),
+                      params().majority(), viewProposals.keySet().stream().sorted().toList(),
+                      params().member().getId());
+        }
     }
 
     boolean complete() {
@@ -144,7 +147,7 @@ public class ViewAssembly {
         }
         if (proposals.size() < selected.majority) {
             log.info("Cannot complete view assembly: {} proposed: {} required: {} on: {}", nextViewId,
-                     proposals.keySet().stream().toList(), selected.majority, params().member().getId());
+                     proposals.keySet().stream().sorted().toList(), selected.majority, params().member().getId());
             transitions.failed();
             return false;
         }
@@ -164,8 +167,8 @@ public class ViewAssembly {
         }
         assert slate.size() == selected.assembly.size() : "Invalid slate: " + slate.size() + " expected: "
         + selected.assembly.size();
-        log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
-                  params().member().getId());
+        log.debug("View Assembly: {} completed assembly: {} on: {}", nextViewId,
+                  slate.keySet().stream().sorted().toList(), params().member().getId());
         transitions.complete();
         return true;
     }
@@ -258,7 +261,7 @@ public class ViewAssembly {
     void newEpoch() {
         var current = countdown.decrementAndGet();
         if (current == 0) {
-            transitions.certified();
+            transitions.countdownCompleted();
         }
     }
 
@@ -271,8 +274,7 @@ public class ViewAssembly {
 
     private void checkAssembly() {
         if (proposals.size() >= selected.majority) {
-            countdown.set(-1);
-            transitions.certified();
+            transitions.gathered();
         }
     }
 
@@ -293,7 +295,6 @@ public class ViewAssembly {
                                    .addViews(
                                    SignedViews.newBuilder().setViews(views).setSignature(view.sign(views).toSig()))
                                    .build());
-        countdown.set(2);
     }
 
     private void propose(Views vs, List<View> majorities, Multiset<View> consensus) {
@@ -357,7 +358,7 @@ public class ViewAssembly {
             log.debug("Selected: {} on: {}", selected, params().member().getId());
         }
         onConsensus.complete(selected);
-        transitions.certified();
+        transitions.viewAcquired();
         pendingJoins.forEach(svm -> join(svm, false));
         pendingJoins.clear();
     }
@@ -375,8 +376,6 @@ public class ViewAssembly {
             if (proposals.size() == selected.majority) {
                 log.debug("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
                           nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
-
-                proposals.forEach((key, value) -> slate.put(key, joinOf(value)));
                 transitions.certified();
             } else {
                 countdown.set(2);
@@ -386,32 +385,16 @@ public class ViewAssembly {
         }
 
         public void checkAssembly() {
-            countdown.set(2);
             ViewAssembly.this.checkAssembly();
         }
 
         public void checkViews() {
-            countdown.set(2);
             vote();
         }
 
         @Override
         public void complete() {
             ViewAssembly.this.complete();
-        }
-
-        @Override
-        public void elect() {
-            if (selected != null && proposals.size() >= selected.majority) {
-                log.debug("Electing view: {} required: {} proposed: {} on: {}", nextViewId, selected.majority,
-                          proposals.keySet().stream().sorted().toList(), params().member().getId());
-                transitions.complete();
-            } else {
-                log.error("Failed election selected: {} required: {} proposed: {} of: {} on: {}", selected != null,
-                          selected != null ? -1 : selected.majority, proposals.keySet().stream().sorted().toList(),
-                          nextViewId, params().member().getId());
-                transitions.failed();
-            }
         }
 
         @Override

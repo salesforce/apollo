@@ -21,8 +21,6 @@ public interface Reconfiguration {
 
     void complete();
 
-    void elect();
-
     void failed();
 
     void finish();
@@ -37,13 +35,23 @@ public interface Reconfiguration {
             }
 
             @Override
-            public Transitions certified() {
+            public Transitions countdownCompleted() {
+                return VIEW_AGREEMENT;
+            }
+
+            @Override
+            public Transitions proposed() {
                 return VIEW_AGREEMENT;
             }
         }, CERTIFICATION {
             @Override
             public Transitions certified() {
-                return RECONFIGURE;
+                return RECONFIGURED;
+            }
+
+            @Override
+            public Transitions countdownCompleted() {
+                return RECONFIGURED;
             }
 
             @Entry
@@ -52,7 +60,7 @@ public interface Reconfiguration {
             }
         }, GATHER {
             @Override
-            public Transitions certified() {
+            public Transitions gathered() {
                 return CERTIFICATION;
             }
 
@@ -80,16 +88,6 @@ public interface Reconfiguration {
             public void terminate() {
                 context().failed();
             }
-        }, RECONFIGURE {
-            @Override
-            public Transitions complete() {
-                return RECONFIGURED;
-            }
-
-            @Entry
-            public void elect() {
-                context().elect();
-            }
         }, RECONFIGURED {
             @Override
             public Transitions complete() {
@@ -108,7 +106,7 @@ public interface Reconfiguration {
             }
 
             @Override
-            public Transitions certified() {
+            public Transitions viewAcquired() {
                 return GATHER;
             }
         }
@@ -124,8 +122,24 @@ public interface Reconfiguration {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions countdownCompleted() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions failed() {
             return Reconfigure.PROTOCOL_FAILURE;
+        }
+
+        default Transitions gathered() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions proposed() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions viewAcquired() {
+            throw fsm().invalidTransitionOn();
         }
     }
 }
