@@ -25,8 +25,7 @@ class Transactioneer {
     private final static Random                     entropy   = new Random();
     private final static Logger                     log       = LoggerFactory.getLogger(Transactioneer.class);
     private final static Executor                   executor  = Executors.newVirtualThreadPerTaskExecutor();
-    private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual()
-                                                                                                          .factory());
+    private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1);
     private final        AtomicInteger              completed = new AtomicInteger();
     private final        CountDownLatch             countdown;
     private final        List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();

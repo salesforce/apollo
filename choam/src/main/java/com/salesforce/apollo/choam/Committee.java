@@ -90,6 +90,9 @@ public interface Committee {
     boolean isMember();
 
     default void join(SignedViewMember nextView, Digest from) {
+        log().trace("Error joining by: {} view: {} diadem: {} invalid committee: {} on: {}", from,
+                    Digest.from(nextView.getVm().getView()), Digest.from(nextView.getVm().getView()),
+                    this.getClass().getSimpleName(), params().member().getId());
         throw new StatusRuntimeException(ABORTED);
     }
 

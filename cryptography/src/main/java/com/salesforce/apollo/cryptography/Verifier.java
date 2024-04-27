@@ -155,8 +155,8 @@ public interface Verifier {
         }
 
         @Override
-        public boolean verify(JohnHancock signature, InputStream message) {
-            return false;
+        public String toString() {
+            return "<No Verifier>";
         }
 
         @Override
@@ -164,6 +164,10 @@ public interface Verifier {
             return false;
         }
 
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return false;
+        }
     }
 
     class MockVerifier implements Verifier {

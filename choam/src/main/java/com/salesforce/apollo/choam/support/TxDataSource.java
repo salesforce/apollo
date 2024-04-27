@@ -65,13 +65,13 @@ public class TxDataSource implements DataSource {
         if (metrics != null) {
             metrics.dropped(processing.size(), validations.size(), assemblies.size());
         }
-        log.trace("Closing with remaining txns: {}({}:{}) validations: {} assemblies: {} on: {}", processing.size(),
+        log.debug("Closing with remaining txns: {}({}:{}) validations: {} assemblies: {} on: {}", processing.size(),
                   processing.added(), processing.taken(), validations.size(), assemblies.size(), member.getId());
     }
 
     public void drain() {
         draining.set(true);
-        log.trace("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
+        log.debug("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
                   processing.taken(), member.getId());
     }
 
@@ -170,5 +170,11 @@ public class TxDataSource implements DataSource {
 
     public void offer(Validate generateValidation) {
         validations.offer(generateValidation);
+    }
+
+    public void reset() {
+        log.debug("Clearing with remaining txns: {}({}:{}) validations: {} assemblies: {} on: {}", processing.size(),
+                  processing.added(), processing.taken(), validations.size(), assemblies.size(), member.getId());
+        processing.clear();
     }
 }

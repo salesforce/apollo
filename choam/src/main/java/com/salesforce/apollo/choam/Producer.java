@@ -27,7 +27,10 @@ import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -48,7 +51,6 @@ public class Producer {
     private final        ChRbcGossip                  coordinator;
     private final        TxDataSource                 ds;
     private final        Map<Digest, PendingBlock>    pending            = new ConcurrentSkipListMap<>();
-    private final        List<Assemblies>             pendingAssemblies  = new CopyOnWriteArrayList<>();
     private final        Map<Digest, List<Validate>>  pendingValidations = new ConcurrentSkipListMap<>();
     private final        AtomicReference<HashedBlock> previousBlock      = new AtomicReference<>();
     private final        AtomicBoolean                started            = new AtomicBoolean(false);
@@ -105,7 +107,7 @@ public class Producer {
                                       params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
 
-        var onConsensus = new CompletableFuture<ViewAssembly.View>();
+        var onConsensus = new CompletableFuture<ViewAssembly.Vue>();
         onConsensus.whenComplete((v, throwable) -> {
             if (throwable == null) {
                 produceAssemble(v);
@@ -115,11 +117,14 @@ public class Producer {
         });
         assembly = new ViewAssembly(nextViewId, view, Producer.this::addAssembly, onConsensus) {
             @Override
-            public void complete() {
-                super.complete();
-                log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                          params().member().getId());
-                assembled = true;
+            public boolean complete() {
+                if (super.complete()) {
+                    log.debug("Vue reconfiguration: {} gathered: {} complete on: {}", nextViewId,
+                              getSlate().keySet().stream().sorted().toList(), params().member().getId());
+                    assembled = true;
+                    return true;
+                }
+                return false;
             }
         };
     }
@@ -212,10 +217,13 @@ public class Producer {
 
     private void newEpoch(Integer epoch) {
         log.trace("new epoch: {} on: {}", epoch, params().member().getId());
+        assembly.newEpoch();
         var last = epoch >= maxEpoch && assembled;
         if (last) {
             controller.completeIt();
             Producer.this.transitions.viewComplete();
+        } else {
+            ds.reset();
         }
         transitions.newEpoch(epoch, last);
     }
@@ -225,17 +233,10 @@ public class Producer {
     }
 
     private void processAssemblies(List<UnitData> aggregate) {
-        var joins = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
-        final var ass = assembly;
-        if (ass != null) {
-            log.trace("Consuming {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
-                      params().member().getId());
-            ass.inbound().accept(joins);
-        } else {
-            log.trace("Pending {} units, {} assemblies on: {}", aggregate.size(), joins.size(),
-                      params().member().getId());
-            pendingAssemblies.addAll(joins);
-        }
+        var aggs = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
+        log.trace("Consuming {} assemblies from {} units on: {}", aggregate.size(), aggs.size(),
+                  params().member().getId());
+        assembly.assemble(aggs);
     }
 
     private void processPendingValidations(HashedBlock block, PendingBlock p) {
@@ -277,7 +278,7 @@ public class Producer {
         }
     }
 
-    private void produceAssemble(ViewAssembly.View v) {
+    private void produceAssemble(ViewAssembly.Vue v) {
         final var vlb = previousBlock.get();
         var ass = Assemble.newBuilder()
                           .setView(View.newBuilder()
@@ -294,7 +295,7 @@ public class Producer {
         pending.put(assemble.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.debug("View assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
+        log.debug("Vue assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
                   assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
         transitions.assembled();
     }
@@ -385,10 +386,7 @@ public class Producer {
         public void assemble() {
             log.debug("Starting view diadem consensus for: {} on: {}", nextViewId, params().member().getId());
             startProduction();
-            var joins = new ArrayList<>(pendingAssemblies);
-            pendingAssemblies.clear();
             assembly.start();
-            assembly.inbound().accept(joins);
         }
 
         @Override

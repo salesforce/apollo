@@ -20,6 +20,7 @@ import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
 import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -102,11 +103,11 @@ public class TestCHOAM {
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
+                                                              .setEthereal(Config.newBuilder()
+                                                                                 .setNumberOfEpochs(3)
+                                                                                 .setEpochLength(7))
                                                               .build())
-                               .setCheckpointBlockDelta(1);
-        if (LARGE_TESTS) {
-            params.getProducer().ethereal().setNumberOfEpochs(5).setEpochLength(60);
-        }
+                               .setCheckpointBlockDelta(3);
 
         checkpointOccurred = new CompletableFuture<>();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -202,7 +203,7 @@ public class TestCHOAM {
                            .build()
                            .report();
         }
-        assertTrue(checkpointOccurred.get());
+        assertTrue(checkpointOccurred.get(5, TimeUnit.SECONDS));
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {

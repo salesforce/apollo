@@ -36,6 +36,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.messaging.proto.AgedMessageOrBuilder;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
@@ -47,6 +48,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1105,7 +1107,7 @@ public class CHOAM {
          *
          * @param hash - the "cut" across the rings of the context, determining the successors and thus the committee
          *             members of the view
-         * @return the View determined by this Context and the supplied hash value
+         * @return the Vue determined by this Context and the supplied hash value
          */
         public View getView(Digest hash) {
             var builder = View.newBuilder().setDiadem(diadem.toDigeste()).setMajority(context.majority());
@@ -1326,6 +1328,11 @@ public class CHOAM {
 
         @Override
         public SubmitResult submitTxn(Transaction transaction) {
+            if (!started.get()) {
+                log.trace("Failed submitting txn: {} no servers available in: {} on: {}",
+                          hashOf(transaction, params.digestAlgorithm()), viewId, params.member().getId());
+                return SubmitResult.newBuilder().setResult(Result.ERROR_SUBMITTING).setErrorMsg("Shutdown").build();
+            }
             if (!servers.hasNext()) {
                 log.trace("Failed submitting txn: {} no servers available in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), viewId, params.member().getId());
@@ -1365,6 +1372,8 @@ public class CHOAM {
         }
 
         private void join(View view) {
+            log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                     params.member().getId());
             var joining = new CompletableFuture<Void>();
             if (!join.compareAndSet(null, joining)) {
                 log.info("Ongoing join of: {} should have been cancelled on: {}", Digest.from(view.getDiadem()),
@@ -1374,44 +1383,71 @@ public class CHOAM {
             }
             var servers = new GroupIterator(validators.keySet());
             var joined = new HashSet<Member>();
-            Thread.ofVirtual().start(Utils.wrapped(() -> {
-                while (!joining.isDone() && joined.size() < view.getMajority() && servers.hasNext()) {
-                    Member target = servers.next();
-                    try (var link = comm.connect(target)) {
-                        if (link == null) {
-                            log.debug("No link for: {} for joining: {} on: {}", target.getId(),
-                                      Digest.from(view.getDiadem()), params.member().getId());
-                            continue;
-                        }
-                        log.trace("Joining view: {} diadem: {} on: {}", viewId, Digest.from(view.getDiadem()),
-                                  params.member().getId());
-                        final var c = next.get();
-                        var inView = ViewMember.newBuilder(c.member)
-                                               .setDiadem(view.getDiadem())
-                                               .setView(nextViewId.get().toDigeste())
-                                               .build();
-                        var svm = SignedViewMember.newBuilder()
-                                                  .setVm(inView)
-                                                  .setSignature(params.member().sign(inView.toByteString()).toSig())
-                                                  .build();
-                        try {
-                            link.join(svm);
-                            joined.add(target);
-                        } catch (Throwable t) {
-                            log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target, nextViewId,
-                                      Digest.from(view.getDiadem()), params.member().getId(), t);
-                        }
-                    } catch (StatusRuntimeException e) {
-                        log.trace("Failed join attempt with: {} view: {} diadem: {} status:{} on: {}", target,
-                                  nextViewId, Digest.from(view.getDiadem()), e.getStatus(), params.member().getId());
-                    } catch (Throwable e) {
-                        log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target, nextViewId,
-                                  Digest.from(view.getDiadem()), params.member().getId(), e);
+
+            var delay = Duration.ofMillis(Entropy.nextSecureInt(100));
+
+            Thread.ofVirtual().start(() -> {
+                log.error("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                          params.member().getId());
+                while (!joining.isDone() && joined.size() < view.getMajority()) {
+                    try {
+                        Thread.sleep(delay.toMillis());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
                     }
+                    join(view, servers, joined);
                 }
+                log.info("Finishing join of: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                         params.member().getId());
                 joining.complete(null);
-                log.info("Finishing join of: {} on: {}", Digest.from(view.getDiadem()), params.member().getId());
-            }, log));
+            });
+        }
+
+        private void join(View view, GroupIterator servers, HashSet<Member> joined) {
+            Member target = servers.next();
+            if (joined.contains(target)) {
+                log.trace("Already joined with: {} view: {} diadem: {}  on: {}", target.getId(), nextViewId.get(),
+                          Digest.from(view.getDiadem()), params.member().getId());
+                return;
+            }
+            try (var link = comm.connect(target)) {
+                join(view, link, target, joined);
+            } catch (StatusRuntimeException e) {
+                log.trace("Failed join attempt with: {} view: {} diadem: {} status:{} on: {}", target.getId(),
+                          nextViewId, Digest.from(view.getDiadem()), e.getStatus(), params.member().getId());
+            } catch (Throwable e) {
+                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
+                          Digest.from(view.getDiadem()), params.member().getId(), e);
+            }
+        }
+
+        private void join(View view, Terminal link, Member target, HashSet<Member> joined) {
+            if (link == null) {
+                log.debug("No link for: {} for joining: {} on: {}", target.getId(), Digest.from(view.getDiadem()),
+                          params.member().getId());
+                return;
+            }
+            log.trace("Joining view: {} diadem: {} on: {}", viewId, Digest.from(view.getDiadem()),
+                      params.member().getId());
+            final var c = next.get();
+            var inView = ViewMember.newBuilder(c.member)
+                                   .setDiadem(view.getDiadem())
+                                   .setView(nextViewId.get().toDigeste())
+                                   .build();
+            var svm = SignedViewMember.newBuilder()
+                                      .setVm(inView)
+                                      .setSignature(params.member().sign(inView.toByteString()).toSig())
+                                      .build();
+            try {
+                link.join(svm);
+                joined.add(target);
+                log.trace("Joined with: {} view: {} diadem: {} on: {}", target.getId(), viewId,
+                          Digest.from(view.getDiadem()), params.member().getId());
+            } catch (Throwable t) {
+                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
+                          Digest.from(view.getDiadem()), params.member().getId(), t);
+            }
         }
     }
 

@@ -15,18 +15,29 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Reconfiguration {
     void certify();
 
+    void checkAssembly();
+
+    void checkViews();
+
     void complete();
 
     void elect();
 
     void failed();
 
-    void viewAgreement();
+    void finish();
+
+    void publishViews();
 
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
+            @Entry
+            public void publish() {
+                context().publishViews();
+            }
+
             @Override
-            public Transitions assembled() {
+            public Transitions certified() {
                 return VIEW_AGREEMENT;
             }
         }, CERTIFICATION {
@@ -39,27 +50,17 @@ public interface Reconfiguration {
             public void certify() {
                 context().certify();
             }
-
-            @Override
-            public Transitions gathered() {
-                return CERTIFICATION;
-            }
         }, GATHER {
             @Override
-            public Transitions gathered() {
+            public Transitions certified() {
                 return CERTIFICATION;
             }
 
-            @Override
-            public Transitions viewDetermined() {
-                return null;
+            @Entry
+            public void gather() {
+                context().checkAssembly();
             }
         }, PROTOCOL_FAILURE {
-            @Override
-            public Transitions assembled() {
-                return null;
-            }
-
             @Override
             public Transitions certified() {
                 return null;
@@ -92,6 +93,7 @@ public interface Reconfiguration {
         }, RECONFIGURED {
             @Override
             public Transitions complete() {
+                context().finish();
                 return null;
             }
 
@@ -102,20 +104,17 @@ public interface Reconfiguration {
         }, VIEW_AGREEMENT {
             @Entry
             public void viewConsensus() {
-                context().viewAgreement();
+                context().checkViews();
             }
 
             @Override
-            public Transitions viewDetermined() {
+            public Transitions certified() {
                 return GATHER;
             }
         }
     }
 
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
-        default Transitions assembled() {
-            throw fsm().invalidTransitionOn();
-        }
 
         default Transitions certified() {
             throw fsm().invalidTransitionOn();
@@ -127,14 +126,6 @@ public interface Reconfiguration {
 
         default Transitions failed() {
             return Reconfigure.PROTOCOL_FAILURE;
-        }
-
-        default Transitions gathered() {
-            return null;
-        }
-
-        default Transitions viewDetermined() {
-            throw fsm().invalidTransitionOn();
         }
     }
 }

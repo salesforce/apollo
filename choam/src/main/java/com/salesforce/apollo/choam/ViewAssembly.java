@@ -19,7 +19,6 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.cryptography.proto.PubKey;
 import com.salesforce.apollo.membership.Member;
-import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,13 +29,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.salesforce.apollo.choam.ViewContext.print;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.cryptography.QualifiedBase64.signature;
-import static io.grpc.Status.ABORTED;
 
 /**
  * View reconfiguration. Attempts to create a new view reconfiguration. The protocol comes to an agreement on the
@@ -57,11 +58,14 @@ public class ViewAssembly {
     private final        Consumer<Assemblies>          publisher;
     private final        Map<Digest, Join>             slate         = new HashMap<>();
     private final        ViewContext                   view;
-    private final        CompletableFuture<View>       onConsensus;
-    private volatile     View                          selected;
+    private final        CompletableFuture<Vue>        onConsensus;
+    private final        AtomicInteger                 countdown     = new AtomicInteger();
+    private final        List<SignedViewMember>        pendingJoins  = new CopyOnWriteArrayList<>();
+    private final        AtomicBoolean                 started       = new AtomicBoolean(false);
+    private volatile     Vue                           selected;
 
     public ViewAssembly(Digest nextViewId, ViewContext vc, Consumer<Assemblies> publisher,
-                        CompletableFuture<View> onConsensus) {
+                        CompletableFuture<Vue> onConsensus) {
         view = vc;
         this.nextViewId = nextViewId;
         this.publisher = publisher;
@@ -80,48 +84,116 @@ public class ViewAssembly {
     }
 
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         transitions.fsm().enterStartState();
-        transitions.assembled();
     }
 
-    void complete() {
+    void assemble(List<Assemblies> asses) {
+        if (!started.get()) {
+            return;
+        }
+
+        if (asses.isEmpty()) {
+            return;
+        }
+
+        var joins = asses.stream()
+                         .flatMap(a -> a.getJoinsList().stream())
+                         .filter(view -> !proposals.containsKey(Digest.from(view.getJoin().getVm().getId())))
+                         .filter(signedJoin -> !SignedJoin.getDefaultInstance().equals(signedJoin))
+                         .filter(view::validate)
+                         .toList();
+        var views = asses.stream().flatMap(a -> a.getViewsList().stream()).filter(SignedViews::hasViews).toList();
+
+        log.info("Assembling joins: {} views: {} on: {}", joins.size(), views.size(), params().member().getId());
+
+        joins.forEach(sj -> join(sj.getJoin(), false));
+        if (selected != null) {
+            if (!views.isEmpty()) {
+                log.trace("Already selected: {}, ignoring views: {} on: {}", selected.diadem, views.size(),
+                          params().member().getId());
+            }
+            return;
+        }
+        views.forEach(svs -> {
+            if (view.validate(svs)) {
+                log.info("Adding views: {} from: {} on: {}",
+                         svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                         Digest.from(svs.getViews().getMember()), params().member().getId());
+                viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
+                if (viewProposals.size() == params().context().getRingCount()) {
+                    transitions.certified();
+                    countdown.set(-1);
+                }
+            } else {
+                log.info("Invalid views: {} from: {} on: {}",
+                         svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                         Digest.from(svs.getViews().getMember()), params().member().getId());
+            }
+        });
+    }
+
+    boolean complete() {
         if (selected == null) {
             log.info("Cannot complete view assembly: {} as selected is null on: {}", nextViewId,
                      params().member().getId());
             transitions.failed();
-            return;
+            return false;
         }
         if (proposals.size() < selected.majority) {
             log.info("Cannot complete view assembly: {} proposed: {} required: {} on: {}", nextViewId,
                      proposals.keySet().stream().toList(), selected.majority, params().member().getId());
             transitions.failed();
-            return;
+            return false;
         }
+        proposals.forEach((d, svm) -> slate.put(d, Join.newBuilder().setMember(svm).build()));
+
         // Fill out the proposals with the unreachable members of the next assembly
-        Sets.difference(selected.assembly.keySet(), proposals.keySet())
-            .forEach(m -> proposals.put(m, SignedViewMember.newBuilder()
-                                                           .setVm(ViewMember.newBuilder()
-                                                                            .setId(m.toDigeste())
-                                                                            .setView(nextViewId.toDigeste()))
-                                                           .build()));
+        var missing = Sets.difference(selected.assembly.keySet(), proposals.keySet());
+        if (!missing.isEmpty()) {
+            log.info("Missing proposals: {} on: {}", missing.stream().sorted().toList(), params().member().getId());
+            missing.forEach(m -> slate.put(m, Join.newBuilder()
+                                                  .setMember(SignedViewMember.newBuilder()
+                                                                             .setVm(ViewMember.newBuilder()
+                                                                                              .setId(m.toDigeste())
+                                                                                              .setView(
+                                                                                              nextViewId.toDigeste())))
+                                                  .build()));
+        }
+        assert slate.size() == selected.assembly.size() : "Invalid slate: " + slate.size() + " expected: "
+        + selected.assembly.size();
         log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
                   params().member().getId());
         transitions.complete();
+        return true;
     }
 
-    Consumer<List<Assemblies>> inbound() {
-        return lre -> lre.forEach(this::assemble);
-    }
+    void join(SignedViewMember svm, boolean direct) {
+        if (!started.get()) {
+            return;
+        }
 
-    boolean join(SignedViewMember svm, boolean direct) {
         final var mid = Digest.from(svm.getVm().getId());
+        if (proposals.containsKey(mid)) {
+            log.trace("Redundant join from: {} on: {}", print(svm, params().digestAlgorithm()),
+                      params().member().getId());
+            return;
+        }
+        if (selected == null) {
+            pendingJoins.add(svm);
+            log.trace("Pending join from: {} on: {}", print(svm, params().digestAlgorithm()),
+                      params().member().getId());
+            return;
+        }
         final var m = selected.assembly.get(mid);
         if (m == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Invalid view member: {} on: {}", print(svm, params().digestAlgorithm()),
                           params().member().getId());
             }
-            throw new StatusRuntimeException(ABORTED);
+            return;
         }
         var viewId = Digest.from(svm.getVm().getView());
         if (!nextViewId.equals(viewId)) {
@@ -129,7 +201,7 @@ public class ViewAssembly {
                 log.trace("Invalid view id for member: {} on: {}", print(svm, params().digestAlgorithm()),
                           params().member().getId());
             }
-            return false;
+            return;
         }
         if (log.isDebugEnabled()) {
             log.debug("Join of: {} on: {}", print(svm, params().digestAlgorithm()), params().member().getId());
@@ -140,7 +212,7 @@ public class ViewAssembly {
                 log.trace("Invalid signature for view member: {} on: {}", print(svm, params().digestAlgorithm()),
                           params().member().getId());
             }
-            return false;
+            return;
         }
 
         PubKey encoded = svm.getVm().getConsensusKey();
@@ -150,7 +222,7 @@ public class ViewAssembly {
                 log.trace("Could not verify consensus key from view member: {} on: {}",
                           print(svm, params().digestAlgorithm()), params().member().getId());
             }
-            return false;
+            return;
         }
 
         PublicKey consensusKey = publicKey(encoded);
@@ -159,54 +231,35 @@ public class ViewAssembly {
                 log.trace("Could not deserialize consensus key from view member: {} on: {}",
                           print(svm, params().digestAlgorithm()), params().member().getId());
             }
-            return false;
-        }
-        if (proposals.putIfAbsent(mid, svm) == null) {
-            if (direct) {
-                var signature = view.sign(svm);
-                publisher.accept(Assemblies.newBuilder()
-                                           .addJoins(SignedJoin.newBuilder()
-                                                               .setJoin(svm)
-                                                               .setMember(params().member().getId().toDigeste())
-                                                               .setSignature(signature.toSig())
-                                                               .build())
-                                           .build());
-                if (log.isTraceEnabled()) {
-                    log.trace("Publishing view member: {} sig: {} on: {}", print(svm, params().digestAlgorithm()),
-                              params().digestAlgorithm().digest(signature.toSig().toByteString()),
-                              params().member().getId());
-                }
-            } else if (log.isTraceEnabled()) {
-                log.trace("Adding discovered view member: {} on: {}", print(svm, params().digestAlgorithm()),
-                          params().member().getId());
-            }
-        }
-        if (proposals.size() == selected.assembly.size()) {
-            Thread.ofVirtual().start(transitions::gathered);
-        }
-        return true;
-    }
-
-    private void assemble(Assemblies ass) {
-        log.info("Assembling {} joins and {} views on: {}", ass.getJoinsCount(), ass.getViewsCount(),
-                 params().member().getId());
-        ass.getJoinsList().stream().filter(view::validate).forEach(sj -> join(sj.getJoin(), false));
-        if (selected != null) {
             return;
         }
-        for (SignedViews svs : ass.getViewsList()) {
-            if (view.validate(svs)) {
-                log.info("Adding views: {} from: {} on: {}",
-                         svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
-                         Digest.from(svs.getViews().getMember()), params().member().getId());
-                viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
-            } else {
-                log.info("Invalid views: {} from: {} on: {}",
-                         svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
-                         Digest.from(svs.getViews().getMember()), params().member().getId());
+
+        if (direct) {
+            var signature = view.sign(svm);
+            publisher.accept(Assemblies.newBuilder()
+                                       .addJoins(SignedJoin.newBuilder()
+                                                           .setJoin(svm)
+                                                           .setMember(params().member().getId().toDigeste())
+                                                           .setSignature(signature.toSig())
+                                                           .build())
+                                       .build());
+            if (log.isTraceEnabled()) {
+                log.trace("Publishing view member: {} sig: {} on: {}", print(svm, params().digestAlgorithm()),
+                          params().digestAlgorithm().digest(signature.toSig().toByteString()),
+                          params().member().getId());
             }
+        } else if (proposals.putIfAbsent(mid, svm) == null) {
+            log.trace("Adding discovered view member: {} on: {}", print(svm, params().digestAlgorithm()),
+                      params().member().getId());
         }
-        vote();
+        checkAssembly();
+    }
+
+    void newEpoch() {
+        var current = countdown.decrementAndGet();
+        if (current == 0) {
+            transitions.certified();
+        }
     }
 
     private Map<Digest, Member> assemblyOf(List<Digeste> committee) {
@@ -216,24 +269,37 @@ public class ViewAssembly {
                         .collect(Collectors.toMap(Member::getId, m -> m));
     }
 
-    private void castVote() {
+    private void checkAssembly() {
+        if (proposals.size() >= selected.majority) {
+            countdown.set(-1);
+            transitions.certified();
+        }
+    }
+
+    private Parameters params() {
+        return view.params();
+    }
+
+    private void propose() {
         var views = view.pendingViews()
                         .getViews(nextViewId)
                         .setMember(params().member().getId().toDigeste())
                         .setVid(nextViewId.toDigeste())
                         .build();
-        log.info("Voting for: {} on: {}", nextViewId, params().member().getId());
+        log.info("Proposing for: {} views: {} on: {}", nextViewId,
+                 views.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                 params().member().getId());
         publisher.accept(Assemblies.newBuilder()
                                    .addViews(
                                    SignedViews.newBuilder().setViews(views).setSignature(view.sign(views).toSig()))
                                    .build());
+        countdown.set(2);
     }
 
-    private void castVote(Views vs, List<com.salesforce.apollo.choam.proto.View> majorities,
-                          Multiset<com.salesforce.apollo.choam.proto.View> consensus) {
+    private void propose(Views vs, List<View> majorities, Multiset<View> consensus) {
         var ordered = vs.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList();
         var lastIndex = -1;
-        com.salesforce.apollo.choam.proto.View last = null;
+        View last = null;
         for (var v : majorities) {
             var i = ordered.indexOf(Digest.from(v.getDiadem()));
             if (i != -1) {
@@ -248,12 +314,8 @@ public class ViewAssembly {
         }
     }
 
-    private Parameters params() {
-        return view.params();
-    }
-
     private void vote() {
-        Multiset<com.salesforce.apollo.choam.proto.View> candidates = HashMultiset.create();
+        Multiset<View> candidates = HashMultiset.create();
         viewProposals.values().forEach(v -> candidates.addAll(v.getViewsList()));
         var majority = params().majority();
         var majorities = candidates.entrySet()
@@ -273,8 +335,8 @@ public class ViewAssembly {
             log.trace("Majority views: {} on: {}", majorities.stream().map(v -> Digest.from(v.getDiadem())).toList(),
                       params().member().getId());
         }
-        Multiset<com.salesforce.apollo.choam.proto.View> consensus = HashMultiset.create();
-        viewProposals.values().forEach(vs -> castVote(vs, majorities, consensus));
+        Multiset<View> consensus = HashMultiset.create();
+        viewProposals.values().forEach(vs -> propose(vs, majorities, consensus));
         var ratification = consensus.entrySet()
                                     .stream()
                                     .filter(e -> e.getCount() >= majority)
@@ -289,16 +351,18 @@ public class ViewAssembly {
                       params().member().getId());
         }
         var winner = ratification.getFirst();
-        selected = new View(Digest.from(winner.getDiadem()), assemblyOf(winner.getCommitteeList()),
-                            winner.getMajority());
+        selected = new Vue(Digest.from(winner.getDiadem()), assemblyOf(winner.getCommitteeList()),
+                           winner.getMajority());
         if (log.isDebugEnabled()) {
             log.debug("Selected: {} on: {}", selected, params().member().getId());
         }
         onConsensus.complete(selected);
-        transitions.viewDetermined();
+        transitions.certified();
+        pendingJoins.forEach(svm -> join(svm, false));
+        pendingJoins.clear();
     }
 
-    record View(Digest diadem, Map<Digest, Member> assembly, int majority) {
+    public record Vue(Digest diadem, Map<Digest, Member> assembly, int majority) {
         @Override
         public String toString() {
             return "View{" + "diadem=" + diadem + ", assembly=" + assembly.keySet().stream().sorted().toList() + '}';
@@ -308,20 +372,27 @@ public class ViewAssembly {
     private class Recon implements Reconfiguration {
         @Override
         public void certify() {
-            if (proposals.size() >= selected.majority) {
+            if (proposals.size() == selected.majority) {
                 log.debug("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
                           nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
 
-                proposals.forEach((key, value) -> {
-                    slate.put(key, joinOf(value));
-                });
-                log.debug("Electing view: {} slate: {} on: {}", nextViewId, slate.keySet().stream().sorted().toList(),
-                          params().member().getId());
+                proposals.forEach((key, value) -> slate.put(key, joinOf(value)));
                 transitions.certified();
             } else {
+                countdown.set(2);
                 log.debug("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
-                          proposals.entrySet().stream().sorted().toList(), nextViewId, params().member().getId());
+                          proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
+        }
+
+        public void checkAssembly() {
+            countdown.set(2);
+            ViewAssembly.this.checkAssembly();
+        }
+
+        public void checkViews() {
+            countdown.set(2);
+            vote();
         }
 
         @Override
@@ -331,14 +402,14 @@ public class ViewAssembly {
 
         @Override
         public void elect() {
-            if (selected != null && proposals.size() == selected.assembly().size()) {
-                proposals.forEach((key, value) -> slate.put(key, joinOf(value)));
-                log.debug("Electing view: {} slate: {} on: {}", nextViewId, slate.keySet().stream().sorted().toList(),
-                          params().member().getId());
+            if (selected != null && proposals.size() >= selected.majority) {
+                log.debug("Electing view: {} required: {} proposed: {} on: {}", nextViewId, selected.majority,
+                          proposals.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.complete();
             } else {
-                log.error("Failed election; selected: {} proposed: {} of: {} on: {}", selected != null,
-                          proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
+                log.error("Failed election selected: {} required: {} proposed: {} of: {} on: {}", selected != null,
+                          selected != null ? -1 : selected.majority, proposals.keySet().stream().sorted().toList(),
+                          nextViewId, params().member().getId());
                 transitions.failed();
             }
         }
@@ -350,8 +421,13 @@ public class ViewAssembly {
         }
 
         @Override
-        public void viewAgreement() {
-            ViewAssembly.this.castVote();
+        public void finish() {
+            started.set(false);
+        }
+
+        @Override
+        public void publishViews() {
+            propose();
         }
 
         private Join joinOf(SignedViewMember vm) {
