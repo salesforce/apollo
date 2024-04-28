@@ -177,9 +177,9 @@ public class ProcessContainerDomain extends ProcessDomain {
             Thread.currentThread().interrupt();
         }
         hostedDomains.values().forEach(d -> d.stop());
-        var portalELG = portalEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
-        var serverELG = contextEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
-        var clientELG = clientEventLoopGroup.shutdownGracefully(100, 1_000, TimeUnit.MILLISECONDS);
+        var portalELG = portalEventLoopGroup.shutdownGracefully();
+        var serverELG = contextEventLoopGroup.shutdownGracefully();
+        var clientELG = clientEventLoopGroup.shutdownGracefully();
         try {
             if (clientELG.await(30, TimeUnit.SECONDS)) {
                 log.info("Did not completely shutdown client event loop group for process: {}", member.getId());

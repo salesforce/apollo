@@ -273,7 +273,9 @@ public class ViewAssembly {
     }
 
     private void checkAssembly() {
-        if (proposals.size() >= selected.majority) {
+        if (proposals.size() == selected.majority) {
+            transitions.certified();
+        } else if (proposals.size() >= selected.majority) {
             transitions.gathered();
         }
     }
@@ -378,7 +380,7 @@ public class ViewAssembly {
                           nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.certified();
             } else {
-                countdown.set(2);
+                countdown.set(3);
                 log.debug("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
                           proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
