@@ -143,7 +143,13 @@ public class Bootstrapper {
                   .filter(cb -> cb.getBlock().hasReconfigure())
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
                   .forEach(reconfigure -> store.put(reconfigure));
-        scheduleViewChainCompletion(new AtomicReference<>(checkpointView.height()), ULong.valueOf(0));
+        var lastReconfig = ULong.valueOf(checkpointView.block.getHeader().getLastReconfig());
+        var zero = ULong.valueOf(0);
+        if (lastReconfig.equals(zero)) {
+            viewChainSynchronized.complete(true);
+        } else {
+            scheduleViewChainCompletion(new AtomicReference<>(lastReconfig), zero);
+        }
     }
 
     private boolean completeAnchor(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
@@ -214,7 +220,9 @@ public class Bootstrapper {
         long seed = Entropy.nextBitsStreamLong();
         ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks() * 2,
                                                                       params.combine().falsePositiveRate());
-        start.set(store.lastViewChainFrom(start.get()));
+        var lastViewChain = store.lastViewChainFrom(start.get());
+        assert lastViewChain != null : "last view chain from: " + start.get() + " is null";
+        start.set(lastViewChain);
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()
                                                        .setBlocksBff(blocksBff.toBff())
@@ -468,7 +476,7 @@ public class Bootstrapper {
         try {
             store.validate(anchor.height(), to);
             anchorSynchronized.complete(true);
-            log.info("Anchor chain to checkpoint synchronized on: {}", params.member().getId());
+            log.info("Anchor chain to checkpoint synchronized to: {} on: {}", to, params.member().getId());
         } catch (Throwable e) {
             log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), to,
                       params.member().getId(), e);

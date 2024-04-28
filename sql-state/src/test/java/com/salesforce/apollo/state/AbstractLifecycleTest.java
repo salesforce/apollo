@@ -42,6 +42,8 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -81,9 +83,10 @@ abstract public class AbstractLifecycleTest {
     protected              SigningMember                testSubject;
     protected              int                          toleranceLevel;
     DynamicContextImpl<Member> context;
-    private File                 baseDir;
-    private File                 checkpointDirBase;
-    private List<Transactioneer> transactioneers;
+    private File                     baseDir;
+    private File                     checkpointDirBase;
+    private List<Transactioneer>     transactioneers;
+    private ScheduledExecutorService scheduler;
 
     {
         var txns = MigrationTest.initializeBookSchema();
@@ -115,6 +118,10 @@ abstract public class AbstractLifecycleTest {
             choams.values().forEach(e -> e.stop());
             choams = null;
         }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
+        }
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         parameters.clear();
@@ -125,6 +132,7 @@ abstract public class AbstractLifecycleTest {
 
     @BeforeEach
     public void before() throws Exception {
+        scheduler = Executors.newScheduledThreadPool(10);
         checkpointOccurred = new CountDownLatch(CARDINALITY);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -301,7 +309,8 @@ abstract public class AbstractLifecycleTest {
                                                                        .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.getLast().getId()).getSession());
-        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown));
+        transactioneers.add(
+        new Transactioneer(scheduler, () -> update(entropy, mutator), mutator, timeout, 1, countdown));
         System.out.println("Transaction member: " + members.getLast().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());

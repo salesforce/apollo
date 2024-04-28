@@ -72,7 +72,7 @@ public class Store {
     public Iterator<ULong> blocksFrom(ULong from, ULong to, int max) {
         return new Iterator<>() {
             ULong next;
-            int remaining = max;
+            int   remaining = max;
 
             {
                 next = from == null ? ULong.valueOf(0) : from;
@@ -247,7 +247,7 @@ public class Store {
             }
             next = viewChain.get(next);
         }
-        return last;
+        return next == null ? last : next;
     }
 
     public void put(HashedCertifiedBlock cb) {
@@ -353,8 +353,8 @@ public class Store {
             ULong next;
 
             {
-                next = viewChain.get(from);
-                if (!viewChain.containsKey(next)) {
+                next = from;
+                if (!viewChain.containsKey(from)) {
                     next = null;
                 }
             }
@@ -412,10 +412,12 @@ public class Store {
         hashes.put(height, hash);
         hashToHeight.put(hash, height);
         if (block.hasReconfigure() || block.hasGenesis()) {
+            log.trace("insert view chain: {}:{}", height, hash);
             viewChain.put(ULong.valueOf(block.getHeader().getHeight()),
                           ULong.valueOf(block.getHeader().getLastReconfig()));
+        } else {
+            log.trace("insert: {}:{}", height, hash);
         }
-        log.trace("insert: {}:{}", height, hash);
     }
 
     private <T> T transactionally(Callable<T> action) throws ExecutionException {
