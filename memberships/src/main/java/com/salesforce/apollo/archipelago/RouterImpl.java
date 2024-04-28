@@ -197,7 +197,7 @@ public class RouterImpl implements Router {
         } catch (IOException e) {
             throw new IllegalStateException("Cannot start server", e);
         }
-        log.info("Started router: {}", server.getListenSockets());
+        log.info("Started router: {} on: {}", server.getListenSockets(), from.getId());
     }
 
     private <Service> RoutableService<Service> getRoutableService(Member member, Digest context, Service service,
@@ -213,7 +213,7 @@ public class RouterImpl implements Router {
         });
         routing.bind(context, service, validator);
         contextRegistration.accept(context);
-        log.info("Communications created for: " + member.getId());
+        log.info("Communications created for: {} on: {}", member.getId(), from.getId());
         return routing;
     }
 

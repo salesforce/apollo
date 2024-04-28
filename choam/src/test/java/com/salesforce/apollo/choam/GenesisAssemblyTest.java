@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -31,7 +32,6 @@ import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.slf4j.LoggerFactory;
 
@@ -88,18 +88,10 @@ public class GenesisAssemblyTest {
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
-            when(s.join(any(Digest.class), any(Digest.class))).then(new Answer<ViewMember>() {
-                @Override
-                public ViewMember answer(InvocationOnMock invocation) throws Throwable {
-                    KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
-                    final PubKey consensus = bs(keyPair.getPublic());
-                    return ViewMember.newBuilder()
-                                     .setId(m.getId().toDigeste())
-                                     .setConsensusKey(consensus)
-                                     .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
-                                     .build();
-
-                }
+            when(s.join(any(SignedViewMember.class), any(Digest.class))).then((Answer<Empty>) invocation -> {
+                KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
+                final PubKey consensus = bs(keyPair.getPublic());
+                return Empty.getDefaultInstance();
             });
         });
 
@@ -144,6 +136,11 @@ public class GenesisAssemblyTest {
                 @Override
                 public void onFailure() {
                     // do nothing
+                }
+
+                @Override
+                public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
+                    return null;
                 }
 
                 @Override

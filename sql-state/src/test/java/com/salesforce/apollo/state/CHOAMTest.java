@@ -81,6 +81,7 @@ public class CHOAMTest {
     private       List<SigningMember>          members;
     private       MetricRegistry               registry;
     private       Map<Digest, Router>          routers;
+    private       ScheduledExecutorService     scheduler;
 
     private static Txn initialInsert() {
         return Txn.newBuilder()
@@ -102,6 +103,10 @@ public class CHOAMTest {
             choams.values().forEach(e -> e.stop());
             choams = null;
         }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
+        }
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         members = null;
@@ -117,6 +122,7 @@ public class CHOAMTest {
 
     @BeforeEach
     public void before() throws Exception {
+        scheduler = Executors.newScheduledThreadPool(10);
         registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -184,7 +190,7 @@ public class CHOAMTest {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(
-                new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown));
+                new Transactioneer(scheduler, () -> update(entropy, mutator), mutator, timeout, max, countdown));
             }
         });
         System.out.println("Starting txns");

@@ -4,6 +4,9 @@ option java_multiple_files = true;
 option java_package = "com.salesforce.apollo.choam.proto";
 option java_outer_classname = "ChoamProto";
 option objc_class_prefix = "Chp";
+
+import "google/protobuf/empty.proto";
+
 import "crypto.proto";
 import "stereotomy.proto";
 
@@ -15,7 +18,7 @@ service TransactionSubmission {
 
 service Terminal {
   /* reconfiguration */
-  rpc join (crypto.Digeste) returns (SignedViewMember) {}
+  rpc join (SignedViewMember) returns (google.protobuf.Empty) {}
 
   /* bootstrapping */
   rpc sync(Synchronize) returns (Initial) {}
@@ -47,6 +50,7 @@ message Block {
     Reconfigure reconfigure = 3;
     Checkpoint checkpoint = 4;
     Executions executions = 5;
+    Assemble assemble = 6;
   }
 }
 
@@ -81,6 +85,10 @@ message Checkpoint {
 
 message Executions {
   repeated Transaction executions = 1;
+}
+
+message Assemble {
+  View view = 1;
 }
 
 message FoundationSeal {
@@ -130,7 +138,8 @@ message Views {
 
 message View {
   crypto.Digeste diadem = 1;
-  repeated crypto.Digeste committee = 2;
+  int32 majority = 2;
+  repeated crypto.Digeste committee = 3;
 }
 
 message SignedView {
@@ -142,8 +151,9 @@ message SignedView {
 message ViewMember {
   crypto.Digeste id = 1;
   crypto.Digeste view = 2;
-  crypto.PubKey consensusKey = 3;
-  crypto.Sig signature = 4;
+  crypto.Digeste diadem = 3;
+  crypto.PubKey consensusKey = 4;
+  crypto.Sig signature = 5;
 }
 
 message SignedViewMember {

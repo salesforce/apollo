@@ -11,14 +11,15 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
-import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
+import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
@@ -220,11 +221,13 @@ public class DomainTest {
                                                                      "jdbc:h2:mem:%s-state;DB_CLOSE_DELAY=-1".formatted(
                                                                      d), checkpointDirBase, Duration.ofMillis(10),
                                                                      0.00125, Duration.ofMinutes(1), 3, 10, 0.1);
-            var domain = new ProcessDomain(group, member, pdParams, params, RuntimeParameters.newBuilder()
-                                                                                             .setFoundation(sealed)
-                                                                                             .setContext(context)
-                                                                                             .setCommunications(
-                                                                                             localRouter),
+            var domain = new ProcessDomain(group, member, pdParams, params.clone(), RuntimeParameters.newBuilder()
+                                                                                                     .setFoundation(
+                                                                                                     sealed)
+                                                                                                     .setContext(
+                                                                                                     context)
+                                                                                                     .setCommunications(
+                                                                                                     localRouter),
                                            new InetSocketAddress(0), ffParams, null);
             domains.add(domain);
             localRouter.start();
@@ -247,18 +250,27 @@ public class DomainTest {
     }
 
     private Builder params() {
-        var params = Parameters.newBuilder()
-                               .setGenerateGenesis(true)
-                               .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGossipDuration(Duration.ofMillis(10))
-                               .setProducer(ProducerParameters.newBuilder()
-                                                              .setGossipDuration(Duration.ofMillis(20))
-                                                              .setBatchInterval(Duration.ofMillis(100))
-                                                              .setMaxBatchByteSize(1024 * 1024)
-                                                              .setMaxBatchCount(3000)
-                                                              .build())
-                               .setCheckpointBlockDelta(200);
-        params.getProducer().ethereal().setEpochLength(7).setNumberOfEpochs(3);
-        return params;
+        var template = Parameters.newBuilder()
+                                 .setGenerateGenesis(true)
+                                 .setGenesisViewId(GENESIS_VIEW_ID)
+                                 .setBootstrap(Parameters.BootstrapParameters.newBuilder()
+                                                                             .setGossipDuration(Duration.ofMillis(50))
+                                                                             .build())
+                                 .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
+                                 .setGossipDuration(Duration.ofMillis(50))
+                                 .setProducer(Parameters.ProducerParameters.newBuilder()
+                                                                           .setGossipDuration(Duration.ofMillis(50))
+                                                                           .setBatchInterval(Duration.ofMillis(50))
+                                                                           .setMaxBatchByteSize(1024 * 1024)
+                                                                           .setMaxBatchCount(10_000)
+                                                                           .setEthereal(Config.newBuilder()
+                                                                                              .setNumberOfEpochs(3)
+                                                                                              .setEpochLength(7))
+                                                                           .build())
+                                 .setCheckpointBlockDelta(200)
+                                 .setDrainPolicy(ExponentialBackoffPolicy.newBuilder()
+                                                                         .setInitialBackoff(Duration.ofMillis(1))
+                                                                         .setMaxBackoff(Duration.ofMillis(1)));
+        return template;
     }
 }

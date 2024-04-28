@@ -15,75 +15,69 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Reconfiguration {
     void certify();
 
-    void complete();
+    void checkAssembly();
 
-    void elect();
+    void checkViews();
+
+    void complete();
 
     void failed();
 
-    void gather();
+    void finish();
 
-    void nominate();
-
-    void viewAgreement();
+    void publishViews();
 
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
+            // Publish the Views of this node
+            @Entry
+            public void publish() {
+                context().publishViews();
+            }
+
+            // We have a majority of members submitting view proposals
             @Override
-            public Transitions assembled() {
+            public Transitions proposed() {
                 return VIEW_AGREEMENT;
             }
         }, CERTIFICATION {
+            // We have a full complement of the committee view proposals
             @Override
             public Transitions certified() {
-                return RECONFIGURE;
+                return RECONFIGURED;
             }
 
+            // We have waited to get a full compliment and have now finished waiting
+            @Override
+            public Transitions countdownCompleted() {
+                return RECONFIGURED;
+            }
+
+            // See if we already have a full complement of Joins of the next committee
+            // if not set a deadline
             @Entry
             public void certify() {
                 context().certify();
             }
-
-            @Override
-            public Transitions gathered() {
-                return CERTIFICATION;
-            }
-
-            @Override
-            public Transitions validation() {
-                return CERTIFICATION;
-            }
         }, GATHER {
-            @Entry
-            public void assembly() {
-                context().gather();
-            }
-
+            // We have a majority of the new committee Joins
             @Override
             public Transitions gathered() {
-                return NOMINATION;
-            }
-
-            @Override
-            public Transitions viewDetermined() {
-                return null;
-            }
-        }, NOMINATION {
-            @Entry
-            public void nominate() {
-                context().nominate();
-            }
-
-            @Override
-            public Transitions nominated() {
                 return CERTIFICATION;
+            }
+
+            // We have a full complement of the new committee Joins
+            @Override
+            public Transitions certified() {
+                return CERTIFICATION;
+            }
+
+            // Check to see if we already have a full complement of committee Joins
+            @Entry
+            public void gather() {
+                context().checkAssembly();
             }
         }, PROTOCOL_FAILURE {
-            @Override
-            public Transitions assembled() {
-                return null;
-            }
-
             @Override
             public Transitions certified() {
                 return null;
@@ -99,69 +93,58 @@ public interface Reconfiguration {
                 return null;
             }
 
-            @Override
-            public Transitions gathered() {
-                return null;
-            }
-
-            @Override
-            public Transitions nominated() {
-                return null;
-            }
-
             @Entry
             public void terminate() {
                 context().failed();
             }
-
-            @Override
-            public Transitions validation() {
-                return null;
-            }
-        }, RECONFIGURE {
-            @Override
-            public Transitions complete() {
-                return RECONFIGURED;
-            }
-
-            @Entry
-            public void elect() {
-                context().elect();
-            }
         }, RECONFIGURED {
+            // Finish and close down the assembly
             @Override
             public Transitions complete() {
+                context().finish();
                 return null;
             }
 
+            // Complete the configuration protocol
+            // The slate of the ViewAssembly now contains
+            // the SignedViewMembers of the next committee
             @Entry
             public void completion() {
                 context().complete();
             }
         }, VIEW_AGREEMENT {
+            // Vote on the Views gathered
             @Entry
             public void viewConsensus() {
-                context().viewAgreement();
+                context().checkViews();
             }
 
+            // The View for the assembly has been selected
             @Override
-            public Transitions viewDetermined() {
+            public Transitions viewAcquired() {
                 return GATHER;
+            }
+
+            // no op+
+            @Override
+            public Transitions proposed() {
+                return null;
             }
         }
     }
 
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
-        default Transitions assembled() {
-            throw fsm().invalidTransitionOn();
-        }
 
         default Transitions certified() {
             throw fsm().invalidTransitionOn();
         }
 
         default Transitions complete() {
-            return Reconfigure.RECONFIGURE;
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions countdownCompleted() {
+            throw fsm().invalidTransitionOn();
         }
 
         default Transitions failed() {
@@ -169,18 +152,14 @@ public interface Reconfiguration {
         }
 
         default Transitions gathered() {
-            return null;
-        }
-
-        default Transitions nominated() {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions validation() {
-            return null;
+        default Transitions proposed() {
+            throw fsm().invalidTransitionOn();
         }
 
-        default Transitions viewDetermined() {
+        default Transitions viewAcquired() {
             throw fsm().invalidTransitionOn();
         }
     }

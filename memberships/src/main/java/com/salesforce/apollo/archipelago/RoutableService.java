@@ -57,6 +57,9 @@ public class RoutableService<Service> {
                         }
                     }
                     c.accept(binding.service);
+                } catch (StatusRuntimeException sre) {
+                    log.debug("Uncaught SRE in service evaluation: {} for context: {}", sre.getStatus(), context);
+                    responseObserver.onError(sre);
                 } catch (RejectedExecutionException e) {
                     log.debug("Rejected execution context: {} on: {}", context, c);
                 } catch (Throwable t) {

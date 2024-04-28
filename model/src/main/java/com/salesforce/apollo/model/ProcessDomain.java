@@ -121,7 +121,7 @@ public class ProcessDomain extends Domain {
 
     protected BiConsumer<Context, Digest> listener() {
         return (context, diadem) -> {
-            choam.nextView(context, diadem);
+            choam.rotateViewKeys(context, diadem);
 
             log.info("View change: {} for: {} cardinality: {} on: {}", diadem, params.context().getId(),
                      context.totalCount(), params.member().getId());

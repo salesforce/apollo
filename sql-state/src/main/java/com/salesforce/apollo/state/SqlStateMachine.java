@@ -337,7 +337,7 @@ public class SqlStateMachine {
         } catch (LiquibaseException e) {
             throw new IllegalStateException("unable to initialize db state on: " + id, e);
         }
-        log.debug("Initialized state on: {}", url);
+        log.debug("Initialized state: {} on: {}", url, id);
     }
 
     private int[] acceptBatch(Batch batch) throws SQLException {
@@ -408,7 +408,7 @@ public class SqlStateMachine {
                     exec.executeUpdate();
                     break;
                 default:
-                    log.debug("Invalid statement execution enum: {}", call.getExecution());
+                    log.debug("Invalid statement execution enum: {} on: {}", call.getExecution(), id);
                     return new CallResult(out, results);
                 }
                 for (int j = 1; j <= call.getOutParametersCount(); j++) {
@@ -483,7 +483,7 @@ public class SqlStateMachine {
                     exec.executeUpdate();
                     break;
                 default:
-                    log.debug("Invalid statement execution enum: {}", statement.getExecution());
+                    log.debug("Invalid statement execution enum: {} on: {}", statement.getExecution(), id);
                     return Collections.emptyList();
                 }
                 CachedRowSet rowset = factory.createCachedRowSet();
@@ -562,7 +562,7 @@ public class SqlStateMachine {
         begin(height, hash);
         withContext(() -> {
             updateCurrent(height, hash, -1, Digest.NONE);
-            log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
+            log.debug("Begin block: {} hash: {} on: {}", height, hash, id);
         });
     }
 
@@ -635,7 +635,7 @@ public class SqlStateMachine {
 
     private void execute(int index, Digest txnHash, Txn tx,
                          @SuppressWarnings("rawtypes") CompletableFuture onCompletion, Executor executor) {
-        log.debug("executing: {}", tx.getExecutionCase());
+        log.debug("executing: {} on: {}", tx.getExecutionCase(), id);
         var executing = executingBlock.get();
         updateCurrent(executing.height, executing.blkHash, index, txnHash);
 
@@ -702,7 +702,7 @@ public class SqlStateMachine {
         deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
         updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
-        log.info("Engine statements initialized");
+        log.info("Engine statements initialized on: {}", id);
     }
 
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
@@ -995,7 +995,7 @@ public class SqlStateMachine {
             try {
                 txn = Txn.parseFrom(tx.getContent());
             } catch (InvalidProtocolBufferException e) {
-                log.warn("invalid txn: {}", tx, e);
+                log.warn("invalid txn: {} on: {}", tx, id, e);
                 onComplete.completeExceptionally(e);
                 return;
             }

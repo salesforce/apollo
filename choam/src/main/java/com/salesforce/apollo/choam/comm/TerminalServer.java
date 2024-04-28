@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.cryptography.Digest;
-import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.protocols.ClientIdentity;
 import io.grpc.stub.StreamObserver;
 
@@ -70,14 +70,14 @@ public class TerminalServer extends TerminalImplBase {
     }
 
     @Override
-    public void join(Digeste nextView, StreamObserver<SignedViewMember> responseObserver) {
+    public void join(SignedViewMember request, StreamObserver<Empty> responseObserver) {
         Digest from = identity.getFrom();
         if (from == null) {
             responseObserver.onError(new IllegalStateException("Member has been removed"));
             return;
         }
         router.evaluate(responseObserver, s -> {
-            responseObserver.onNext(s.join(Digest.from(nextView), from));
+            responseObserver.onNext(s.join(request, from));
             responseObserver.onCompleted();
         });
     }

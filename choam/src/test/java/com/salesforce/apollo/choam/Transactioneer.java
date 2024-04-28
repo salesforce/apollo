@@ -25,8 +25,7 @@ class Transactioneer {
     private final static Random                     entropy   = new Random();
     private final static Logger                     log       = LoggerFactory.getLogger(Transactioneer.class);
     private final static Executor                   executor  = Executors.newVirtualThreadPerTaskExecutor();
-    private final static ScheduledExecutorService   scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual()
-                                                                                                          .factory());
+    private final        ScheduledExecutorService   scheduler;
     private final        AtomicInteger              completed = new AtomicInteger();
     private final        CountDownLatch             countdown;
     private final        List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();
@@ -39,7 +38,9 @@ class Transactioneer {
                                                                            .build();
     private final        AtomicBoolean              finished  = new AtomicBoolean();
 
-    Transactioneer(Session session, Duration timeout, int max, CountDownLatch countdown) {
+    Transactioneer(ScheduledExecutorService scheduler, Session session, Duration timeout, int max,
+                   CountDownLatch countdown) {
+        this.scheduler = scheduler;
         this.session = session;
         this.timeout = timeout;
         this.max = max;

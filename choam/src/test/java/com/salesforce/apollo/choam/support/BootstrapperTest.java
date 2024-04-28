@@ -63,6 +63,7 @@ public class BootstrapperTest {
         var context = new StaticContext<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, members, 3);
         TestChain testChain = new TestChain(bootstrapStore);
         testChain.genesis()
+                 .checkpoint()
                  .userBlocks(10)
                  .viewChange()
                  .userBlocks(10)

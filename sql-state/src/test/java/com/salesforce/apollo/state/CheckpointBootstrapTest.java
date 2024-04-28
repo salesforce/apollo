@@ -7,6 +7,7 @@
 package com.salesforce.apollo.state;
 
 import com.salesforce.apollo.context.DynamicContext;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
@@ -34,10 +35,10 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     public void checkpointBootstrap() throws Exception {
         pre();
 
-        checkpointOccurred.await(30, TimeUnit.SECONDS);
+        checkpointOccurred.await(10, TimeUnit.SECONDS);
 
         ULong chkptHeight = checkpointHeight.get();
-        assertNotNull(chkptHeight, "Null checkpoint height!");
+        assertNotNull(chkptHeight, "No checkpoint");
         System.out.println("Checkpoint at height: " + chkptHeight);
 
         var processed = Utils.waitForCondition(10_000, 1_000, () -> {
@@ -64,11 +65,11 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
-        ((DynamicContext) choam.context().delegate()).activate(testSubject);
+        ((DynamicContext<Member>) choam.context().delegate()).activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choam.active()),
+        assertTrue(Utils.waitForCondition(30_000, 1_000, choam::active),
                    "Test subject did not become active: " + choam.logState());
         members.add(testSubject);
         post();

@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.protobuf.Empty;
 import com.salesforce.apollo.choam.proto.*;
 import com.salesforce.apollo.cryptography.Digest;
 
@@ -20,7 +21,7 @@ public interface Concierge {
 
     Blocks fetchViewChain(BlockReplication request, Digest from);
 
-    SignedViewMember join(Digest nextView, Digest from);
+    Empty join(SignedViewMember nextView, Digest from);
 
     Initial sync(Synchronize request, Digest from);
 

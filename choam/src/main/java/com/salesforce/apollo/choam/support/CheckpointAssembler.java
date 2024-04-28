@@ -77,8 +77,8 @@ public class CheckpointAssembler {
     }
 
     private void assembled(CheckpointState cs) {
-        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
-                 member.getId());
+        log.info("Assembled checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(),
+                 diadem.compactWrapped(), member.getId());
         assembled.complete(cs);
     }
 
@@ -110,8 +110,8 @@ public class CheckpointAssembler {
         if (assembled.isDone()) {
             return;
         }
-        log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(), diadem,
-                 member.getId());
+        log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(),
+                 diadem.compactWrapped(), member.getId());
         var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
         ringer.iterate(digestAlgorithm.random(), (link, ring) -> gossip(link),
                        (tally, result, destination) -> gossip(result), t -> scheduler.schedule(

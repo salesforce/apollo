@@ -237,6 +237,7 @@ public class GenesisAssembly implements Genesis {
     private void certify(Validate v) {
         if (reconfiguration == null) {
             pendingValidations.add(v);
+            return;
         }
         log.trace("Validating reconfiguration block: {} height: {} on: {}", reconfiguration.hash,
                   reconfiguration.height(), params().member().getId());

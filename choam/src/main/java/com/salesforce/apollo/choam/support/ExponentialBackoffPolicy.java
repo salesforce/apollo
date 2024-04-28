@@ -58,7 +58,7 @@ public class ExponentialBackoffPolicy {
         return (long) (Entropy.nextBitsStreamDouble() * mag + low);
     }
 
-    public static class Builder {
+    public static class Builder implements Cloneable {
         private Duration initialBackoff = Duration.ofMillis(10);
         private double   jitter         = .2;
         private Duration maxBackoff     = Duration.ofMillis(500);
@@ -66,6 +66,14 @@ public class ExponentialBackoffPolicy {
 
         public ExponentialBackoffPolicy build() {
             return new ExponentialBackoffPolicy(initialBackoff, jitter, maxBackoff, multiplier);
+        }
+
+        public Builder clone() {
+            try {
+                return (Builder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException(e);
+            }
         }
 
         public Duration getInitialBackoff() {

@@ -41,6 +41,11 @@ public interface Genesis {
                 context().certify(preblock, last);
                 return last ? PUBLISH : null;
             }
+
+            @Override
+            public Transitions nextEpoch(Integer epoch) {
+                return null;
+            }
         }, FAIL {
         }, INITIAL {
             @Entry

@@ -570,7 +570,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         }
     }
 
-    public static class LimiterBuilder {
+    public static class LimiterBuilder implements Cloneable {
         private Duration backlogDuration = Duration.ofSeconds(1);
         private int      backlogSize     = 1_000;
         private double   backoffRatio    = 0.5;
@@ -595,6 +595,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                       .backlogSize(backlogSize)
                                       .backlogTimeout(backlogDuration)
                                       .build();
+        }
+
+        public LimiterBuilder clone() {
+            try {
+                return (LimiterBuilder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException(e);
+            }
         }
 
         public int getBacklogSize() {
@@ -706,11 +714,20 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         @Override
         public Builder clone() {
+            Builder clone;
             try {
-                return (Builder) super.clone();
+                clone = (Builder) super.clone();
             } catch (CloneNotSupportedException e) {
                 throw new IllegalStateException("well, that was unexpected");
             }
+            clone.setMvBuilder(mvBuilder.clone());
+            clone.setProducer(
+            new ProducerParameters(producer.ethereal.clone(), producer.gossipDuration, producer.maxBatchByteSize(),
+                                   producer.batchInterval, producer.maxBatchCount(), producer.maxGossipDelay));
+            clone.setTxnLimiterBuilder(txnLimiterBuilder.clone());
+            clone.setSubmitPolicy(submitPolicy.clone());
+            clone.setDrainPolicy(drainPolicy.clone());
+            return clone;
         }
 
         public BootstrapParameters getBootstrap() {

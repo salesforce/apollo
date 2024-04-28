@@ -350,7 +350,8 @@ class Binding {
         if (gateway.complete(
         new Bound(hexBloom, trust.getSuccessorsList().stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
                   initialSeedSet.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
-            log.info("Gateway acquired: {} context: {} on: {}", hexBloom.compact(), this.context.getId(), node.getId());
+            log.info("Gateway acquired: {} context: {} on: {}", hexBloom.compactWrapped(), this.context.getId(),
+                     node.getId());
         }
     }
 

@@ -77,6 +77,10 @@ public class ViewContext {
         return blockProducer.checkpoint();
     }
 
+    public int committeeSize() {
+        return validators.size();
+    }
+
     public Context<Member> context() {
         return context;
     }
@@ -150,6 +154,10 @@ public class ViewContext {
         return blockProducer.produce(l, hash, executions, checkpoint);
     }
 
+    public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
+        return blockProducer.produce(height, prev, assemble, checkpoint);
+    }
+
     public void publish(HashedCertifiedBlock block) {
         blockProducer.publish(block.hash, block.certifiedBlock);
     }
@@ -172,7 +180,9 @@ public class ViewContext {
 
     public JohnHancock sign(Views views) {
         if (log.isTraceEnabled()) {
-            log.trace("Signing views on: {}", params.member().getId());
+            log.trace("Signing views: {} on: {}",
+                      views.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                      params.member().getId());
         }
         return signer.sign(views.toByteString());
     }

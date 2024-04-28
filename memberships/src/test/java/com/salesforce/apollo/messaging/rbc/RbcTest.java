@@ -55,7 +55,7 @@ public class RbcTest {
     private static final boolean                         LARGE_TESTS    = Boolean.getBoolean("large_tests");
     private static final Parameters.Builder              parameters     = Parameters.newBuilder()
                                                                                     .setMaxMessages(100)
-                                                                                    .setFalsePositiveRate(0.0125)
+                                                                                    .setFalsePositiveRate(0.00125)
                                                                                     .setBufferSize(500)
                                                                                     .setDedupBufferSize(
                                                                                     LARGE_TESTS ? 100 * 100 : 50 * 50)

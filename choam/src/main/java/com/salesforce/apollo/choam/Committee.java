@@ -16,27 +16,45 @@ import com.salesforce.apollo.cryptography.JohnHancock;
 import com.salesforce.apollo.cryptography.Verifier;
 import com.salesforce.apollo.cryptography.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.MockMember;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
+import static io.grpc.Status.ABORTED;
 
 /**
  * @author hal.hildebrand
  */
 public interface Committee {
 
-    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        var validators = reconfigure.getJoinsList()
-                                    .stream()
-                                    .collect(
-                                    Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getVm().getId())),
-                                                     e -> (Verifier) new DefaultVerifier(
-                                                     publicKey(e.getMember().getVm().getConsensusKey()))));
+    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context, Digest member,
+                                              Logger log) {
+        var validators = reconfigure.getJoinsList().stream().collect(Collectors.toMap(e -> {
+            var id = new Digest(e.getMember().getVm().getId());
+            var m = context.getMember(id);
+            if (m == null) {
+                log.info("No member for validator: {}, returning mock on: {}", id, member);
+                return new MockMember(id);
+            } else {
+                return m;
+            }
+        }, e -> {
+            var vm = e.getMember().getVm();
+            if (vm.hasConsensusKey()) {
+
+                return new DefaultVerifier(publicKey(vm.getConsensusKey()));
+            } else {
+                log.info("No member for validator: {}, returning mock on: {}", Digest.from(vm.getId()), member);
+                return Verifier.NO_VERIFIER;
+            }
+        }));
         assert !validators.isEmpty() : "No validators in this reconfiguration of: " + context.getId();
         return validators;
     }
@@ -64,11 +82,19 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
+    default void assemble(Assemble assemble) {
+    }
+
     void complete();
 
     boolean isMember();
 
-    SignedViewMember join(Digest nextView, Digest from);
+    default void join(SignedViewMember nextView, Digest from) {
+        log().trace("Error joining by: {} view: {} diadem: {} invalid committee: {} on: {}", from,
+                    Digest.from(nextView.getVm().getView()), Digest.from(nextView.getVm().getView()),
+                    this.getClass().getSimpleName(), params().member().getId());
+        throw new StatusRuntimeException(ABORTED);
+    }
 
     Logger log();
 
@@ -123,8 +149,8 @@ public interface Committee {
 
     default boolean validate(HashedCertifiedBlock hb, Map<Member, Verifier> validators) {
         Parameters params = params();
-
-        log().trace("Validating block: {} height: {} certs: {} on: {}", hb.hash, hb.height(),
+        log().trace("Validating block: {} hash: {} height: {} certs: {} on: {}", hb.block.getBodyCase(), hb.hash,
+                    hb.height(),
                     hb.certifiedBlock.getCertificationsList().stream().map(c -> new Digest(c.getId())).toList(),
                     params.member().getId());
         int valid = 0;
@@ -137,17 +163,18 @@ public interface Committee {
             }
         }
         final int toleranceLevel = params.context().toleranceLevel();
-        log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
+        log().trace("Validate: {} height: {} count: {} needed: {} on: {}", hb.hash, hb.height(), valid, toleranceLevel,
                     params.member().getId());
         return valid > toleranceLevel;
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {
-        if (!hb.block.hasGenesis()) {
+        if (!Objects.requireNonNull(hb.block).hasGenesis()) {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        var validators = validatorsOf(reconfigure, params().context());
+        var validators = validatorsOf(reconfigure, params().context(), params().member().getId(), log());
         return !validators.isEmpty() && validate(hb, validators);
     }
+
 }

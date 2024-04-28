@@ -29,6 +29,7 @@ import com.salesforce.apollo.messaging.proto.*;
 import com.salesforce.apollo.ring.RingCommunications;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
+import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -234,6 +235,10 @@ public class ReliableBroadcaster {
         try {
             return link.gossip(
             MessageBff.newBuilder().setRing(ring).setDigests(buffer.forReconcilliation().toBff()).build());
+        } catch (StatusRuntimeException sre) {
+            log.trace("rbc gossiping[{}] failed: {} with: {} ring: {} on: {}", buffer.round(), sre.getStatus(),
+                      link.getMember().getId(), ring, member.getId());
+            return null;
         } catch (Throwable e) {
             log.trace("rbc gossiping[{}] failed with: {} ring: {} on: {}", buffer.round(), link.getMember().getId(),
                       ring, member.getId(), e);
@@ -276,6 +281,8 @@ public class ReliableBroadcaster {
                 roundListeners.values().forEach(l -> {
                     try {
                         l.accept(gossipRound);
+                    } catch (StatusRuntimeException e) {
+                        log.error("error: {} sending round() to listener on: {}", e.getStatus(), member.getId(), e);
                     } catch (Throwable e) {
                         log.error("error sending round() to listener on: {}", member.getId(), e);
                     }
@@ -318,13 +325,12 @@ public class ReliableBroadcaster {
         }
 
         public static class Builder implements Cloneable {
-            private int bufferSize = 1500;
-
+            private int             bufferSize         = 1500;
             private int             dedupBufferSize    = 100;
             private double          dedupFpr           = Math.pow(10, -9);
             private int             deliveredCacheSize = 100;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.00125;
+            private double          falsePositiveRate  = 0.000125;
             private int             maxMessages        = 500;
 
             public Parameters build() {

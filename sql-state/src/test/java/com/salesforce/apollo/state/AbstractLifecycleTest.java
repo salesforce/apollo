@@ -20,6 +20,7 @@ import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -41,6 +42,8 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -55,11 +58,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author hal.hildebrand
  */
 abstract public class AbstractLifecycleTest {
-    protected static final int               CARDINALITY     = 5;
-    private static final   Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest(
+    protected static final int                          CARDINALITY      = 5;
+    private static final   Digest                       GENESIS_VIEW_ID  = DigestAlgorithm.DEFAULT.digest(
     "Give me food or give me slack or kill me".getBytes());
-    protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
-    protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
+    protected final        AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
+    protected final        Map<Member, SqlStateMachine> updaters         = new HashMap<>();
     //    static {
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
@@ -70,19 +73,20 @@ abstract public class AbstractLifecycleTest {
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TxDataSource.class)).setLevel(Level.TRACE);
     //    }
-    private final          List<Transaction> GENESIS_DATA;
-    private final   Map<Member, Parameters>      parameters       = new HashMap<>();
-    protected       SecureRandom                 entropy;
-    protected       CountDownLatch               checkpointOccurred;
-    protected       Map<Digest, CHOAM>           choams;
-    protected       List<SigningMember>          members;
-    protected       Map<Digest, Router>          routers;
-    protected       SigningMember                testSubject;
-    protected       int                          toleranceLevel;
+    private final          List<Transaction>            GENESIS_DATA;
+    private final          Map<Member, Parameters>      parameters       = new HashMap<>();
+    protected              SecureRandom                 entropy;
+    protected              CountDownLatch               checkpointOccurred;
+    protected              Map<Digest, CHOAM>           choams;
+    protected              List<SigningMember>          members;
+    protected              Map<Digest, Router>          routers;
+    protected              SigningMember                testSubject;
+    protected              int                          toleranceLevel;
     DynamicContextImpl<Member> context;
-    private File                 baseDir;
-    private File                 checkpointDirBase;
-    private List<Transactioneer> transactioneers;
+    private File                     baseDir;
+    private File                     checkpointDirBase;
+    private List<Transactioneer>     transactioneers;
+    private ScheduledExecutorService scheduler;
 
     {
         var txns = MigrationTest.initializeBookSchema();
@@ -114,6 +118,10 @@ abstract public class AbstractLifecycleTest {
             choams.values().forEach(e -> e.stop());
             choams = null;
         }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
+        }
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         parameters.clear();
@@ -124,6 +132,7 @@ abstract public class AbstractLifecycleTest {
 
     @BeforeEach
     public void before() throws Exception {
+        scheduler = Executors.newScheduledThreadPool(10);
         checkpointOccurred = new CountDownLatch(CARDINALITY);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -300,7 +309,8 @@ abstract public class AbstractLifecycleTest {
                                                                        .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.getLast().getId()).getSession());
-        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown));
+        transactioneers.add(
+        new Transactioneer(scheduler, () -> update(entropy, mutator), mutator, timeout, 1, countdown));
         System.out.println("Transaction member: " + members.getLast().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
@@ -356,6 +366,9 @@ abstract public class AbstractLifecycleTest {
                                                               .setBatchInterval(Duration.ofMillis(10))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
+                                                              .setEthereal(Config.newBuilder()
+                                                                                 .setEpochLength(7)
+                                                                                 .setNumberOfEpochs(3))
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockDelta(checkpointBlockSize())
