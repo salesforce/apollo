@@ -1386,9 +1386,9 @@ public class CHOAM {
             var servers = new GroupIterator(validators.keySet());
             var joined = new HashSet<Member>();
 
-            var delay = Duration.ofMillis(Entropy.nextSecureInt(100));
+            var delay = Duration.ofMillis(Entropy.nextSecureInt(5));
 
-            Thread.ofVirtual().start(() -> {
+            Thread.ofPlatform().start(() -> {
                 log.error("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                           params.member().getId());
                 while (!joining.isDone() && joined.size() < view.getMajority()) {
