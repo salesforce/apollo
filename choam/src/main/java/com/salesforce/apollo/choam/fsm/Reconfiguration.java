@@ -109,6 +109,11 @@ public interface Reconfiguration {
             public Transitions viewAcquired() {
                 return GATHER;
             }
+
+            @Override
+            public Transitions proposed() {
+                return null;
+            }
         }
     }
 
