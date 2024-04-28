@@ -122,20 +122,25 @@ leaderless.
 
 CHOAM is driven from a _Finite State Machine_ model using Tron (another module in Apollo). This manifests in the pattern
 of a leaf action driver in the form of _contexts_ that provide the leaf actions the Tron state machines. Currently, the
-FSM model has 4 state maps, representing the normal operation of the node (*Mercantile*), block production (*Earner*),
-the view rotation (*Reconfigure*) and Genesis bootstrapping (*BrickLayer*). The view reconfiguration logic provides
+FSM model has 4 state maps, representing the normal operation of the
+node [(*Mercantile*)](src/main/java/com/salesforce/apollo/choam/fsm/Combine.java),
+block production [(*Earner*)](src/main/java/com/salesforce/apollo/choam/fsm/Driven.java),
+the view rotation [(*Reconfigure*)](src/main/java/com/salesforce/apollo/choam/fsm/Reconfiguration.java)
+and Genesis bootstrapping [(*BrickLayer*)](src/main/java/com/salesforce/apollo/choam/fsm/Genesis.java).
+The view reconfiguration logic provides
 dynamic rotation of view/committee members based on random cuts across the underlying context membership rings on the
 view context ID (digest). This balances the load across all available members.
 
 ## Messaging
 
-Client transactions are submitted to the current members of the group using Point to Point messaging. Block production
-is accomplished with Ethereal Gossip and is reused for view change and genesis bootstrapping consensus as well. In
-CHOAM, only a small subset of the membership produces new blocks. Consequently, the other members of the CHOAM must
-somehow receive these blocks and do so reliably. The CHOAM group (context) uses the Reliable Broadcast from the
+Client transactions are submitted to the current members of the group using Point to Point messaging. Consensus block
+production
+uses Ethereal Gossip and is reused for view change and genesis bootstrapping consensus. In
+CHOAM, only a small subset of the total membership produces new blocks. Consequently, the other members of the CHOAM
+must
+somehow receive these blocks and do so reliably. The CHOAM group (context) uses a Reliable Broadcast from the
 _membership_ module to reliably distribute the blocks to all live members using a 2/3+1 variation of the firefly's ring
-calculation. This protocol's message buffer is bounded and garbage collected and efficient in dissemination. As it is a
-garbage collected, bounded buffer broadcast, messages will ultimately age out and discarded. The protocol is thus
-ultimately partially synchronous. Members can thus fall out of (partial) synchronization of the group. Currently, this
-is
-handled by resynchronizing with the available group through the same bootstrap mechanism a node uses to join anew.
+calculation. This protocol's message buffer is bounded and garbage collected and efficient in dissemination. As it is
+a garbage collected, bounded buffer broadcast, the messages will ultimately age out and discarded. As join and recovery
+synchronization rely upon getting these messages, during periods of no transactions the last block is periodically
+rebroadcast.
