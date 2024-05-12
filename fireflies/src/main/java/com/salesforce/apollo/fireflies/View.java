@@ -367,14 +367,14 @@ public class View {
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
             if (max != null && max.getCount() >= majority) {
-                log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
-                         majority, viewManagement.cardinality(), currentView(), node.getId());
+                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
+                         viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
                 observations.clear();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
-                log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
+                log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          observations.size(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
                 observations.clear();
