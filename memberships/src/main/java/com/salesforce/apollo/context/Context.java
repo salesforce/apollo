@@ -123,6 +123,22 @@ public interface Context<T extends Member> {
     Iterable<T> betweenSuccessor(int ring, T start, T stop);
 
     /**
+     * @param hash - the point on the rings to determine successors
+     * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
+     * rings
+     */
+    default Set<Member> bftSubset(Digest hash) {
+        Set<Member> successors = new HashSet<>();
+        successors(hash, m -> {
+            if (successors.size() == getRingCount()) {
+                return false;
+            }
+            return successors.add(m);
+        });
+        return successors;
+    }
+
+    /**
      * Maximum cardinality of this context
      */
     int cardinality();
