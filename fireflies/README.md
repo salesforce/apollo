@@ -28,18 +28,19 @@ describes. Membership is agreed upon across the group and changes only by consen
 incredibly stable foundation for utilizing the BFT secure overlay that Fireflies provides.
 
 Members must formally join a context. This is a two phase protocol of first contacting a seed (any one will do) and then
-redirecting to further members of the context to await the next view that includes the joining member. To formally join
-a context (cluster) of nodes, the joining member needs to know the complete membership of the context. The memship of
-the view is discovered using the information supplied to the joining member in the Gateway of the join response from the
+following the redirection to further members of the context to await the next view that includes the joining member. To formally join
+a context (cluster) of nodes, the joining member needs to know the complete membership of the context.  This membership 
+can be quite large.  Thus, the membership of the view is discovered, rather than returned from the Join prototocol.  
+The information supplied to the joining member in the Gateway of the join response from the
 redirect member for the joining view (the seeding member of the view supplied by the first phase of the Join protocol).
 The Gateway of this join contains a hash of the  _crown_  of the view (see view identity below) as well as a tight Bloom
 Filter that defines the membership set. This scheme is based off the most excellent
 paper [HEX-BLOOM: An Efficient Method for Authenticity and Integrity Verification in Privacy-preserving Computing](https://eprint.iacr.org/2021/773.pdf).
 
 This Join protocol is scalable and reuses the underlying Fireflies state reconcilliation to fill out the remaining
-membership. After the Join protocol succeeds, the member gossips with peers in the same view and participates in view
-changes. A member does not vote upon a view or accept Seed or Join requests until the view's membership is fully
-acquired.
+membership using gossip across the membership. After the Join protocol succeeds, the member gossips with peers 
+in the same view and participates in view changes. A member does not vote upon a view or accept Seed or Join 
+requests until the view's membership is fully acquired.
 
 ### Byzantine Fault Tolerant Join Protocol
 
@@ -53,28 +54,44 @@ tolerand and secure Join protocol. Which is pretty cool.
 ### Gossip Optimized Join
 
 Note that Apollo Fireflies does not return all the _SignedNotes_ (Apollo Fireflies KERI equivalent of an X509
-certificate, as in the origina FF paper) of all the members known in a view. Rather during the Join protocol, most
-existing members may not exist in the joining member's context and thus cannot be contacted. They are essentially in a
-pending state where the joining member is awaiting the state transfer of the these members'  _SignedNotes__ . Upon
+certificate) of all the members known in a view when responding to the Join. During the Join protocol members may 
+not exist in the joining member's context beyond the seed set and cannot be contacted. They are essentially in a
+pending state where the joining member is awaiting the state transfer of the these members'  _SignedNotes_ . Upon
 obtaining all members' notes the member then computes the  _crown_  of the membership and the view ID is the digest
-value of  _crown.rehash()_.
+value of  _crown.compact()_.
 
 Apollo Fireflies reuses the  _redirect_  part of the original Fireflies protocol to redirect the joining members to
 their correct successors in the current state of the view. The redirected joining member uses this discovery to fill out
 it's membership in the context. The underlying gossip state replication provides the state transfer of all the member's
 SignedNote state for the view to the joining member. This occurs rather quickly and spreads this rather large plug of
-state transfer required in the join of a view across the system, rather than punishing a member or two. It's also async,
-schocastic and BFT, which is nice.
+state transfer required by the join of a view across the system, rather than punishing a member or two haphazardly. 
+It's also async, schocastic and BFT, which is nice.
 
+### View Consensus Voting
 After a member has joined, the member can then participate in the global consensus that determines the view membership
-evolution. This process follows the broad outlines of
-the [Rapid paper](https://www.usenix.org/system/files/conference/atc18/atc18-suresh.pdf). Periodically the group members
-will issue votes on what they believe the next view membership should be. This is a list of SignedNotes of joining
-members and the digests of leaving members. When a member acquires 3/4+1 votes, and 3/4+1 of these votes agree on the
-joining and leaving members set, a new view will be installed in the member.
+evolution. This process deviates significantly from
+the [Rapid paper](https://www.usenix.org/system/files/conference/atc18/atc18-suresh.pdf).  In this implementation, there
+is a distinct BFT subset of the View membership that are responsible for Observations - that is, the ballots for changing
+a View from mebership set A to membership set B.  This set is chosen using the Context.bftSubset(digest) method and results
+in a small number of members Fireflies delegates the view change voting responsibilities.
 
-Thus, only incremental state transfer occurs for existing members during future joins, modulo any state reconcilliation
+In response to a number of Joins or Leaves, a vote will be scheduled on each View.  Only the bft membership subset defined by
+using the compact hash of the View's HexBloom crown may vote and only their votes are counted across the membership.  This
+gives use a byzantine fault tolerant way of cheaply getting trustworthy votes.  When voting occurs, all members count the votes
+and change the view accordingly, but only the bft meber subset voted.  Besides being quite secure and highly available, using this
+scheme is incredibly cheap as this BFT Subset cardinality is way, way less - in general - than the cardinality of the group.
+
+In the original Rapid paper, a 3/4+1 consensus is used and Fireflies had that for a while as well.  However, this would
+not scale to the extent we would like - e.g. 1,000,000 members.  So using the BFT subset, we're reusing the fundamental
+BFT Ring Structure of the Fireflies context  _itself_  which I also find highly satisfying.  So for 1,000,000 members
+rather than having 750,000 ballots we can leverage the View Context's rings to compute the BFT subset and get away with
+13-42 (depending on pByz one chooses).  This is a dramatic reduction both in state - we don't need 750K ballots to replicate
+around to everyone, nor do we need to get them to all agree and count them up.  So the Voting protocol now seems
+both secure and efficient.
+
+Only incremental state transfer occurs for existing members during future joins, modulo any state reconcilliation
 transfer for joining members. Steady state overhead is bounded and independent of the number of members in the view.
+As this is all based on the underlying gossip protocol, and the network bandwidth and compute spread evenly across the system.
 
 ### Designed For Stablity
 
@@ -82,10 +99,9 @@ Apollo Fireflies leverages the same sort of  __"almost everywhere"__  agreement 
 using a clever windowing proxy for stability as Rapid does, Apollo reuses the Accusation mechanism of the Fireflies
 protocol. Member  _instability_  is defined as existing  _rebuttal timers_  when the vote is proposed. If there are no
 rebuttal timers, the View is considered to be in a  _stable_  state for the member. When a member is stable, and if
-there are non zero joining/leavings, a  _Vote_  on the new membership view is created and submitted. After the vote is
-submitted, the member awaits the fast path consensus on the membership.
-
-_slow path consensus not implemented yet_
+there are non zero joining/leavings, and the member is an Observer (member of the BFT subset), then a  _Vote_  on 
+the new membership view is created and submitted. After the vote is submitted, the member awaits the fast path 
+consensus on the membership.
 
 #### Shunning
 
