@@ -19,6 +19,7 @@ import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -47,24 +48,25 @@ import java.util.stream.Collectors;
  * @author hal.hildebrand
  */
 public class ViewManagement {
-    private static final Logger                                        log          = LoggerFactory.getLogger(
-    ViewManagement.class);
-    final                AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
-    private final        AtomicInteger                                 attempt      = new AtomicInteger();
-    private final        Digest                                        bootstrapView;
-    private final        DynamicContext<Participant>                   context;
-    private final        DigestAlgorithm                               digestAlgo;
-    private final        ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
-    private final        FireflyMetrics                                metrics;
-    private final        Node                                          node;
-    private final        Parameters                                    params;
-    private final        Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
-    private final        View                                          view;
-    private final        AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
-    private final        Lock                                          joinLock     = new ReentrantLock();
-    private final        AtomicReference<Digest>                       currentView  = new AtomicReference<>();
-    private              boolean                                       bootstrap;
-    private              CompletableFuture<Void>                       onJoined;
+    private static final Logger log = LoggerFactory.getLogger(ViewManagement.class);
+
+    final            AtomicReference<HexBloom>                     diadem       = new AtomicReference<>();
+    final            Set<Digest>                                   observers    = new TreeSet<>();
+    private final    AtomicInteger                                 attempt      = new AtomicInteger();
+    private final    Digest                                        bootstrapView;
+    private final    DynamicContext<Participant>                   context;
+    private final    DigestAlgorithm                               digestAlgo;
+    private final    ConcurrentMap<Digest, NoteWrapper>            joins        = new ConcurrentSkipListMap<>();
+    private final    FireflyMetrics                                metrics;
+    private final    Node                                          node;
+    private final    Parameters                                    params;
+    private final    Map<Digest, Consumer<Collection<SignedNote>>> pendingJoins = new ConcurrentSkipListMap<>();
+    private final    View                                          view;
+    private final    AtomicReference<ViewChange>                   vote         = new AtomicReference<>();
+    private final    Lock                                          joinLock     = new ReentrantLock();
+    private final    AtomicReference<Digest>                       currentView  = new AtomicReference<>();
+    private volatile boolean                                       bootstrap;
+    private volatile CompletableFuture<Void>                       onJoined;
 
     ViewManagement(View view, DynamicContext<Participant> context, Parameters params, FireflyMetrics metrics, Node node,
                    DigestAlgorithm digestAlgo) {
@@ -356,11 +358,21 @@ public class ViewManagement {
     }
 
     /**
-     * start a view change if there's any offline members or joining members
+     * start a view change if there are any offline members or joining members
      */
     void maybeViewChange() {
-        if (context.offlineCount() > 0 || !joins.isEmpty()) {
-            initiateViewChange();
+        if ((context.offlineCount() > 0 || !joins.isEmpty())) {
+            if (isObserver()) {
+                initiateViewChange();
+            } else {
+                // Use pending rebuttals as a proxy for stability
+                if (view.hasPendingRebuttals()) {
+                    log.debug("Pending rebuttals in view: {} on: {}", currentView(), node.getId());
+                    view.scheduleViewChange(1); // 1 TTL round to check again
+                } else {
+                    view.scheduleFinalizeViewChange();
+                }
+            }
         } else {
             view.scheduleViewChange();
         }
@@ -476,18 +488,21 @@ public class ViewManagement {
      * Initiate the view change
      */
     private void initiateViewChange() {
+        assert isObserver() : "Not observer: " + node.getId();
         view.stable(() -> {
             if (vote.get() != null) {
                 log.trace("Vote already cast for: {} on: {}", currentView(), node.getId());
                 return;
             }
             // Use pending rebuttals as a proxy for stability
-            if (!view.hasPendingRebuttals()) {
+            if (view.hasPendingRebuttals()) {
                 log.debug("Pending rebuttals in view: {} on: {}", currentView(), node.getId());
                 view.scheduleViewChange(1); // 1 TTL round to check again
                 return;
             }
             view.scheduleFinalizeViewChange();
+            log.trace("Initiating view change vote: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
+                      view.streamShunned().count(), node.getId());
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView().toDigeste())
@@ -506,6 +521,13 @@ public class ViewManagement {
             log.info("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
                      change.getLeavesCount(), node.getId());
         });
+    }
+
+    /**
+     * @return true if the receiver is part of the BFT Observers of this group
+     */
+    private boolean isObserver() {
+        return observers.contains(node.getId());
     }
 
     private void joined(Collection<SignedNote> seedSet, Digest from, StreamObserver<Gateway> responseObserver,
@@ -546,6 +568,10 @@ public class ViewManagement {
     private void setDiadem(final HexBloom hex) {
         diadem.set(hex);
         currentView.set(diadem.get().compactWrapped());
+        observers.clear();
+        context.bftSubset(hex.compact()).stream().map(Member::getId).forEach(observers::add);
+        log.info("View: {} set diadem: {} observers: {} on: {}", context.getId(), diadem.get().compactWrapped(),
+                 observers.stream().toList(), node.getId());
     }
 
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {

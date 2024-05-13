@@ -43,7 +43,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Maximum pending joins
          */
-        private int      maxPending             = 15;
+        private int      maxPending             = 200;
         /**
          * Minimum cardinality for bloom filters
          */

@@ -548,13 +548,14 @@ public class StereotomyImpl implements Stereotomy {
 
             var signature = signer.sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
-            var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", Base64.getUrlEncoder()
-                                                                               .encodeToString(
-                                                                               (getState().getIdentifier()
-                                                                                          .toIdent()
-                                                                                          .toByteArray())),
-                                                        Base64.getUrlEncoder()
-                                                              .encodeToString(signature.toSig().toByteArray())));
+            var formatted = String.format("UID=%s, DC=%s", Base64.getUrlEncoder()
+                                                                 .withoutPadding()
+                                                                 .encodeToString(
+                                                                 (getState().getIdentifier().toIdent().toByteArray())),
+                                          Base64.getUrlEncoder()
+                                                .withoutPadding()
+                                                .encodeToString(signature.toSig().toByteArray()));
+            var dn = new BcX500NameDnImpl(formatted);
 
             return new CertificateWithPrivateKey(
             Certificates.selfSign(false, dn, keyPair, validFrom, validFrom.plus(valid), extensions),

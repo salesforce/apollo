@@ -343,14 +343,15 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var cardinality = context.memberCount();
-            final var superMajority = cardinality - ((cardinality - 1) / 4);
-            if (observations.size() < superMajority) {
-                log.trace("Do not have super majority: {} required: {}   for: {} on: {}", observations.size(),
-                          superMajority, currentView(), node.getId());
+            final var majority = context.size() == 1 ? 1 : context.majority();
+            if (observations.size() < majority) {
+                log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
+                          majority, viewManagement.observers.stream().toList(), currentView(), node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
+            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
+                     viewManagement.observers.stream().toList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             observations.values().forEach(vc -> {
                 final var leaving = new ArrayList<>(
@@ -365,16 +366,16 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            if (max != null && max.getCount() >= superMajority) {
-                log.info("Fast path consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
-                         superMajority, viewManagement.cardinality(), currentView(), node.getId());
+            if (max != null && max.getCount() >= majority) {
+                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
+                         viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
                 observations.clear();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
-                log.info("Fast path consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), superMajority, viewManagement.cardinality(),
+                log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
+                         observations.size(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
                 observations.clear();
             }
@@ -395,7 +396,7 @@ public class View {
     }
 
     boolean hasPendingRebuttals() {
-        return pendingRebuttals.isEmpty();
+        return !pendingRebuttals.isEmpty();
     }
 
     void initiate(SignedViewChange viewChange) {
@@ -823,6 +824,10 @@ public class View {
      */
     private boolean add(SignedViewChange observation) {
         final Digest observer = Digest.from(observation.getChange().getObserver());
+        if (!viewManagement.observers.contains(observer)) {
+            log.trace("Invalid observer: {} current: {} on: {}", observer, currentView(), node.getId());
+            return false;
+        }
         final var inView = Digest.from(observation.getChange().getCurrent());
         if (!currentView().equals(inView)) {
             log.trace("Invalid view change: {} current: {} from {} on: {}", inView, currentView(), observer,

@@ -168,7 +168,7 @@ public class E2ETest {
     }
 
     private void initialize() {
-        var parameters = Parameters.newBuilder().setMaxPending(5).setMaximumTxfr(5).build();
+        var parameters = Parameters.newBuilder().setMaxPending(20).setMaximumTxfr(5).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 

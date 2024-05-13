@@ -197,7 +197,7 @@ public class SwarmTest {
 
     private void initialize() {
         var parameters = Parameters.newBuilder()
-                                   .setMaxPending(10)
+                                   .setMaxPending(50)
                                    .setMaximumTxfr(20)
                                    .setJoinRetries(30)
                                    .setFpr(0.00000125)
