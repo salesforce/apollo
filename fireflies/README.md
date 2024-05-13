@@ -132,8 +132,7 @@ the necessity of a separate monitoring protocol.
 
 ## Current Limitations
 
-The system is mostly complete. Currently, only the supermajority fast path consensus is implemented. Fall back consensus
-to appear at a later date. Full bootstrap and join integration with Thoth is now complete and tested.
+The Fireflies module is functionally complete. Full bootstrap and join integration with Thoth is complete and tested.
 
 ## Status
 
