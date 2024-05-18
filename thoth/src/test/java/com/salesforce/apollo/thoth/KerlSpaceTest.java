@@ -18,6 +18,7 @@ import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
@@ -80,7 +81,8 @@ public class KerlSpaceTest {
 
         var identifierA = stereotomyA.newIdentifier();
         try (var connection = connectionPoolA.getConnection()) {
-            KerlDHT.updateLocationHash(identifierA.getIdentifier(), digestAlgorithm, DSL.using(connection));
+            KerlDHT.updateLocationHash(identifierA.getIdentifier(), digestAlgorithm,
+                                       DSL.using(connection, SQLDialect.H2));
         }
 
         identifierA.rotate();
@@ -94,7 +96,8 @@ public class KerlSpaceTest {
         identifierB.rotate();
         var digestB = identifierB.getLastEstablishingEvent().getCoordinates().getDigest();
         try (var connection = connectionPoolB.getConnection()) {
-            KerlDHT.updateLocationHash(identifierB.getIdentifier(), digestAlgorithm, DSL.using(connection));
+            KerlDHT.updateLocationHash(identifierB.getIdentifier(), digestAlgorithm,
+                                       DSL.using(connection, SQLDialect.H2));
         }
         var biffB = spaceB.populate(0x1638, new CombinedIntervals(
         new KeyInterval(digestAlgorithm.getOrigin(), digestAlgorithm.getLast())), 0.000125);

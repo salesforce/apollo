@@ -29,6 +29,7 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
+import org.jooq.SQLDialect;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
@@ -70,7 +71,7 @@ abstract public class UniKERL implements DigestKERL {
 
     public UniKERL(Connection connection, DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
-        this.dsl = DSL.using(connection);
+        this.dsl = DSL.using(connection, SQLDialect.H2);
         processor = new KeyEventProcessor(this);
     }
 
@@ -243,7 +244,7 @@ abstract public class UniKERL implements DigestKERL {
                 log.error("Error deserializing attachment event", e);
                 return;
             }
-            append(DSL.using(connection), event);
+            append(DSL.using(connection, SQLDialect.H2), event);
         });
     }
 
@@ -363,7 +364,7 @@ abstract public class UniKERL implements DigestKERL {
     }
 
     public static void initializeKERL(Connection connection) {
-        initialize(DSL.using(connection));
+        initialize(DSL.using(connection, SQLDialect.H2));
     }
 
     @Override
