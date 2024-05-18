@@ -20,6 +20,7 @@ import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import org.slf4j.Logger;
@@ -85,6 +86,7 @@ public class Enclave implements RouterSupplier {
                                                            .executor(executor)
                                                            .protocolNegotiator(new DomainSocketNegotiator(IMPL))
                                                            .channelType(IMPL.getServerDomainSocketChannelClass())
+                                                           .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                            .workerEventLoopGroup(IMPL.getEventLoopGroup())
                                                            .bossEventLoopGroup(IMPL.getEventLoopGroup())
                                                            .intercept(new DomainSocketServerInterceptor())
@@ -129,6 +131,7 @@ public class Enclave implements RouterSupplier {
             }
         };
         final var builder = NettyChannelBuilder.forAddress(bridge)
+                                               .withOption(ChannelOption.TCP_NODELAY, true)
                                                .executor(executor)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)

@@ -58,6 +58,7 @@ import liquibase.ui.ConsoleUIService;
 import liquibase.ui.UIService;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -956,7 +957,7 @@ public class KerlDHT implements ProtoKERLService {
 
     private void updateLocationHash(Identifier identifier) {
         try (var connection = connectionPool.getConnection()) {
-            var dsl = DSL.using(connection);
+            var dsl = DSL.using(connection, SQLDialect.H2);
             updateLocationHash(identifier, kerl.getDigestAlgorithm(), dsl);
         } catch (SQLException e) {
             log.error("Cannot update location hash for: {} on: {}", identifier, member.getId());

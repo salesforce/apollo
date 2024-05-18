@@ -23,6 +23,7 @@ import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import org.joou.ULong;
@@ -148,6 +149,7 @@ public class EnclaveTest {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .withOption(ChannelOption.TCP_NODELAY, true)
                                   .executor(executor)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)

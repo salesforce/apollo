@@ -28,6 +28,7 @@ import com.salesforce.apollo.thoth.proto.Update;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
+import org.jooq.SQLDialect;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
@@ -216,7 +217,7 @@ public class KerlSpace {
     public Biff populate(long seed, CombinedIntervals intervals, double fpr) {
         DigestBloomFilter bff = new DigestBloomFilter(seed, Math.max(cardinality(), 100), fpr);
         try (var connection = connectionPool.getConnection()) {
-            var dsl = DSL.using(connection);
+            var dsl = DSL.using(connection, SQLDialect.H2);
             eventDigestsIn(intervals, dsl).forEach(d -> {
                 log.trace("Adding reconcile digest: {} on: {}", d, member);
                 bff.add(d);
@@ -239,7 +240,7 @@ public class KerlSpace {
         var biff = BloomFilter.from(intervals.getHave());
         var update = Update.newBuilder();
         try (var connection = connectionPool.getConnection()) {
-            var dsl = DSL.using(connection);
+            var dsl = DSL.using(connection, SQLDialect.H2);
             intervals.getIntervalsList()
                      .stream()
                      .map(KeyInterval::new)
@@ -274,7 +275,7 @@ public class KerlSpace {
         final var digestAlgorithm = kerl.getDigestAlgorithm();
 
         try (var connection = connectionPool.getConnection()) {
-            var dsl = DSL.using(connection);
+            var dsl = DSL.using(connection, SQLDialect.H2);
             dsl.transaction(ctx -> {
                 var context = DSL.using(ctx);
                 for (var evente_ : events) {
@@ -298,7 +299,7 @@ public class KerlSpace {
     // the estimated cardinality of the number of key events
     private int cardinality() {
         try (var connection = connectionPool.getConnection()) {
-            var dsl = DSL.using(connection);
+            var dsl = DSL.using(connection, SQLDialect.H2);
             return dsl.fetchCount(dsl.selectFrom(IDENTIFIER));
         } catch (SQLException e) {
             log.error("Unable to provide estimated cardinality, cannot acquire JDBC connection on: {}", member, e);

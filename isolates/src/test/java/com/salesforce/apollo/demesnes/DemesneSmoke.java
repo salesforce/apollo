@@ -43,6 +43,7 @@ import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.channel.unix.ServerDomainSocketChannel;
@@ -192,6 +193,7 @@ public class DemesneSmoke {
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
                                   .executor(executor)
+                                  .withOption(ChannelOption.TCP_NODELAY, true)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(clientChannelType)
                                   .keepAliveTime(1, TimeUnit.SECONDS)

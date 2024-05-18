@@ -15,6 +15,7 @@ import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 
@@ -86,6 +87,7 @@ public class Portal<To extends Member> {
         };
         return NettyChannelBuilder.forAddress(address)
                                   .executor(executor)
+                                  .withOption(ChannelOption.TCP_NODELAY, true)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(channelType)
                                   .keepAliveTime(keepAlive.toNanos(), TimeUnit.NANOSECONDS)
