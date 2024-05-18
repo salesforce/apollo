@@ -30,6 +30,7 @@ import io.grpc.Server;
 import io.grpc.netty.DomainSocketNegotiatorHandler;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import org.joou.ULong;
@@ -84,6 +85,7 @@ public class ProcessContainerDomain extends ProcessDomain {
                                                                 .protocolNegotiator(
                                                                 new DomainSocketNegotiatorHandler.DomainSocketNegotiator(
                                                                 IMPL))
+                                                                .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                                 .channelType(IMPL.getServerDomainSocketChannelClass())
                                                                 .workerEventLoopGroup(portalEventLoopGroup)
                                                                 .bossEventLoopGroup(portalEventLoopGroup)
@@ -94,6 +96,7 @@ public class ProcessContainerDomain extends ProcessDomain {
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
                                                 .protocolNegotiator(
                                                 new DomainSocketNegotiatorHandler.DomainSocketNegotiator(IMPL))
+                                                .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                 .channelType(IMPL.getServerDomainSocketChannelClass())
                                                 .addService(new DemesneKERLServer(dht, null))
                                                 .addService(outerContextService())
@@ -207,6 +210,7 @@ public class ProcessContainerDomain extends ProcessDomain {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .withOption(ChannelOption.TCP_NODELAY, true)
                                   .executor(executor)
                                   .eventLoopGroup(clientEventLoopGroup)
                                   .channelType(channelType)

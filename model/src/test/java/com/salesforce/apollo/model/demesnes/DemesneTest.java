@@ -45,6 +45,7 @@ import io.grpc.netty.DomainSocketNegotiatorHandler.DomainSocketNegotiator;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.channel.unix.ServerDomainSocketChannel;
@@ -149,7 +150,9 @@ public class DemesneTest {
                                                                                  .bossEventLoopGroup(
                                                                                  IMPL.getEventLoopGroup())
                                                                                  .intercept(
-                                                                                 new DomainSocketServerInterceptor()),
+                                                                                 new DomainSocketServerInterceptor())
+                                                                                 .withChildOption(
+                                                                                 ChannelOption.TCP_NODELAY, true),
                                         s -> handler(portalEndpoint), bridge, Duration.ofMillis(1), s -> routes.get(s));
 
         final var endpoint1 = new DomainSocketAddress(Path.of("target").resolve(UUID.randomUUID().toString()).toFile());
@@ -280,6 +283,7 @@ public class DemesneTest {
 
     private ManagedChannel handler(DomainSocketAddress address) {
         return NettyChannelBuilder.forAddress(address)
+                                  .withOption(ChannelOption.TCP_NODELAY, true)
                                   .executor(executor)
                                   .eventLoopGroup(eventLoopGroup)
                                   .channelType(clientChannelType)

@@ -15,6 +15,7 @@ import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
+import io.netty.channel.ChannelOption;
 import io.netty.handler.ssl.ClientAuth;
 
 import java.net.SocketAddress;
@@ -33,6 +34,7 @@ public class MtlsClient {
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
                                      .executor(executor)
+                                     .withOption(ChannelOption.TCP_NODELAY, true)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, MtlsServer.TL_SV1_3))
                                      .intercept(new ConcurrencyLimitClientInterceptor(limiter,
                                                                                       () -> Status.RESOURCE_EXHAUSTED.withDescription(

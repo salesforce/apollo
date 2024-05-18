@@ -38,6 +38,7 @@ import com.salesforce.apollo.utils.Hex;
 import io.grpc.ManagedChannel;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import org.slf4j.Logger;
@@ -189,6 +190,7 @@ public class DemesneImpl implements Demesne {
             ManagedChannel channel = null;
             try {
                 channel = NettyChannelBuilder.forAddress(serverAddress)
+                                             .withOption(ChannelOption.TCP_NODELAY, true)
                                              .executor(executor)
                                              .intercept(clientInterceptor(kerlContext))
                                              .eventLoopGroup(eventLoopGroup)
@@ -210,6 +212,7 @@ public class DemesneImpl implements Demesne {
 
     private OuterContextClient outerFrom(File address) {
         return new OuterContextClient(NettyChannelBuilder.forAddress(new DomainSocketAddress(address))
+                                                         .withOption(ChannelOption.TCP_NODELAY, true)
                                                          .executor(executor)
                                                          .intercept(clientInterceptor(context.getId()))
                                                          .eventLoopGroup(eventLoopGroup)
