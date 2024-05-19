@@ -24,6 +24,11 @@ public interface EndpointProvider {
         return HostAndPort.fromParts(addr.getHostName(), addr.getPort()).toString();
     }
 
+    static <T extends SocketAddress> T reify(String encoded) {
+        var hnp = HostAndPort.fromString(encoded);
+        return (T) new InetSocketAddress(hnp.getHost(), hnp.getPort());
+    }
+
     SocketAddress addressFor(Member to);
 
     String getAlias();
@@ -32,6 +37,6 @@ public interface EndpointProvider {
 
     ClientAuth getClientAuth();
 
-    CertificateValidator getValiator();
+    CertificateValidator getValidator();
 
 }

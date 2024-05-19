@@ -6,12 +6,10 @@
  */
 package com.salesforce.apollo.archipelago;
 
-import com.google.common.net.HostAndPort;
 import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import io.netty.handler.ssl.ClientAuth;
 
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.function.Function;
 
@@ -27,7 +25,7 @@ public class StandardEpProvider implements EndpointProvider {
 
     public StandardEpProvider(String bindAddress, ClientAuth clientAuth, CertificateValidator validator,
                               Function<Member, String> resolver) {
-        this.bindAddress = reify(bindAddress);
+        this.bindAddress = EndpointProvider.reify(bindAddress);
         this.clientAuth = clientAuth;
         this.validator = validator;
         this.resolver = resolver;
@@ -35,7 +33,7 @@ public class StandardEpProvider implements EndpointProvider {
 
     @Override
     public SocketAddress addressFor(Member to) {
-        return reify(resolver.apply(to));
+        return EndpointProvider.reify(resolver.apply(to));
     }
 
     @Override
@@ -54,12 +52,7 @@ public class StandardEpProvider implements EndpointProvider {
     }
 
     @Override
-    public CertificateValidator getValiator() {
+    public CertificateValidator getValidator() {
         return validator;
-    }
-
-    private SocketAddress reify(String encoded) {
-        var hnp = HostAndPort.fromString(encoded);
-        return new InetSocketAddress(hnp.getHost(), hnp.getPort());
     }
 }
