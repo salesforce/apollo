@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.demesnes;
 
+import com.salesforce.apollo.archipelago.EndpointProvider;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -31,7 +32,6 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -208,7 +208,7 @@ public class FireFliesTrace {
                                                                                                     .setContext(context)
                                                                                                     .setCommunications(
                                                                                                     localRouter),
-                                                  new InetSocketAddress(0), commsDirectory, ffParams,
+                                                  EndpointProvider.allocatePort(), commsDirectory, ffParams,
                                                   IdentifierSpecification.newBuilder(), null);
             domains.add(node);
             routers.put(node, localRouter);
@@ -221,7 +221,7 @@ public class FireFliesTrace {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), EndpointProvider.allocatePort()));
         domains.forEach(d -> {
             BiConsumer<Context, Digest> c = (context, viewId) -> {
                 if (context.cardinality() == CARDINALITY) {

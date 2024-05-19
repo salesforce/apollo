@@ -333,8 +333,7 @@ class Binding {
     private NoteWrapper seedFor(Seed seed) {
         SignedNote seedNote = SignedNote.newBuilder()
                                         .setNote(Note.newBuilder()
-                                                     .setHost(seed.endpoint().getHostName())
-                                                     .setPort(seed.endpoint().getPort())
+                                                     .setEndpoint(seed.endpoint())
                                                      .setIdentifier(seed.identifier().toIdent())
                                                      .setEpoch(-1)
                                                      .setMask(ByteString.copyFrom(

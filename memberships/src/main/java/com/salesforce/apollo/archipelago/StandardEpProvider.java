@@ -6,28 +6,26 @@
  */
 package com.salesforce.apollo.archipelago;
 
+import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Member;
+import io.netty.handler.ssl.ClientAuth;
+
 import java.net.SocketAddress;
 import java.util.function.Function;
 
-import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
-import com.salesforce.apollo.membership.Member;
-
-import io.netty.handler.ssl.ClientAuth;
-
 /**
  * @author hal.hildebrand
- *
  */
 public class StandardEpProvider implements EndpointProvider {
 
-    private final SocketAddress                   bindAddress;
-    private final ClientAuth                      clientAuth;
-    private final Function<Member, SocketAddress> resolver;
-    private final CertificateValidator            validator;
+    private final SocketAddress            bindAddress;
+    private final ClientAuth               clientAuth;
+    private final Function<Member, String> resolver;
+    private final CertificateValidator     validator;
 
-    public StandardEpProvider(SocketAddress bindAddress, ClientAuth clientAuth, CertificateValidator validator,
-                              Function<Member, SocketAddress> resolver) {
-        this.bindAddress = bindAddress;
+    public StandardEpProvider(String bindAddress, ClientAuth clientAuth, CertificateValidator validator,
+                              Function<Member, String> resolver) {
+        this.bindAddress = EndpointProvider.reify(bindAddress);
         this.clientAuth = clientAuth;
         this.validator = validator;
         this.resolver = resolver;
@@ -35,7 +33,7 @@ public class StandardEpProvider implements EndpointProvider {
 
     @Override
     public SocketAddress addressFor(Member to) {
-        return resolver.apply(to);
+        return EndpointProvider.reify(resolver.apply(to));
     }
 
     @Override
@@ -54,8 +52,7 @@ public class StandardEpProvider implements EndpointProvider {
     }
 
     @Override
-    public CertificateValidator getValiator() {
+    public CertificateValidator getValidator() {
         return validator;
     }
-
 }

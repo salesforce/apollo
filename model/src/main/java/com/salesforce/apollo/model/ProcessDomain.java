@@ -25,7 +25,6 @@ import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,7 +54,7 @@ public class ProcessDomain extends Domain {
     private final   BiConsumer<Context, Digest>         listener           = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
-                         Builder builder, Parameters.RuntimeParameters.Builder runtime, InetSocketAddress endpoint,
+                         Builder builder, Parameters.RuntimeParameters.Builder runtime, String endpoint,
                          com.salesforce.apollo.fireflies.Parameters.Builder ff, StereotomyMetrics stereotomyMetrics) {
         super(member, builder, pdParams.dbURL, pdParams.checkpointBaseDir, runtime);
         parameters = pdParams;

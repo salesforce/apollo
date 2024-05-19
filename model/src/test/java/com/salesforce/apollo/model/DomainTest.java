@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
+import com.salesforce.apollo.archipelago.EndpointProvider;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -30,7 +31,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -228,7 +228,7 @@ public class DomainTest {
                                                                                                      context)
                                                                                                      .setCommunications(
                                                                                                      localRouter),
-                                           new InetSocketAddress(0), ffParams, null);
+                                           EndpointProvider.allocatePort(), ffParams, null);
             domains.add(domain);
             localRouter.start();
         });

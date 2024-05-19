@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
@@ -72,7 +71,7 @@ public class ProcessContainerDomain extends ProcessDomain {
 
     public ProcessContainerDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters parameters,
                                   Parameters.Builder builder, Parameters.RuntimeParameters.Builder runtime,
-                                  InetSocketAddress endpoint, Path commDirectory,
+                                  String endpoint, Path commDirectory,
                                   com.salesforce.apollo.fireflies.Parameters.Builder ff,
                                   IdentifierSpecification.Builder<SelfAddressingIdentifier> subDomainSpecification,
                                   StereotomyMetrics stereotomyMetrics) {

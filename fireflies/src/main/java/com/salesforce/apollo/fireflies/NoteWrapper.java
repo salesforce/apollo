@@ -40,16 +40,16 @@ public class NoteWrapper {
         return currentView;
     }
 
+    public String getEndpoint() {
+        return note.getNote().getEndpoint();
+    }
+
     public long getEpoch() {
         return note.getNote().getEpoch();
     }
 
     public Digest getHash() {
         return hash;
-    }
-
-    public String getHost() {
-        return note.getNote().getHost();
     }
 
     public Digest getId() {
@@ -62,10 +62,6 @@ public class NoteWrapper {
 
     public BitSet getMask() {
         return mask;
-    }
-
-    public int getPort() {
-        return note.getNote().getPort();
     }
 
     public JohnHancock getSignature() {

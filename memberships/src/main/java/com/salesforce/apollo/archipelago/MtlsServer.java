@@ -31,6 +31,8 @@ import io.netty.handler.ssl.*;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLPeerUnverifiedException;
@@ -51,15 +53,17 @@ import java.util.function.Supplier;
  * @author hal.hildebrand
  */
 public class MtlsServer implements RouterSupplier {
-    static final         String                                  TL_SV1_3          = "TLSv1.3";
-    private static final Provider                                PROVIDER_JSSE     = Security.getProvider("SunJSSE");
-    private final        LoadingCache<X509Certificate, Digest>   cachedMembership;
-    private final        Function<Member, ClientContextSupplier> contextSupplier;
-    private final        EndpointProvider                        epProvider;
-    private final        Member                                  from;
-    private final        Context.Key<SSLSession>                 sslSessionContext = Context.key("SSLSession");
-    private final        ServerContextSupplier                   supplier;
-    private final        Executor                                executor;
+    static final         String   TL_SV1_3      = "TLSv1.3";
+    private static final Provider PROVIDER_JSSE = Security.getProvider("SunJSSE");
+    private static final Logger   log           = LoggerFactory.getLogger(MtlsServer.class);
+
+    private final LoadingCache<X509Certificate, Digest>   cachedMembership;
+    private final Function<Member, ClientContextSupplier> contextSupplier;
+    private final EndpointProvider                        epProvider;
+    private final Member                                  from;
+    private final Context.Key<SSLSession>                 sslSessionContext = Context.key("SSLSession");
+    private final ServerContextSupplier                   supplier;
+    private final Executor                                executor;
 
     public MtlsServer(Member from, EndpointProvider epProvider, Function<Member, ClientContextSupplier> contextSupplier,
                       ServerContextSupplier supplier) {
@@ -148,7 +152,7 @@ public class MtlsServer implements RouterSupplier {
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),
-                                                                                            epProvider.getValiator(),
+                                                                                            epProvider.getValidator(),
                                                                                             PROVIDER_JSSE))
                                                              .fallbackHandlerRegistry(new MutableHandlerRegistry())
                                                              .withChildOption(ChannelOption.TCP_NODELAY, true)
@@ -174,8 +178,10 @@ public class MtlsServer implements RouterSupplier {
     }
 
     private ManagedChannel connectTo(Member to) {
-        return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
-                              contextSupplier.apply(from), epProvider.getValiator(), executor).getChannel();
+        var address = epProvider.addressFor(to);
+        log.debug("Connecting to: {} address: {} on: {}", to.getId(), address, from.getId());
+        return new MtlsClient(address, epProvider.getClientAuth(), epProvider.getAlias(), contextSupplier.apply(from),
+                              epProvider.getValidator(), executor).getChannel();
     }
 
     private X509Certificate getCert() {
