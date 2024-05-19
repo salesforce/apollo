@@ -8,10 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -27,7 +24,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
@@ -102,7 +98,7 @@ public class E2ETest {
 
         final var seeds = members.values()
                                  .stream()
-                                 .map(m -> new Seed(m.getIdentifier().getIdentifier(), new InetSocketAddress(0)))
+                                 .map(m -> new Seed(m.getIdentifier().getIdentifier(), EndpointProvider.allocatePort()))
                                  .limit(largeTests ? 10 : 1)
                                  .toList();
         final var bootstrapSeed = seeds.subList(0, 1);
@@ -206,8 +202,8 @@ public class E2ETest {
 
             gateway.start();
             gateways.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, Verifiers.from(kerl), comms,
-                            parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, EndpointProvider.allocatePort(), EventValidation.NONE, Verifiers.from(kerl),
+                            comms, parameters, gateway, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 

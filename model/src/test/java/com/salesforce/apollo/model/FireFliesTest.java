@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
+import com.salesforce.apollo.archipelago.EndpointProvider;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -96,7 +96,7 @@ public class FireFliesTest {
                                                                                                    .setContext(context)
                                                                                                    .setCommunications(
                                                                                                    localRouter),
-                                         new InetSocketAddress(0), ffParams, null);
+                                         EndpointProvider.allocatePort(), ffParams, null);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.start();
@@ -109,7 +109,7 @@ public class FireFliesTest {
         long then = System.currentTimeMillis();
         final var countdown = new CountDownLatch(domains.size());
         final var seeds = Collections.singletonList(
-        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), new InetSocketAddress(0)));
+        new Seed(domains.getFirst().getMember().getIdentifier().getIdentifier(), EndpointProvider.allocatePort()));
         domains.forEach(d -> {
             BiConsumer<Context, Digest> c = (context, viewId) -> {
                 if (context.cardinality() == CARDINALITY) {

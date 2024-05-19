@@ -48,8 +48,7 @@ message Note {
   crypto.Digeste currentView = 2;
   stereotomy.Ident identifier = 3;
   bytes mask = 4;
-  string host = 5;
-  int32 port = 6;
+  string endpoint = 5;
 }
 
 message ViewChange {

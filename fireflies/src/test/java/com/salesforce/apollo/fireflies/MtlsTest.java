@@ -33,8 +33,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
@@ -59,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MtlsTest {
     private static final int                                                         CARDINALITY;
     private static final Map<Digest, CertificateWithPrivateKey>                      certs       = new HashMap<>();
-    private static final Map<Digest, InetSocketAddress>                              endpoints   = new HashMap<>();
+    private static final Map<Digest, String>                                         endpoints   = new HashMap<>();
     private static final boolean                                                     LARGE_TESTS = Boolean.getBoolean(
     "large_tests");
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
@@ -81,11 +79,14 @@ public class MtlsTest {
             return stereotomy.newIdentifier();
         }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
         identities.entrySet().forEach(e -> {
-            InetSocketAddress endpoint = new InetSocketAddress(localhost, Utils.allocatePort());
             certs.put(e.getKey(),
                       e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT));
-            endpoints.put(e.getKey(), endpoint);
+            endpoints.put(e.getKey(), EndpointProvider.allocatePort());
         });
+    }
+
+    private static String endpoint(Member m) {
+        return ((Participant) m).endpoint();
     }
 
     @AfterEach
@@ -117,7 +118,6 @@ public class MtlsTest {
 
         var builder = ServerConnectionCache.newBuilder().setTarget(30);
         var frist = new AtomicBoolean(true);
-        Function<Member, SocketAddress> resolver = m -> ((Participant) m).endpoint();
 
         var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {
@@ -125,7 +125,7 @@ public class MtlsTest {
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = new StandardEpProvider(endpoints.get(node.getId()), ClientAuth.REQUIRE,
-                                                         CertificateValidator.NONE, resolver);
+                                                         CertificateValidator.NONE, MtlsTest::endpoint);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(

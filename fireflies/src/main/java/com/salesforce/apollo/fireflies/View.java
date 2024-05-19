@@ -51,8 +51,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -113,14 +111,14 @@ public class View {
     private final        Verifiers                                   verifiers;
     private volatile     ScheduledFuture<?>                          futureGossip;
 
-    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this(context, member, endpoint, validation, verifiers, communications, params, communications, digestAlgo,
              metrics);
     }
 
-    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+    public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
                 Router gateway, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
@@ -1481,19 +1479,18 @@ public class View {
         return verifier.get().verify(threshold, signature, message);
     }
 
-    public record Seed(SelfAddressingIdentifier identifier, InetSocketAddress endpoint) {
+    public record Seed(SelfAddressingIdentifier identifier, String endpoint) {
     }
 
     public class Node extends Participant implements SigningMember {
         private final ControlledIdentifierMember wrapped;
 
-        public Node(ControlledIdentifierMember wrapped, InetSocketAddress endpoint) {
+        public Node(ControlledIdentifierMember wrapped, String endpoint) {
             super(wrapped.getId());
             this.wrapped = wrapped;
             var n = Note.newBuilder()
                         .setEpoch(0)
-                        .setHost(endpoint.getHostName())
-                        .setPort(endpoint.getPort())
+                        .setEndpoint(endpoint)
                         .setIdentifier(wrapped.getIdentifier().getIdentifier().toIdent())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
@@ -1656,8 +1653,7 @@ public class View {
             var n = Note.newBuilder()
                         .setEpoch(0)
                         .setCurrentView(currentView().toDigeste())
-                        .setHost(current.getHost())
-                        .setPort(current.getPort())
+                        .setEndpoint(current.getEndpoint())
                         .setIdentifier(current.getIdentifier().toIdent())
                         .setMask(ByteString.copyFrom(nextMask().toByteArray()))
                         .build();
@@ -1693,12 +1689,12 @@ public class View {
             return id.compareTo(o.getId());
         }
 
-        public SocketAddress endpoint() {
+        public String endpoint() {
             final var current = note;
             if (current == null) {
                 return null;
             }
-            return new InetSocketAddress(current.getHost(), current.getPort());
+            return current.getEndpoint();
         }
 
         @Override
