@@ -443,7 +443,7 @@ public class View {
      * @param ring
      */
     boolean redirect(Participant member, Gossip gossip, int ring) {
-        if (!gossip.hasRedirect()) {
+        if (gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
             log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
                      node.getId());
             return false;
@@ -1060,7 +1060,7 @@ public class View {
                 final var member = destination.member();
                 try {
                     Gossip gossip = result.get();
-                    if (gossip.hasRedirect()) {
+                    if (!gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
                         stable(() -> redirect(member, gossip, destination.ring()));
                     } else if (viewManagement.joined()) {
                         try {
