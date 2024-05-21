@@ -274,7 +274,7 @@ class Binding {
                 return;
             }
             redirecting.iterate((link, m) -> {
-                if (!view.started.get()) {
+                if (gateway.isDone() || !view.started.get()) {
                     return null;
                 }
                 log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());

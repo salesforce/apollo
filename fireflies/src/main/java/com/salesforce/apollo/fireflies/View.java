@@ -619,11 +619,6 @@ public class View {
             return link.gossip(gossip);
         } catch (Throwable e) {
             final var p = (Participant) link.getMember();
-            if (!viewManagement.joined()) {
-                log.debug("Exception: {} bootstrap gossiping with:S {} view: {} on: {}", e.getMessage(), p.getId(),
-                          currentView(), node.getId());
-                return null;
-            }
             if (e instanceof StatusRuntimeException sre) {
                 switch (sre.getStatus().getCode()) {
                 case PERMISSION_DENIED:
@@ -653,7 +648,8 @@ public class View {
 
                 }
             } else {
-                log.debug("Exception gossiping with: {} view: {} on: {}", p.getId(), currentView(), node.getId(), e);
+                log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
+                          currentView(), node.getId(), e);
                 accuse(p, ring, e);
             }
             return null;
@@ -1298,7 +1294,7 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
+            log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
                       context.totalCount(), node.getId());
         }
     }
