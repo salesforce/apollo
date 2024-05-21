@@ -30,17 +30,19 @@ incredibly stable foundation for utilizing the BFT secure overlay that Fireflies
 Members must formally join a context. This is a two phase protocol of first contacting a seed (any one will do) and then
 following the redirection to further members of the context to await the next view that includes the joining member. To formally join
 a context (cluster) of nodes, the joining member needs to know the complete membership of the context.  This membership 
-can be quite large.  Thus, the membership of the view is discovered, rather than returned from the Join prototocol.  
-The information supplied to the joining member in the Gateway of the join response from the
-redirect member for the joining view (the seeding member of the view supplied by the first phase of the Join protocol).
+can be quite large.  Thus, the membership of the view is discovered, rather than returned from the Join prototocol.
+
+The join response the member receives is a Gateway from the
+redirect members (the seeding members supplied by the first phase of the Join protocol).
 The Gateway of this join contains a hash of the  _crown_  of the view (see view identity below) as well as a tight Bloom
 Filter that defines the membership set. This scheme is based off the most excellent
 paper [HEX-BLOOM: An Efficient Method for Authenticity and Integrity Verification in Privacy-preserving Computing](https://eprint.iacr.org/2021/773.pdf).
+This allows the joining member to precisely validate the membership of the joined View that it quickly acquires via the underlying gossip of the View.
 
 This Join protocol is scalable and reuses the underlying Fireflies state reconcilliation to fill out the remaining
-membership using gossip across the membership. After the Join protocol succeeds, the member gossips with peers 
-in the same view and participates in view changes. A member does not vote upon a view or accept Seed or Join 
-requests until the view's membership is fully acquired.
+membership using gossip across the membership. After the Join protocol completes, the member gossips normally with peers 
+in the same view and participates in view changes. A member will not vote upon a view or accept Seed or Join 
+requests until the view it is joining membership has been fully acquired.
 
 ### Byzantine Fault Tolerant Join Protocol
 
