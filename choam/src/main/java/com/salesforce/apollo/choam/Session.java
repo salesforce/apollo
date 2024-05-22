@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Function;
 import com.google.protobuf.Message;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
@@ -33,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
