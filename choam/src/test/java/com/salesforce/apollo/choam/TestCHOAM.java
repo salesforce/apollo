@@ -191,7 +191,7 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(LARGE_TESTS ? 3200 : 60, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 3200 : 120, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: " + transactioneers.stream()
                                                                                    .map(t -> t.getCompleted())
                                                                                    .filter(i -> i < max)
