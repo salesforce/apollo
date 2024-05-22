@@ -137,6 +137,7 @@ public class View {
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
+        gossiper.allowDuplicates();
         this.validation = validation;
         this.verifiers = verifiers;
     }
@@ -615,6 +616,7 @@ public class View {
                                                    .setRing(ring)
                                                    .setGossip(commonDigests())
                                                    .build());
+        log.info("gossiping with: {} on: {}", link.getMember().getId(), node.getId());
         try {
             return link.gossip(gossip);
         } catch (Throwable e) {
@@ -1330,7 +1332,7 @@ public class View {
                            .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
                            .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
                            .build();
-        log.trace("Redirecting: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
+        log.trace("Redirect: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
                   successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
                   gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
                   gossip.getJoins().getUpdatesCount(), node.getId());
@@ -1928,6 +1930,7 @@ public class View {
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
                     g = redirectTo(member, ring, successor, digests);
+                    log.info("Redirected: {} on: {}", member.getId(), node.getId());
                 } else {
                     g = Gossip.newBuilder()
                               .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))

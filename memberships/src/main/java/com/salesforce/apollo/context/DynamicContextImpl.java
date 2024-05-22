@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -41,7 +42,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     private final    Map<Digest, Tracked<T>>          members             = new ConcurrentSkipListMap<>();
     private final    Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
     private final    double                           pByz;
-    private final    List<Ring<T>>                    rings               = new ArrayList<>();
+    private final    List<Ring<T>>                    rings               = new CopyOnWriteArrayList<>();
     private volatile int                              cardinality;
 
     public DynamicContextImpl(Digest id, int cardinality, double pbyz, int bias) {
@@ -526,7 +527,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
             });
         }
         assert rings.size() == ringCount : "Ring count: " + rings.size() + " does not match: " + ringCount;
-        log.debug("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
+        log.info("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
     }
 
     @Override

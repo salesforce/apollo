@@ -180,6 +180,17 @@ public class SwarmTest {
                 }
                 assertTrue(testGraph.isSC());
             }
+
+            var ringRef = views.get(0).getContext().rings().toList();
+            for (var v : views) {
+                var tested = v.getContext().rings().toList();
+                for (int i = 0; i < ringRef.size(); i++) {
+                    var r = ringRef.get(i);
+                    var t = tested.get(i);
+                    assertEquals(r.getRing(), t.getRing());
+                    assertEquals(r.getRing(), t.getRing());
+                }
+            }
         }
         communications.forEach(e -> e.close(Duration.ofSeconds(1)));
         views.forEach(view -> view.stop());
