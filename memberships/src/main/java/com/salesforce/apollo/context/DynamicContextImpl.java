@@ -527,7 +527,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
             });
         }
         assert rings.size() == ringCount : "Ring count: " + rings.size() + " does not match: " + ringCount;
-        log.info("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
+        log.debug("Rebalanced: {} from: {} to: {} tolerance: {}", id, currentCount, rings.size(), toleranceLevel());
     }
 
     @Override
