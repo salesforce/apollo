@@ -36,11 +36,11 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     final         SigningMember                 member;
     private final CommonCommunications<Comm, ?> comm;
     private final Direction                     direction;
-    private final boolean                       ignoreSelf;
     private final Lock                          lock           = new ReentrantLock();
     private final List<iteration<T>>            traversalOrder = new ArrayList<>();
     protected     boolean                       noDuplicates   = true;
     volatile      int                           currentIndex   = -1;
+    private       boolean                       ignoreSelf;
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
         this(context, member, comm, false);
@@ -66,6 +66,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return this;
     }
 
+    public void dontIgnoreSelf() {
+        this.ignoreSelf = false;
+    }
+
     public <Q> void execute(BiFunction<Comm, Integer, Q> round, SyncHandler<T, Q, Comm> handler) {
         final var next = next(member.getId());
         if (next == null || next.member == null) {
@@ -81,13 +85,17 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         }
     }
 
+    public void ignoreSelf() {
+        this.ignoreSelf = true;
+    }
+
     public RingCommunications<T, Comm> noDuplicates() {
         noDuplicates = true;
         return this;
     }
 
     public void reset() {
-        currentIndex = 0;
+        currentIndex = -1;
         traversalOrder.clear();
         log.trace("Reset on: {}", member.getId());
     }
@@ -102,6 +110,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         var traversal = new ArrayList<iteration<T>>();
         var traversed = new TreeSet<T>();
         for (int ring = 0; ring < context.getRingCount(); ring++) {
+            if (context.size() == 1) {
+                traversal.add(new iteration<>((T) member, ring));
+                continue;
+            }
             T successor = direction.retrieve(context, ring, digest, m -> {
                 if (ignoreSelf && m.equals(member)) {
                     return Context.IterateResult.CONTINUE;

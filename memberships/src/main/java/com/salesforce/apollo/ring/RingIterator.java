@@ -114,7 +114,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
 
         var next = next(digest);
         log.trace("Iteration: {} tally: {} for digest: {} on: {} ring: {} complete: false on: {}", iteration(),
-                  tally.get(), digest, context.getId(), next.ring(), member.getId());
+                  tally.get(), digest, context.getId(), next == null ? "<null>" : next.ring(), member.getId());
         if (next == null || next.link() == null) {
             log.trace("No successor found for digest: {} on: {} iteration: {} traversed: {} ring: {} on: {}", digest,
                       context.getId(), iteration(), traversed, currentIndex, member.getId());
@@ -125,8 +125,8 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                           digest, context.getId(), tally.get(), member.getId());
                 schedule(proceed);
             } else {
-                log.trace("Completed on iteration: {} on: {} for digest: {} for: {} tally: {} on: {}", iteration(),
-                          digest, context.getId(), tally.get(), member.getId());
+                log.trace("Completed on iteration: {} for digest: {} for: {} tally: {} on: {}", iteration(), digest,
+                          context.getId(), tally.get(), member.getId());
             }
             return;
         }
