@@ -26,6 +26,7 @@ import java.util.stream.Stream;
  * @author hal.hildebrand
  */
 public class HexBloom {
+
     public static final  double                   DEFAULT_FPR      = 0.0001;
     public static final  long                     DEFAULT_SEED     = Primes.PRIMES[666];
     private static final Function<Digest, Digest> IDENTITY         = d -> d;
@@ -286,6 +287,25 @@ public class HexBloom {
      */
     public static List<Function<Digest, Digest>> hashWraps(int crowns) {
         return IntStream.range(0, crowns).mapToObj(i -> hashWrap(i)).toList();
+    }
+
+    public HexBloom add(Digest d, List<Function<Digest, Digest>> hashes) {
+        return addAll(Collections.singletonList(d), hashes);
+    }
+
+    public HexBloom addAll(List<Digest> added, List<Function<Digest, Digest>> hashes) {
+        var nextCard = cardinality + added.size();
+        var nextMembership = membership.clone();
+        var crwns = Arrays.stream(crowns).map(AtomicReference::new).toList();
+
+        added.forEach(d -> {
+            for (int i = 0; i < crwns.size(); i++) {
+                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
+            }
+            nextMembership.add(d);
+        });
+
+        return new HexBloom(nextCard, crwns.stream().map(AtomicReference::get).toList(), nextMembership);
     }
 
     public Digest compact() {

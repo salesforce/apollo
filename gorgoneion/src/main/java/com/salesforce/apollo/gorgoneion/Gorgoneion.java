@@ -415,7 +415,7 @@ public class Gorgoneion {
                 log.warn("Invalid notarization for: {} from: {} on: {}", identifier, from, member.getId());
                 throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Invalid notarization"));
             }
-            log.info("Enrolling notorization for: {} from: {} on: {}", identifier, from, member.getId());
+            log.info("Enrolling notarization for: {} from: {} on: {}", identifier, from, member.getId());
             Gorgoneion.this.enroll(request);
         }
 

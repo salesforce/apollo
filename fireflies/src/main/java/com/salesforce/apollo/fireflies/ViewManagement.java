@@ -386,7 +386,7 @@ public class ViewManagement {
             return view.gossip(link, 0);
         }, (futureSailor, link, m) -> {
             futureSailor.ifPresent(g -> {
-                if (g.hasRedirect()) {
+                if (!g.getRedirect().equals(SignedNote.getDefaultInstance())) {
                     final Participant member = (Participant) link.getMember();
                     view.stable(() -> view.redirect(member, g, 0));
                 } else {
@@ -396,10 +396,10 @@ public class ViewManagement {
             return !joined();
         }, () -> {
             if (!joined()) {
-                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)), 500,
-                                   TimeUnit.MILLISECONDS);
+                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)),
+                                   params.populateDuration().toNanos(), TimeUnit.NANOSECONDS);
             }
-        }, Duration.ofMillis(500)));
+        }, params.populateDuration()));
         repopulate.get().run();
     }
 

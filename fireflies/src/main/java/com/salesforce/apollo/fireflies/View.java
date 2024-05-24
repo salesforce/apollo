@@ -137,6 +137,7 @@ public class View {
                                          r -> new EntranceServer(gateway.getClientIdentityProvider(), r, metrics),
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
+        gossiper.allowDuplicates();
         this.validation = validation;
         this.verifiers = verifiers;
     }
@@ -443,7 +444,7 @@ public class View {
      * @param ring
      */
     boolean redirect(Participant member, Gossip gossip, int ring) {
-        if (!gossip.hasRedirect()) {
+        if (gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
             log.warn("Redirect from: {} on ring: {} did not contain redirect member note on: {}", member.getId(), ring,
                      node.getId());
             return false;
@@ -615,15 +616,11 @@ public class View {
                                                    .setRing(ring)
                                                    .setGossip(commonDigests())
                                                    .build());
+        log.info("gossiping with: {} on: {}", link.getMember().getId(), node.getId());
         try {
             return link.gossip(gossip);
         } catch (Throwable e) {
             final var p = (Participant) link.getMember();
-            if (!viewManagement.joined()) {
-                log.debug("Exception: {} bootstrap gossiping with:S {} view: {} on: {}", e.getMessage(), p.getId(),
-                          currentView(), node.getId());
-                return null;
-            }
             if (e instanceof StatusRuntimeException sre) {
                 switch (sre.getStatus().getCode()) {
                 case PERMISSION_DENIED:
@@ -653,7 +650,8 @@ public class View {
 
                 }
             } else {
-                log.debug("Exception gossiping with: {} view: {} on: {}", p.getId(), currentView(), node.getId(), e);
+                log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
+                          currentView(), node.getId(), e);
                 accuse(p, ring, e);
             }
             return null;
@@ -1064,7 +1062,7 @@ public class View {
                 final var member = destination.member();
                 try {
                     Gossip gossip = result.get();
-                    if (gossip.hasRedirect()) {
+                    if (!gossip.getRedirect().equals(SignedNote.getDefaultInstance())) {
                         stable(() -> redirect(member, gossip, destination.ring()));
                     } else if (viewManagement.joined()) {
                         try {
@@ -1298,7 +1296,7 @@ public class View {
             return;
         }
         if (context.activate(member)) {
-            log.debug("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
+            log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
                       context.totalCount(), node.getId());
         }
     }
@@ -1334,7 +1332,7 @@ public class View {
                            .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
                            .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
                            .build();
-        log.trace("Redirecting: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
+        log.trace("Redirect: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
                   successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
                   gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
                   gossip.getJoins().getUpdatesCount(), node.getId());
@@ -1932,6 +1930,7 @@ public class View {
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
                     g = redirectTo(member, ring, successor, digests);
+                    log.info("Redirected: {} on: {}", member.getId(), node.getId());
                 } else {
                     g = Gossip.newBuilder()
                               .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))

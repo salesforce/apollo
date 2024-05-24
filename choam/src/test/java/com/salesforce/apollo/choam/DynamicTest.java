@@ -103,7 +103,14 @@ public class DynamicTest {
 
     @Test
     public void smokin() throws Exception {
+
         var bootstrap = members.subList(0, 4);
+        var kernel = bootstrap.get(0);
+        contexts.get(kernel).activate(kernel);
+        routers.get(kernel).start();
+        choams.get(kernel).start();
+
+        bootstrap.forEach(member -> bootstrap.forEach(m -> contexts.get(member).activate(m)));
 
         bootstrap.forEach(member -> bootstrap.forEach(m -> contexts.get(member).activate(m)));
 

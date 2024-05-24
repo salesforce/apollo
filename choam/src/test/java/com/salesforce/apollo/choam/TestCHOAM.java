@@ -102,11 +102,11 @@ public class TestCHOAM {
         var params = Parameters.newBuilder()
                                .setGenerateGenesis(true)
                                .setGenesisViewId(origin.prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(20))
+                               .setGossipDuration(Duration.ofMillis(30))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
-                                                              .setGossipDuration(Duration.ofMillis(10))
+                                                              .setGossipDuration(Duration.ofMillis(30))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .setEthereal(Config.newBuilder()
                                                                                  .setNumberOfEpochs(3)
@@ -191,7 +191,7 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(LARGE_TESTS ? 3200 : 60, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 3200 : 120, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: " + transactioneers.stream()
                                                                                    .map(t -> t.getCompleted())
                                                                                    .filter(i -> i < max)

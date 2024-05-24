@@ -13,7 +13,7 @@ import java.time.Duration;
  */
 public record Parameters(int joinRetries, int minimumBiffCardinality, int rebuttalTimeout, int viewChangeRounds,
                          int finalizeViewRounds, double fpr, int maximumTxfr, Duration retryDelay, int maxPending,
-                         Duration seedingTimeout, int validationRetries, int crowns) {
+                         Duration seedingTimeout, int validationRetries, int crowns, Duration populateDuration) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -68,11 +68,12 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
          * Minimum number of rounds to check for view change
          */
         private int      viewChangeRounds       = 7;
+        private Duration populateDuration       = Duration.ofMillis(20);
 
         public Parameters build() {
             return new Parameters(joinRetries, minimumBiffCardinality, rebuttalTimeout, viewChangeRounds,
                                   finalizeViewRounds, fpr, maximumTxfr, retryDelay, maxPending, seedingTimout,
-                                  validationRetries, crowns);
+                                  validationRetries, crowns, populateDuration);
         }
 
         public int getCrowns() {
@@ -135,6 +136,15 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
 
         public Builder setMinimumBiffCardinality(int minimumBiffCardinality) {
             this.minimumBiffCardinality = minimumBiffCardinality;
+            return this;
+        }
+
+        public Duration getPopulateDuration() {
+            return populateDuration;
+        }
+
+        public Builder setPopulateDuration(Duration populateDuration) {
+            this.populateDuration = populateDuration;
             return this;
         }
 

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
-import com.google.common.base.Function;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -56,6 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -109,10 +109,9 @@ public class CHOAM {
 
         rotateViewKeys();
         var bContext = new DelegatedContext<>(params.context());
-        var adapter = new MessageAdapter(_ -> true, (Function<ByteString, Digest>) this::signatureHash,
-                                         (Function<ByteString, List<Digest>>) _ -> Collections.emptyList(),
-                                         (_, any) -> any,
-                                         (Function<AgedMessageOrBuilder, ByteString>) AgedMessageOrBuilder::getContent);
+        var adapter = new MessageAdapter(_ -> true, this::signatureHash,
+                                         _ -> Collections.emptyList(),
+                                         (_, any) -> any, AgedMessageOrBuilder::getContent);
 
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
@@ -234,7 +233,9 @@ public class CHOAM {
     }
 
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
-        return members.stream().collect(Collectors.toMap(m -> m, baseContext::getMember));
+        return members.stream()
+                      .map(baseContext::getMember)
+                      .collect(Collectors.toMap(Member::getId, Function.identity()));
     }
 
     public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
