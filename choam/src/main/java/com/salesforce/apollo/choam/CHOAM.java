@@ -109,9 +109,8 @@ public class CHOAM {
 
         rotateViewKeys();
         var bContext = new DelegatedContext<>(params.context());
-        var adapter = new MessageAdapter(_ -> true, this::signatureHash,
-                                         _ -> Collections.emptyList(),
-                                         (_, any) -> any, AgedMessageOrBuilder::getContent);
+        var adapter = new MessageAdapter(_ -> true, this::signatureHash, _ -> Collections.emptyList(), (_, any) -> any,
+                                         AgedMessageOrBuilder::getContent);
 
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
@@ -235,6 +234,7 @@ public class CHOAM {
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
         return members.stream()
                       .map(baseContext::getMember)
+                      .filter(m -> m != null)
                       .collect(Collectors.toMap(Member::getId, Function.identity()));
     }
 
