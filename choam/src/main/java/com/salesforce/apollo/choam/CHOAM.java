@@ -543,9 +543,9 @@ public class CHOAM {
 
             @Override
             public void publish(Digest hash, CertifiedBlock cb) {
-                log.trace("Publishing: {} hash: {} height: {} certifications: {} on: {}", cb.getBlock().getBodyCase(),
-                          hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()), cb.getCertificationsCount(),
-                          params.member().getId());
+                log.info("Publishing: {} hash: {} height: {} certifications: {} on: {}", cb.getBlock().getBodyCase(),
+                         hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()), cb.getCertificationsCount(),
+                         params.member().getId());
                 combine.publish(cb, true);
             }
 
