@@ -37,6 +37,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     private final    ScheduledExecutorService scheduler;
     private volatile boolean                  majorityFailed  = false;
     private volatile boolean                  majoritySucceed = false;
+    private volatile int                      iteration       = -1;
 
     public RingIterator(Duration frequency, Context<T> context, SigningMember member,
                         CommonCommunications<Comm, ?> comm, boolean ignoreSelf, ScheduledExecutorService scheduler) {
@@ -88,7 +89,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     }
 
     public int iteration() {
-        return currentIndex + 1;
+        return iteration;
     }
 
     @Override
@@ -103,7 +104,10 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
                                                  traversed);
-        boolean completed = currentIndex == context.getRingCount() - 1;
+        iteration++;
+        final var cur = iteration;
+        var ringCount = context.getRingCount();
+        boolean completed = cur > ringCount;
 
         Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally, completed,
                                                      onComplete);
