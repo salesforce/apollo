@@ -338,7 +338,9 @@ abstract public class AbstractLifecycleTest {
         SqlStateMachine up = new SqlStateMachine(m.getId(), url, new Properties(),
                                                  new File(checkpointDirBase, m.getId().toString()));
         updaters.put(m, up);
-
+        if (testSubject) {
+            params.setGenerateGenesis(false);
+        }
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                                .build(RuntimeParameters.newBuilder()

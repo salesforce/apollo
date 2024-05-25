@@ -27,7 +27,10 @@ import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -240,11 +243,12 @@ public class Producer {
     }
 
     private void processPendingValidations(HashedBlock block, PendingBlock p) {
-        var pending = pendingValidations.remove(block.hash);
+        var pending = pendingValidations.get(block.hash);
         if (pending != null) {
             pending.forEach(v -> validate(v, p, block.hash));
             if (p.witnesses.size() >= params().majority()) {
                 publish(p);
+                pendingValidations.remove(block.hash);
             }
         }
     }
@@ -254,13 +258,13 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (txns.isEmpty()) {
-            if (preblocks % 5 == 0) {
-                pending.values()
-                       .stream()
-                       .filter(pb -> pb.published.get())
-                       .max(Comparator.comparing(pb -> pb.block.height()))
-                       .ifPresent(this::publish);
-            }
+            //            if (preblocks % 5 == 0) {
+            //                pending.values()
+            //                       .stream()
+            //                       .filter(pb -> pb.published.get())
+            //                       .max(Comparator.comparing(pb -> pb.block.height()))
+            //                       .ifPresent(pb -> publish(pb, true));
+            //            }
             return;
         }
         log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(),
@@ -306,10 +310,20 @@ public class Producer {
     }
 
     private void publish(PendingBlock p) {
+        this.publish(p, false);
+    }
+
+    private void publish(PendingBlock p, boolean force) {
         assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
-        log.debug("Published pending: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
-                  p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
-        p.published.set(true);
+        var publish = p.published.compareAndSet(false, true);
+        if (!publish) {
+            log.warn("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
+                     p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
+            return;
+        }
+        log.warn("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", force ? "(forced) " : " ",
+                 p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
+                 params().member().getId());
         final var cb = CertifiedBlock.newBuilder()
                                      .setBlock(p.block.block)
                                      .addAllCertifications(
