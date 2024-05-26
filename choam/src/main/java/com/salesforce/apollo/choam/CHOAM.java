@@ -552,7 +552,7 @@ public class CHOAM {
                              cb.getBlock().getBodyCase(), hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()),
                              cb.getCertificationsCount(), params.member().getId());
                 }
-                combine.publish(cb, true);
+                combine.publish(cb, !beacon);
             }
 
             @Override
