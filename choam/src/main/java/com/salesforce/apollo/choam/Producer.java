@@ -313,7 +313,7 @@ public class Producer {
     private void publish(PendingBlock p, boolean force) {
         assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
         var publish = p.published.compareAndSet(false, true);
-        if (!publish) {
+        if (!publish && !force) {
             log.trace("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
                       p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
             return;
