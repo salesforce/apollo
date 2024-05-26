@@ -608,29 +608,33 @@
     </scm>
     <repositories>
         <repository>
-            <id>Maven Central</id>
-            <url>https://mvnrepository.com/artifact/</url>
+            <id>central</id>
+            <url>https://repo.maven.org/maven2/</url>
             <snapshots>
                 <enabled>false</enabled>
-                <updatePolicy>daily</updatePolicy>
             </snapshots>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </releases>
+        </repository>
+        <repository>
+            <id>central-1</id>
+            <url>https://repo1.maven.org/maven2/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
-            <id>Maven Central</id>
-            <url>https://mvnrepository.com/artifact/</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </releases>
+            <id>central</id>
+            <url>https://repo.maven.org/maven2/</url>
             <snapshots>
                 <enabled>false</enabled>
-                <updatePolicy>daily</updatePolicy>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>central-1</id>
+            <url>https://repo1.maven.org/maven2/</url>
+            <snapshots>
+                <enabled>false</enabled>
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
