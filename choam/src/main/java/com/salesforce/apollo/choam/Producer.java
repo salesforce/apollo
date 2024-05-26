@@ -314,13 +314,13 @@ public class Producer {
         assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
         var publish = p.published.compareAndSet(false, true);
         if (!publish) {
-            log.warn("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
-                     p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
+            log.trace("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
+                      p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
             return;
         }
-        log.warn("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", force ? "(forced) " : " ",
-                 p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
-                 params().member().getId());
+        log.trace("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", force ? "(forced) " : "",
+                  p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
+                  params().member().getId());
         final var cb = CertifiedBlock.newBuilder()
                                      .setBlock(p.block.block)
                                      .addAllCertifications(
