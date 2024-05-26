@@ -90,25 +90,28 @@ public class DomainTest {
 
         var countDown = new CountDownLatch(17);
 
-        retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(ali, adminMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(ali, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(burcu, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(can, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(managerMembers, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(technicianMembers, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(demet, helpDeskMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(egin, helpDeskMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(egin, userMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(fuat, managerMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(gl, managerMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(hakan, technicianMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(irmak, technicianMembers), 3).whenComplete((_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3).whenComplete(
+        retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).whenCompleteAsync(
         (_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3).whenComplete(
+        retryNesting(() -> oracle.map(ali, adminMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(ali, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(burcu, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(can, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(managerMembers, userMembers), 3).whenCompleteAsync(
         (_, _) -> countDown.countDown());
-        retryNesting(() -> oracle.map(jale, abcTechMembers), 3).whenComplete((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(technicianMembers, userMembers), 3).whenCompleteAsync(
+        (_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(demet, helpDeskMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(egin, helpDeskMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(egin, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(fuat, managerMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(gl, managerMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(hakan, technicianMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(irmak, technicianMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3).whenCompleteAsync(
+        (_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3).whenCompleteAsync(
+        (_, _) -> countDown.countDown());
+        retryNesting(() -> oracle.map(jale, abcTechMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown());
 
         countDown.await(120, TimeUnit.SECONDS);
 
