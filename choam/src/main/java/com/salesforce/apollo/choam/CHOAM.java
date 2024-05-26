@@ -542,10 +542,16 @@ public class CHOAM {
             }
 
             @Override
-            public void publish(Digest hash, CertifiedBlock cb) {
-                log.info("Publishing: {} hash: {} height: {} certifications: {} on: {}", cb.getBlock().getBodyCase(),
-                         hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()), cb.getCertificationsCount(),
-                         params.member().getId());
+            public void publish(Digest hash, CertifiedBlock cb, boolean beacon) {
+                if (beacon) {
+                    log.trace("Publishing beacon: {} hash: {} height: {} certifications: {} on: {}",
+                              cb.getBlock().getBodyCase(), hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()),
+                              cb.getCertificationsCount(), params.member().getId());
+                } else {
+                    log.info("Publishing: {} hash: {} height: {} certifications: {} on: {}",
+                             cb.getBlock().getBodyCase(), hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()),
+                             cb.getCertificationsCount(), params.member().getId());
+                }
                 combine.publish(cb, true);
             }
 
@@ -1022,7 +1028,7 @@ public class CHOAM {
 
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
-        void publish(Digest hash, CertifiedBlock cb);
+        void publish(Digest hash, CertifiedBlock cb, boolean beacon);
 
         Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
     }

@@ -312,15 +312,15 @@ public class Producer {
         this.publish(p, false);
     }
 
-    private void publish(PendingBlock p, boolean force) {
+    private void publish(PendingBlock p, boolean beacon) {
         assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
         var publish = p.published.compareAndSet(false, true);
-        if (!publish && !force) {
+        if (!publish && !beacon) {
             log.trace("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
                       p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
             return;
         }
-        log.trace("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", force ? "(forced) " : "",
+        log.trace("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", beacon ? "(beacon) " : "",
                   p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
                   params().member().getId());
         final var cb = CertifiedBlock.newBuilder()
@@ -328,7 +328,7 @@ public class Producer {
                                      .addAllCertifications(
                                      p.witnesses.values().stream().map(Validate::getWitness).toList())
                                      .build();
-        view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));
+        view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb), beacon);
     }
 
     private void reconfigure() {

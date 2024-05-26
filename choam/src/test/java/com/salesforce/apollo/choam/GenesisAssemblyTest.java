@@ -149,7 +149,7 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public void publish(Digest hash, CertifiedBlock cb) {
+                public void publish(Digest hash, CertifiedBlock cb, boolean beacon) {
                     complete.countDown();
                 }
 
