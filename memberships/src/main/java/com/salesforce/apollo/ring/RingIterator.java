@@ -37,7 +37,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     private final    ScheduledExecutorService scheduler;
     private volatile boolean                  majorityFailed  = false;
     private volatile boolean                  majoritySucceed = false;
-    private volatile int                      iteration       = -1;
+    private volatile int                      iteration       = 0;
 
     public RingIterator(Duration frequency, Context<T> context, SigningMember member,
                         CommonCommunications<Comm, ?> comm, boolean ignoreSelf, ScheduledExecutorService scheduler) {
