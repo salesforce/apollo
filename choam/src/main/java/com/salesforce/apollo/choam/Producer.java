@@ -27,10 +27,7 @@ import com.salesforce.apollo.membership.Member;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -258,13 +255,13 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (txns.isEmpty()) {
-            //            if (preblocks % 5 == 0) {
-            //                pending.values()
-            //                       .stream()
-            //                       .filter(pb -> pb.published.get())
-            //                       .max(Comparator.comparing(pb -> pb.block.height()))
-            //                       .ifPresent(pb -> publish(pb, true));
-            //            }
+            if (preblocks % 5 == 0) {
+                pending.values()
+                       .stream()
+                       .filter(pb -> pb.published.get())
+                       .max(Comparator.comparing(pb -> pb.block.height()))
+                       .ifPresent(pb -> publish(pb, true));
+            }
             return;
         }
         log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(),
