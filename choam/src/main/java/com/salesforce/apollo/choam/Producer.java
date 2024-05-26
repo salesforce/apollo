@@ -57,7 +57,7 @@ public class Producer {
     private final        Semaphore                    serialize          = new Semaphore(1);
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
-    private volatile     int                          preblocks          = 0;
+    private volatile     int                          emptyPreBlocks     = 0;
     private volatile     boolean                      assembled          = false;
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label) {
@@ -255,7 +255,9 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (txns.isEmpty()) {
-            if (preblocks % 5 == 0) {
+            var empty = emptyPreBlocks + 1;
+            emptyPreBlocks = empty;
+            if (empty % 5 == 0) {
                 pending.values()
                        .stream()
                        .filter(pb -> pb.published.get())
@@ -363,7 +365,6 @@ public class Producer {
                 return;
             }
             try {
-                preblocks++;
                 transitions.create(preblock, last);
             } catch (Throwable t) {
                 log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
