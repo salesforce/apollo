@@ -259,6 +259,13 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
+    public T getMember(int i, int r) {
+        i = i % size();
+        var ring = ring(i);
+        return (T) ring.get(i);
+    }
+
+    @Override
     public Collection<T> getOffline() {
         return members.values().stream().filter(e -> !e.isActive()).map(Tracked::member).toList();
     }

@@ -79,8 +79,8 @@ public class Producer {
                               producerParams.batchInterval(), producerParams.maxBatchCount(),
                               params().drainPolicy().build());
 
-        log.info("Producer max elements: {} reconfiguration epoch: {} on: {}", blocks, maxEpoch,
-                 params.member().getId());
+        log.debug("Producer max elements: {} reconfiguration epoch: {} on: {}", blocks, maxEpoch,
+                  params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName("Producer%s on: %s".formatted(getViewId(), params.member().getId()));
@@ -343,9 +343,9 @@ public class Producer {
         pending.put(reconfiguration.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.info("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
-                 reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
-                 params().member().getId());
+        log.trace("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
+                  reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
+                  params().member().getId());
         processPendingValidations(reconfiguration, p);
 
         log.trace("Draining on: {}", params().member().getId());

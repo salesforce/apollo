@@ -95,6 +95,11 @@ public class DelegatedContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public T getMember(int i, int ring) {
+        return delegate.getMember(i, ring);
+    }
+
+    @Override
     public double getProbabilityByzantine() {
         return delegate.getProbabilityByzantine();
     }

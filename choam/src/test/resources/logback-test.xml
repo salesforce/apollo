@@ -25,6 +25,10 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <logger name="com.salesforce.apollo.ring.SliceIterator" level="warn" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
     <logger name="com.salesforce.apollo.membership.messaging.rbc" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
@@ -33,7 +37,7 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

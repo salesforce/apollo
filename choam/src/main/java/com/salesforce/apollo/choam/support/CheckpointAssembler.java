@@ -19,7 +19,7 @@ import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.ring.RingIterator;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import org.h2.mvstore.MVMap;
@@ -28,6 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -51,10 +53,12 @@ public class CheckpointAssembler {
     private final SigningMember                             member;
     private final MVMap<Integer, byte[]>                    state;
     private final HexBloom                                  diadem;
+    private final List<Member>                              committee;
 
-    public CheckpointAssembler(Duration frequency, ULong height, Checkpoint checkpoint, SigningMember member,
-                               Store store, CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
-                               double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
+    public CheckpointAssembler(List<Member> committee, Duration frequency, ULong height, Checkpoint checkpoint,
+                               SigningMember member, Store store, CommonCommunications<Terminal, Concierge> comms,
+                               Context<Member> context, double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
+        this.committee = new ArrayList<>(committee);
         this.height = height;
         this.member = member;
         this.checkpoint = checkpoint;
@@ -112,11 +116,19 @@ public class CheckpointAssembler {
         }
         log.info("Assembly of checkpoint: {} segments: {} crown: {} on: {}", height, checkpoint.getCount(),
                  diadem.compactWrapped(), member.getId());
-        var ringer = new RingIterator<>(frequency, context, member, comms, true, scheduler);
-        ringer.iterate(digestAlgorithm.random(), (link, ring) -> gossip(link),
-                       (tally, result, destination) -> gossip(result), t -> scheduler.schedule(
-        () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)), duration.toMillis(),
-        TimeUnit.MILLISECONDS));
+
+        var ringer = new SliceIterator<>("Assembly[%s:%s]".formatted(diadem.compactWrapped(), member.getId()), member,
+                                         committee, comms);
+        ringer.iterate((link, m) -> {
+            log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), member.getId());
+            return gossip(link);
+        }, (result, link, m) -> gossip(result), () -> {
+            if (!assembled.isDone()) {
+                scheduler.schedule(
+                () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)),
+                duration.toMillis(), TimeUnit.MILLISECONDS);
+            }
+        }, duration);
 
     }
 

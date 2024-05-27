@@ -880,9 +880,6 @@ public class CHOAM {
     }
 
     private Initial sync(Synchronize request, Digest from) {
-        if (from == null) {
-            return Initial.getDefaultInstance();
-        }
         final HashedCertifiedBlock g = genesis.get();
         if (g != null) {
             Initial.Builder initial = Initial.newBuilder();
@@ -897,13 +894,10 @@ public class CHOAM {
                 }
                 final ULong lastReconfig = ULong.valueOf(cp.block.getHeader().getLastReconfig());
                 HashedCertifiedBlock lastView = null;
-                if (lastReconfig.equals(ULong.valueOf(0))) {
-                    lastView = cp;
-                } else {
-                    var stored = store.getCertifiedBlock(lastReconfig);
-                    if (stored != null) {
-                        lastView = new HashedCertifiedBlock(params.digestAlgorithm(), stored);
-                    }
+
+                var stored = store.getCertifiedBlock(lastReconfig);
+                if (stored != null) {
+                    lastView = new HashedCertifiedBlock(params.digestAlgorithm(), stored);
                 }
                 if (lastView == null) {
                     lastView = g;

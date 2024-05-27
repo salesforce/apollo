@@ -244,16 +244,16 @@ public class ViewContext {
         Verifier v = verifierOf(sv);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("no verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
-                          params.member().getId());
+                log.warn("No verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
+                         params.member().getId());
             }
             return false;
         }
         var validated = v.verify(JohnHancock.from(sv.getSignature()), sv.getViews().toByteString());
         if (!validated) {
             if (log.isTraceEnabled()) {
-                log.trace("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
-                          params().member().getId());
+                log.warn("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                         params().member().getId());
             }
         } else if (log.isTraceEnabled()) {
             log.trace("Validated views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),

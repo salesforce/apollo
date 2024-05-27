@@ -36,6 +36,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -43,22 +44,23 @@ import java.util.stream.Collectors;
  * @author hal.hildebrand
  */
 public class Bootstrapper {
-    private static final Logger                                    log                   = LoggerFactory.getLogger(
-    Bootstrapper.class);
-    private final        HashedCertifiedBlock                      anchor;
-    private final        CompletableFuture<Boolean>                anchorSynchronized    = new CompletableFuture<>();
-    private final        CommonCommunications<Terminal, Concierge> comms;
-    private final        ULong                                     lastCheckpoint;
-    private final        Parameters                                params;
-    private final        Store                                     store;
-    private final        CompletableFuture<SynchronizedState>      sync                  = new CompletableFuture<>();
-    private final        CompletableFuture<Boolean>                viewChainSynchronized = new CompletableFuture<>();
-    private final        ScheduledExecutorService                  scheduler;
-    private volatile     HashedCertifiedBlock                      checkpoint;
-    private volatile     CompletableFuture<CheckpointState>        checkpointAssembled;
-    private volatile     CheckpointState                           checkpointState;
-    private volatile     HashedCertifiedBlock                      checkpointView;
-    private volatile     HashedCertifiedBlock                      genesis;
+    private static final Logger log = LoggerFactory.getLogger(Bootstrapper.class);
+
+    private final    HashedCertifiedBlock                      anchor;
+    private final    CompletableFuture<Boolean>                anchorSynchronized    = new CompletableFuture<>();
+    private final    CommonCommunications<Terminal, Concierge> comms;
+    private final    ULong                                     lastCheckpoint;
+    private final    Parameters                                params;
+    private final    Store                                     store;
+    private final    CompletableFuture<SynchronizedState>      sync                  = new CompletableFuture<>();
+    private final    CompletableFuture<Boolean>                viewChainSynchronized = new CompletableFuture<>();
+    private final    ScheduledExecutorService                  scheduler;
+    private final    AtomicInteger                             sampleIndex           = new AtomicInteger();
+    private volatile HashedCertifiedBlock                      checkpoint;
+    private volatile CompletableFuture<CheckpointState>        checkpointAssembled;
+    private volatile CheckpointState                           checkpointState;
+    private volatile HashedCertifiedBlock                      checkpointView;
+    private volatile HashedCertifiedBlock                      genesis;
 
     public Bootstrapper(HashedCertifiedBlock anchor, Parameters params, Store store,
                         CommonCommunications<Terminal, Concierge> bootstrapComm) {
@@ -122,8 +124,16 @@ public class Bootstrapper {
         log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
                  crown.compactWrapped(), Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()),
                  params.member().getId());
-
-        CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
+        var committee = checkpointView.certifiedBlock.getBlock()
+                                                     .getReconfigure()
+                                                     .getJoinsList()
+                                                     .stream()
+                                                     .map(j -> j.getMember().getVm().getId())
+                                                     .map(Digest::from)
+                                                     .map(d -> params.context().getMember(d))
+                                                     .filter(m -> m != null)
+                                                     .toList();
+        CheckpointAssembler assembler = new CheckpointAssembler(committee, params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
                                                                 store, comms, params.context(), threshold,
                                                                 params.digestAlgorithm());
@@ -366,11 +376,21 @@ public class Bootstrapper {
         }
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder().setHeight(anchor.height().longValue()).build();
-        final var randomCut = params.digestAlgorithm().random();
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true, scheduler).iterate(
-        randomCut, (link, ring) -> synchronize(s, link),
-        (tally, futureSailor, destination) -> synchronize(futureSailor, votes, destination),
-        t -> computeGenesis(votes));
+        var si = sampleIndex.getAndIncrement();
+        var member = params.context().getMember(si, Entropy.nextBitsStreamInt(params.context().getRingCount()));
+        if (member == null) {
+            log.warn("No members: {} to sample on: {}", params.context().size(), params.member().getId());
+            computeGenesis(votes);
+            return;
+        }
+        var randomCut = member.getId();
+        log.info("Random cut: {} on: {}", randomCut, params.member().getId());
+        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
+                                                          comms, true, scheduler);
+        iterator.allowDuplicates();
+        iterator.iterate(randomCut, (link, _) -> synchronize(s, link),
+                         (_, futureSailor, destination) -> synchronize(futureSailor, votes, destination),
+                         t -> computeGenesis(votes));
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {

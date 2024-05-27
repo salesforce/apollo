@@ -141,6 +141,13 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public T getMember(int i, int r) {
+        i = i % size();
+        var ring = new StaticRing(r);
+        return ring.get(i);
+    }
+
+    @Override
     public double getProbabilityByzantine() {
         return pByz;
     }
@@ -461,7 +468,7 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     private void initialize(Collection<T> members) {
-        record ringMapping<T extends Member>(Tracked<T> m, short i) {
+        record ringMapping<T extends Member>(Tracked<T> m, int i) {
         }
         {
             var i = 0;
@@ -472,7 +479,7 @@ public class StaticContext<T extends Member> implements Context<T> {
         Arrays.sort(this.members, Comparator.comparing(t -> t.member));
         for (int j = 0; j < rings.length; j++) {
             var mapped = new TreeMap<Digest, ringMapping<T>>();
-            for (short i = 0; i < this.members.length; i++) {
+            for (var i = 0; i < this.members.length; i++) {
                 var m = this.members[i];
                 mapped.put(Context.hashFor(id, j, m.member.getId()), new ringMapping<>(m, i));
             }
@@ -578,6 +585,10 @@ public class StaticContext<T extends Member> implements Context<T> {
          */
         public T findSuccessor(T m, Function<T, IterateResult> predicate) {
             return succ(hashFor(m), predicate);
+        }
+
+        public T get(int i) {
+            return ring().get(i, members).member;
         }
 
         public Digest hashFor(Digest d) {
@@ -692,8 +703,8 @@ public class StaticContext<T extends Member> implements Context<T> {
                 @Override
                 public Iterator<T> iterator() {
                     return new Iterator<T>() {
-                        private final Ring<T> ring = ring();
-                        private int current = 0;
+                        private final Ring<T> ring    = ring();
+                        private       int     current = 0;
 
                         @Override
                         public boolean hasNext() {

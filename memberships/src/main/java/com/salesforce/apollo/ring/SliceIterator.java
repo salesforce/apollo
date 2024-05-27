@@ -71,9 +71,10 @@ public class SliceIterator<Comm extends Link> {
 
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, frequency);
         try (Comm link = next()) {
-            if (link == null) {
+            if (link == null || link.getMember() == null) {
                 log.trace("No link for iteration of: <{}> on: {}", label, member.getId());
-                allowed.accept(handler.handle(Optional.empty(), link, slice.get(slice.size() - 1)));
+                allowed.accept(
+                handler.handle(Optional.empty(), link, slice.isEmpty() ? null : slice.get(slice.size() - 1)));
                 return;
             }
             log.trace("Iteration of: <{}> to: {} on: {}", label, link.getMember().getId(), member.getId());
@@ -107,6 +108,9 @@ public class SliceIterator<Comm extends Link> {
         if (!currentIteration.hasNext()) {
             Entropy.secureShuffle(slice);
             currentIteration = slice.iterator();
+        }
+        if (!currentIteration.hasNext()) {
+            return null;
         }
         current = currentIteration.next();
         return linkFor(current);

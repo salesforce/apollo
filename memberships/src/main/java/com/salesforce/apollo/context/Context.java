@@ -209,6 +209,13 @@ public interface Context<T extends Member> {
     T getMember(Digest memberID);
 
     /**
+     * @param i
+     * @param ring
+     * @return the i'th Member in Ring 0 of the receiver
+     */
+    T getMember(int i, int ring);
+
+    /**
      * Answer the probability {0, 1} that any given member is byzantine
      */
     double getProbabilityByzantine();

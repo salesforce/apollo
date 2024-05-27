@@ -616,7 +616,6 @@ public class View {
                                                    .setRing(ring)
                                                    .setGossip(commonDigests())
                                                    .build());
-        log.trace("gossiping with: {} on: {}", link.getMember().getId(), node.getId());
         try {
             return link.gossip(gossip);
         } catch (Throwable e) {
@@ -1302,44 +1301,6 @@ public class View {
     }
 
     /**
-     * Redirect the member to the successor from this view's perspective
-     *
-     * @param member
-     * @param ring
-     * @param successor
-     * @param digests
-     * @return the Gossip containing the successor's Identity and Note from this view
-     */
-    private Gossip redirectTo(Participant member, int ring, Participant successor, Digests digests) {
-        assert member != null;
-        assert successor != null;
-        if (successor.getNote() == null) {
-            log.debug("Cannot redirect: {} to: {} on ring: {} as note is null on: {}", member.getId(),
-                      successor.getId(), ring, node.getId());
-            return Gossip.getDefaultInstance();
-        }
-
-        var identity = successor.getNote();
-        if (identity == null) {
-            log.debug("Cannot redirect: {} to: {} on ring: {} as note is null on: {}", member.getId(),
-                      successor.getId(), ring, node.getId());
-            return Gossip.getDefaultInstance();
-        }
-        var gossip = Gossip.newBuilder()
-                           .setRedirect(successor.getNote().getWrapped())
-                           .setNotes(processNotes(BloomFilter.from(digests.getNoteBff())))
-                           .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff())))
-                           .setObservations(processObservations(BloomFilter.from(digests.getObservationBff())))
-                           .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff())))
-                           .build();
-        log.trace("Redirect: {} to: {} on ring: {} notes: {} acc: {} obv: {} joins: {} on: {}", member.getId(),
-                  successor.getId(), ring, gossip.getNotes().getUpdatesCount(),
-                  gossip.getAccusations().getUpdatesCount(), gossip.getObservations().getUpdatesCount(),
-                  gossip.getJoins().getUpdatesCount(), node.getId());
-        return gossip;
-    }
-
-    /**
      * Process the gossip response, providing the updates requested by the the other member and processing the updates
      * provided by the other member
      *
@@ -1900,13 +1861,13 @@ public class View {
                 "Not introduced!, ring: %s from: %s on: %s".formatted(request.getRing(), from, node.getId())));
             }
             return stable(() -> {
-                validate(from, request);
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
                     log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
                     "invalid ring: %s from: %s on: %s".formatted(ring, from, node.getId())));
                 }
+                validate(from, request);
 
                 Participant member = context.getActiveMember(from);
                 if (member == null) {
@@ -1927,21 +1888,19 @@ public class View {
                 }
 
                 Gossip g;
+                var builder = Gossip.newBuilder();
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
-                    g = redirectTo(member, ring, successor, digests);
+                    builder.setRedirect(successor.getNote().getWrapped());
                     log.debug("Redirected: {} on: {}", member.getId(), node.getId());
-                } else {
-                    g = Gossip.newBuilder()
-                              .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
-                              .setAccusations(
-                              processAccusations(BloomFilter.from(digests.getAccusationBff()), params.fpr()))
-                              .setObservations(
-                              processObservations(BloomFilter.from(digests.getObservationBff()), params.fpr()))
-                              .setJoins(
-                              viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
-                              .build();
                 }
+                g = builder.setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
+                           .setAccusations(
+                           processAccusations(BloomFilter.from(digests.getAccusationBff()), params.fpr()))
+                           .setObservations(
+                           processObservations(BloomFilter.from(digests.getObservationBff()), params.fpr()))
+                           .setJoins(viewManagement.processJoins(BloomFilter.from(digests.getJoinBiff()), params.fpr()))
+                           .build();
                 if (g.getNotes().getUpdatesCount() + g.getAccusations().getUpdatesCount() + g.getObservations()
                                                                                              .getUpdatesCount()
                 + g.getJoins().getUpdatesCount() != 0) {
