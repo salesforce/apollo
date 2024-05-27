@@ -109,9 +109,8 @@ public class CHOAM {
 
         rotateViewKeys();
         var bContext = new DelegatedContext<>(params.context());
-        var adapter = new MessageAdapter(_ -> true, this::signatureHash,
-                                         _ -> Collections.emptyList(),
-                                         (_, any) -> any, AgedMessageOrBuilder::getContent);
+        var adapter = new MessageAdapter(_ -> true, this::signatureHash, _ -> Collections.emptyList(), (_, any) -> any,
+                                         AgedMessageOrBuilder::getContent);
 
         combine = new ReliableBroadcaster(bContext, params.member(), params.combine(), params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics(),
@@ -235,6 +234,7 @@ public class CHOAM {
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Digest> members) {
         return members.stream()
                       .map(baseContext::getMember)
+                      .filter(m -> m != null)
                       .collect(Collectors.toMap(Member::getId, Function.identity()));
     }
 
@@ -542,11 +542,17 @@ public class CHOAM {
             }
 
             @Override
-            public void publish(Digest hash, CertifiedBlock cb) {
-                log.trace("Publishing: {} hash: {} height: {} certifications: {} on: {}", cb.getBlock().getBodyCase(),
-                          hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()), cb.getCertificationsCount(),
-                          params.member().getId());
-                combine.publish(cb, true);
+            public void publish(Digest hash, CertifiedBlock cb, boolean beacon) {
+                if (beacon) {
+                    log.trace("Publishing beacon: {} hash: {} height: {} certifications: {} on: {}",
+                              cb.getBlock().getBodyCase(), hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()),
+                              cb.getCertificationsCount(), params.member().getId());
+                } else {
+                    log.info("Publishing: {} hash: {} height: {} certifications: {} on: {}",
+                             cb.getBlock().getBodyCase(), hash, ULong.valueOf(cb.getBlock().getHeader().getHeight()),
+                             cb.getCertificationsCount(), params.member().getId());
+                }
+                combine.publish(cb, !beacon);
             }
 
             @Override
@@ -1022,7 +1028,7 @@ public class CHOAM {
 
         Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
-        void publish(Digest hash, CertifiedBlock cb);
+        void publish(Digest hash, CertifiedBlock cb, boolean beacon);
 
         Block reconfigure(Map<Digest, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
     }

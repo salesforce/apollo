@@ -37,12 +37,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.salesforce.apollo.choam.Session.retryNesting;
-import static java.util.concurrent.CompletableFuture.allOf;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -88,22 +89,47 @@ public class DomainTest {
 
         // Map direct edges. Transitive edges added as a side effect
 
-        allOf(retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3),
-              retryNesting(() -> oracle.map(ali, adminMembers), 3), retryNesting(() -> oracle.map(ali, userMembers), 3),
-              retryNesting(() -> oracle.map(burcu, userMembers), 3),
-              retryNesting(() -> oracle.map(can, userMembers), 3),
-              retryNesting(() -> oracle.map(managerMembers, userMembers), 3),
-              retryNesting(() -> oracle.map(technicianMembers, userMembers), 3),
-              retryNesting(() -> oracle.map(demet, helpDeskMembers), 3),
-              retryNesting(() -> oracle.map(egin, helpDeskMembers), 3),
-              retryNesting(() -> oracle.map(egin, userMembers), 3),
-              retryNesting(() -> oracle.map(fuat, managerMembers), 3),
-              retryNesting(() -> oracle.map(gl, managerMembers), 3),
-              retryNesting(() -> oracle.map(hakan, technicianMembers), 3),
-              retryNesting(() -> oracle.map(irmak, technicianMembers), 3),
-              retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3),
-              retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3),
-              retryNesting(() -> oracle.map(jale, abcTechMembers), 3)).get(60, TimeUnit.SECONDS);
+        var countDown = new CountDownLatch(17);
+
+        try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+
+            retryNesting(() -> oracle.map(helpDeskMembers, adminMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(ali, adminMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                   exec);
+            retryNesting(() -> oracle.map(ali, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                  exec);
+            retryNesting(() -> oracle.map(burcu, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                    exec);
+            retryNesting(() -> oracle.map(can, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                  exec);
+            retryNesting(() -> oracle.map(managerMembers, userMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(technicianMembers, userMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(demet, helpDeskMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                        exec);
+            retryNesting(() -> oracle.map(egin, helpDeskMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                       exec);
+            retryNesting(() -> oracle.map(egin, userMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                   exec);
+            retryNesting(() -> oracle.map(fuat, managerMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                      exec);
+            retryNesting(() -> oracle.map(gl, managerMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                    exec);
+            retryNesting(() -> oracle.map(hakan, technicianMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(irmak, technicianMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(abcTechMembers, technicianMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(flaggedTechnicianMembers, technicianMembers), 3).whenCompleteAsync(
+            (_, _) -> countDown.countDown(), exec);
+            retryNesting(() -> oracle.map(jale, abcTechMembers), 3).whenCompleteAsync((_, _) -> countDown.countDown(),
+                                                                                      exec);
+
+            countDown.await(120, TimeUnit.SECONDS);
+        }
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -114,7 +140,7 @@ public class DomainTest {
 
         // Users can View Document 123
         Assertion tuple = userMembers.assertion(object123View);
-        retryNesting(() -> oracle.add(tuple), 3).get();
+        retryNesting(() -> oracle.add(tuple), 3).get(120, TimeUnit.SECONDS);
 
         // Direct subjects that can View the document
         var viewers = oracle.read(object123View);
@@ -128,7 +154,7 @@ public class DomainTest {
 
         // Assert flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
-        retryNesting(() -> oracle.add(grantTechs), 3).get();
+        retryNesting(() -> oracle.add(grantTechs), 3).get(120, TimeUnit.SECONDS);
 
         // Now have 2 direct subjects that can view the doc
         viewers = oracle.read(object123View);
@@ -167,22 +193,22 @@ public class DomainTest {
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove them
-        retryNesting(() -> oracle.remove(abcTechMembers, technicianMembers), 3).get();
+        retryNesting(() -> oracle.remove(abcTechMembers, technicianMembers), 3).get(120, TimeUnit.SECONDS);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove our assertion
-        retryNesting(() -> oracle.delete(tuple), 3).get();
+        retryNesting(() -> oracle.delete(tuple), 3).get(120, TimeUnit.SECONDS);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Some deletes
-        retryNesting(() -> oracle.delete(abcTechMembers), 3).get();
-        retryNesting(() -> oracle.delete(flaggedTechnicianMembers), 3).get();
+        retryNesting(() -> oracle.delete(abcTechMembers), 3).get(120, TimeUnit.SECONDS);
+        retryNesting(() -> oracle.delete(flaggedTechnicianMembers), 3).get(120, TimeUnit.SECONDS);
     }
 
     @AfterEach

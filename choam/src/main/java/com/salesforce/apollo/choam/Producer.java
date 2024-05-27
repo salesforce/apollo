@@ -57,7 +57,7 @@ public class Producer {
     private final        Semaphore                    serialize          = new Semaphore(1);
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
-    private volatile     int                          preblocks          = 0;
+    private volatile     int                          emptyPreBlocks     = 0;
     private volatile     boolean                      assembled          = false;
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label) {
@@ -240,11 +240,12 @@ public class Producer {
     }
 
     private void processPendingValidations(HashedBlock block, PendingBlock p) {
-        var pending = pendingValidations.remove(block.hash);
+        var pending = pendingValidations.get(block.hash);
         if (pending != null) {
             pending.forEach(v -> validate(v, p, block.hash));
             if (p.witnesses.size() >= params().majority()) {
                 publish(p);
+                pendingValidations.remove(block.hash);
             }
         }
     }
@@ -254,12 +255,14 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (txns.isEmpty()) {
-            if (preblocks % 5 == 0) {
+            var empty = emptyPreBlocks + 1;
+            emptyPreBlocks = empty;
+            if (empty % 5 == 0) {
                 pending.values()
                        .stream()
                        .filter(pb -> pb.published.get())
                        .max(Comparator.comparing(pb -> pb.block.height()))
-                       .ifPresent(this::publish);
+                       .ifPresent(pb -> publish(pb, true));
             }
             return;
         }
@@ -306,16 +309,26 @@ public class Producer {
     }
 
     private void publish(PendingBlock p) {
+        this.publish(p, false);
+    }
+
+    private void publish(PendingBlock p, boolean beacon) {
         assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
-        log.debug("Published pending: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
-                  p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
-        p.published.set(true);
+        var publish = p.published.compareAndSet(false, true);
+        if (!publish && !beacon) {
+            log.trace("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
+                      p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
+            return;
+        }
+        log.trace("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", beacon ? "(beacon) " : "",
+                  p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
+                  params().member().getId());
         final var cb = CertifiedBlock.newBuilder()
                                      .setBlock(p.block.block)
                                      .addAllCertifications(
                                      p.witnesses.values().stream().map(Validate::getWitness).toList())
                                      .build();
-        view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));
+        view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb), beacon);
     }
 
     private void reconfigure() {
@@ -352,7 +365,6 @@ public class Producer {
                 return;
             }
             try {
-                preblocks++;
                 transitions.create(preblock, last);
             } catch (Throwable t) {
                 log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);

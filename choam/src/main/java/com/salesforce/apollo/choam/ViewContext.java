@@ -158,8 +158,8 @@ public class ViewContext {
         return blockProducer.produce(height, prev, assemble, checkpoint);
     }
 
-    public void publish(HashedCertifiedBlock block) {
-        blockProducer.publish(block.hash, block.certifiedBlock);
+    public void publish(HashedCertifiedBlock block, boolean beacon) {
+        blockProducer.publish(block.hash, block.certifiedBlock, beacon);
     }
 
     public Block reconfigure(Map<Digest, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,

@@ -41,8 +41,8 @@
         <jooq.version>3.18.15</jooq.version>
         <bc.version>1.78</bc.version>
         <logback.version>1.4.12</logback.version>
-        <grpc.version>1.62.2</grpc.version>
-        <protobuf.version>3.25.3</protobuf.version>
+        <grpc.version>1.64.0</grpc.version>
+        <protobuf.version>4.27.0</protobuf.version>
         <liquibase.version>4.8.0</liquibase.version>
         <netty.version>4.1.100.Final</netty.version>
         <native.maven.plugin.version>0.9.27</native.maven.plugin.version>
@@ -608,29 +608,33 @@
     </scm>
     <repositories>
         <repository>
-            <id>Maven Central</id>
-            <url>https://mvnrepository.com/artifact/</url>
+            <id>central</id>
+            <url>https://repo.maven.org/maven2/</url>
             <snapshots>
                 <enabled>false</enabled>
-                <updatePolicy>daily</updatePolicy>
             </snapshots>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </releases>
+        </repository>
+        <repository>
+            <id>central-1</id>
+            <url>https://repo1.maven.org/maven2/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
-            <id>Maven Central</id>
-            <url>https://mvnrepository.com/artifact/</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>daily</updatePolicy>
-            </releases>
+            <id>central</id>
+            <url>https://repo.maven.org/maven2/</url>
             <snapshots>
                 <enabled>false</enabled>
-                <updatePolicy>daily</updatePolicy>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>central-1</id>
+            <url>https://repo1.maven.org/maven2/</url>
+            <snapshots>
+                <enabled>false</enabled>
             </snapshots>
         </pluginRepository>
     </pluginRepositories>
@@ -780,6 +784,7 @@
                     <configuration>
                         <forkCount>${forks}</forkCount>
                         <reuseForks>true</reuseForks>
+                        <argLine>-Djdk.tracePinnedThreads=full</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

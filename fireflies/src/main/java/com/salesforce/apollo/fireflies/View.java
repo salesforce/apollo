@@ -616,7 +616,7 @@ public class View {
                                                    .setRing(ring)
                                                    .setGossip(commonDigests())
                                                    .build());
-        log.info("gossiping with: {} on: {}", link.getMember().getId(), node.getId());
+        log.trace("gossiping with: {} on: {}", link.getMember().getId(), node.getId());
         try {
             return link.gossip(gossip);
         } catch (Throwable e) {
@@ -1930,7 +1930,7 @@ public class View {
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
                     g = redirectTo(member, ring, successor, digests);
-                    log.info("Redirected: {} on: {}", member.getId(), node.getId());
+                    log.debug("Redirected: {} on: {}", member.getId(), node.getId());
                 } else {
                     g = Gossip.newBuilder()
                               .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
