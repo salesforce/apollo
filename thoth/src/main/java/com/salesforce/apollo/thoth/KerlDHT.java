@@ -247,7 +247,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error appending KERL: {} on: {}", ce.getMessage(), member.getId());
+                log.warn("error appending KERL: {} on: {}", ce.getMessage(), member.getId());
                 return Collections.emptyList();
             }
             throw new IllegalStateException(e.getCause());
@@ -277,7 +277,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error appending Key Event: {} on: {}", ce.getMessage(), member.getId());
+                log.warn("error appending Key Event: {} on: {}", ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -334,7 +334,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error appending attachments: {} on: {}", ce.getMessage(), member.getId());
+                log.warn("error appending attachments: {} on: {}", ce.getMessage(), member.getId());
                 return Empty.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -367,7 +367,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error appending validations: {} on: {}", ce.getMessage(), member.getId());
+                log.warn("error appending validations: {} on: {}", ce.getMessage(), member.getId());
                 return Empty.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -421,7 +421,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -456,7 +456,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KERL_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -531,7 +531,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -541,7 +541,7 @@ public class KerlDHT implements ProtoKERLService {
     @Override
     public KeyState_ getKeyState(Ident identifier, long sequenceNumber) {
         var operation = "getKeyState(%s, %s)".formatted(Identifier.from(identifier), ULong.valueOf(sequenceNumber));
-        log.info("{} on: {}", operation, member.getId());
+        log.warn("{} on: {}", operation, member.getId());
         if (identifier == null) {
             return KeyState_.getDefaultInstance();
         }
@@ -568,7 +568,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -604,7 +604,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
@@ -640,7 +640,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} on: {}", operation, member.getId(), ce);
+                log.warn("error {} on: {}", operation, member.getId(), ce);
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -676,7 +676,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -712,7 +712,7 @@ public class KerlDHT implements ProtoKERLService {
             return null;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof CompletionException ce) {
-                log.info("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
+                log.warn("error {} : {} on: {}", operation, ce.getMessage(), member.getId());
                 return null;
             }
             throw new IllegalStateException(e.getCause());
@@ -1046,31 +1046,31 @@ public class KerlDHT implements ProtoKERLService {
 
         @Override
         public List<KeyState_> append(KERL_ kerl_) {
-            log.info("appending kerl on: {}", member.getId());
+            log.debug("appending kerl on: {}", member.getId());
             return complete(k -> k.append(kerl_));
         }
 
         @Override
         public List<KeyState_> append(List<KeyEvent_> events) {
-            log.info("appending events on: {}", member.getId());
+            log.debug("appending events on: {}", member.getId());
             return complete(k -> k.append(events));
         }
 
         @Override
         public List<KeyState_> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
-            log.info("appending events and attachments on: {}", member.getId());
+            log.debug("appending events and attachments on: {}", member.getId());
             return complete(k -> k.append(events, attachments));
         }
 
         @Override
         public Empty appendAttachments(List<AttachmentEvent> attachments) {
-            log.info("append attachments on: {}", member.getId());
+            log.debug("append attachments on: {}", member.getId());
             return complete(k -> k.appendAttachments(attachments));
         }
 
         @Override
         public Empty appendValidations(Validations validations) {
-            log.info("append validations on: {}", member.getId());
+            log.debug("append validations on: {}", member.getId());
             return complete(k -> k.appendValidations(validations));
         }
 
