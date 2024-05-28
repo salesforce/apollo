@@ -90,8 +90,8 @@ public class Session {
         CompletableFuture<T> cf = supplier.get();
         for (int i = 0; i < maxRetries; i++) {
             final var attempt = i;
-            cf = cf.thenApply(CompletableFuture::completedFuture).exceptionally(__ -> {
-                log.trace("resubmitting after attempt: {}", attempt + 1);
+            cf = cf.thenApply(CompletableFuture::completedFuture).exceptionally(e -> {
+                log.info("resubmitting after attempt: {} exception: {}", attempt + 1, e.toString());
                 return supplier.get();
             }).thenCompose(java.util.function.Function.identity());
         }

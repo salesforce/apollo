@@ -4,8 +4,6 @@ on: [ push ]
 
 jobs:
   build:
-    env:
-      MAVEN_OPTS: "-Xmx12G -Xms4G"
     runs-on: ubuntu-latest
 
     steps:

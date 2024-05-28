@@ -784,6 +784,7 @@
                     <configuration>
                         <forkCount>${forks}</forkCount>
                         <reuseForks>true</reuseForks>
+                        <argLine>-Xmx10G -Xms4G</argLine>
                         <argLine>-Djdk.tracePinnedThreads=full</argLine>
                     </configuration>
                 </plugin>
