@@ -352,15 +352,21 @@ public class View {
             log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
                      viewManagement.observers.stream().toList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
-            observations.values().forEach(vc -> {
-                final var leaving = new ArrayList<>(
-                vc.getChange().getLeavesList().stream().map(Digest::from).collect(Collectors.toSet()));
-                final var joining = new ArrayList<>(
-                vc.getChange().getJoinsList().stream().map(Digest::from).collect(Collectors.toSet()));
-                leaving.sort(Ordering.natural());
-                joining.sort(Ordering.natural());
-                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
-            });
+            final var current = currentView();
+            observations.values()
+                        .stream()
+                        .filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent())))
+                        .forEach(vc -> {
+                            final var leaving = new ArrayList<>(
+                            vc.getChange().getLeavesList().stream().map(Digest::from).collect(Collectors.toSet()));
+                            final var joining = new ArrayList<>(
+                            vc.getChange().getJoinsList().stream().map(Digest::from).collect(Collectors.toSet()));
+                            leaving.sort(Ordering.natural());
+                            joining.sort(Ordering.natural());
+                            ballots.add(
+                            new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
+                        });
+            observations.clear();
             var max = ballots.entrySet()
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
@@ -369,14 +375,12 @@ public class View {
                 log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
                          viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
-                observations.clear();
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
                          observations.size(), majority, viewManagement.cardinality(),
-                         ballots.entrySet().stream().sorted(reversed).limit(1).toList(), currentView(), node.getId());
-                observations.clear();
+                         ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
             }
 
             scheduleViewChange();

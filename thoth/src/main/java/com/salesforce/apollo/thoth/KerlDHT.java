@@ -59,6 +59,7 @@ import liquibase.ui.UIService;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -946,6 +947,8 @@ public class KerlDHT implements ProtoKERLService {
             log.error("Cannot update location hash for: {} on: {}", identifier, member.getId());
             throw new IllegalStateException(
             "Cannot update location hash S for: %s on: %s".formatted(identifier, member.getId()));
+        } catch (DataAccessException e) {
+            log.trace("Duplicate location hash for: {} on: {}", identifier, member.getId());
         }
     }
 

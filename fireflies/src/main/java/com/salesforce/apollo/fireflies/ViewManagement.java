@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Objects;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
@@ -578,20 +577,14 @@ public class ViewManagement {
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
 
         Ballot(Digest view, List<Digest> leaving, List<Digest> joining, DigestAlgorithm algo) {
-            this(view, leaving, joining, view.xor(joining.stream().reduce(Digest::xor).orElse(algo.getOrigin()))
-                                             .xor(leaving.stream()
-                                                         .reduce(Digest::xor)
-                                                         .orElse(algo.getOrigin())
-                                                         .xor(
-                                                         joining.stream().reduce(Digest::xor).orElse(algo.getOrigin())))
-                                             .hashCode());
+            this(view, leaving, joining, Objects.hash(view, joining, leaving));
         }
 
         @Override
         public boolean equals(Object obj) {
             if (obj instanceof Ballot b) {
-                return Objects.equal(view, b.view) && Objects.equal(leaving, b.leaving) && Objects.equal(joining,
-                                                                                                         b.joining);
+                return Objects.equals(view, b.view) && Objects.equals(leaving, b.leaving) && Objects.equals(joining,
+                                                                                                            b.joining);
             }
             return false;
         }
@@ -603,7 +596,7 @@ public class ViewManagement {
 
         @Override
         public String toString() {
-            return String.format("{h: %s, j: %s, l: %s}", hash, joining.size(), leaving.size());
+            return String.format("{v: %s, h: %s, j: %s, l: %s}", view, hash, joining.size(), leaving.size());
         }
     }
 }
