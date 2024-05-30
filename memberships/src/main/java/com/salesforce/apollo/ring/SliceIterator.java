@@ -31,24 +31,29 @@ import java.util.function.Consumer;
  * @author hal.hildebrand
  */
 public class SliceIterator<Comm extends Link> {
-    private static final Logger                        log       = LoggerFactory.getLogger(SliceIterator.class);
-    private final        CommonCommunications<Comm, ?> comm;
-    private final        String                        label;
-    private final        SigningMember                 member;
-    private final        List<? extends Member>        slice;
-    private final        ScheduledExecutorService      scheduler = Executors.newScheduledThreadPool(1,
-                                                                                                    Thread.ofVirtual()
-                                                                                                          .factory());
-    private              Member                        current;
-    private              Iterator<? extends Member>    currentIteration;
+    private static final Logger log = LoggerFactory.getLogger(SliceIterator.class);
+
+    private final CommonCommunications<Comm, ?> comm;
+    private final String                        label;
+    private final SigningMember                 member;
+    private final List<? extends Member>        slice;
+    private final ScheduledExecutorService      scheduler;
+    private       Member                        current;
+    private       Iterator<? extends Member>    currentIteration;
 
     public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
                          CommonCommunications<Comm, ?> comm) {
+        this(label, member, slice, comm, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+    }
+
+    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+                         CommonCommunications<Comm, ?> comm, ScheduledExecutorService scheduler) {
         assert member != null && slice != null && comm != null;
         this.label = label;
         this.member = member;
         this.slice = slice;
         this.comm = comm;
+        this.scheduler = scheduler;
         Entropy.secureShuffle(slice);
         this.currentIteration = slice.iterator();
         log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(m -> m.getId()).toList(), member.getId());
