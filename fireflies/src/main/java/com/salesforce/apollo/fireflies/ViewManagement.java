@@ -338,7 +338,7 @@ public class ViewManagement {
                     if (context.totalCount() == cardinality()) {
                         join();
                     } else {
-                        populate(new ArrayList<>(context.activeMembers()));
+                        //                        populate(new ArrayList<>(context.activeMembers()));
                     }
                 });
             }, log));
@@ -464,14 +464,17 @@ public class ViewManagement {
         }
         return view.stable(() -> {
             var newMember = view.new Participant(note.getId());
-            final var sample = context.sample(params.maximumTxfr(), Entropy.bitsStream(), (Digest) null);
+
+            final var introductions = observers.stream().map(context::getMember).toList();
 
             log.debug("Member seeding: {} view: {} context: {} sample: {} on: {}", newMember.getId(), currentView(),
-                      context.getId(), sample.size(), node.getId());
+                      context.getId(), introductions.size(), node.getId());
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
-                           .addAllSample(
-                           sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSignedNote).toList())
+                           .addAllSample(introductions.stream()
+                                                      .filter(java.util.Objects::nonNull)
+                                                      .map(Participant::getSignedNote)
+                                                      .toList())
                            .setCardinality(cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())
