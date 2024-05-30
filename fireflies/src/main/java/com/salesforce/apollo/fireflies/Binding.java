@@ -229,8 +229,8 @@ class Binding {
                 this.context.rebalance(r.getCardinality());
                 node.nextNote(view);
 
-                log.debug("Completing redirect to view: {} context: {} sample: {} on: {}", view, this.context.getId(),
-                          r.getSampleCount(), node.getId());
+                log.debug("Completing redirect to view: {} context: {} introductions: {} on: {}", view,
+                          this.context.getId(), r.getIntroductionsCount(), node.getId());
                 if (timer != null) {
                     timer.close();
                 }
@@ -240,7 +240,7 @@ class Binding {
     }
 
     private void join(Redirect redirect, Digest v, Duration duration) {
-        var sample = redirect.getSampleList()
+        var sample = redirect.getIntroductionsList()
                              .stream()
                              .map(sn -> new NoteWrapper(sn, digestAlgo))
                              .map(nw -> view.new Participant(nw))

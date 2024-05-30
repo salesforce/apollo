@@ -467,14 +467,14 @@ public class ViewManagement {
 
             final var introductions = observers.stream().map(context::getMember).toList();
 
-            log.debug("Member seeding: {} view: {} context: {} sample: {} on: {}", newMember.getId(), currentView(),
-                      context.getId(), introductions.size(), node.getId());
+            log.debug("Member seeding: {} view: {} context: {} introductions: {} on: {}", newMember.getId(),
+                      currentView(), context.getId(), introductions.size(), node.getId());
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
-                           .addAllSample(introductions.stream()
-                                                      .filter(java.util.Objects::nonNull)
-                                                      .map(Participant::getSignedNote)
-                                                      .toList())
+                           .addAllIntroductions(introductions.stream()
+                                                             .filter(java.util.Objects::nonNull)
+                                                             .map(Participant::getSignedNote)
+                                                             .toList())
                            .setCardinality(cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())

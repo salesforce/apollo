@@ -132,7 +132,7 @@ message Redirect {
   int32 cardinality = 2;
   int32 rings = 3;
   bool bootstrap = 4;
-  repeated SignedNote sample = 6;
+  repeated SignedNote introductions = 6;
 }
 
 message Join {
