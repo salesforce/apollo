@@ -9,6 +9,7 @@
 **/.classpath
 **/.DS_Store
 **/bin/
+**/.run/
 /bin/
 *.csv
 **/dependency-reduced-pom.xml
