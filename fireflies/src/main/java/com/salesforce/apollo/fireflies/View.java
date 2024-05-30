@@ -138,6 +138,7 @@ public class View {
                                          EntranceClient.getCreate(metrics), Entrance.getLocalLoopback(node, service));
         gossiper = new RingCommunications<>(context, node, comm);
         gossiper.allowDuplicates();
+        gossiper.ignoreSelf();
         this.validation = validation;
         this.verifiers = verifiers;
     }
@@ -807,6 +808,8 @@ public class View {
         }
 
         if (!isValidMask(note.getMask(), context)) {
+            log.debug("Invalid mask of: {} cardinality: {} on: {}", note.getId(), note.getMask().cardinality(),
+                      node.getId());
             if (metrics != null) {
                 metrics.filteredNotes().mark();
             }
@@ -1373,11 +1376,11 @@ public class View {
     private void validate(Digest from, final int ring, Digest requestView) {
         if (shunned.contains(from)) {
             log.trace("Member is shunned: {} on: {}", from, node.getId());
-            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned: " + from));
+            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned"));
         }
         if (!started.get()) {
             log.trace("Currently offline, send unknown to: {}  on: {}", from, node.getId());
-            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member: " + node.getId() + " is offline"));
+            throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Considered offline"));
         }
         if (!requestView.equals(currentView())) {
             log.debug("Invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView(), ring, from,
@@ -1389,7 +1392,7 @@ public class View {
 
     private void validate(Digest from, NoteWrapper note, Digest requestView, final int ring) {
         if (!from.equals(note.getId())) {
-            throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Member does not match: " + from));
+            throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Note member does not match"));
         }
         validate(from, ring, requestView);
     }
@@ -1860,16 +1863,14 @@ public class View {
         @Override
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
-                log.trace("Not introduced!, ring: {} on: {}", request.getRing(), node.getId());
-                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
-                "Not introduced!, ring: %s from: %s on: %s".formatted(request.getRing(), from, node.getId())));
+                log.trace("Not introduced; ring: {} from: {}, on: {}", request.getRing(), from, node.getId());
+                throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not introduced"));
             }
             return stable(() -> {
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
                     log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
-                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
-                    "invalid ring: %s from: %s on: %s".formatted(ring, from, node.getId())));
+                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("invalid ring"));
                 }
                 validate(from, request);
 
@@ -1879,16 +1880,14 @@ public class View {
                     member = context.getActiveMember(from);
                     if (member == null) {
                         log.debug("Not active member: {} on: {}", from, node.getId());
-                        throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription(
-                        "Not active member: %s on: %s".formatted(from, node.getId())));
+                        throw new StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("Not active member"));
                     }
                 }
 
                 Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No active successor on ring: {} from: {} on: {}", ring, from, node.getId());
-                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
-                    "No active successor on ring: %s from: %s on: %s".formatted(ring, from, node.getId())));
+                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("No active successor"));
                 }
 
                 Gossip g;
@@ -1896,7 +1895,7 @@ public class View {
                 final var digests = request.getGossip();
                 if (!successor.equals(node)) {
                     builder.setRedirect(successor.getNote().getWrapped());
-                    log.debug("Redirected: {} on: {}", member.getId(), node.getId());
+                    log.debug("Redirected: {} to: {} on: {}", member.getId(), successor.id, node.getId());
                 }
                 g = builder.setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), params.fpr()))
                            .setAccusations(
@@ -1941,15 +1940,13 @@ public class View {
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
                     log.debug("invalid ring: {} current: {} from: {} on: {}", ring, currentView(), from, node.getId());
-                    throw new StatusRuntimeException(
-                    Status.INVALID_ARGUMENT.withDescription("No successor of: " + from));
+                    throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid ring"));
                 }
                 Participant member = context.getActiveMember(from);
                 Participant successor = context.successor(ring, member, m -> context.isActive(m.getId()));
                 if (successor == null) {
                     log.debug("No successor, invalid update from: {} on ring: {} on: {}", from, ring, node.getId());
-                    throw new StatusRuntimeException(
-                    Status.FAILED_PRECONDITION.withDescription("No successor of: " + from));
+                    throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("No successor"));
                 }
                 if (!successor.equals(node)) {
                     return;
