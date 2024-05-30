@@ -28,10 +28,7 @@ import org.joou.Unsigned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -87,6 +84,10 @@ public class Bootstrapper {
     }
 
     private void anchor(AtomicReference<ULong> start, ULong end) {
+        if (end.equals(ULong.valueOf(0)) && start.get().equals(ULong.valueOf(1))) {
+            validateAnchor();
+            return;
+        }
         final var randomCut = params.digestAlgorithm().random();
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true, scheduler).iterate(
@@ -131,7 +132,7 @@ public class Bootstrapper {
                                                      .map(j -> j.getMember().getVm().getId())
                                                      .map(Digest::from)
                                                      .map(d -> params.context().getMember(d))
-                                                     .filter(m -> m != null)
+                                                     .filter(Objects::nonNull)
                                                      .toList();
         CheckpointAssembler assembler = new CheckpointAssembler(committee, params.gossipDuration(), checkpoint.height(),
                                                                 checkpoint.block.getCheckpoint(), params.member(),
