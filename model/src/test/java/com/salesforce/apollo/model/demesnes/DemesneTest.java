@@ -250,7 +250,7 @@ public class DemesneTest {
                                                 .setParent(parentAddress)
                                                 .setCommDirectory(commDirectory.toString())
                                                 .setMaxTransfer(100)
-                                                .setFalsePositiveRate(.125)
+                                                .setFalsePositiveRate(.00125)
                                                 .build();
         final var demesne = new DemesneImpl(parameters);
         Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();

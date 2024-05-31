@@ -723,11 +723,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
-    public int totalCount() {
-        return members.size();
-    }
-
-    @Override
     public Iterable<T> traverse(int ring, T member) {
         return ring(ring).traverse(member);
     }

@@ -506,11 +506,6 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @return the total number of members
-     */
-    int totalCount();
-
-    /**
      * @param member
      * @return the iteratator to traverse the ring starting at the member
      */

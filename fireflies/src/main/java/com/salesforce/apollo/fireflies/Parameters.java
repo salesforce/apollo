@@ -31,7 +31,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * False positive rate for bloom filter state replication (high fpr is good)
          */
-        private double   fpr                    = 0.0125;
+        private double   fpr                    = 0.00125;
         /**
          * Number of retries when joining until giving up
          */

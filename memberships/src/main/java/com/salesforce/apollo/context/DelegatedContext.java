@@ -338,11 +338,6 @@ public class DelegatedContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public int totalCount() {
-        return delegate.totalCount();
-    }
-
-    @Override
     public Iterable<T> traverse(int ring, T member) {
         return delegate.traverse(ring, member);
     }

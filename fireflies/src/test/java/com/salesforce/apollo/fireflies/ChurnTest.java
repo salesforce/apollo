@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -143,45 +144,52 @@ public class ChurnTest {
             toStart.forEach(view -> view.start(() -> countdown.get().countDown(), gossipDuration, seeds));
 
             success = countdown.get().await(30, TimeUnit.SECONDS);
-            failed = testViews.stream()
-                              .filter(e -> e.getContext().activeCount() != testViews.size()
-                              || e.getContext().totalCount() != testViews.size())
-                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                                                      v.getContext().activeCount()))
-                              .toList();
+            failed = testViews.stream().filter(e -> {
+                if (e.getContext().activeCount() != testViews.size())
+                    return true;
+                Context<Participant> participantContext = e.getContext();
+                return participantContext.size() != testViews.size();
+            }).sorted(Comparator.comparing(v -> v.getContext().activeCount())).map(v -> {
+                Context<Participant> participantContext = v.getContext();
+                return String.format("%s : %s : %s ", v.getNode().getId(), participantContext.size(),
+                                     v.getContext().activeCount());
+            }).toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
                                 .map(v -> v.getContext())
-                                .filter(
-                                ctx -> ctx.totalCount() != testViews.size() || ctx.activeCount() != testViews.size())
+                                .filter(ctx -> ctx.size() != testViews.size() || ctx.activeCount() != testViews.size())
                                 .count() == 0;
             });
-            failed = testViews.stream()
-                              .filter(e -> e.getContext().activeCount() != testViews.size()
-                              || e.getContext().totalCount() != testViews.size())
-                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                                                      v.getContext().activeCount()))
-                              .toList();
+            failed = testViews.stream().filter(e -> {
+                if (e.getContext().activeCount() != testViews.size())
+                    return true;
+                Context<Participant> participantContext = e.getContext();
+                return participantContext.size() != testViews.size();
+            }).sorted(Comparator.comparing(v -> v.getContext().activeCount())).map(v -> {
+                Context<Participant> participantContext = v.getContext();
+                return String.format("%s : %s : %s ", v.getNode().getId(), participantContext.size(),
+                                     v.getContext().activeCount());
+            }).toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
                                 .map(v -> v.getContext())
-                                .filter(
-                                ctx -> ctx.totalCount() != testViews.size() || ctx.activeCount() != testViews.size())
+                                .filter(ctx -> ctx.size() != testViews.size() || ctx.activeCount() != testViews.size())
                                 .count() == 0;
             });
-            failed = testViews.stream()
-                              .filter(e -> e.getContext().activeCount() != testViews.size()
-                              || e.getContext().totalCount() != testViews.size())
-                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
-                              .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().totalCount(),
-                                                      v.getContext().activeCount()))
-                              .toList();
+            failed = testViews.stream().filter(e -> {
+                if (e.getContext().activeCount() != testViews.size())
+                    return true;
+                Context<Participant> participantContext = e.getContext();
+                return participantContext.size() != testViews.size();
+            }).sorted(Comparator.comparing(v -> v.getContext().activeCount())).map(v -> {
+                Context<Participant> participantContext = v.getContext();
+                return String.format("%s : %s : %s ", v.getNode().getId(), participantContext.size(),
+                                     v.getContext().activeCount());
+            }).toList();
             assertTrue(success, " expected: " + testViews.size() + " failed: " + failed.size() + " views: " + failed);
 
             System.out.println(
@@ -213,10 +221,13 @@ public class ChurnTest {
             //            System.out.println("** Removed: " + removed);
             then = System.currentTimeMillis();
             success = Utils.waitForCondition(60_000, 1_000, () -> {
-                return expected.stream().filter(view -> view.getContext().totalCount() > expected.size()).count() == 0;
+                return expected.stream().filter(view -> {
+                    Context<Participant> participantContext = view.getContext();
+                    return participantContext.size() > expected.size();
+                }).count() == 0;
             });
             failed = expected.stream()
-                             .filter(e -> e.getContext().activeCount() != testViews.size())
+                             .filter(e -> e.getContext().activeCount() != expected.size())
                              .sorted(Comparator.comparing(v -> v.getContext().activeCount()))
                              .map(v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
                              .toList();

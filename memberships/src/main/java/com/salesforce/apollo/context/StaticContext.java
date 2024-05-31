@@ -444,11 +444,6 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
-    public int totalCount() {
-        return members.length;
-    }
-
-    @Override
     public Iterable<T> traverse(int ring, T member) {
         return ring(ring).traverse(member);
     }

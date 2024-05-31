@@ -310,14 +310,14 @@ public class View {
             if (accused) {
                 checkInvalidations(member);
             }
-            if (!viewManagement.joined() && context.totalCount() == viewManagement.cardinality()) {
-                assert context.totalCount() == viewManagement.cardinality();
+            if (!viewManagement.joined() && context.size() == viewManagement.cardinality()) {
+                assert context.size() == viewManagement.cardinality();
                 viewManagement.join();
             } else {
                 // This assertion needs to accommodate invalid diadem cardinality during view installation, as the diadem
                 // is from the previous view until all joining member have... joined.
-                assert context.totalCount() <= Math.max(viewManagement.cardinality(), context.cardinality()) : "total: "
-                + context.totalCount() + " card: " + viewManagement.cardinality();
+                assert context.size() <= Math.max(viewManagement.cardinality(), context.cardinality()) : "total: "
+                + context.size() + " card: " + viewManagement.cardinality();
             }
             return true;
         });
@@ -343,15 +343,17 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var majority = context.size() == 1 ? 1 : context.majority();
-            if (observations.size() < majority) {
-                log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
-                          majority, viewManagement.observers.stream().toList(), currentView(), node.getId());
+            final var superMajority =
+            context.size() == 1 ? 1 : context.getRingCount() - ((context.getRingCount() - 1) / 4);
+            if (observations.size() < superMajority) {
+                log.trace("Do not have superMajority: {} required: {} observers: {} for: {} on: {}",
+                          observations.size(), superMajority, viewManagement.observers.stream().toList(), currentView(),
+                          node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
-            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
-                     viewManagement.observers.stream().toList(), currentView(), node.getId());
+            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(),
+                     superMajority, viewManagement.observers.stream().toList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             final var current = currentView();
             observations.values()
@@ -372,15 +374,15 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            if (max != null && max.getCount() >= majority) {
-                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
-                         viewManagement.cardinality(), currentView(), node.getId());
+            if (max != null && max.getCount() >= superMajority) {
+                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
+                         superMajority, viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), majority, viewManagement.cardinality(),
+                         observations.size(), superMajority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
             }
 
@@ -422,7 +424,7 @@ public class View {
             viewChangeListeners.forEach(listener -> {
                 try {
                     log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
-                              currentView(), context.totalCount(), joining.size(), leaving.size(), node.getId());
+                              currentView(), context.size(), joining.size(), leaving.size(), node.getId());
                     listener.accept(sc, current);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
@@ -1286,8 +1288,8 @@ public class View {
         var jCount = joins.stream().filter(j -> addJoin(j)).count();
         if (notes.size() + accusations.size() + observe.size() + joins.size() != 0) {
             log.trace("Updating, members: {} notes: {}:{} accusations: {}:{} observations: {}:{} joins: {}:{} on: {}",
-                      context.totalCount(), nCount, notes.size(), aCount, accusations.size(), oCount, observe.size(),
-                      jCount, joins.size(), node.getId());
+                      context.size(), nCount, notes.size(), aCount, accusations.size(), oCount, observe.size(), jCount,
+                      joins.size(), node.getId());
         }
     }
 
@@ -1303,7 +1305,7 @@ public class View {
         }
         if (context.activate(member)) {
             log.trace("Recovering: {} cardinality: {} count: {} on: {}", member.getId(), viewManagement.cardinality(),
-                      context.totalCount(), node.getId());
+                      context.size(), node.getId());
         }
     }
 

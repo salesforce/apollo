@@ -158,7 +158,7 @@ public class ViewManagement {
                                    .map(p -> p.note.getWrapped())
                                    .collect(Collectors.toSet());
 
-        context.rebalance(context.totalCount() + ballot.joining.size());
+        context.rebalance(context.size() + ballot.joining.size());
         var joining = new ArrayList<SelfAddressingIdentifier>();
         var pending = ballot.joining()
                             .stream()
@@ -205,20 +205,19 @@ public class ViewManagement {
     void join() {
         joinLock.lock();
         try {
-            assert context.totalCount() == cardinality();
+            assert context.size() == cardinality();
             if (joined()) {
                 return;
             }
             var current = currentView();
-            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.size(),
                      node.getId());
-            var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(Participant::getId),
+            var calculated = HexBloom.construct(context.size(), context.allMembers().map(Participant::getId),
                                                 view.bootstrapView(), params.crowns());
 
             if (!current.equals(calculated.compactWrapped())) {
                 log.error("Crown: {} does not produce view: {} cardinality: {} count: {} on: {}",
-                          calculated.compactWrapped(), currentView(), cardinality(), context.totalCount(),
-                          node.getId());
+                          calculated.compactWrapped(), currentView(), cardinality(), context.size(), node.getId());
                 view.stop();
                 throw new IllegalStateException("Invalid crown");
             }
@@ -231,7 +230,7 @@ public class ViewManagement {
             if (metrics != null) {
                 metrics.viewChanges().mark();
             }
-            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.size(),
                      node.getId());
             onJoined.complete(null);
         } finally {
@@ -333,9 +332,9 @@ public class ViewManagement {
 
                     view.introduced();
                     log.debug("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}",
-                              currentView.get(), bound.successors().size(), cardinality(), context.totalCount(),
+                              currentView.get(), bound.successors().size(), cardinality(), context.size(),
                               node.getId());
-                    if (context.totalCount() == cardinality()) {
+                    if (context.size() == cardinality()) {
                         join();
                     } else {
                         //                        populate(new ArrayList<>(context.activeMembers()));
