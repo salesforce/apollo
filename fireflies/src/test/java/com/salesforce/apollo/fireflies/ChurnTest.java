@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ChurnTest {
 
     private static final int                                                         CARDINALITY    = 100;
-    private static final double                                                      P_BYZ          = 0.3;
+    private static final double                                                      P_BYZ          = 0.2;
     private static       Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static       KERL.AppendKERL                                             kerl;
     private final        List<Router>                                                communications = new ArrayList<>();

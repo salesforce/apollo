@@ -727,6 +727,20 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         return ring(ring).traverse(member);
     }
 
+    /**
+     * @return the list of successor to the key on each ring that pass the provided predicate test
+     */
+    @Override
+    public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        Set<T> successors = new HashSet<>();
+        for (Ring<T> ring : rings) {
+            T successor = ring.successor(key, m -> !collector.contains(m) && test.test(m));
+            if (successor != null) {
+                collector.add(successor);
+            }
+        }
+    }
+
     @Override
     public boolean validRing(int ring) {
         return ring >= 0 && ring < rings.size();
@@ -1215,7 +1229,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
+         * @param location
          * @param predicate
          * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
          * excluding) the first item where predicate(item) evaluates to True.
@@ -1225,7 +1239,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
+         * @param m
          * @param predicate
          * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
          * excluding) the first item where predicate(item) evaluates to True.

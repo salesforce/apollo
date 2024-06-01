@@ -59,7 +59,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Timeout for contacting seed gateways during seeding and join operations
          */
-        private Duration seedingTimout          = Duration.ofSeconds(5);
+        private Duration seedingTimout          = Duration.ofSeconds(15);
         /**
          * Max number of times to attempt validation when joining a view
          */

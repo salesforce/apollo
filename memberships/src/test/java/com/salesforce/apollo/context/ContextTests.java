@@ -47,4 +47,26 @@ public class ContextTests {
         assertEquals(members.get(0), successors.get(0));
         assertEquals(members.get(1), context.successor(1, members.get(0)));
     }
+
+    @Test
+    public void successors() throws Exception {
+        var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
+        List<SigningMember> members = new ArrayList<>();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
+        for (int i = 0; i < 50; i++) {
+            SigningMember m = new ControlledIdentifierMember(stereotomy.newIdentifier());
+            members.add(m);
+            context.activate(m);
+        }
+        var successors = context.bftSubset(members.get(10).getId());
+        assertEquals(context.getRingCount(), successors.size());
+
+        successors = context.bftSubset(members.get(10).getId(), m -> {
+            return context.isActive(m);
+        });
+        assertEquals(context.getRingCount(), successors.size());
+    }
 }

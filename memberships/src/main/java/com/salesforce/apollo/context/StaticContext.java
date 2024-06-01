@@ -449,6 +449,16 @@ public class StaticContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        for (int ring = 0; ring < rings.length; ring++) {
+            T successor = ring(ring).successor(key, m -> !collector.contains(m) && test.test(m));
+            if (successor != null) {
+                collector.add(successor);
+            }
+        }
+    }
+
+    @Override
     public boolean validRing(int ring) {
         return ring >= 0 && ring < rings.length;
     }

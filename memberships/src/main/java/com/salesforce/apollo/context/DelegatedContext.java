@@ -5,6 +5,7 @@ import com.salesforce.apollo.membership.Member;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -340,6 +341,11 @@ public class DelegatedContext<T extends Member> implements Context<T> {
     @Override
     public Iterable<T> traverse(int ring, T member) {
         return delegate.traverse(ring, member);
+    }
+
+    @Override
+    public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        delegate.uniqueSuccessors(key, test, collector);
     }
 
     @Override

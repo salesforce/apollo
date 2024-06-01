@@ -1114,7 +1114,8 @@ public class CHOAM {
          */
         public View getView(Digest hash) {
             var builder = View.newBuilder().setDiadem(diadem.toDigeste()).setMajority(context.majority());
-            Committee.viewMembersOf(hash, context).forEach(d -> builder.addCommittee(d.getId().toDigeste()));
+            ((Context<? super Member>) context).bftSubset(hash).forEach(
+            d -> builder.addCommittee(d.getId().toDigeste()));
             return builder.build();
         }
     }

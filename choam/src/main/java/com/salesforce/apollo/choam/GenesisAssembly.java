@@ -17,6 +17,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.OneShot;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.proto.PubKey;
@@ -64,9 +65,9 @@ public class GenesisAssembly implements Genesis {
                            String label) {
         view = vc;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(view.context().getId(), view.pendingViews().last().context())
-                                .stream()
-                                .collect(Collectors.toMap(Member::getId, m -> m));
+        Digest hash = view.context().getId();
+        nextAssembly = ((Set<Member>) ((Context<? super Member>) view.pendingViews().last().context()).bftSubset(
+        hash)).stream().collect(Collectors.toMap(Member::getId, m -> m));
         if (!Dag.validate(nextAssembly.size())) {
             throw new IllegalStateException("Invalid BFT cardinality: " + nextAssembly.size());
         }

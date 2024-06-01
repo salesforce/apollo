@@ -127,15 +127,19 @@ public interface Context<T extends Member> {
      * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
      * rings
      */
-    default Set<Member> bftSubset(Digest hash) {
-        Set<Member> successors = new HashSet<>();
-        successors(hash, m -> {
-            if (successors.size() == getRingCount()) {
-                return false;
-            }
-            return successors.add(m);
-        });
-        return successors;
+    default Set<T> bftSubset(Digest hash) {
+        return bftSubset(hash, m -> true);
+    }
+
+    /**
+     * @param hash   - the point on the rings to determine successors
+     * @param filter - the filter to apply to successors
+     * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
+     */
+    default Set<T> bftSubset(Digest hash, Predicate<T> filter) {
+        var collector = new HashSet<T>();
+        uniqueSuccessors(hash, filter, collector);
+        return collector;
     }
 
     /**
@@ -510,6 +514,12 @@ public interface Context<T extends Member> {
      * @return the iteratator to traverse the ring starting at the member
      */
     Iterable<T> traverse(int ring, T member);
+
+    /**
+     * collect the list of successors to the key on each ring that pass the provided predicate test and provide a unique
+     * member per ring if possible.
+     */
+    void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector);
 
     boolean validRing(int ring);
 

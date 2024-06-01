@@ -125,6 +125,16 @@ public class ViewManagement {
         return currentView.get();
     }
 
+    void gc(Participant member) {
+        assert member != null;
+        view.stable(() -> {
+            if (observers.remove(member.id)) {
+                log.info("Removed observer: {} view: {} on: {}", member.id, currentView.get(), node.getId());
+                resetObservers();
+            }
+        });
+    }
+
     /**
      * @param seed
      * @param p
@@ -199,8 +209,12 @@ public class ViewManagement {
         view.notifyListeners(joining, ballot.leaving);
     }
 
+    boolean isObserver(Digest observer) {
+        return observers().contains(observer);
+    }
+
     /**
-     * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if does not match currentView
+     * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if it does not match currentView
      */
     void join() {
         joinLock.lock();
@@ -362,6 +376,8 @@ public class ViewManagement {
     void maybeViewChange() {
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
             if (isObserver()) {
+                log.trace("Initiating view change: {} (non observer) joins: {} leaves: {} on: {}", currentView(),
+                          joins.size(), view.streamShunned().count(), node.getId());
                 initiateViewChange();
             } else {
                 // Use pending rebuttals as a proxy for stability
@@ -373,8 +389,18 @@ public class ViewManagement {
                 }
             }
         } else {
+            log.trace("No view change: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
+                      view.streamShunned().count(), node.getId());
             view.scheduleViewChange();
         }
+    }
+
+    Set<Digest> observers() {
+        return observers;
+    }
+
+    List<Digest> observersList() {
+        return observers().stream().toList();
     }
 
     void populate(List<Participant> sample) {
@@ -503,6 +529,10 @@ public class ViewManagement {
                 return;
             }
             view.scheduleFinalizeViewChange();
+            if (!isObserver(node.getId())) {
+                log.trace("Initiating view change: {} (non observer) on: {}", currentView(), node.getId());
+                return;
+            }
             log.trace("Initiating view change vote: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
                       view.streamShunned().count(), node.getId());
             final var builder = ViewChange.newBuilder()
@@ -567,13 +597,31 @@ public class ViewManagement {
         }
     }
 
+    private void resetObservers() {
+        observers.clear();
+        context.bftSubset(diadem.get().compact(), context::isActive)
+               .stream()
+               .map(Member::getId)
+               .forEach(observers::add);
+        if (observers.isEmpty()) {
+            observers.add(node.getId()); // bootstrap case
+        }
+        if (observers.size() > 1 && observers.size() < context.getRingCount()) {
+            log.info("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                     context.cardinality(), currentView(), context.getId(), node.getId());
+            assert observers.size() > 1 && observers.size() < context.getRingCount();
+        }
+        log.info("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                 context.cardinality(), currentView(), context.getId(), node.getId());
+    }
+
     private void setDiadem(final HexBloom hex) {
         diadem.set(hex);
         currentView.set(diadem.get().compactWrapped());
-        observers.clear();
-        context.bftSubset(hex.compact()).stream().map(Member::getId).forEach(observers::add);
-        log.info("View: {} set diadem: {} observers: {} on: {}", context.getId(), diadem.get().compactWrapped(),
-                 observers.stream().toList(), node.getId());
+        resetObservers();
+        log.info("View: {} set diadem: {} observers: {} view: {} context: {} size: {} on: {}", context.getId(),
+                 diadem.get().compactWrapped(), observers.stream().toList(), currentView(), context.getId(),
+                 context.size(), node.getId());
     }
 
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {

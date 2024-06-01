@@ -347,13 +347,13 @@ public class View {
             context.size() == 1 ? 1 : context.getRingCount() - ((context.getRingCount() - 1) / 4);
             if (observations.size() < superMajority) {
                 log.trace("Do not have superMajority: {} required: {} observers: {} for: {} on: {}",
-                          observations.size(), superMajority, viewManagement.observers.stream().toList(), currentView(),
+                          observations.size(), superMajority, viewManagement.observersList(), currentView(),
                           node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
             log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(),
-                     superMajority, viewManagement.observers.stream().toList(), currentView(), node.getId());
+                     superMajority, viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             final var current = currentView();
             observations.values()
@@ -679,7 +679,7 @@ public class View {
         pendingRebuttals.computeIfAbsent(member.getId(),
                                          d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
         log.debug("Accuse {} on ring {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
-                  e.toString(), node.getId());
+                  e.getMessage(), node.getId());
     }
 
     /**
@@ -828,7 +828,7 @@ public class View {
      */
     private boolean add(SignedViewChange observation) {
         final Digest observer = Digest.from(observation.getChange().getObserver());
-        if (!viewManagement.observers.contains(observer)) {
+        if (!viewManagement.isObserver(observer)) {
             log.trace("Invalid observer: {} current: {} on: {}", observer, currentView(), node.getId());
             return false;
         }
@@ -993,9 +993,10 @@ public class View {
         if (context.isActive(member)) {
             amplify(member);
         }
-        log.debug("Garbage collecting: {} on: {}", member.getId(), node.getId());
+        log.debug("Garbage collecting: {} view: {} on: {}", member.getId(), viewManagement.currentView(), node.getId());
         context.offline(member);
         shunned.add(member.getId());
+        viewManagement.gc(member);
     }
 
     /**
@@ -1375,18 +1376,18 @@ public class View {
         return builder.build();
     }
 
-    private void validate(Digest from, final int ring, Digest requestView) {
+    private void validate(Digest from, final int ring, Digest requestView, String type) {
         if (shunned.contains(from)) {
-            log.trace("Member is shunned: {} on: {}", from, node.getId());
+            log.trace("Member is shunned: {} cannot {} on: {}", type, from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Member is shunned"));
         }
         if (!started.get()) {
-            log.trace("Currently offline, send unknown to: {}  on: {}", from, node.getId());
+            log.trace("Currently offline, cannot {}, send unknown to: {} on: {}", type, from, node.getId());
             throw new StatusRuntimeException(Status.UNKNOWN.withDescription("Considered offline"));
         }
         if (!requestView.equals(currentView())) {
-            log.debug("Invalid view: {} current: {} ring: {} from: {} on: {}", requestView, currentView(), ring, from,
-                      node.getId());
+            log.debug("Invalid {}, view: {} current: {} ring: {} from: {} on: {}", type, requestView, currentView(),
+                      ring, from, node.getId());
             throw new StatusRuntimeException(
             Status.PERMISSION_DENIED.withDescription("Invalid view: " + requestView + " current: " + currentView()));
         }
@@ -1394,9 +1395,10 @@ public class View {
 
     private void validate(Digest from, NoteWrapper note, Digest requestView, final int ring) {
         if (!from.equals(note.getId())) {
+            log.debug("Invalid {} note: {} from: {} ring: {} on: {}", "gossip", note.getId(), from, ring, node.getId());
             throw new StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Note member does not match"));
         }
-        validate(from, ring, requestView);
+        validate(from, ring, requestView, "gossip");
     }
 
     private void validate(Digest from, SayWhat request) {
@@ -1417,7 +1419,7 @@ public class View {
     private void validate(Digest from, State request) {
         var valid = false;
         try {
-            validate(from, request.getRing(), Digest.from(request.getView()));
+            validate(from, request.getRing(), Digest.from(request.getView()), "update");
             valid = true;
         } finally {
             if (!valid && metrics != null) {
@@ -1871,7 +1873,7 @@ public class View {
             return stable(() -> {
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
-                    log.debug("invalid ring: {} from: {} on: {}", ring, from, node.getId());
+                    log.debug("invalid gossip ring: {} from: {} on: {}", ring, from, node.getId());
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("invalid ring"));
                 }
                 validate(from, request);
