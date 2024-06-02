@@ -18,7 +18,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +53,7 @@ public class SliceIterator<Comm extends Link> {
         assert member != null && s != null && comm != null;
         this.label = label;
         this.member = member;
-        this.slice = new ArrayList<>(s);
+        this.slice = new CopyOnWriteArrayList<>(s);
         this.comm = comm;
         this.scheduler = scheduler;
         Entropy.secureShuffle(this.slice);

@@ -90,10 +90,13 @@ public class Bootstrapper {
         }
         final var randomCut = params.digestAlgorithm().random();
         log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true, scheduler).iterate(
-        randomCut, (link, ring) -> anchor(link, start, end),
-        (tally, futureSailor, destination) -> completeAnchor(futureSailor, start, end, destination),
-        t -> scheduleAnchorCompletion(start, end));
+        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
+                                                          comms, true, scheduler);
+        iterator.ignoreSelf();
+        iterator.noDuplicates();
+        iterator.iterate(randomCut, (link, ring) -> anchor(link, start, end),
+                         (tally, futureSailor, destination) -> completeAnchor(futureSailor, start, end, destination),
+                         t -> scheduleAnchorCompletion(start, end));
     }
 
     private Blocks anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
@@ -122,6 +125,7 @@ public class Bootstrapper {
         assert !checkpointView.height()
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
         var crown = HexBloom.from(checkpoint.block.getCheckpoint().getCrown());
+        assert !crown.crowns().isEmpty() : "Crowns should not be empty";
         log.info("Assembling from checkpoint: {}:{} crown: {} last cp: {} on: {}", checkpoint.height(), checkpoint.hash,
                  crown.compactWrapped(), Digest.from(checkpoint.block.getHeader().getLastCheckpointHash()),
                  params.member().getId());
@@ -190,10 +194,13 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
-        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), scheduler, comms).iterate(
-        params.digestAlgorithm().random(), (link, ring) -> completeViewChain(link, start, end),
-        (tally, result, destination) -> completeViewChain(result, start, end, destination),
-        t -> scheduleViewChainCompletion(start, end));
+        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
+                                                          scheduler, comms);
+        iterator.noDuplicates();
+        iterator.ignoreSelf();
+        iterator.iterate(params.digestAlgorithm().random(), (link, ring) -> completeViewChain(link, start, end),
+                         (tally, result, destination) -> completeViewChain(result, start, end, destination),
+                         t -> scheduleViewChainCompletion(start, end));
     }
 
     private boolean completeViewChain(Optional<Blocks> futureSailor, AtomicReference<ULong> start, ULong end,
@@ -255,33 +262,15 @@ public class Bootstrapper {
                                           // If restoring from known genesis...
                                           .filter(e -> genesis == null || genesis.hash.equals(e.getKey()))
                                           .filter(e -> {
-                                              if (e.getValue().hasGenesis()) {
-                                                  if (lastCheckpoint != null
-                                                  && lastCheckpoint.compareTo(ULong.valueOf(0)) > 0) {
-                                                      log.trace(
-                                                      "Rejecting genesis from: {} last checkpoint: {} > 0 on: {}",
-                                                      e.getKey(), lastCheckpoint, params.member().getId());
-                                                      return false;
-                                                  }
-                                                  log.trace("Accepting genesis from: {} on: {}", e.getKey(),
-                                                            params.member().getId());
-                                                  return true;
-                                              }
-                                              if (!e.getValue().hasCheckpoint()) {
-                                                  log.trace(
-                                                  "Rejecting: {} has no checkpoint. last checkpoint from: {} > 0 on: {}",
-                                                  e.getKey(), lastCheckpoint, params.member().getId());
+                                              if (lastCheckpoint != null
+                                              && lastCheckpoint.compareTo(ULong.valueOf(0)) > 0) {
+                                                  log.trace("Rejecting genesis from: {} last checkpoint: {} > 0 on: {}",
+                                                            e.getKey(), lastCheckpoint, params.member().getId());
                                                   return false;
                                               }
-
-                                              ULong checkpointViewHeight = HashedBlock.height(
-                                              e.getValue().getCheckpointView().getBlock());
-                                              ULong recordedCheckpointViewHeight = ULong.valueOf(
-                                              e.getValue().getCheckpoint().getBlock().getHeader().getLastReconfig());
-                                              // checkpoint's view should match
-                                              log.trace("Accepting checkpoint from: {} on: {}", e.getKey(),
+                                              log.trace("Accepting genesis from: {} on: {}", e.getKey(),
                                                         params.member().getId());
-                                              return checkpointViewHeight.equals(recordedCheckpointViewHeight);
+                                              return true;
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                                         e.getValue().getGenesis())))
@@ -354,15 +343,15 @@ public class Bootstrapper {
                          checkpointView == null ? genesis.hash : checkpoint.hash, params.member().getId());
                 sync.complete(new SynchronizedState(genesis, checkpointView, checkpoint, checkpointState));
             } else {
-                log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
+                log.error("Failed synchronizing to: {} from: {} last view: {} on: {}", genesis.hash,
                           checkpoint == null ? genesis.hash : checkpoint.hash,
-                          checkpointView == null ? genesis.hash : checkpoint.hash, t);
+                          checkpointView == null ? genesis.hash : checkpoint.hash, params.member().getId(), t);
                 sync.completeExceptionally(t);
             }
         }).exceptionally(t -> {
-            log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
+            log.error("Failed synchronizing to: {} from: {} last view: {} on: {}", genesis.hash,
                       checkpoint == null ? genesis.hash : checkpoint.hash,
-                      checkpointView == null ? genesis.hash : checkpoint.hash, t);
+                      checkpointView == null ? genesis.hash : checkpoint.hash, params.member().getId(), t);
             sync.completeExceptionally(t);
             return null;
         });
@@ -389,6 +378,7 @@ public class Bootstrapper {
         var iterator = new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true,
                                           scheduler);
         iterator.allowDuplicates();
+        iterator.ignoreSelf();
         iterator.iterate(randomCut, (link, _) -> synchronize(s, link),
                          (_, futureSailor, destination) -> synchronize(futureSailor, votes, destination),
                          t -> computeGenesis(votes));
