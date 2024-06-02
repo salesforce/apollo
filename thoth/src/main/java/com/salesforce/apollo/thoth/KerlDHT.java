@@ -199,7 +199,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
         iterator.iterate(identifier, null,
                          (link, r) -> link.append(Collections.emptyList(), Collections.singletonList(event)), null,
@@ -235,7 +235,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
         iterator.iterate(identifier, null, (link, r) -> link.append(kerl), null,
                          (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
@@ -264,7 +264,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStates>();
         HashMultiset<KeyStates> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
         iterator.iterate(identifier, null, (link, r) -> link.append(Collections.singletonList(event)), null,
                          (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
@@ -321,7 +321,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
         iterator.iterate(identifier, null, (link, r) -> link.appendAttachments(events), null,
                          (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
@@ -355,7 +355,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Empty>();
         HashMultiset<Empty> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
         iterator.iterate(identifier, null, (link, r) -> link.appendValidations(validations), null,
                          (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
@@ -408,7 +408,7 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<Attachment>();
         HashMultiset<Attachment> gathered = HashMultiset.create();
         var operation = "getAttachment(%s)".formatted(EventCoordinates.from(coordinates));
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
@@ -443,7 +443,7 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KERL_>();
         HashMultiset<KERL_> gathered = HashMultiset.create();
         var operation = "getKerl(%s)".formatted(Identifier.from(identifier));
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKERL(identifier),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -482,7 +482,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyEvent_>();
         HashMultiset<KeyEvent_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -518,7 +518,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -555,7 +555,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -591,7 +591,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyState(identifier),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -627,7 +627,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStateWithAttachments_>();
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -663,7 +663,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
         HashMultiset<KeyStateWithEndorsementsAndValidations_> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
@@ -699,7 +699,7 @@ public class KerlDHT implements ProtoKERLService {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Validations>();
         HashMultiset<Validations> gathered = HashMultiset.create();
-        var iterator = new RingIterator<Member, DhtService>(operationsFrequency, context, member, scheduler, dhtComms);
+        var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
                          () -> failedMajority(result, maxCount(gathered), operation),
                          (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,

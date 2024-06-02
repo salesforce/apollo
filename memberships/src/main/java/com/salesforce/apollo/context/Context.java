@@ -10,11 +10,10 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
+import com.salesforce.apollo.ring.RingCommunications;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -114,7 +113,7 @@ public interface Context<T extends Member> {
      * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
      * rings
      */
-    default Set<T> bftSubset(Digest hash) {
+    default LinkedHashSet<T> bftSubset(Digest hash) {
         return bftSubset(hash, m -> true);
     }
 
@@ -123,8 +122,8 @@ public interface Context<T extends Member> {
      * @param filter - the filter to apply to successors
      * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
      */
-    default Set<T> bftSubset(Digest hash, Predicate<T> filter) {
-        var collector = new HashSet<T>();
+    default LinkedHashSet<T> bftSubset(Digest hash, Predicate<T> filter) {
+        var collector = new LinkedHashSet<T>();
         uniqueSuccessors(hash, filter, collector);
         return collector;
     }
@@ -463,6 +462,32 @@ public interface Context<T extends Member> {
     List<T> successors(T key, Predicate<T> test);
 
     Iterable<T> successors(int ring, Digest location);
+
+    default List<RingCommunications.iteration<T>> successors(Digest digest, T ignore, boolean noDuplicates, T member) {
+        var traversal = new ArrayList<RingCommunications.iteration<T>>();
+        var traversed = new TreeSet<T>();
+        for (int ring = 0; ring < getRingCount(); ring++) {
+            if (size() == 1) {
+                traversal.add(new RingCommunications.iteration<>(member, ring));
+                continue;
+            }
+            T successor = findSuccessor(ring, digest, m -> {
+                if (ignore != null && ignore.equals(m)) {
+                    return Context.IterateResult.CONTINUE;
+                }
+                if (noDuplicates) {
+                    if (traversed.add(m)) {
+                        return Context.IterateResult.SUCCESS;
+                    } else {
+                        return Context.IterateResult.CONTINUE;
+                    }
+                }
+                return Context.IterateResult.SUCCESS;
+            });
+            traversal.add(new RingCommunications.iteration<>(successor, ring));
+        }
+        return traversal;
+    }
 
     /**
      * @param ring

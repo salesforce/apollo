@@ -105,8 +105,7 @@ public class LeydenJar {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<String>();
         var gathered = HashMultiset.<String>create();
-        var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
-                                                             binderComms);
+        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
         iterate.iterate(hash, null, (link, r) -> {
                             link.bind(bound);
                             return "";
@@ -133,8 +132,7 @@ public class LeydenJar {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Bound>();
         var gathered = HashMultiset.<Bound>create();
-        var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
-                                                             binderComms);
+        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
         iterate.iterate(hash, null, (link, r) -> {
                             var bound = link.get(keyAndToken);
                             log.debug("Get {}: bound: <{}:{}> from: {} on: {}", hash, bound.getKey().toStringUtf8(),
@@ -188,8 +186,7 @@ public class LeydenJar {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<String>();
         var gathered = HashMultiset.<String>create();
-        var iterate = new RingIterator<Member, BinderClient>(operationsFrequency, context, member, scheduler,
-                                                             binderComms);
+        var iterate = new RingIterator<>(operationsFrequency, context, member, scheduler, binderComms);
         iterate.iterate(hash, null, (link, r) -> {
                             link.unbind(keyAndToken);
                             return "";
@@ -221,7 +218,7 @@ public class LeydenJar {
     private Stream<Digest> bindingsIn(KeyInterval i) {
         Iterator<Digest> it = new Iterator<Digest>() {
             private final Iterator<Digest> iterate = bottled.keyIterator(i.getBegin());
-            private Digest next;
+            private       Digest           next;
 
             {
                 if (iterate.hasNext()) {

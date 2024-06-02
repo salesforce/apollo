@@ -97,7 +97,8 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   transitions::process, transitions::nextEpoch, label);
-        coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
+        coordinator = new ChRbcGossip(reContext.getId(), params().member(), nextAssembly.values(),
+                                      controller.processor(), params().communications(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());

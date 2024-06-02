@@ -13,7 +13,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.context.StaticContext;
+import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Signer;
 import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
@@ -97,8 +97,12 @@ public class EtherealTest {
                                         .map(ControlledIdentifierMember::new)
                                         .map(e -> (Member) e)
                                         .toList();
-
-        StaticContext<Member> context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members, 3);
+        DynamicContext<Member> context = DynamicContext.newBuilder()
+                                                       .setBias(3)
+                                                       .setpByz(0.1)
+                                                       .setId(DigestAlgorithm.DEFAULT.getOrigin())
+                                                       .build();
+        context.activate(members);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         var builder = Config.newBuilder().setnProc((short) NPROC).setNumberOfEpochs(-1).setEpochLength(EPOCH_LENGTH);
 
@@ -132,7 +136,8 @@ public class EtherealTest {
                 }
             }, "Test: " + i);
 
-            var gossiper = new ChRbcGossip(context, (SigningMember) member, controller.processor(), com, metrics);
+            var gossiper = new ChRbcGossip(context.getId(), (SigningMember) member, members, controller.processor(),
+                                           com, metrics);
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);
@@ -219,7 +224,12 @@ public class EtherealTest {
                                         .map(e -> (Member) e)
                                         .toList();
 
-        StaticContext<Member> context = new StaticContext<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members, 3);
+        DynamicContext<Member> context = DynamicContext.newBuilder()
+                                                       .setBias(3)
+                                                       .setpByz(0.1)
+                                                       .setId(DigestAlgorithm.DEFAULT.getOrigin())
+                                                       .build();
+        context.activate(members);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         var builder = Config.newBuilder()
                             .setnProc((short) NPROC)
@@ -254,7 +264,8 @@ public class EtherealTest {
                 }
             }, "Test: " + i);
 
-            var gossiper = new ChRbcGossip(context, (SigningMember) member, controller.processor(), com, metrics);
+            var gossiper = new ChRbcGossip(context.getId(), (SigningMember) member, members, controller.processor(),
+                                           com, metrics);
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);

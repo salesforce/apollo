@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
@@ -133,6 +134,10 @@ public class ViewContext {
 
     public Signer getSigner() {
         return signer;
+    }
+
+    public Set<Member> membership() {
+        return validators.keySet();
     }
 
     /**

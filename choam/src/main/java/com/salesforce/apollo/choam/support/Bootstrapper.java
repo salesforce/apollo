@@ -386,8 +386,8 @@ public class Bootstrapper {
         }
         var randomCut = member.getId();
         log.info("Random cut: {} on: {}", randomCut, params.member().getId());
-        var iterator = new RingIterator<Member, Terminal>(params.gossipDuration(), params.context(), params.member(),
-                                                          comms, true, scheduler);
+        var iterator = new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, true,
+                                          scheduler);
         iterator.allowDuplicates();
         iterator.iterate(randomCut, (link, _) -> synchronize(s, link),
                          (_, futureSailor, destination) -> synchronize(futureSailor, votes, destination),

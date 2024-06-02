@@ -15,9 +15,8 @@ service Gossiper {
 }
 
 message Gossip {
-  int32 ring = 1;
-  crypto.Biff have = 2;
-  repeated Have haves = 3;
+  crypto.Biff have = 1;
+  repeated Have haves = 2;
 }
 
 message Have {

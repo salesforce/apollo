@@ -7,9 +7,9 @@
 
 package com.salesforce.apollo.ethereal;
 
+import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.ethereal.proto.Gossip;
 import com.salesforce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.cryptography.Digest;
 
 /**
  * @author hal.hildebrand
@@ -20,10 +20,9 @@ public interface Processor {
      * First phase request. Answer the gossip for the current state of the receiver
      *
      * @param context - the digest id of the context for routing
-     * @param ring    - the ring we're gossiping on
      * @return the Gossip
      */
-    Gossip gossip(Digest context, int ring);
+    Gossip gossip(Digest context);
 
     /**
      * First phase reply. Answer the Update from the receiver's state, based on the suppled Have
