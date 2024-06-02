@@ -129,7 +129,7 @@ public class ViewManagement {
         assert member != null;
         view.stable(() -> {
             if (observers.remove(member.id)) {
-                log.info("Removed observer: {} view: {} on: {}", member.id, currentView.get(), node.getId());
+                log.trace("Removed observer: {} view: {} on: {}", member.id, currentView.get(), node.getId());
                 resetObservers();
             }
         });
@@ -607,21 +607,21 @@ public class ViewManagement {
             observers.add(node.getId()); // bootstrap case
         }
         if (observers.size() > 1 && observers.size() < context.getRingCount()) {
-            log.info("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
-                     context.cardinality(), currentView(), context.getId(), node.getId());
+            log.debug("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                      context.cardinality(), currentView(), context.getId(), node.getId());
             assert observers.size() > 1 && observers.size() < context.getRingCount();
         }
-        log.info("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
-                 context.cardinality(), currentView(), context.getId(), node.getId());
+        log.trace("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                  context.cardinality(), currentView(), context.getId(), node.getId());
     }
 
     private void setDiadem(final HexBloom hex) {
         diadem.set(hex);
         currentView.set(diadem.get().compactWrapped());
         resetObservers();
-        log.info("View: {} set diadem: {} observers: {} view: {} context: {} size: {} on: {}", context.getId(),
-                 diadem.get().compactWrapped(), observers.stream().toList(), currentView(), context.getId(),
-                 context.size(), node.getId());
+        log.debug("View: {} set diadem: {} observers: {} view: {} context: {} size: {} on: {}", context.getId(),
+                  diadem.get().compactWrapped(), observers.stream().toList(), currentView(), context.getId(),
+                  context.size(), node.getId());
     }
 
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
