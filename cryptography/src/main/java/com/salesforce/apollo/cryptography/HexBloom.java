@@ -27,7 +27,6 @@ import java.util.stream.Stream;
  */
 public class HexBloom {
 
-    public static final  double                   DEFAULT_FPR      = 0.0001;
     public static final  long                     DEFAULT_SEED     = Primes.PRIMES[666];
     private static final Function<Digest, Digest> IDENTITY         = d -> d;
     private static final int                      MINIMUM_BFF_CARD = 100;
@@ -41,29 +40,30 @@ public class HexBloom {
         var hashes = hashes(count);
         crowns = new Digest[count];
         cardinality = 0;
-        membership = new BloomFilter.DigestBloomFilter(0x666, MINIMUM_BFF_CARD, DEFAULT_FPR);
+        var cardinality = Math.max(MINIMUM_BFF_CARD, count);
+        membership = new BloomFilter.DigestBloomFilter(0x666, MINIMUM_BFF_CARD, 1.0 / (double) cardinality);
         for (int i = 0; i < crowns.length; i++) {
             crowns[i] = hashes.get(i).apply(initial);
         }
     }
 
     public HexBloom(Digest initial, List<Function<Digest, Digest>> hashes) {
-        assert hashes.size() > 0;
+        assert !hashes.isEmpty();
         crowns = new Digest[hashes.size()];
         cardinality = 0;
-        membership = new BloomFilter.DigestBloomFilter(0x666, MINIMUM_BFF_CARD, DEFAULT_FPR);
+        membership = new BloomFilter.DigestBloomFilter(0x666, MINIMUM_BFF_CARD, 1.0 / (double) MINIMUM_BFF_CARD);
         for (int i = 0; i < crowns.length; i++) {
             crowns[i] = hashes.get(i).apply(initial);
         }
     }
 
     public HexBloom(HexBloome hb) {
-        this(hb.getCardinality(), hb.getCrownsList().stream().map(d -> Digest.from(d)).toList(),
+        this(hb.getCardinality(), hb.getCrownsList().stream().map(Digest::from).toList(),
              BloomFilter.from(hb.getMembership()));
     }
 
     public HexBloom(int cardinality, List<Digest> crowns, BloomFilter<Digest> membership) {
-        assert crowns.size() > 0;
+        assert !crowns.isEmpty();
         this.crowns = new Digest[crowns.size()];
         for (int i = 0; i < crowns.size(); i++) {
             this.crowns[i] = crowns.get(i);
@@ -90,7 +90,7 @@ public class HexBloom {
      * @return the HexBloom built according to spec
      */
     public static HexBloom construct(int count, Stream<Digest> digests, Digest initialCrown, int crowns) {
-        return construct(count, digests, Collections.emptyList(), hashes(crowns), initialCrown, DEFAULT_FPR);
+        return construct(count, digests, Collections.emptyList(), hashes(crowns), initialCrown);
     }
 
     /**
@@ -105,7 +105,7 @@ public class HexBloom {
      */
     public static HexBloom construct(int currentCount, Stream<Digest> currentMembership, List<Digest> added,
                                      Digest initialCrown, int count) {
-        return construct(currentCount, currentMembership, added, hashes(count), initialCrown, DEFAULT_FPR);
+        return construct(currentCount, currentMembership, added, hashes(count), initialCrown);
     }
 
     /**
@@ -120,7 +120,7 @@ public class HexBloom {
      */
     public static HexBloom construct(int currentCount, Stream<Digest> currentMembership, List<Digest> added,
                                      List<Digest> crowns, List<Digest> removed) {
-        return construct(currentCount, currentMembership, added, crowns, removed, hashes(crowns.size()), DEFAULT_FPR);
+        return construct(currentCount, currentMembership, added, crowns, removed, hashes(crowns.size()));
     }
 
     /**
@@ -132,33 +132,32 @@ public class HexBloom {
      * @param crowns            - the current crown state corresponding to the currentMembership
      * @param removed           - digests removed that are present in the currentMembership list
      * @param hashes            - the list of functions for computing the hash of a digest for a given crown
-     * @param fpr               - desired false positive rate for membership bloomfilter
      * @return the HexBloom representing the new state
      */
     public static HexBloom construct(int currentCount, Stream<Digest> currentMembership, List<Digest> added,
-                                     List<Digest> crowns, List<Digest> removed, List<Function<Digest, Digest>> hashes,
-                                     double fpr) {
-        assert crowns.size() > 0;
+                                     List<Digest> crowns, List<Digest> removed, List<Function<Digest, Digest>> hashes) {
+        assert !crowns.isEmpty();
         if (hashes.size() != crowns.size()) {
             throw new IllegalArgumentException(
             "Size of supplied hash functions: " + hashes.size() + " must equal the # of crowns: " + crowns.size());
         }
         var cardinality = currentCount + added.size() - removed.size();
-        var membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
-        var crwns = crowns.stream().map(d -> new AtomicReference<>(d)).toList();
+        var n = Math.max(MINIMUM_BFF_CARD, cardinality);
+        var membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, n, 1.0 / (double) n);
+        var crwns = crowns.stream().map(AtomicReference::new).toList();
         added.forEach(d -> {
             for (int i = 0; i < crwns.size(); i++) {
-                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), (a, b) -> a.xor(b));
+                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
             }
             membership.add(d);
         });
         removed.forEach(d -> {
             for (int i = 0; i < crwns.size(); i++) {
-                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), (a, b) -> a.xor(b));
+                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
             }
         });
-        currentMembership.forEach(d -> membership.add(d));
-        return new HexBloom(cardinality, crwns.stream().map(ad -> ad.get()).toList(), membership);
+        currentMembership.forEach(membership::add);
+        return new HexBloom(cardinality, crwns.stream().map(AtomicReference::get).toList(), membership);
     }
 
     /**
@@ -169,79 +168,30 @@ public class HexBloom {
      * @param added             - the added member digests
      * @param hashes            - the supplied crown hash functions
      * @param initialCrown      - the initial value of the crowns
-     * @param fpr               - the false positive rate for the membership bloom filter
      * @return the HexBloom built according to spec
      */
     public static HexBloom construct(int currentCount, Stream<Digest> currentMembership, List<Digest> added,
-                                     List<Function<Digest, Digest>> hashes, Digest initialCrown, double fpr) {
-        assert hashes.size() > 0;
+                                     List<Function<Digest, Digest>> hashes, Digest initialCrown) {
+        assert !hashes.isEmpty();
         var cardinality = currentCount + added.size();
-        var membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
+        var n = Math.max(MINIMUM_BFF_CARD, cardinality);
+        var membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, n, 1.0 / (double) n);
 
-        var crwns = IntStream.range(0, hashes.size())
-                             .mapToObj(i -> hashes.get(i).apply(initialCrown))
-                             .map(d -> new AtomicReference<>(d))
-                             .toList();
+        var crwns = hashes.stream().map(hash -> hash.apply(initialCrown)).map(AtomicReference::new).toList();
 
         currentMembership.forEach(d -> {
             for (int i = 0; i < crwns.size(); i++) {
-                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), (a, b) -> a.xor(b));
+                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
             }
             membership.add(d);
         });
         added.forEach(d -> {
             for (int i = 0; i < crwns.size(); i++) {
-                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), (a, b) -> a.xor(b));
+                crwns.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
             }
             membership.add(d);
         });
         return new HexBloom(cardinality, crwns.stream().map(ad -> ad.get()).toList(), membership);
-    }
-
-    /**
-     * Construct a HexBloom with a membership bloomfilter using the default false positive rate and the default hash
-     * transforms for each crown
-     *
-     * @param currentMembership - list of digests that correspond to the supplied crowns
-     * @param added             - digests added that are not present in the currentMembership list
-     * @param crowns            - the current crown state corresponding to the currentMembership
-     * @param removed           - digests removed that are present in the currentMembership list
-     * @return the HexBloom representing the new state
-     */
-    public static HexBloom construct(List<Digest> currentMembership, List<Digest> added, List<Digest> crowns,
-                                     List<Digest> removed) {
-        return construct(currentMembership, added, crowns, removed, hashes(crowns.size()), DEFAULT_FPR);
-    }
-
-    /**
-     * Construct a HexBloom with a membership bloomfilter using the default false positive rate
-     *
-     * @param currentMembership - list of digests that correspond to the supplied crowns
-     * @param added             - digests added that are not present in the currentMembership list
-     * @param crowns            - the current crown state corresponding to the currentMembership
-     * @param removed           - digests removed that are present in the currentMembership list
-     * @param hashes            - the list of functions for computing the hash of a digest for a given crown
-     * @return the HexBloom representing the new state
-     */
-    public static HexBloom construct(List<Digest> currentMembership, List<Digest> added, List<Digest> crowns,
-                                     List<Digest> removed, List<Function<Digest, Digest>> hashes) {
-        return construct(currentMembership, added, crowns, removed, hashes, DEFAULT_FPR);
-    }
-
-    /**
-     * Construct a HexBloom.
-     *
-     * @param currentMembership - list of digests that correspond to the supplied crowns
-     * @param added             - digests added that are not present in the currentMembership list
-     * @param crowns            - the current crown state corresponding to the currentMembership
-     * @param removed           - digests removed that are present in the currentMembership list
-     * @param hashes            - the list of functions for computing the hash of a digest for a given crown
-     * @param fpr               - desired false positive rate for membership bloomfilter
-     * @return the HexBloom representing the new state
-     */
-    public static HexBloom construct(List<Digest> currentMembership, List<Digest> added, List<Digest> crowns,
-                                     List<Digest> removed, List<Function<Digest, Digest>> hashes, double fpr) {
-        return construct(currentMembership.size(), currentMembership.stream(), added, crowns, removed, hashes, fpr);
     }
 
     public static HexBloom from(HexBloome hb) {
@@ -252,7 +202,6 @@ public class HexBloom {
     /**
      * Answer the default hash for a crown positiion
      *
-     * @param index
      * @return the hash transform
      */
     public static Function<Digest, Digest> hash(int index) {
@@ -261,19 +210,13 @@ public class HexBloom {
 
     /**
      * Answer the default hash transforms for the number of crowns
-     *
-     * @param crowns
-     * @return
      */
     public static List<Function<Digest, Digest>> hashes(int crowns) {
-        return IntStream.range(0, crowns).mapToObj(i -> hash(i)).toList();
+        return IntStream.range(0, crowns).mapToObj(HexBloom::hash).toList();
     }
 
     /**
      * Answer the default wrapping hash for a crown positiion
-     *
-     * @param index
-     * @return the wrapping hash transform
      */
     public static Function<Digest, Digest> hashWrap(int index) {
         return d -> d.prefix(index);
@@ -281,12 +224,9 @@ public class HexBloom {
 
     /**
      * Answer the default wrapping hash transforms for the number of crowns
-     *
-     * @param crowns
-     * @return
      */
     public static List<Function<Digest, Digest>> hashWraps(int crowns) {
-        return IntStream.range(0, crowns).mapToObj(i -> hashWrap(i)).toList();
+        return IntStream.range(0, crowns).mapToObj(HexBloom::hashWrap).toList();
     }
 
     public HexBloom add(Digest d, List<Function<Digest, Digest>> hashes) {
@@ -312,7 +252,7 @@ public class HexBloom {
         if (crowns.length == 1) {
             return crowns[0];
         }
-        return Arrays.asList(crowns).stream().reduce(crowns[0].getAlgorithm().getOrigin(), (a, b) -> a.xor(b));
+        return Arrays.stream(crowns).reduce(crowns[0].getAlgorithm().getOrigin(), Digest::xor);
     }
 
     /**
@@ -334,7 +274,7 @@ public class HexBloom {
                         .mapToObj(i -> hashes.get(i).apply(crowns[i]))
                         .toList()
                         .stream()
-                        .reduce(crowns[0].getAlgorithm().getOrigin(), (a, b) -> a.xor(b));
+                        .reduce(crowns[0].getAlgorithm().getOrigin(), Digest::xor);
     }
 
     public boolean contains(Digest digest) {
@@ -370,9 +310,6 @@ public class HexBloom {
 
     /**
      * Answer the serialized receiver, with crowns hashed using the supplied hashes functions
-     *
-     * @param hashes
-     * @return
      */
     public HexBloome toHexBloome(List<Function<Digest, Digest>> hashes) {
         if (hashes.size() != crowns.length) {
@@ -388,8 +325,6 @@ public class HexBloom {
 
     /**
      * Answer the serialized receiver, using no transformation on the crowns
-     *
-     * @return
      */
     public HexBloome toIdentityHexBloome() {
         return toHexBloome(IntStream.range(0, crowns.length).mapToObj(i -> IDENTITY).toList());
@@ -401,8 +336,8 @@ public class HexBloom {
     }
 
     /**
-     * Validate that the supplied members matches the receiver's crowns. All members must be included in the membership
-     * bloomfilter, all calculated crowns must match and the cardinality must match.
+     * Validate that the supplied members match the receiver's crowns. All members must be included in the membership
+     * bloomfilter, all calculated crowns must match, and the cardinality must match.
      *
      * @param members - list of member digests
      * @return true if validated
@@ -412,8 +347,8 @@ public class HexBloom {
     }
 
     /**
-     * Validate that the supplied members matches the receiver's crowns. All members must be included in the membership
-     * bloomfilter, all calculated crowns must match and the cardinality must match.
+     * Validate that the supplied members match the receiver's crowns. All members must be included in the membership
+     * bloomfilter, all calculated crowns must match, and the cardinality must match.
      *
      * @param members - lsit of member digests
      * @param hashes  - hash functions for computing crowns
@@ -424,8 +359,8 @@ public class HexBloom {
     }
 
     /**
-     * Validate that the supplied members matches the receiver's crowns. All members must be included in the membership
-     * bloomfilter, all calculated crowns must match and the cardinality must match.
+     * Validate that the supplied members match the receiver's crowns. All members must be included in the membership
+     * bloomfilter, all calculated crowns must match, and the cardinality must match.
      *
      * @param members - stream of member digests
      * @return true if validated
@@ -435,8 +370,8 @@ public class HexBloom {
     }
 
     /**
-     * Validate that the supplied members matches the receiver's crowns. All members must be included in the membership
-     * bloomfilter, all calculated crowns must match and the cardinality must match.
+     * Validate that the supplied members match the receiver's crowns. All members must be included in the membership
+     * bloomfilter, all calculated crowns must match, and the cardinality must match.
      *
      * @param members - stream of member digests
      * @param hashes  - hash functions for computing crowns
@@ -448,12 +383,12 @@ public class HexBloom {
             "Size of supplied hash functions: " + hashes.size() + " must equal the # of crowns: " + crowns.length);
         }
         var count = new AtomicInteger();
-        var calculated = IntStream.range(0, crowns.length)
-                                  .mapToObj(i -> new AtomicReference<Digest>(crowns[i].getAlgorithm().getOrigin()))
-                                  .toList();
+        var calculated = Arrays.stream(crowns)
+                               .map(crown -> new AtomicReference<Digest>(crown.getAlgorithm().getOrigin()))
+                               .toList();
         members.forEach(d -> {
             for (int i = 0; i < crowns.length; i++) {
-                calculated.get(i).accumulateAndGet(hashes.get(i).apply(d), (a, b) -> a.xor(b));
+                calculated.get(i).accumulateAndGet(hashes.get(i).apply(d), Digest::xor);
             }
             count.incrementAndGet();
         });
@@ -526,30 +461,20 @@ public class HexBloom {
         protected final List<Function<Digest, Digest>> hashes;
         protected       int                            currentCount = 0;
 
-        public Accumulator(int cardinality, int crowns, Digest initial, double fpr) {
-            this(cardinality, hashes(crowns), initial, fpr);
-        }
-
-        public Accumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial, double fpr) {
+        public Accumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial) {
             if (cardinality < 0) {
                 throw new IllegalArgumentException(("Cardinality must be >= 0"));
             }
             if (crownHashes == null || crownHashes.isEmpty()) {
                 throw new IllegalArgumentException("Crown hashes must not be null or empty");
             }
-            if (fpr <= 0) {
-                throw new IllegalArgumentException("False positive rate must be > 0");
-            }
             this.cardinality = cardinality;
             this.hashes = crownHashes;
-            accumulators = IntStream.range(0, hashes.size())
-                                    .mapToObj(i -> hashes.get(i).apply(initial))
-                                    .map(d -> new AtomicReference<>(d))
-                                    .toList();
+            accumulators = hashes.stream().map(hash -> hash.apply(initial)).map(AtomicReference::new).toList();
         }
 
         public Accumulator(int cardinality, int crowns, Digest initial) {
-            this(cardinality, crowns, initial, DEFAULT_FPR);
+            this(cardinality, hashes(crowns), initial);
         }
 
         public void add(Digest digest) {
@@ -558,7 +483,7 @@ public class HexBloom {
             }
             currentCount++;
             for (int i = 0; i < accumulators.size(); i++) {
-                accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), (a, b) -> a.xor(b));
+                accumulators.get(i).accumulateAndGet(hashes.get(i).apply(digest), Digest::xor);
             }
         }
 
@@ -571,12 +496,12 @@ public class HexBloom {
                 "Size of supplied hash functions: " + hashes.size() + " must equal the # of crowns: "
                 + accumulators.size());
             }
-            var algorithm = accumulators.get(0).get().getAlgorithm();
+            var algorithm = accumulators.getFirst().get().getAlgorithm();
             return IntStream.range(0, accumulators.size())
                             .mapToObj(i -> hashes.get(i).apply(accumulators.get(i).get()))
                             .toList()
                             .stream()
-                            .reduce(algorithm.getOrigin(), (a, b) -> a.xor(b));
+                            .reduce(algorithm.getOrigin(), Digest::xor);
         }
 
         /**
@@ -587,7 +512,7 @@ public class HexBloom {
         }
 
         public List<Digest> crowns() {
-            return accumulators.stream().map(ar -> ar.get()).toList();
+            return accumulators.stream().map(AtomicReference::get).toList();
         }
 
         public List<Digest> wrappedCrowns() {
@@ -604,17 +529,14 @@ public class HexBloom {
     public static class HexAccumulator extends Accumulator {
         private final BloomFilter<Digest> membership;
 
-        public HexAccumulator(int cardinality, int crowns, Digest initial, double fpr) {
-            this(cardinality, hashes(crowns), initial, fpr);
-        }
-
-        public HexAccumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial, double fpr) {
-            super(cardinality, crownHashes, initial, fpr);
-            membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, Math.max(MINIMUM_BFF_CARD, cardinality), fpr);
-        }
-
         public HexAccumulator(int cardinality, int crowns, Digest initial) {
-            this(cardinality, crowns, initial, DEFAULT_FPR);
+            this(cardinality, hashes(crowns), initial);
+        }
+
+        public HexAccumulator(int cardinality, List<Function<Digest, Digest>> crownHashes, Digest initial) {
+            super(cardinality, crownHashes, initial);
+            var n = Math.max(MINIMUM_BFF_CARD, cardinality);
+            membership = new BloomFilter.DigestBloomFilter(DEFAULT_SEED, n, 1.0 / (double) n);
         }
 
         @Override
@@ -625,7 +547,7 @@ public class HexBloom {
 
         public HexBloom build() {
             assert currentCount == cardinality : "Did not add all members, missing: " + (cardinality - currentCount);
-            return new HexBloom(cardinality, accumulators.stream().map(ar -> ar.get()).toList(), membership);
+            return new HexBloom(cardinality, accumulators.stream().map(AtomicReference::get).toList(), membership);
         }
     }
 }

@@ -6,20 +6,142 @@
  */
 package com.salesforce.apollo.bloomFilters;
 
+import com.salesforce.apollo.cryptography.Digest;
+import org.joou.ULong;
+
 import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
-import org.joou.ULong;
-
-import com.salesforce.apollo.cryptography.Digest;
-
 /**
  * @author hal.hildebrand
- *
  */
 public abstract class Hash<M> {
-//    public static int HITS = 0;
-//    public static int MISSES = 0;
+    //    public static int HITS = 0;
+    //    public static int MISSES = 0;
+
+    public static final long MERSENNE_31 = (long) (Math.pow(2, 32) - 1); // 2147483647
+    public final int  k;
+    public final int  m;
+    public final long seed;
+    protected final Hasher<M> hasher;
+
+    public Hash(long seed, int n, double p) {
+        m = optimalM(n, p);
+        k = optimalK(n, m);
+        assert m > 0 && k <= 30;
+        this.seed = seed;
+        hasher = newHasher();
+    }
+
+    public Hash(long seed, int k, int m) {
+        assert m > 0 && k <= 30;
+        this.seed = seed;
+        this.k = k;
+        this.m = m;
+        hasher = newHasher();
+    }
+
+    /**
+     * @param k - the number of hashes
+     * @param m - the number of entries, bits or counters that K hashes to
+     * @param n - the number of elements in the set
+     * @return the false positive probability for the specified number of hashes K, population M entries and N elements
+     */
+    public static double fpp(int k, int m, int n) {
+        double Kd = k;
+        double Md = m;
+        double Nd = n;
+        return Math.pow(1 - Math.exp(-Kd / (Md / Nd)), Kd);
+    }
+
+    /**
+     * @param m   - the number of entries (bits)
+     * @param k   - the number of hashes
+     * @param fpp - the false positive probability
+     * @return the number of elements that a bloom filter can hold with M entries (bits) K hashes and the specified
+     * false positive rate
+     */
+    public static int n(int m, int k, double fpp) {
+        double Kd = k;
+        double Md = m;
+        return (int) Math.ceil(Md / (-Kd / Math.log(1 - Math.exp(Math.log(fpp) / Kd))));
+    }
+
+    /**
+     * Computes the optimal k (number of hashes per element inserted in Bloom filter), given the expected insertions and
+     * total number of bits in the Bloom filter.
+     *
+     * See http://en.wikipedia.org/wiki/File:Bloom_filter_fp_probability.svg for the formula.
+     *
+     * @param n expected insertions (must be positive)
+     * @param m total number of bits in Bloom filter (must be positive)
+     */
+    public static int optimalK(long n, long m) {
+        // (m / n) * log(2), but avoid truncation due to division!
+        return Math.max(1, (int) Math.round(((double) m) / ((double) n) * Math.log(2)));
+    }
+
+    /**
+     * Computes m (total bits of Bloom filter) which is expected to achieve, for the specified expected insertions, the
+     * required false positive probability.
+     *
+     * See http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives for the formula.
+     *
+     * @param n expected insertions (must be positive)
+     * @param p false positive rate (must be 0 < p < 1)
+     */
+    public static int optimalM(long n, double p) {
+        if (p == 0) {
+            p = Double.MIN_VALUE;
+        }
+        return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
+    }
+
+    @Override
+    public Hash<M> clone() {
+        Hasher<M> clone = hasher.clone();
+        return new Hash<M>(seed, k, m) {
+
+            @Override
+            protected Hasher<M> newHasher() {
+                return clone;
+            }
+        };
+    }
+
+    public boolean equivalent(Hash<M> other) {
+        return getK() == other.getK() && getM() == other.getM() && getSeed() == other.getSeed();
+    }
+
+    public double fpp(int n) {
+        return fpp(k, m, n);
+    }
+
+    public int getK() {
+        return k;
+    }
+
+    public int getM() {
+        return m;
+    }
+
+    public long getSeed() {
+        return seed;
+    }
+
+    public int[] hashes(M key) {
+        return hasher.hashes(k, key, m, seed);
+    }
+
+    public long identityHash(M key) {
+        return hasher.identityHash(key, seed);
+    }
+
+    public IntStream locations(M key) {
+        return hasher.locations(k, key, m, seed);
+    }
+
+    abstract protected Hasher<M> newHasher();
 
     public static class BytesHasher extends Hasher<byte[]> {
 
@@ -69,25 +191,23 @@ public abstract class Hash<M> {
         private static final long C2                   = 0x4cf5ad432745937fL;
         private static final long CHUNK_SIZE           = 16;
         private static final int  MAX_HASHING_ATTEMPTS = 500;
+        long h1;
+        long h2;
+        int  length;
+        public Hasher() {
+        }
+        public Hasher(M key, long seed) {
+            process(key, seed);
+        }
 
         static int toInt(byte value) {
             return value & 0xFF;
         }
 
         private static void throwMax(int k, int m, int[] hashes) {
-            throw new IllegalStateException("Cannot find: " + k + " unique hashes for m: " + m + " after: "
-            + MAX_HASHING_ATTEMPTS + " hashing attempts.  found: " + IntStream.of(hashes).mapToObj(e -> e).toList());
-        }
-
-        long h1;
-        long h2;
-        int  length;
-
-        public Hasher() {
-        }
-
-        public Hasher(M key, long seed) {
-            process(key, seed);
+            throw new IllegalStateException(
+            "Cannot find: " + k + " unique hashes for m: " + m + " after: " + MAX_HASHING_ATTEMPTS
+            + " hashing attempts.  found: " + IntStream.of(hashes).mapToObj(e -> e).toList());
         }
 
         /**
@@ -114,11 +234,11 @@ public abstract class Hash<M> {
                 }
                 if (!found) {
                     hashes[i++] = hash;
-//                    HITS++;
+                    //                    HITS++;
                 } else {
                     h2 += Primes.PRIMES[prime];
                     prime = ++prime % Primes.PRIMES.length;
-//                    MISSES++;
+                    //                    MISSES++;
                 }
                 combinedHash += h2;
             }
@@ -148,9 +268,6 @@ public abstract class Hash<M> {
             processIt(value);
             makeHash();
         }
-
-        @Override
-        protected abstract Hasher<M> clone();
 
         IntStream locations(int k, M key, int m, long seed) {
             return IntStream.of(hashes(k, key, m, seed));
@@ -202,6 +319,9 @@ public abstract class Hash<M> {
         }
 
         abstract void processIt(M key);
+
+        @Override
+        protected abstract Hasher<M> clone();
 
         private void bmix64(long k1, long k2) {
             h1 ^= mixK1(k1);
@@ -392,133 +512,4 @@ public abstract class Hash<M> {
         }
 
     }
-
-    public static final long MERSENNE_31 = (long) (Math.pow(2, 32) - 1); // 2147483647
-
-    /**
-     * @param k - the number of hashes
-     * @param m - the number of entries, bits or counters that K hashes to
-     * @param n - the number of elements in the set
-     * 
-     * @return the false positive probability for the specified number of hashes K,
-     *         population M entries and N elements
-     */
-    public static double fpp(int k, int m, int n) {
-        double Kd = k;
-        double Md = m;
-        double Nd = n;
-        return Math.pow(1 - Math.exp(-Kd / (Md / Nd)), Kd);
-    }
-
-    /**
-     * @param m   - the number of entries (bits)
-     * @param k   - the number of hashes
-     * @param fpp - the false positive probability
-     * @return the number of elements that a bloom filter can hold with M entries
-     *         (bits) K hashes and the specified false positive rate
-     */
-    public static int n(int m, int k, double fpp) {
-        double Kd = k;
-        double Md = m;
-        return (int) Math.ceil(Md / (-Kd / Math.log(1 - Math.exp(Math.log(fpp) / Kd))));
-    }
-
-    /**
-     * Computes the optimal k (number of hashes per element inserted in Bloom
-     * filter), given the expected insertions and total number of bits in the Bloom
-     * filter.
-     *
-     * See http://en.wikipedia.org/wiki/File:Bloom_filter_fp_probability.svg for the
-     * formula.
-     *
-     * @param n expected insertions (must be positive)
-     * @param m total number of bits in Bloom filter (must be positive)
-     */
-    public static int optimalK(long n, long m) {
-        // (m / n) * log(2), but avoid truncation due to division!
-        return Math.max(1, (int) Math.round(((double) m) / ((double) n) * Math.log(2)));
-    }
-
-    /**
-     * Computes m (total bits of Bloom filter) which is expected to achieve, for the
-     * specified expected insertions, the required false positive probability.
-     *
-     * See http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
-     * for the formula.
-     *
-     * @param n expected insertions (must be positive)
-     * @param p false positive rate (must be 0 < p < 1)
-     */
-    public static int optimalM(long n, double p) {
-        if (p == 0) {
-            p = Double.MIN_VALUE;
-        }
-        return Math.max(8, (int) (-n * Math.log(p) / (Math.log(2) * Math.log(2))));
-    }
-
-    public final int  k;
-    public final int  m;
-    public final long seed;
-
-    protected final Hasher<M> hasher;
-
-    public Hash(long seed, int n, double p) {
-        m = optimalM(n, p);
-        k = optimalK(n, m);
-        this.seed = seed;
-        hasher = newHasher();
-    }
-
-    public Hash(long seed, int k, int m) {
-        this.seed = seed;
-        this.k = k;
-        this.m = m;
-        hasher = newHasher();
-    }
-
-    @Override
-    public Hash<M> clone() {
-        Hasher<M> clone = hasher.clone();
-        return new Hash<M>(seed, k, m) {
-
-            @Override
-            protected Hasher<M> newHasher() {
-                return clone;
-            }
-        };
-    }
-
-    public boolean equivalent(Hash<M> other) {
-        return getK() == other.getK() && getM() == other.getM() && getSeed() == other.getSeed();
-    }
-
-    public double fpp(int n) {
-        return fpp(k, m, n);
-    }
-
-    public int getK() {
-        return k;
-    }
-
-    public int getM() {
-        return m;
-    }
-
-    public long getSeed() {
-        return seed;
-    }
-
-    public int[] hashes(M key) {
-        return hasher.hashes(k, key, m, seed);
-    }
-
-    public long identityHash(M key) {
-        return hasher.identityHash(key, seed);
-    }
-
-    public IntStream locations(M key) {
-        return hasher.locations(k, key, m, seed);
-    }
-
-    abstract protected Hasher<M> newHasher();
 }

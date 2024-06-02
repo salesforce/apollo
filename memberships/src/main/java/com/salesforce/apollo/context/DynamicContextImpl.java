@@ -259,6 +259,13 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
+    public T getMember(int i, int r) {
+        i = i % size();
+        var ring = ring(i);
+        return (T) ring.get(i);
+    }
+
+    @Override
     public Collection<T> getOffline() {
         return members.values().stream().filter(e -> !e.isActive()).map(Tracked::member).toList();
     }
@@ -716,13 +723,26 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
     }
 
     @Override
-    public int totalCount() {
-        return members.size();
+    public Iterable<T> traverse(int ring, T member) {
+        return ring(ring).traverse(member);
+    }
+
+    /**
+     * @return the list of successor to the key on each ring that pass the provided predicate test
+     */
+    @Override
+    public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
+        for (Ring<T> ring : rings) {
+            T successor = ring.successor(key, m -> !collector.contains(m) && test.test(m));
+            if (successor != null) {
+                collector.add(successor);
+            }
+        }
     }
 
     @Override
-    public Iterable<T> traverse(int ring, T member) {
-        return ring(ring).traverse(member);
+    public void uniqueSuccessors(Digest key, Set<T> collector) {
+        uniqueSuccessors(key, t -> true, collector);
     }
 
     @Override
@@ -1213,7 +1233,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
+         * @param location
          * @param predicate
          * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
          * excluding) the first item where predicate(item) evaluates to True.
@@ -1223,7 +1243,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         /**
-         * @param start
+         * @param m
          * @param predicate
          * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
          * excluding) the first item where predicate(item) evaluates to True.

@@ -330,7 +330,7 @@ public class ReliableBroadcaster {
             private double          dedupFpr           = Math.pow(10, -9);
             private int             deliveredCacheSize = 100;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.000125;
+            private double          falsePositiveRate  = 0.00125;
             private int             maxMessages        = 500;
 
             public Parameters build() {

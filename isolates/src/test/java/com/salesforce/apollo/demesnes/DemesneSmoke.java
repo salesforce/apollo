@@ -171,7 +171,6 @@ public class DemesneSmoke {
                                                 .setParent(parentAddress)
                                                 .setCommDirectory(commDirectory.toString())
                                                 .setMaxTransfer(100)
-                                                .setFalsePositiveRate(.125)
                                                 .build();
         final var demesne = new DemesneImpl(parameters);
         Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();

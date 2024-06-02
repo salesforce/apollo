@@ -28,8 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RingCommunicationsTest {
     @Test
     public void smokin() throws Exception {
-        var serverMember1 = new SigningMemberImpl(Utils.getMember(0), ULong.MIN);
-        var serverMember2 = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
+        var serverMember1 = new SigningMemberImpl(Utils.getMember(1), ULong.MIN);
+        var serverMember2 = new SigningMemberImpl(Utils.getMember(2), ULong.MIN);
         var pinged1 = new AtomicBoolean();
         var pinged2 = new AtomicBoolean();
 
@@ -77,24 +77,20 @@ public class RingCommunicationsTest {
                                                 .setFactory(to -> InProcessChannelBuilder.forName(name).build());
         var router = new RouterImpl(serverMember1, serverBuilder, cacheBuilder, null);
         try {
-            RouterImpl.CommonCommunications<TestItService, TestIt> commsA = router.create(serverMember1,
-                                                                                          context.getId(),
-                                                                                          new ServiceImpl(local1, "A"),
-                                                                                          "A", ServerImpl::new,
-                                                                                          TestItClient::new, local1);
+            var commsA = router.create(serverMember1, context.getId(), new ServiceImpl(local1, "A"), "A",
+                                       ServerImpl::new, TestItClient::new, local1);
 
-            RouterImpl.CommonCommunications<TestItService, TestIt> commsB = router.create(serverMember2,
-                                                                                          context.getId(),
-                                                                                          new ServiceImpl(local2, "B"),
-                                                                                          "B", ServerImpl::new,
-                                                                                          TestItClient::new, local2);
+            router.create(serverMember2, context.getId(), new ServiceImpl(local2, "B"), "B", ServerImpl::new,
+                          TestItClient::new, local2);
 
             router.start();
             var sync = new RingCommunications<Member, TestItService>(context, serverMember1, commsA);
-            sync.allowDuplicates();
+            sync.noDuplicates();
             var countdown = new CountDownLatch(1);
-            sync.execute((link, round) -> link.ping(Any.getDefaultInstance()),
-                         (result, destination) -> countdown.countDown());
+            for (var i = 0; i < context.getRingCount(); i++) {
+                sync.execute((link, round) -> link.ping(Any.getDefaultInstance()),
+                             (result, destination) -> countdown.countDown());
+            }
             assertTrue(countdown.await(1, TimeUnit.SECONDS), "Completed: " + countdown.getCount());
             assertFalse(pinged1.get());
             assertTrue(pinged2.get());

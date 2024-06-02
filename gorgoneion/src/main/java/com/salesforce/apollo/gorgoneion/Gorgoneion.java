@@ -157,10 +157,9 @@ public class Gorgoneion {
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
 
-        var successors = context.totalCount() == 1 ? Collections.singletonList(member)
-                                                   : Context.uniqueSuccessors(context, digestOf(ident,
-                                                                                                parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 1 : context.majority();
+        var successors = context.size() == 1 ? Collections.singletonList(member)
+                                             : context.bftSubset(digestOf(ident, parameters.digestAlgorithm()));
+        final var majority = context.size() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
@@ -221,9 +220,8 @@ public class Gorgoneion {
                                        .setValidations(validations)
                                        .build();
 
-        var successors = Context.uniqueSuccessors(context,
-                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 1 : context.majority();
+        var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        final var majority = context.size() == 1 ? 1 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         redirecting.iterate((link, m) -> {
@@ -248,9 +246,8 @@ public class Gorgoneion {
 
         var validated = new CompletableFuture<Validations>();
 
-        var successors = Context.uniqueSuccessors(context,
-                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
-        final var majority = context.totalCount() == 1 ? 1 : context.majority();
+        var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        final var majority = context.size() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
         redirecting.iterate((link, m) -> {
@@ -472,7 +469,7 @@ public class Gorgoneion {
                     }
                 }
                 // If there is only one active member in our context, it's us.
-                var majority = context.totalCount() == 1 ? 1 : context.majority();
+                var majority = context.size() == 1 ? 1 : context.majority();
                 if (count < majority) {
                     log.warn("Invalid notarization, no majority: {} required: {} for: {} from: {} on: {}", count,
                              majority, identifier, from, member.getId());
@@ -531,7 +528,7 @@ public class Gorgoneion {
                 count++;
             }
 
-            var majority = context.totalCount() == 1 ? 1 : context.majority();
+            var majority = context.size() == 1 ? 1 : context.majority();
             if (count < majority) {
                 log.warn("Invalid credential nonce, no majority signature: {} required >= {} from: {} on: {}", count,
                          majority, from, member.getId());

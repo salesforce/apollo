@@ -93,8 +93,8 @@ public class RingIteratorTest {
             router.start();
             var frequency = Duration.ofMillis(1);
             var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-            var sync = new RingIterator<Member, TestItService>(frequency, context, serverMember1, scheduler, commsA);
-            sync.allowDuplicates();
+            var sync = new RingIterator<>(frequency, context, serverMember1, scheduler, commsA);
+            sync.noDuplicates();
             var countdown = new CountDownLatch(3);
             sync.iterate(context.getId(), (link, round) -> link.ping(Any.getDefaultInstance()),
                          (round, result, link) -> {

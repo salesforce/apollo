@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Objects;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
@@ -126,6 +125,16 @@ public class ViewManagement {
         return currentView.get();
     }
 
+    void gc(Participant member) {
+        assert member != null;
+        view.stable(() -> {
+            if (observers.remove(member.id)) {
+                log.trace("Removed observer: {} view: {} on: {}", member.id, currentView.get(), node.getId());
+                resetObservers();
+            }
+        });
+    }
+
     /**
      * @param seed
      * @param p
@@ -159,7 +168,7 @@ public class ViewManagement {
                                    .map(p -> p.note.getWrapped())
                                    .collect(Collectors.toSet());
 
-        context.rebalance(context.totalCount() + ballot.joining.size());
+        context.rebalance(context.size() + ballot.joining.size());
         var joining = new ArrayList<SelfAddressingIdentifier>();
         var pending = ballot.joining()
                             .stream()
@@ -200,26 +209,29 @@ public class ViewManagement {
         view.notifyListeners(joining, ballot.leaving);
     }
 
+    boolean isObserver(Digest observer) {
+        return observers().contains(observer);
+    }
+
     /**
-     * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if does not match currentView
+     * Formally join the view. Calculate the HEX-BLOOM crown and view, fail and stop if it does not match currentView
      */
     void join() {
         joinLock.lock();
         try {
-            assert context.totalCount() == cardinality();
+            assert context.size() == cardinality();
             if (joined()) {
                 return;
             }
             var current = currentView();
-            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+            log.info("Joining view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.size(),
                      node.getId());
-            var calculated = HexBloom.construct(context.totalCount(), context.allMembers().map(Participant::getId),
+            var calculated = HexBloom.construct(context.size(), context.allMembers().map(Participant::getId),
                                                 view.bootstrapView(), params.crowns());
 
             if (!current.equals(calculated.compactWrapped())) {
                 log.error("Crown: {} does not produce view: {} cardinality: {} count: {} on: {}",
-                          calculated.compactWrapped(), currentView(), cardinality(), context.totalCount(),
-                          node.getId());
+                          calculated.compactWrapped(), currentView(), cardinality(), context.size(), node.getId());
                 view.stop();
                 throw new IllegalStateException("Invalid crown");
             }
@@ -232,7 +244,7 @@ public class ViewManagement {
             if (metrics != null) {
                 metrics.viewChanges().mark();
             }
-            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.totalCount(),
+            log.info("Joined view: {} cardinality: {} count: {} on: {}", current, cardinality(), context.size(),
                      node.getId());
             onJoined.complete(null);
         } finally {
@@ -250,8 +262,8 @@ public class ViewManagement {
         }
         var note = new NoteWrapper(join.getNote(), digestAlgo);
         if (!from.equals(note.getId())) {
-            log.info("Ignored join of view: {} from: {} does not match: {} on: {}", joinView, from, note.getId(),
-                     node.getId());
+            log.debug("Ignored join of view: {} from: {} does not match: {} on: {}", joinView, from, note.getId(),
+                      node.getId());
             responseObserver.onError(
             new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Member does not match note")));
             return;
@@ -259,7 +271,7 @@ public class ViewManagement {
         if (!view.validate(note.getIdentifier())) {
             responseObserver.onError(
             new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid identifier")));
-            log.info("Ignored join of view: {} from: {} invalid identifier on: {}", joinView, from, node.getId());
+            log.debug("Ignored join of view: {} from: {} invalid identifier on: {}", joinView, from, node.getId());
             return;
         }
         view.stable(() -> {
@@ -312,8 +324,8 @@ public class ViewManagement {
                 view.viewChange(() -> {
                     final var hex = bound.view();
 
-                    log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
-                             hex.compactWrapped(), context.getId(), node.getId());
+                    log.debug("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", hex.getCardinality(),
+                              hex.compactWrapped(), context.getId(), node.getId());
                     context.rebalance(hex.getCardinality());
                     context.activate(node);
                     diadem.set(hex);
@@ -333,12 +345,13 @@ public class ViewManagement {
                     }
 
                     view.introduced();
-                    log.info("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}", currentView.get(),
-                             bound.successors().size(), cardinality(), context.totalCount(), node.getId());
-                    if (context.totalCount() == cardinality()) {
+                    log.debug("Currently joining view: {} seeds: {} cardinality: {} count: {} on: {}",
+                              currentView.get(), bound.successors().size(), cardinality(), context.size(),
+                              node.getId());
+                    if (context.size() == cardinality()) {
                         join();
                     } else {
-                        populate(new ArrayList<>(context.activeMembers()));
+                        //                        populate(new ArrayList<>(context.activeMembers()));
                     }
                 });
             }, log));
@@ -363,6 +376,8 @@ public class ViewManagement {
     void maybeViewChange() {
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
             if (isObserver()) {
+                log.trace("Initiating view change: {} (non observer) joins: {} leaves: {} on: {}", currentView(),
+                          joins.size(), view.streamShunned().count(), node.getId());
                 initiateViewChange();
             } else {
                 // Use pending rebuttals as a proxy for stability
@@ -374,8 +389,18 @@ public class ViewManagement {
                 }
             }
         } else {
+            log.trace("No view change: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
+                      view.streamShunned().count(), node.getId());
             view.scheduleViewChange();
         }
+    }
+
+    Set<Digest> observers() {
+        return observers;
+    }
+
+    List<Digest> observersList() {
+        return observers().stream().toList();
     }
 
     void populate(List<Participant> sample) {
@@ -464,14 +489,17 @@ public class ViewManagement {
         }
         return view.stable(() -> {
             var newMember = view.new Participant(note.getId());
-            final var sample = context.sample(params.maximumTxfr(), Entropy.bitsStream(), (Digest) null);
 
-            log.info("Member seeding: {} view: {} context: {} sample: {} on: {}", newMember.getId(), currentView(),
-                     context.getId(), sample.size(), node.getId());
+            final var introductions = observers.stream().map(context::getMember).toList();
+
+            log.debug("Member seeding: {} view: {} context: {} introductions: {} on: {}", newMember.getId(),
+                      currentView(), context.getId(), introductions.size(), node.getId());
             return Redirect.newBuilder()
                            .setView(currentView().toDigeste())
-                           .addAllSample(
-                           sample.stream().filter(java.util.Objects::nonNull).map(Participant::getSignedNote).toList())
+                           .addAllIntroductions(introductions.stream()
+                                                             .filter(java.util.Objects::nonNull)
+                                                             .map(Participant::getSignedNote)
+                                                             .toList())
                            .setCardinality(cardinality())
                            .setBootstrap(bootstrap)
                            .setRings(context.getRingCount())
@@ -501,6 +529,10 @@ public class ViewManagement {
                 return;
             }
             view.scheduleFinalizeViewChange();
+            if (!isObserver(node.getId())) {
+                log.trace("Initiating view change: {} (non observer) on: {}", currentView(), node.getId());
+                return;
+            }
             log.trace("Initiating view change vote: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
                       view.streamShunned().count(), node.getId());
             final var builder = ViewChange.newBuilder()
@@ -518,8 +550,8 @@ public class ViewManagement {
                                                    .setSignature(signature.toSig())
                                                    .build();
             view.initiate(viewChange);
-            log.info("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
-                     change.getLeavesCount(), node.getId());
+            log.debug("View change vote: {} joins: {} leaves: {} on: {}", currentView(), change.getJoinsCount(),
+                      change.getLeavesCount(), node.getId());
         });
     }
 
@@ -565,32 +597,44 @@ public class ViewManagement {
         }
     }
 
+    private void resetObservers() {
+        observers.clear();
+        context.bftSubset(diadem.get().compact(), context::isActive)
+               .stream()
+               .map(Member::getId)
+               .forEach(observers::add);
+        if (observers.isEmpty()) {
+            observers.add(node.getId()); // bootstrap case
+        }
+        if (observers.size() > 1 && observers.size() < context.getRingCount()) {
+            log.debug("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                      context.cardinality(), currentView(), context.getId(), node.getId());
+            assert observers.size() > 1 && observers.size() < context.getRingCount();
+        }
+        log.trace("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
+                  context.cardinality(), currentView(), context.getId(), node.getId());
+    }
+
     private void setDiadem(final HexBloom hex) {
         diadem.set(hex);
         currentView.set(diadem.get().compactWrapped());
-        observers.clear();
-        context.bftSubset(hex.compact()).stream().map(Member::getId).forEach(observers::add);
-        log.info("View: {} set diadem: {} observers: {} on: {}", context.getId(), diadem.get().compactWrapped(),
-                 observers.stream().toList(), node.getId());
+        resetObservers();
+        log.debug("View: {} set diadem: {} observers: {} view: {} context: {} size: {} on: {}", context.getId(),
+                  diadem.get().compactWrapped(), observers.stream().toList(), currentView(), context.getId(),
+                  context.size(), node.getId());
     }
 
     record Ballot(Digest view, List<Digest> leaving, List<Digest> joining, int hash) {
 
         Ballot(Digest view, List<Digest> leaving, List<Digest> joining, DigestAlgorithm algo) {
-            this(view, leaving, joining, view.xor(joining.stream().reduce(Digest::xor).orElse(algo.getOrigin()))
-                                             .xor(leaving.stream()
-                                                         .reduce(Digest::xor)
-                                                         .orElse(algo.getOrigin())
-                                                         .xor(
-                                                         joining.stream().reduce(Digest::xor).orElse(algo.getOrigin())))
-                                             .hashCode());
+            this(view, leaving, joining, Objects.hash(view, joining, leaving));
         }
 
         @Override
         public boolean equals(Object obj) {
             if (obj instanceof Ballot b) {
-                return Objects.equal(view, b.view) && Objects.equal(leaving, b.leaving) && Objects.equal(joining,
-                                                                                                         b.joining);
+                return Objects.equals(view, b.view) && Objects.equals(leaving, b.leaving) && Objects.equals(joining,
+                                                                                                            b.joining);
             }
             return false;
         }
@@ -602,7 +646,7 @@ public class ViewManagement {
 
         @Override
         public String toString() {
-            return String.format("{h: %s, j: %s, l: %s}", hash, joining.size(), leaving.size());
+            return String.format("{v: %s, h: %s, j: %s, l: %s}", view, hash, joining.size(), leaving.size());
         }
     }
 }

@@ -125,12 +125,18 @@ public class CheckpointAssemblerTest {
                 return CheckpointSegments.newBuilder().addAllSegments(fetched).build();
             }
         });
+        when(client.getMember()).then(new Answer<>() {
+            @Override
+            public Member answer(InvocationOnMock invocation) {
+                return members.get(1);
+            }
+        });
         @SuppressWarnings("unchecked")
         CommonCommunications<Terminal, Concierge> comm = mock(CommonCommunications.class);
         when(comm.connect(any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint,
+        CheckpointAssembler boot = new CheckpointAssembler(members, Duration.ofMillis(10), ULong.valueOf(0), checkpoint,
                                                            bootstrapping, store2, comm, context, 0.00125,
                                                            DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());

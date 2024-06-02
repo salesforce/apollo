@@ -18,9 +18,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -31,25 +33,30 @@ import java.util.function.Consumer;
  * @author hal.hildebrand
  */
 public class SliceIterator<Comm extends Link> {
-    private static final Logger                        log       = LoggerFactory.getLogger(SliceIterator.class);
-    private final        CommonCommunications<Comm, ?> comm;
-    private final        String                        label;
-    private final        SigningMember                 member;
-    private final        List<? extends Member>        slice;
-    private final        ScheduledExecutorService      scheduler = Executors.newScheduledThreadPool(1,
-                                                                                                    Thread.ofVirtual()
-                                                                                                          .factory());
-    private              Member                        current;
-    private              Iterator<? extends Member>    currentIteration;
+    private static final Logger log = LoggerFactory.getLogger(SliceIterator.class);
 
-    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+    private final CommonCommunications<Comm, ?> comm;
+    private final String                        label;
+    private final SigningMember                 member;
+    private final List<? extends Member>        slice;
+    private final ScheduledExecutorService      scheduler;
+    private       Member                        current;
+    private       Iterator<? extends Member>    currentIteration;
+
+    public SliceIterator(String label, SigningMember member, Collection<? extends Member> slice,
                          CommonCommunications<Comm, ?> comm) {
-        assert member != null && slice != null && comm != null;
+        this(label, member, slice, comm, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
+    }
+
+    public SliceIterator(String label, SigningMember member, Collection<? extends Member> s,
+                         CommonCommunications<Comm, ?> comm, ScheduledExecutorService scheduler) {
+        assert member != null && s != null && comm != null;
         this.label = label;
         this.member = member;
-        this.slice = slice;
+        this.slice = new CopyOnWriteArrayList<>(s);
         this.comm = comm;
-        Entropy.secureShuffle(slice);
+        this.scheduler = scheduler;
+        Entropy.secureShuffle(this.slice);
         this.currentIteration = slice.iterator();
         log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(m -> m.getId()).toList(), member.getId());
     }
@@ -71,9 +78,10 @@ public class SliceIterator<Comm extends Link> {
 
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, onComplete, frequency);
         try (Comm link = next()) {
-            if (link == null) {
+            if (link == null || link.getMember() == null) {
                 log.trace("No link for iteration of: <{}> on: {}", label, member.getId());
-                allowed.accept(handler.handle(Optional.empty(), link, slice.get(slice.size() - 1)));
+                allowed.accept(
+                handler.handle(Optional.empty(), link, slice.isEmpty() ? null : slice.get(slice.size() - 1)));
                 return;
             }
             log.trace("Iteration of: <{}> to: {} on: {}", label, link.getMember().getId(), member.getId());
@@ -107,6 +115,9 @@ public class SliceIterator<Comm extends Link> {
         if (!currentIteration.hasNext()) {
             Entropy.secureShuffle(slice);
             currentIteration = slice.iterator();
+        }
+        if (!currentIteration.hasNext()) {
+            return null;
         }
         current = currentIteration.next();
         return linkFor(current);

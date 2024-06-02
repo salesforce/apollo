@@ -10,12 +10,10 @@ import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
+import com.salesforce.apollo.ring.RingCommunications;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -33,18 +31,6 @@ import java.util.stream.Stream;
 public interface Context<T extends Member> {
 
     double DEFAULT_EPSILON = 0.99999;
-
-    static List<Member> uniqueSuccessors(Context<Member> context, Digest digest) {
-        Set<Member> post = new HashSet<>();
-        context.successors(digest, m -> {
-            if (post.size() == context.getRingCount()) {
-                return false;
-            }
-            return post.add(m);
-        });
-        var successors = new ArrayList<>(post);
-        return successors;
-    }
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
         return d.prefix(ctxId, ring);
@@ -127,15 +113,19 @@ public interface Context<T extends Member> {
      * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
      * rings
      */
-    default Set<Member> bftSubset(Digest hash) {
-        Set<Member> successors = new HashSet<>();
-        successors(hash, m -> {
-            if (successors.size() == getRingCount()) {
-                return false;
-            }
-            return successors.add(m);
-        });
-        return successors;
+    default LinkedHashSet<T> bftSubset(Digest hash) {
+        return bftSubset(hash, m -> true);
+    }
+
+    /**
+     * @param hash   - the point on the rings to determine successors
+     * @param filter - the filter to apply to successors
+     * @return the Set of Members constructed from the sucessors of the supplied hash on each of the receiver Context's
+     */
+    default LinkedHashSet<T> bftSubset(Digest hash, Predicate<T> filter) {
+        var collector = new LinkedHashSet<T>();
+        uniqueSuccessors(hash, filter, collector);
+        return collector;
     }
 
     /**
@@ -207,6 +197,13 @@ public interface Context<T extends Member> {
      * Answer the member matching the id, or null if none.
      */
     T getMember(Digest memberID);
+
+    /**
+     * @param i
+     * @param ring
+     * @return the i'th Member in Ring 0 of the receiver
+     */
+    T getMember(int i, int ring);
 
     /**
      * Answer the probability {0, 1} that any given member is byzantine
@@ -466,6 +463,32 @@ public interface Context<T extends Member> {
 
     Iterable<T> successors(int ring, Digest location);
 
+    default List<RingCommunications.iteration<T>> successors(Digest digest, T ignore, boolean noDuplicates, T member) {
+        var traversal = new ArrayList<RingCommunications.iteration<T>>();
+        var traversed = new TreeSet<T>();
+        for (int ring = 0; ring < getRingCount(); ring++) {
+            if (size() == 1) {
+                traversal.add(new RingCommunications.iteration<>(member, ring));
+                continue;
+            }
+            T successor = findSuccessor(ring, digest, m -> {
+                if (ignore != null && ignore.equals(m)) {
+                    return Context.IterateResult.CONTINUE;
+                }
+                if (noDuplicates) {
+                    if (traversed.add(m)) {
+                        return Context.IterateResult.SUCCESS;
+                    } else {
+                        return Context.IterateResult.CONTINUE;
+                    }
+                }
+                return Context.IterateResult.SUCCESS;
+            });
+            traversal.add(new RingCommunications.iteration<>(successor, ring));
+        }
+        return traversal;
+    }
+
     /**
      * @param ring
      * @param predicate
@@ -499,15 +522,27 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @return the total number of members
-     */
-    int totalCount();
-
-    /**
      * @param member
      * @return the iteratator to traverse the ring starting at the member
      */
     Iterable<T> traverse(int ring, T member);
+
+    /**
+     * collect the list of successors to the key on each ring that pass the provided predicate test, and providing a
+     * unique member per ring if possible.
+     */
+    void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector);
+
+    default Set<T> uniqueSuccessors(Digest digest) {
+        var collected = new HashSet<T>();
+        uniqueSuccessors(digest, collected);
+        return collected;
+    }
+
+    /**
+     * collect the list of successors to the key on each ring, providing a unique member per ring if possible.
+     */
+    void uniqueSuccessors(Digest key, Set<T> collector);
 
     boolean validRing(int ring);
 

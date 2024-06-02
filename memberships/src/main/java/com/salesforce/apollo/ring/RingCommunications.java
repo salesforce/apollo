@@ -20,11 +20,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.TreeSet;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * @author hal.hildebrand
@@ -35,7 +33,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
     final         Context<T>                    context;
     final         SigningMember                 member;
     private final CommonCommunications<Comm, ?> comm;
-    private final Direction                     direction;
     private final Lock                          lock           = new ReentrantLock();
     private final List<iteration<T>>            traversalOrder = new ArrayList<>();
     protected     boolean                       noDuplicates   = true;
@@ -48,13 +45,6 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                               boolean ignoreSelf) {
-        this(Direction.SUCCESSOR, context, member, comm, ignoreSelf);
-    }
-
-    public RingCommunications(Direction direction, Context<T> context, SigningMember member,
-                              CommonCommunications<Comm, ?> comm, boolean ignoreSelf) {
-        assert direction != null && context != null && member != null && comm != null;
-        this.direction = direction;
         this.context = context;
         this.member = member;
         this.comm = comm;
@@ -105,43 +95,15 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + currentIndex + "]";
     }
 
-    @SuppressWarnings("unchecked")
-    List<iteration<T>> calculateTraversal(Digest digest) {
-        var traversal = new ArrayList<iteration<T>>();
-        var traversed = new TreeSet<T>();
-        for (int ring = 0; ring < context.getRingCount(); ring++) {
-            if (context.size() == 1) {
-                traversal.add(new iteration<>((T) member, ring));
-                continue;
-            }
-            T successor = direction.retrieve(context, ring, digest, m -> {
-                if (ignoreSelf && m.equals(member)) {
-                    return Context.IterateResult.CONTINUE;
-                }
-                if (noDuplicates) {
-                    if (traversed.add(m)) {
-                        return Context.IterateResult.SUCCESS;
-                    } else {
-                        return Context.IterateResult.CONTINUE;
-                    }
-                }
-                return Context.IterateResult.SUCCESS;
-            });
-            if (successor != null) {
-                traversal.add(new iteration<>(successor == null ? (T) member : successor, ring));
-            }
-        }
-        return traversal;
-    }
-
     final RingCommunications.Destination<T, Comm> next(Digest digest) {
         lock.lock();
         try {
             final var current = currentIndex;
             final var count = traversalOrder.size();
             if (count == 0 || current == count - 1) {
+                var successors = context.successors(digest, ignoreSelf ? (T) member : null, noDuplicates, (T) member);
                 traversalOrder.clear();
-                traversalOrder.addAll(calculateTraversal(digest));
+                traversalOrder.addAll(successors);
                 Entropy.secureShuffle(traversalOrder);
                 log.trace("New traversal order: {}:{} on: {}", context.getRingCount(), traversalOrder, member.getId());
             }
@@ -194,44 +156,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         }
     }
 
-    public enum Direction {
-        PREDECESSOR {
-            @Override
-            public <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                 Function<T, Context.IterateResult> test) {
-                return context.findPredecessor(ring, hash, test);
-            }
-
-            @Override
-            public <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                 Function<T, Context.IterateResult> test) {
-                return context.findPredecessor(ring, member, test);
-            }
-        }, SUCCESSOR {
-            @Override
-            public <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                 Function<T, Context.IterateResult> test) {
-                return context.findSuccessor(ring, hash, test);
-            }
-
-            @Override
-            public <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                 Function<T, Context.IterateResult> test) {
-                return context.findSuccessor(ring, member, test);
-            }
-        };
-
-        public abstract <T extends Member> T retrieve(Context<T> context, int ring, Digest hash,
-                                                      Function<T, Context.IterateResult> test);
-
-        public abstract <T extends Member> T retrieve(Context<T> context, int ring, T member,
-                                                      Function<T, Context.IterateResult> test);
-    }
-
     public record Destination<M, Q>(M member, Q link, int ring) {
     }
 
-    private record iteration<T extends Member>(T m, int ring) {
+    public record iteration<T extends Member>(T m, int ring) {
 
         @Override
         public String toString() {

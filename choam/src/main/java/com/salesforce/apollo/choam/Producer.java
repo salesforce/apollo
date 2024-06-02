@@ -79,8 +79,8 @@ public class Producer {
                               producerParams.batchInterval(), producerParams.maxBatchCount(),
                               params().drainPolicy().build());
 
-        log.info("Producer max elements: {} reconfiguration epoch: {} on: {}", blocks, maxEpoch,
-                 params.member().getId());
+        log.debug("Producer max elements: {} reconfiguration epoch: {} on: {}", blocks, maxEpoch,
+                  params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName("Producer%s on: %s".formatted(getViewId(), params.member().getId()));
@@ -99,10 +99,10 @@ public class Producer {
 
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
-        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
-                                  (preblock, last) -> serial(preblock, last), this::newEpoch, label);
-        coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
-                                      params().communications(), producerMetrics);
+        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds, this::serial,
+                                  this::newEpoch, label);
+        coordinator = new ChRbcGossip(view.context().getId(), params().member(), view.membership(),
+                                      controller.processor(), params().communications(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
 
         var onConsensus = new CompletableFuture<ViewAssembly.Vue>();
@@ -343,9 +343,9 @@ public class Producer {
         pending.put(reconfiguration.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.info("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
-                 reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
-                 params().member().getId());
+        log.trace("Produced: {} hash: {} height: {} slate: {} on: {}", reconfiguration.block.getBodyCase(),
+                  reconfiguration.hash, reconfiguration.height(), slate.keySet().stream().sorted().toList(),
+                  params().member().getId());
         processPendingValidations(reconfiguration, p);
 
         log.trace("Draining on: {}", params().member().getId());

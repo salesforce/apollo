@@ -880,9 +880,6 @@ public class CHOAM {
     }
 
     private Initial sync(Synchronize request, Digest from) {
-        if (from == null) {
-            return Initial.getDefaultInstance();
-        }
         final HashedCertifiedBlock g = genesis.get();
         if (g != null) {
             Initial.Builder initial = Initial.newBuilder();
@@ -897,13 +894,10 @@ public class CHOAM {
                 }
                 final ULong lastReconfig = ULong.valueOf(cp.block.getHeader().getLastReconfig());
                 HashedCertifiedBlock lastView = null;
-                if (lastReconfig.equals(ULong.valueOf(0))) {
-                    lastView = cp;
-                } else {
-                    var stored = store.getCertifiedBlock(lastReconfig);
-                    if (stored != null) {
-                        lastView = new HashedCertifiedBlock(params.digestAlgorithm(), stored);
-                    }
+
+                var stored = store.getCertifiedBlock(lastReconfig);
+                if (stored != null) {
+                    lastView = new HashedCertifiedBlock(params.digestAlgorithm(), stored);
                 }
                 if (lastView == null) {
                     lastView = g;
@@ -1120,7 +1114,8 @@ public class CHOAM {
          */
         public View getView(Digest hash) {
             var builder = View.newBuilder().setDiadem(diadem.toDigeste()).setMajority(context.majority());
-            Committee.viewMembersOf(hash, context).forEach(d -> builder.addCommittee(d.getId().toDigeste()));
+            ((Context<? super Member>) context).bftSubset(hash).forEach(
+            d -> builder.addCommittee(d.getId().toDigeste()));
             return builder.build();
         }
     }
@@ -1134,8 +1129,8 @@ public class CHOAM {
         public void anchor() {
             HashedCertifiedBlock anchor = pending.poll();
             var pending = pendingViews.last().context;
-            if (anchor != null && pending.totalCount() >= pending.majority()) {
-                log.info("Synchronizing from anchor: {} cardinality: {} on: {}", anchor.hash, pending.totalCount(),
+            if (anchor != null && pending.size() >= pending.majority()) {
+                log.info("Synchronizing from anchor: {} cardinality: {} on: {}", anchor.hash, pending.size(),
                          params.member().getId());
                 transitions.bootstrap(anchor);
             }
@@ -1181,9 +1176,10 @@ public class CHOAM {
                     synchronizationFailed();
                 } catch (IllegalStateException e) {
                     final var c = current.get();
+                    Context<Member> memberContext = context();
                     log.debug(
                     "Synchronization quorum formation failed: {}, members: {} desired: {} required: {}, no anchor to recover from: {} on: {}",
-                    e.getMessage(), context().totalCount(), context().getRingCount(), params.majority(),
+                    e.getMessage(), memberContext.size(), context().getRingCount(), params.majority(),
                     c == null ? "<no formation>" : c.getClass().getSimpleName(), params.member().getId());
                     awaitSynchronization();
                 }
@@ -1227,7 +1223,8 @@ public class CHOAM {
 
         private void synchronizationFailed() {
             cancelSynchronization();
-            var activeCount = context().totalCount();
+            Context<Member> memberContext = context();
+            var activeCount = memberContext.size();
             var majority = params.majority();
             if (params.generateGenesis() && activeCount >= majority) {
                 if (current.get() == null && current.compareAndSet(null, new Formation())) {

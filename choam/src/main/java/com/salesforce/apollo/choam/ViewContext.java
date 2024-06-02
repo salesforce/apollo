@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static com.salesforce.apollo.cryptography.QualifiedBase64.publicKey;
@@ -135,6 +136,10 @@ public class ViewContext {
         return signer;
     }
 
+    public Set<Member> membership() {
+        return validators.keySet();
+    }
+
     /**
      * The process has failed
      */
@@ -244,7 +249,7 @@ public class ViewContext {
         Verifier v = verifierOf(sv);
         if (v == null) {
             if (log.isDebugEnabled()) {
-                log.debug("no verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
+                log.debug("No verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
                           params.member().getId());
             }
             return false;

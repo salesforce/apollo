@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -131,11 +132,11 @@ public class E2ETest {
         success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
 
         // Test that all views are up
-        failed = views.stream()
-                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                              v.getContext().totalCount()))
-                      .toList();
+        failed = views.stream().filter(e -> e.getContext().activeCount() != CARDINALITY).map(v -> {
+            Context<Participant> participantContext = v.getContext();
+            return String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
+                                 participantContext.size());
+        }).toList();
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
@@ -144,11 +145,11 @@ public class E2ETest {
         });
 
         // Test that all views are up
-        failed = views.stream()
-                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                              v.getContext().totalCount()))
-                      .toList();
+        failed = views.stream().filter(e -> e.getContext().activeCount() != CARDINALITY).map(v -> {
+            Context<Participant> participantContext = v.getContext();
+            return String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
+                                 participantContext.size());
+        }).toList();
         assertTrue(success || failed.isEmpty(),
                    "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size() + " views: "
                    + failed);

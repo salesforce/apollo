@@ -107,7 +107,7 @@ public class ViewAssembly {
                          .toList();
         var views = asses.stream().flatMap(a -> a.getViewsList().stream()).filter(SignedViews::hasViews).toList();
 
-        log.info("Assembling joins: {} views: {} on: {}", joins.size(), views.size(), params().member().getId());
+        log.debug("Assembling joins: {} views: {} on: {}", joins.size(), views.size(), params().member().getId());
 
         joins.forEach(sj -> join(sj.getJoin(), false));
         if (selected != null) {
@@ -124,7 +124,7 @@ public class ViewAssembly {
                          Digest.from(svs.getViews().getMember()), params().member().getId());
                 viewProposals.put(Digest.from(svs.getViews().getMember()), svs.getViews());
             } else {
-                log.info("Invalid views: {} from: {} on: {}",
+                log.warn("Invalid views: {} from: {} on: {}",
                          svs.getViews().getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
                          Digest.from(svs.getViews().getMember()), params().member().getId());
             }
@@ -140,14 +140,14 @@ public class ViewAssembly {
 
     boolean complete() {
         if (selected == null) {
-            log.info("Cannot complete view assembly: {} as selected is null on: {}", nextViewId,
-                     params().member().getId());
+            log.error("Cannot complete view assembly: {} as selected is null on: {}", nextViewId,
+                      params().member().getId());
             transitions.failed();
             return false;
         }
         if (proposals.size() < selected.majority) {
-            log.info("Cannot complete view assembly: {} proposed: {} required: {} on: {}", nextViewId,
-                     proposals.keySet().stream().sorted().toList(), selected.majority, params().member().getId());
+            log.error("Cannot complete view assembly: {} proposed: {} required: {} on: {}", nextViewId,
+                      proposals.keySet().stream().sorted().toList(), selected.majority, params().member().getId());
             transitions.failed();
             return false;
         }
@@ -290,9 +290,9 @@ public class ViewAssembly {
                         .setMember(params().member().getId().toDigeste())
                         .setVid(nextViewId.toDigeste())
                         .build();
-        log.info("Proposing for: {} views: {} on: {}", nextViewId,
-                 views.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
-                 params().member().getId());
+        log.debug("Proposing for: {} views: {} on: {}", nextViewId,
+                  views.getViewsList().stream().map(v -> Digest.from(v.getDiadem())).toList(),
+                  params().member().getId());
         publisher.accept(Assemblies.newBuilder()
                                    .addViews(
                                    SignedViews.newBuilder().setViews(views).setSignature(view.sign(views).toSig()))

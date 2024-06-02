@@ -51,18 +51,6 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         this(frequency, context, member, comm, false, scheduler);
     }
 
-    public RingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
-                        CommonCommunications<Comm, ?> comm, boolean ignoreSelf, ScheduledExecutorService scheduler) {
-        super(direction, context, member, comm, ignoreSelf);
-        this.scheduler = scheduler;
-        this.frequency = frequency;
-    }
-
-    public RingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
-                        ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm) {
-        this(frequency, direction, context, member, comm, false, scheduler);
-    }
-
     @Override
     public RingIterator<T, Comm> allowDuplicates() {
         super.allowDuplicates();

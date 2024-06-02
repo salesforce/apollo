@@ -79,9 +79,6 @@ public class LocalServer implements RouterSupplier {
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
                                                                .executor(Executors.newVirtualThreadPerTaskExecutor())
-                                                               .scheduledExecutorService(
-                                                               Executors.newScheduledThreadPool(100, Thread.ofVirtual()
-                                                                                                           .factory()))
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(
@@ -105,7 +102,6 @@ public class LocalServer implements RouterSupplier {
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
         final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name)
                                                                        .executor(executor)
-                                                                       .offloadExecutor(executor)
                                                                        .usePlaintext()
                                                                        .intercept(clientInterceptor);
         disableTrash(builder);

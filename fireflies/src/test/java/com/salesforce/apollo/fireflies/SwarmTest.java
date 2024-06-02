@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -132,11 +133,11 @@ public class SwarmTest {
         success = countdown.get().await(largeTests ? 2400 : 120, TimeUnit.SECONDS);
 
         // Test that all views are up
-        failed = views.stream()
-                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s : %s ", v.getNode().getId(), v.getContext().cardinality(),
-                                              v.getContext().activeCount(), v.getContext().totalCount()))
-                      .toList();
+        failed = views.stream().filter(e -> e.getContext().activeCount() != CARDINALITY).map(v -> {
+            Context<Participant> participantContext = v.getContext();
+            return String.format("%s : %s : %s : %s ", v.getNode().getId(), v.getContext().cardinality(),
+                                 v.getContext().activeCount(), participantContext.size());
+        }).toList();
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 
@@ -145,11 +146,11 @@ public class SwarmTest {
         });
 
         // Test that all views are up
-        failed = views.stream()
-                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
-                      .map(v -> String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                              v.getContext().totalCount()))
-                      .toList();
+        failed = views.stream().filter(e -> e.getContext().activeCount() != CARDINALITY).map(v -> {
+            Context<Participant> participantContext = v.getContext();
+            return String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
+                                 participantContext.size());
+        }).toList();
         assertTrue(success,
                    "Views did not stabilize, expected: " + views.size() + " failed: " + failed.size() + " views: "
                    + failed);
@@ -207,7 +208,6 @@ public class SwarmTest {
                                    .setMaxPending(50)
                                    .setMaximumTxfr(20)
                                    .setJoinRetries(30)
-                                   .setFpr(0.00000125)
                                    .setSeedingTimout(Duration.ofSeconds(10))
                                    .setRetryDelay(Duration.ofMillis(largeTests ? 1000 : 200))
                                    .build();

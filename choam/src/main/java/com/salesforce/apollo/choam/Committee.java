@@ -20,7 +20,6 @@ import com.salesforce.apollo.membership.MockMember;
 import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -63,21 +62,10 @@ public interface Committee {
      * Create a view based on the cut of the supplied hash across the rings of the base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Set<Member> successors = viewMembersOf(hash, baseContext);
+        Set<Member> successors = (Set<Member>) baseContext.bftSubset(hash);
         var newView = new StaticContext<>(hash, baseContext.getProbabilityByzantine(), 3, successors,
                                           baseContext.getEpsilon(), successors.size());
         return newView;
-    }
-
-    static Set<Member> viewMembersOf(Digest hash, Context<? super Member> baseContext) {
-        Set<Member> successors = new HashSet<>();
-        baseContext.successors(hash, m -> {
-            if (successors.size() == baseContext.getRingCount()) {
-                return false;
-            }
-            return successors.add(m);
-        });
-        return successors;
     }
 
     void accept(HashedCertifiedBlock next);

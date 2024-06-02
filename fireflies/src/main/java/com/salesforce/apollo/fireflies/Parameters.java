@@ -31,7 +31,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * False positive rate for bloom filter state replication (high fpr is good)
          */
-        private double   fpr                    = 0.0125;
+        private double   fpr                    = 0.00125;
         /**
          * Number of retries when joining until giving up
          */
@@ -59,7 +59,7 @@ public record Parameters(int joinRetries, int minimumBiffCardinality, int rebutt
         /**
          * Timeout for contacting seed gateways during seeding and join operations
          */
-        private Duration seedingTimout          = Duration.ofSeconds(5);
+        private Duration seedingTimout          = Duration.ofSeconds(15);
         /**
          * Max number of times to attempt validation when joining a view
          */

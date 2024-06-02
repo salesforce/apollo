@@ -121,7 +121,7 @@ public class DemesneIsolateTest {
                                           .setParent(parentAddress)
                                           .setCommDirectory(commDirectory.toString())
                                           .setMaxTransfer(100)
-                                          .setFalsePositiveRate(.125)
+                                          .setFalsePositiveRate(.00125)
                                           .build();
         var demesne = new JniBridge(parameters);
         Builder<SelfAddressingIdentifier> specification = IdentifierSpecification.newBuilder();

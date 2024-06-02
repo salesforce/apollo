@@ -183,13 +183,13 @@ class Binding {
     private void gatewaySRE(Digest v, Entrance link, StatusRuntimeException sre, AtomicInteger abandon) {
         switch (sre.getStatus().getCode()) {
         case OUT_OF_RANGE -> {
-            log.info("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                     node.getId());
+            log.debug("Gateway view: {} invalid: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
             abandon.incrementAndGet();
         }
         case FAILED_PRECONDITION -> {
-            log.info("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                     node.getId());
+            log.trace("Gateway view: {} unavailable: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
             abandon.incrementAndGet();
         }
         case PERMISSION_DENIED -> {
@@ -198,8 +198,8 @@ class Binding {
             abandon.incrementAndGet();
         }
         case RESOURCE_EXHAUSTED -> {
-            log.info("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
-                     node.getId());
+            log.debug("Gateway view: {} full: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
+                      node.getId());
             abandon.incrementAndGet();
         }
         default -> log.info("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
@@ -224,13 +224,13 @@ class Binding {
 
             Thread.ofVirtual().start(Utils.wrapped(() -> {
                 var view = Digest.from(r.getView());
-                log.info("Rebalancing to cardinality: {} (validate) for: {} context: {} on: {}", r.getCardinality(),
-                         view, context.getId(), node.getId());
+                log.debug("Rebalancing to cardinality: {} (validate) for: {} context: {} on: {}", r.getCardinality(),
+                          view, context.getId(), node.getId());
                 this.context.rebalance(r.getCardinality());
                 node.nextNote(view);
 
-                log.debug("Completing redirect to view: {} context: {} sample: {} on: {}", view, this.context.getId(),
-                          r.getSampleCount(), node.getId());
+                log.debug("Completing redirect to view: {} context: {} introductions: {} on: {}", view,
+                          this.context.getId(), r.getIntroductionsCount(), node.getId());
                 if (timer != null) {
                     timer.close();
                 }
@@ -240,7 +240,7 @@ class Binding {
     }
 
     private void join(Redirect redirect, Digest v, Duration duration) {
-        var sample = redirect.getSampleList()
+        var sample = redirect.getIntroductionsList()
                              .stream()
                              .map(sn -> new NoteWrapper(sn, digestAlgo))
                              .map(nw -> view.new Participant(nw))
@@ -259,8 +259,8 @@ class Binding {
 
         final var cardinality = redirect.getCardinality();
 
-        log.info("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", cardinality, v, context.getId(),
-                 node.getId());
+        log.debug("Rebalancing to cardinality: {} (join) for: {} context: {} on: {}", cardinality, v, context.getId(),
+                  node.getId());
         this.context.rebalance(cardinality);
         node.nextNote(v);
 
@@ -281,7 +281,7 @@ class Binding {
                 try {
                     var g = link.join(join, params.seedingTimeout());
                     if (g == null || g.equals(Gateway.getDefaultInstance())) {
-                        log.info("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
+                        log.debug("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
                         abandon.incrementAndGet();
                         return null;
                     }
@@ -301,7 +301,7 @@ class Binding {
                     return;
                 }
                 if (abandon.get() >= majority) {
-                    log.info("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
+                    log.debug("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
                     seeding();
                 } else {
                     abandon.set(0);
