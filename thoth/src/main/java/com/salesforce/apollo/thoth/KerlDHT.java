@@ -848,7 +848,7 @@ public class KerlDHT implements ProtoKERLService {
                                RingCommunications.Destination<Member, DhtService> destination, String action) {
         if (futureSailor.isEmpty()) {
             log.debug("Failed {}: {} tally: {} from: {}  on: {}", action, identifier, tally.get(),
-                      destination.member().getId(), member.getId());
+                      destination.member() == null ? "<null>" : destination.member().getId(), member.getId());
             return !isTimedOut.get();
         }
         T content = futureSailor.get();
@@ -867,7 +867,7 @@ public class KerlDHT implements ProtoKERLService {
                              RingCommunications.Destination<Member, DhtService> destination, String action, T empty) {
         if (futureSailor.isEmpty()) {
             log.debug("Failed {}: {} tally: {} from: {}  on: {}", action, identifier, tally,
-                      destination.member().getId(), member.getId());
+                      destination.member() == null ? "<null>" : destination.member().getId(), member.getId());
             return !isTimedOut.get();
         }
         T content = futureSailor.get();
