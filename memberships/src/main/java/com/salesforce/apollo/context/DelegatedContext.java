@@ -349,6 +349,11 @@ public class DelegatedContext<T extends Member> implements Context<T> {
     }
 
     @Override
+    public void uniqueSuccessors(Digest key, Set<T> collector) {
+        delegate.uniqueSuccessors(key, collector);
+    }
+
+    @Override
     public boolean validRing(int ring) {
         return delegate.validRing(ring);
     }

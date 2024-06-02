@@ -12,7 +12,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Util;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,18 +32,6 @@ import java.util.stream.Stream;
 public interface Context<T extends Member> {
 
     double DEFAULT_EPSILON = 0.99999;
-
-    static List<Member> uniqueSuccessors(Context<Member> context, Digest digest) {
-        Set<Member> post = new HashSet<>();
-        context.successors(digest, m -> {
-            if (post.size() == context.getRingCount()) {
-                return false;
-            }
-            return post.add(m);
-        });
-        var successors = new ArrayList<>(post);
-        return successors;
-    }
 
     static Digest hashFor(Digest ctxId, int ring, Digest d) {
         return d.prefix(ctxId, ring);
@@ -516,10 +503,21 @@ public interface Context<T extends Member> {
     Iterable<T> traverse(int ring, T member);
 
     /**
-     * collect the list of successors to the key on each ring that pass the provided predicate test and provide a unique
-     * member per ring if possible.
+     * collect the list of successors to the key on each ring that pass the provided predicate test, and providing a
+     * unique member per ring if possible.
      */
     void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector);
+
+    default Set<T> uniqueSuccessors(Digest digest) {
+        var collected = new HashSet<T>();
+        uniqueSuccessors(digest, collected);
+        return collected;
+    }
+
+    /**
+     * collect the list of successors to the key on each ring, providing a unique member per ring if possible.
+     */
+    void uniqueSuccessors(Digest key, Set<T> collector);
 
     boolean validRing(int ring);
 

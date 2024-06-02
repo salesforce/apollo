@@ -732,13 +732,17 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
      */
     @Override
     public void uniqueSuccessors(Digest key, Predicate<T> test, Set<T> collector) {
-        Set<T> successors = new HashSet<>();
         for (Ring<T> ring : rings) {
             T successor = ring.successor(key, m -> !collector.contains(m) && test.test(m));
             if (successor != null) {
                 collector.add(successor);
             }
         }
+    }
+
+    @Override
+    public void uniqueSuccessors(Digest key, Set<T> collector) {
+        uniqueSuccessors(key, t -> true, collector);
     }
 
     @Override

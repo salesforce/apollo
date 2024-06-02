@@ -157,10 +157,8 @@ public class Gorgoneion {
                          .setTimestamp(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).setNanos(now.getNano()))
                          .build();
 
-        var successors = context.size() == 1 ? Collections.singletonList(member) : Context.uniqueSuccessors(context,
-                                                                                                            digestOf(
-                                                                                                            ident,
-                                                                                                            parameters.digestAlgorithm()));
+        var successors = context.size() == 1 ? Collections.singletonList(member)
+                                             : context.bftSubset(digestOf(ident, parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -222,8 +220,7 @@ public class Gorgoneion {
                                        .setValidations(validations)
                                        .build();
 
-        var successors = Context.uniqueSuccessors(context,
-                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
@@ -249,8 +246,7 @@ public class Gorgoneion {
 
         var validated = new CompletableFuture<Validations>();
 
-        var successors = Context.uniqueSuccessors(context,
-                                                  digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
+        var successors = context.bftSubset(digestOf(identifier.toIdent(), parameters.digestAlgorithm()));
         final var majority = context.size() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();

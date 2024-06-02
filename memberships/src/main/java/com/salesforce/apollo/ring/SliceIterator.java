@@ -18,9 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -41,20 +39,20 @@ public class SliceIterator<Comm extends Link> {
     private       Member                        current;
     private       Iterator<? extends Member>    currentIteration;
 
-    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+    public SliceIterator(String label, SigningMember member, Collection<? extends Member> slice,
                          CommonCommunications<Comm, ?> comm) {
         this(label, member, slice, comm, Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory()));
     }
 
-    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+    public SliceIterator(String label, SigningMember member, Collection<? extends Member> s,
                          CommonCommunications<Comm, ?> comm, ScheduledExecutorService scheduler) {
-        assert member != null && slice != null && comm != null;
+        assert member != null && s != null && comm != null;
         this.label = label;
         this.member = member;
-        this.slice = slice;
+        this.slice = new ArrayList<>(s);
         this.comm = comm;
         this.scheduler = scheduler;
-        Entropy.secureShuffle(slice);
+        Entropy.secureShuffle(this.slice);
         this.currentIteration = slice.iterator();
         log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(m -> m.getId()).toList(), member.getId());
     }
