@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -46,7 +45,7 @@ public class Enclave implements RouterSupplier {
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
-    private final Executor            executor       = Executors.newVirtualThreadPerTaskExecutor();
+    private final Executor            executor       = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
     private final DomainSocketAddress bridge;
     private final Consumer<Digest>    contextRegistration;
     private final DomainSocketAddress endpoint;

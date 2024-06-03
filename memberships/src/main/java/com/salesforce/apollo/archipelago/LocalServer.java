@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -37,10 +36,10 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class LocalServer implements RouterSupplier {
-    private static final Logger   log           = LoggerFactory.getLogger(LocalServer.class);
-    private static final String   NAME_TEMPLATE = "%s-%s";
-    private final        Executor executor      = Executors.newVirtualThreadPerTaskExecutor();
+    private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
+    private static final String NAME_TEMPLATE = "%s-%s";
 
+    private final Executor          executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
     private final ClientInterceptor clientInterceptor;
     private final Member            from;
     private final String            prefix;
@@ -78,7 +77,8 @@ public class LocalServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
-                                                               .executor(Executors.newVirtualThreadPerTaskExecutor())
+                                                               .executor(
+                                                               UnsafeExecutors.newVirtualThreadPerTaskExecutor())
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(

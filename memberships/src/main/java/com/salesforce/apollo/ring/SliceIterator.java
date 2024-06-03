@@ -18,10 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -51,6 +48,7 @@ public class SliceIterator<Comm extends Link> {
     public SliceIterator(String label, SigningMember member, Collection<? extends Member> s,
                          CommonCommunications<Comm, ?> comm, ScheduledExecutorService scheduler) {
         assert member != null && s != null && comm != null;
+        assert !s.stream().filter(Objects::nonNull).toList().isEmpty() : "All elements must be non-null: " + s;
         this.label = label;
         this.member = member;
         this.slice = new CopyOnWriteArrayList<>(s);
@@ -58,7 +56,7 @@ public class SliceIterator<Comm extends Link> {
         this.scheduler = scheduler;
         Entropy.secureShuffle(this.slice);
         this.currentIteration = slice.iterator();
-        log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(m -> m.getId()).toList(), member.getId());
+        log.debug("Slice for: <{}> is: {} on: {}", label, slice.stream().map(Member::getId).toList(), member.getId());
     }
 
     public <T> void iterate(BiFunction<Comm, Member, T> round, SlicePredicateHandler<T, Comm> handler,
