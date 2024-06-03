@@ -23,10 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.PublicKey;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -269,6 +266,7 @@ public class ViewAssembly {
         var last = view.pendingViews().last();
         return committee.stream()
                         .map(d -> last.context().getMember(Digest.from(d)))
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toMap(Member::getId, m -> m));
     }
 

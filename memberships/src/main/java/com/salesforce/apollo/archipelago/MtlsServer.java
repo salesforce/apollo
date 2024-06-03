@@ -44,6 +44,7 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -70,7 +71,7 @@ public class MtlsServer implements RouterSupplier {
         this.epProvider = epProvider;
         this.contextSupplier = contextSupplier;
         this.supplier = supplier;
-        this.executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
             public Digest load(X509Certificate key) throws Exception {
@@ -147,8 +148,7 @@ public class MtlsServer implements RouterSupplier {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         NettyServerBuilder serverBuilder = NettyServerBuilder.forAddress(epProvider.getBindAddress())
-                                                             .executor(
-                                                             UnsafeExecutors.newVirtualThreadPerTaskExecutor())
+                                                             .executor(executor)
                                                              .withOption(ChannelOption.SO_REUSEADDR, true)
                                                              .sslContext(supplier.forServer(ClientAuth.REQUIRE,
                                                                                             epProvider.getAlias(),
