@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
@@ -202,11 +201,11 @@ public class TestCHOAM {
 
             System.out.println();
 
-            ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
+            //            ConsoleReporter.forRegistry(registry)
+            //                           .convertRatesTo(TimeUnit.SECONDS)
+            //                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+            //                           .build()
+            //                           .report();
         }
         assertTrue(checkpointOccurred.get(5, TimeUnit.SECONDS));
     }

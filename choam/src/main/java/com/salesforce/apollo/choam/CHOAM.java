@@ -360,8 +360,14 @@ public class CHOAM {
             return;
         }
         session.cancelAll();
-        linear.shutdown();
-        executions.shutdown();
+        try {
+            linear.shutdown();
+        } catch (Throwable e) {
+        }
+        try {
+            executions.shutdown();
+        } catch (Throwable e) {
+        }
         final var c = current.get();
         if (c != null) {
             c.complete();

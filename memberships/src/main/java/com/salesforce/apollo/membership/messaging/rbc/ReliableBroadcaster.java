@@ -457,7 +457,8 @@ public class ReliableBroadcaster {
         private Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
-            delivered = BloomWindow.create(params.dedupBufferSize, params.dedupFpr, Biff.Type.DIGEST);
+            delivered = BloomWindow.create(params.dedupBufferSize, 1.0 / ((double) params.dedupBufferSize * 2.0),
+                                           Biff.Type.DIGEST);
         }
 
         public void clear() {
@@ -465,7 +466,8 @@ public class ReliableBroadcaster {
         }
 
         public BloomFilter<Digest> forReconcilliation() {
-            var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize, params.falsePositiveRate);
+            var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize,
+                                             1.0 / ((double) params.bufferSize * 2.0));
             state.keySet().forEach(k -> biff.add(k));
             return biff;
         }
