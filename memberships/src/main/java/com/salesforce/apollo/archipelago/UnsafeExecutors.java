@@ -39,7 +39,7 @@ public class UnsafeExecutors {
     }
 
     public static ExecutorService newVirtualThreadPerTaskExecutor() {
-        return virtualThreadExecutor(new ForkJoinPool());
+        return virtualThreadExecutor(Executors.newWorkStealingPool());
     }
 
     public static <B extends Thread.Builder> B configureBuilderExecutor(B builder, Executor executor) {

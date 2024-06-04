@@ -42,6 +42,10 @@ public interface RouterSupplier {
         return router(cacheBuilder, RouterImpl::defaultServerLimit, null);
     }
 
+    default Router router(ServerConnectionCache.Builder cacheBuilder, ExecutorService executor) {
+        return router(cacheBuilder, RouterImpl::defaultServerLimit, null, Collections.emptyList(), null, executor);
+    }
+
     default Router router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                           LimitsRegistry limitsRegistry) {
         return router(cacheBuilder, serverLimit, limitsRegistry, Collections.emptyList());
