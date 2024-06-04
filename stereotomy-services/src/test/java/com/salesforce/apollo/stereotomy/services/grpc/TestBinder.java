@@ -42,11 +42,11 @@ public class TestBinder {
     @AfterEach
     public void after() {
         if (serverRouter != null) {
-            serverRouter.close(Duration.ofMillis(1));
+            serverRouter.close(Duration.ofMillis(0));
             serverRouter = null;
         }
         if (clientRouter != null) {
-            clientRouter.close(Duration.ofMillis(1));
+            clientRouter.close(Duration.ofMillis(0));
             clientRouter = null;
         }
     }

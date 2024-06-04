@@ -74,10 +74,10 @@ public class ChurnTest {
             views.clear();
         }
 
-        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
+        communications.forEach(e -> e.close(Duration.ofSeconds(0)));
         communications.clear();
 
-        gateways.forEach(e -> e.close(Duration.ofSeconds(1)));
+        gateways.forEach(e -> e.close(Duration.ofSeconds(0)));
         gateways.clear();
     }
 
@@ -210,8 +210,8 @@ public class ChurnTest {
             for (int j = c.size() - 1; j >= c.size() - delta; j--) {
                 final var view = c.get(j);
                 view.stop();
-                r.get(j).close(Duration.ofSeconds(1));
-                g.get(j).close(Duration.ofSeconds(1));
+                r.get(j).close(Duration.ofSeconds(0));
+                g.get(j).close(Duration.ofSeconds(0));
                 removed.add(view.getNode().getId());
             }
             c = c.subList(0, c.size() - delta);
@@ -239,7 +239,7 @@ public class ChurnTest {
         }
 
         views.forEach(e -> e.stop());
-        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
+        communications.forEach(e -> e.close(Duration.ofSeconds(0)));
 
         System.out.println();
 

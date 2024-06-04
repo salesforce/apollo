@@ -160,7 +160,7 @@ public class EtherealTest {
         } finally {
             controllers.forEach(Ethereal::stop);
             gossipers.forEach(ChRbcGossip::stop);
-            comms.forEach(e -> e.close(Duration.ofSeconds(1)));
+            comms.forEach(e -> e.close(Duration.ofSeconds(0)));
         }
 
         final var expected = expectedEpochs * (EPOCH_LENGTH - 1);
@@ -287,7 +287,7 @@ public class EtherealTest {
             controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(Ethereal::stop);
             gossipers.forEach(ChRbcGossip::stop);
-            comms.forEach(e -> e.close(Duration.ofSeconds(1)));
+            comms.forEach(e -> e.close(Duration.ofSeconds(0)));
         }
 
         final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);

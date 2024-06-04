@@ -95,7 +95,7 @@ public class RingCommunicationsTest {
             assertFalse(pinged1.get());
             assertTrue(pinged2.get());
         } finally {
-            router.close(Duration.ofSeconds(5));
+            router.close(Duration.ofSeconds(0));
         }
     }
 }

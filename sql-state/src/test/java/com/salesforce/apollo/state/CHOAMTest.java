@@ -96,7 +96,7 @@ public class CHOAMTest {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
             routers = null;
         }
         if (choams != null) {
@@ -230,7 +230,7 @@ public class CHOAMTest {
                                                                       .toList());
         } finally {
             choams.values().forEach(e -> e.stop());
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
 
             System.out.println("Final block height: " + members.stream()
                                                                .map(m -> updaters.get(m))

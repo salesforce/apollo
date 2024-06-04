@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -39,38 +41,47 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class RouterImpl implements Router {
 
-    private final static Logger                                         log      = LoggerFactory.getLogger(
-    RouterImpl.class);
-    private final        ServerConnectionCache                          cache;
-    private final        ClientIdentity                                 clientIdentityProvider;
-    private final        Consumer<Digest>                               contextRegistration;
-    private final        Member                                         from;
-    private final        MutableHandlerRegistry                         registry = new MutableHandlerRegistry();
-    private final        Server                                         server;
-    private final        Map<String, RoutableService<?>>                services = new ConcurrentHashMap<>();
-    private final        AtomicBoolean                                  started  = new AtomicBoolean();
-    private final        Predicate<FernetServerInterceptor.HashedToken> validator;
+    private final static Logger log = LoggerFactory.getLogger(RouterImpl.class);
+
+    private final ServerConnectionCache                          cache;
+    private final ClientIdentity                                 clientIdentityProvider;
+    private final Consumer<Digest>                               contextRegistration;
+    private final Member                                         from;
+    private final MutableHandlerRegistry                         registry = new MutableHandlerRegistry();
+    private final Server                                         server;
+    private final Map<String, RoutableService<?>>                services = new ConcurrentHashMap<>();
+    private final AtomicBoolean                                  started  = new AtomicBoolean();
+    private final Predicate<FernetServerInterceptor.HashedToken> validator;
+    private final ExecutorService                                executor;
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider) {
         this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
-        });
+        }, Executors.newVirtualThreadPerTaskExecutor());
     }
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
-                      ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration) {
-        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, contextRegistration, null);
+                      ClientIdentity clientIdentityProvider, ExecutorService executor) {
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, d -> {
+        }, executor);
     }
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration,
-                      Predicate<FernetServerInterceptor.HashedToken> validator) {
+                      ExecutorService executor) {
+        this(from, serverBuilder, cacheBuilder, clientIdentityProvider, contextRegistration, null, executor);
+    }
+
+    public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
+                      ClientIdentity clientIdentityProvider, Consumer<Digest> contextRegistration,
+                      Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
         this.server = serverBuilder.fallbackHandlerRegistry(registry).intercept(serverInterceptor()).build();
         this.cache = cacheBuilder.clone().setMember(from.getId()).build();
         this.clientIdentityProvider = clientIdentityProvider;
         this.contextRegistration = contextRegistration;
         this.from = from;
         this.validator = validator;
+        this.executor = executor;
     }
 
     public static ClientInterceptor clientInterceptor(Digest ctx) {
@@ -124,6 +135,7 @@ public class RouterImpl implements Router {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        executor.shutdown();
     }
 
     @Override

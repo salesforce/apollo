@@ -44,11 +44,11 @@ public class TestEventObserver {
     @AfterEach
     public void after() {
         if (serverRouter != null) {
-            serverRouter.close(Duration.ofSeconds(1));
+            serverRouter.close(Duration.ofSeconds(0));
             serverRouter = null;
         }
         if (clientRouter != null) {
-            clientRouter.close(Duration.ofSeconds(1));
+            clientRouter.close(Duration.ofSeconds(0));
             clientRouter = null;
         }
     }

@@ -77,6 +77,7 @@ public class ReliableBroadcaster {
                                           r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
         gossiper = new RingCommunications<>(context, member, this.comm);
+        gossiper.ignoreSelf();
         this.adapter = adapter;
     }
 
@@ -230,18 +231,18 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return null;
         }
-        log.trace("rbc gossiping[{}] with: {} ring: {} on: {}", buffer.round(), member.getId(),
+        log.trace("rbc gossiping[{}:{}] with: {} ring: {} on: {}", context.getId(), buffer.round(),
                   link.getMember().getId(), ring, member.getId());
         try {
             return link.gossip(
             MessageBff.newBuilder().setRing(ring).setDigests(buffer.forReconcilliation().toBff()).build());
         } catch (StatusRuntimeException sre) {
-            log.trace("rbc gossiping[{}] failed: {} with: {} ring: {} on: {}", buffer.round(), sre.getStatus(),
-                      link.getMember().getId(), ring, member.getId());
+            log.trace("rbc gossiping[{}:{}] failed: {} with: {} ring: {} on: {}", context.getId(), buffer.round(),
+                      sre.getStatus(), link.getMember().getId(), ring, member.getId());
             return null;
         } catch (Throwable e) {
-            log.trace("rbc gossiping[{}] failed with: {} ring: {} on: {}", buffer.round(), link.getMember().getId(),
-                      ring, member.getId(), e);
+            log.trace("rbc gossiping[{}:{}] failed with: {} ring: {} on: {}", context.getId(), buffer.round(),
+                      link.getMember().getId(), ring, member.getId(), e);
             return null;
         }
     }

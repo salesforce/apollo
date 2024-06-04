@@ -207,7 +207,7 @@ public class MembershipTests {
             choams = null;
         }
         if (routers != null) {
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
             routers = null;
         }
     }

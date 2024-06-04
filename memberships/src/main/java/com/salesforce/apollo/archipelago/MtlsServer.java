@@ -43,7 +43,7 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -63,7 +63,6 @@ public class MtlsServer implements RouterSupplier {
     private final Member                                  from;
     private final Context.Key<SSLSession>                 sslSessionContext = Context.key("SSLSession");
     private final ServerContextSupplier                   supplier;
-    private final Executor                                executor;
 
     public MtlsServer(Member from, EndpointProvider epProvider, Function<Member, ClientContextSupplier> contextSupplier,
                       ServerContextSupplier supplier) {
@@ -71,7 +70,6 @@ public class MtlsServer implements RouterSupplier {
         this.epProvider = epProvider;
         this.contextSupplier = contextSupplier;
         this.supplier = supplier;
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
             @Override
             public Digest load(X509Certificate key) throws Exception {
@@ -142,7 +140,10 @@ public class MtlsServer implements RouterSupplier {
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
-                             Predicate<FernetServerInterceptor.HashedToken> validator) {
+                             Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
+        if (executor == null) {
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+        }
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -174,14 +175,14 @@ public class MtlsServer implements RouterSupplier {
             }
         };
         return new RouterImpl(from, serverBuilder, cacheBuilder.setFactory(t -> connectTo(t)), identity, c -> {
-        }, validator);
+        }, validator, executor);
     }
 
     private ManagedChannel connectTo(Member to) {
         var address = epProvider.addressFor(to);
         log.debug("Connecting to: {} address: {} on: {}", to.getId(), address, from.getId());
         return new MtlsClient(address, epProvider.getClientAuth(), epProvider.getAlias(), contextSupplier.apply(from),
-                              epProvider.getValidator(), executor).getChannel();
+                              epProvider.getValidator()).getChannel();
     }
 
     private X509Certificate getCert() {

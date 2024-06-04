@@ -70,7 +70,7 @@ public class RbcTest {
         if (messengers != null) {
             messengers.forEach(e -> e.stop());
         }
-        communications.forEach(e -> e.close(Duration.ofMillis(1)));
+        communications.forEach(e -> e.close(Duration.ofMillis(0)));
     }
 
     @Test
@@ -140,7 +140,7 @@ public class RbcTest {
                 receiver.reset();
             }
         }
-        communications.forEach(e -> e.close(Duration.ofMillis(1)));
+        communications.forEach(e -> e.close(Duration.ofMillis(0)));
 
         System.out.println();
 

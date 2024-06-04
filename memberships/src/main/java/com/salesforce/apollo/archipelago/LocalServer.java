@@ -25,7 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -39,7 +40,6 @@ public class LocalServer implements RouterSupplier {
     private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
     private static final String NAME_TEMPLATE = "%s-%s";
 
-    private final Executor          executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
     private final ClientInterceptor clientInterceptor;
     private final Member            from;
     private final String            prefix;
@@ -70,15 +70,17 @@ public class LocalServer implements RouterSupplier {
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
-                             Predicate<FernetServerInterceptor.HashedToken> validator) {
+                             Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
+        if (executor == null) {
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+        }
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
         }
         ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(name)
-                                                               .executor(
-                                                               UnsafeExecutors.newVirtualThreadPerTaskExecutor())
+                                                               .executor(executor)
                                                                .intercept(ConcurrencyLimitServerInterceptor.newBuilder(
                                                                                                            limitsBuilder.build())
                                                                                                            .statusSupplier(
@@ -95,13 +97,12 @@ public class LocalServer implements RouterSupplier {
                 return Constants.SERVER_CLIENT_ID_KEY.get();
             }
         }, d -> {
-        }, validator);
+        }, validator, executor);
     }
 
     private ManagedChannel connectTo(Member to) {
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
         final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name)
-                                                                       .executor(executor)
                                                                        .usePlaintext()
                                                                        .intercept(clientInterceptor);
         disableTrash(builder);

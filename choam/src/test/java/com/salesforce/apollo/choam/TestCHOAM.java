@@ -75,7 +75,7 @@ public class TestCHOAM {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
             routers = null;
         }
         if (choams != null) {
@@ -197,7 +197,7 @@ public class TestCHOAM {
                                                                                    .filter(i -> i < max)
                                                                                    .count());
         } finally {
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
             choams.values().forEach(e -> e.stop());
 
             System.out.println();

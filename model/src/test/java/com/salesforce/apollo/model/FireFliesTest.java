@@ -60,7 +60,7 @@ public class FireFliesTest {
     public void after() {
         domains.forEach(n -> n.stop());
         domains.clear();
-        routers.values().forEach(r -> r.close(Duration.ofSeconds(1)));
+        routers.values().forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
     }
 

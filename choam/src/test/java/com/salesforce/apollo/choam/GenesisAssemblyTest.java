@@ -183,7 +183,7 @@ public class GenesisAssemblyTest {
             genii.values().forEach(GenesisAssembly::start);
             complete.await(15, TimeUnit.SECONDS);
         } finally {
-            communications.values().forEach(r -> r.close(Duration.ofSeconds(1)));
+            communications.values().forEach(r -> r.close(Duration.ofSeconds(0)));
             genii.values().forEach(GenesisAssembly::stop);
         }
     }

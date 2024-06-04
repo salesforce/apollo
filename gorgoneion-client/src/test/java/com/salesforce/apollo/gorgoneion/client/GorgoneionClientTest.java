@@ -97,8 +97,8 @@ public class GorgoneionClientTest {
 
         var invitation = gorgoneionClient.apply(Duration.ofSeconds(60));
 
-        gorgonRouter.close(Duration.ofSeconds(1));
-        clientRouter.close(Duration.ofSeconds(1));
+        gorgonRouter.close(Duration.ofSeconds(0));
+        clientRouter.close(Duration.ofSeconds(0));
 
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
@@ -113,10 +113,10 @@ public class GorgoneionClientTest {
     @AfterEach
     public void closeRouters() {
         if (gorgonRouter != null) {
-            gorgonRouter.close(Duration.ofSeconds(3));
+            gorgonRouter.close(Duration.ofSeconds(0));
         }
         if (clientRouter != null) {
-            clientRouter.close(Duration.ofSeconds(3));
+            clientRouter.close(Duration.ofSeconds(0));
         }
     }
 

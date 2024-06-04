@@ -55,7 +55,7 @@ public class ContainmentDomainTest {
     public void after() {
         domains.forEach(Domain::stop);
         domains.clear();
-        routers.forEach(r -> r.close(Duration.ofSeconds(100)));
+        routers.forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
     }
 
