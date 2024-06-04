@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.UnsafeExecutors;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -170,9 +171,10 @@ public class MembershipTests {
         SigningMember testSubject = new ControlledIdentifierMember(stereotomy.newIdentifier());
 
         final var prefix = UUID.randomUUID().toString();
+        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         routers = members.stream()
                          .collect(Collectors.toMap(Member::getId, m -> new LocalServer(prefix, m).router(
-                         ServerConnectionCache.newBuilder().setTarget(cardinality))));
+                         ServerConnectionCache.newBuilder().setTarget(cardinality), executor)));
         routers.put(testSubject.getId(), new LocalServer(prefix, testSubject).router(
         ServerConnectionCache.newBuilder().setTarget(cardinality)));
         choams = new HashMap<>();

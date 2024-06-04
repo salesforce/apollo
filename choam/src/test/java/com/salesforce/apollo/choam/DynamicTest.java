@@ -3,6 +3,7 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.UnsafeExecutors;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
@@ -63,9 +64,10 @@ public class DynamicTest {
                            .toList();
 
         final var prefix = UUID.randomUUID().toString();
+        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m, m -> new LocalServer(prefix, m).router(
-                         ServerConnectionCache.newBuilder().setTarget(cardinality * 2))));
+                         ServerConnectionCache.newBuilder().setTarget(cardinality * 2), executor)));
 
         var template = Parameters.newBuilder()
                                  .setGenerateGenesis(true)
