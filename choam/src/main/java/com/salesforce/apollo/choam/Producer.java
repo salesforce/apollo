@@ -128,7 +128,7 @@ public class Producer {
     }
 
     public void join(SignedViewMember viewMember) {
-        assembly.join(viewMember, true);
+        assembly.joined(viewMember);
     }
 
     public void start() {
@@ -357,21 +357,22 @@ public class Producer {
     }
 
     private void serial(List<ByteString> preblock, Boolean last) {
+        try {
+            serialize.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
         Thread.ofVirtual().start(() -> {
             try {
-                serialize.acquire();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            try {
-                transitions.create(preblock, last);
+                create(preblock, last);
             } catch (Throwable t) {
                 log.error("Error processing preblock last: {} on: {}", last, params().member().getId(), t);
             } finally {
                 serialize.release();
             }
         });
+
     }
 
     private PendingBlock validate(Validate v) {
@@ -434,11 +435,6 @@ public class Producer {
         @Override
         public void complete() {
             stop();
-        }
-
-        @Override
-        public void create(List<ByteString> preblock, boolean last) {
-            Producer.this.create(preblock, last);
         }
 
         @Override

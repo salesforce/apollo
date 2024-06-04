@@ -1393,21 +1393,15 @@ public class CHOAM {
             }
             log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                      params.member().getId());
-            var servers = new GroupIterator(validators.keySet());
-            var joined = new HashSet<Member>();
+            var servers = new ConcurrentSkipListSet<>(validators.keySet());
 
             var delay = Duration.ofMillis(Entropy.nextSecureInt(5));
+            var joined = new AtomicInteger();
 
             Thread.ofPlatform().start(() -> {
                 log.error("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                           params.member().getId());
-                while (!joining.isDone() && joined.size() < view.getMajority()) {
-                    try {
-                        Thread.sleep(delay.toMillis());
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
+                while (!joining.isDone() && joined.get() < view.getMajority()) {
                     join(view, servers, joined);
                 }
                 log.info("Finishing join of: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
@@ -1416,32 +1410,10 @@ public class CHOAM {
             });
         }
 
-        private void join(View view, GroupIterator servers, HashSet<Member> joined) {
-            Member target = servers.next();
-            if (joined.contains(target)) {
-                log.trace("Already joined with: {} view: {} diadem: {}  on: {}", target.getId(), nextViewId.get(),
-                          Digest.from(view.getDiadem()), params.member().getId());
-                return;
-            }
-            try (var link = comm.connect(target)) {
-                join(view, link, target, joined);
-            } catch (StatusRuntimeException e) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} status:{} on: {}", target.getId(),
-                          nextViewId, Digest.from(view.getDiadem()), e.getStatus(), params.member().getId());
-            } catch (Throwable e) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
-                          Digest.from(view.getDiadem()), params.member().getId(), e);
-            }
-        }
+        private void join(View view, Collection<Member> servers, AtomicInteger joined) {
 
-        private void join(View view, Terminal link, Member target, HashSet<Member> joined) {
-            if (link == null) {
-                log.debug("No link for: {} for joining: {} on: {}", target.getId(), Digest.from(view.getDiadem()),
-                          params.member().getId());
-                return;
-            }
-            log.trace("Joining view: {} diadem: {} on: {}", viewId, Digest.from(view.getDiadem()),
-                      params.member().getId());
+            log.trace("Joining view: {} diadem: {} servers: {} on: {}", viewId, Digest.from(view.getDiadem()),
+                      servers.stream().map(Member::getId).toList(), params.member().getId());
             final var c = next.get();
             var inView = ViewMember.newBuilder(c.member)
                                    .setDiadem(view.getDiadem())
@@ -1451,17 +1423,31 @@ public class CHOAM {
                                       .setVm(inView)
                                       .setSignature(params.member().sign(inView.toByteString()).toSig())
                                       .build();
+            var countdown = new CountDownLatch(servers.size());
+
+            servers.stream().map(comm::connect).filter(Objects::nonNull).forEach(t -> {
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        t.join(svm);
+                        servers.remove(t.getMember());
+                        joined.incrementAndGet();
+                        countdown.countDown();
+                        log.trace("Joined with: {} view: {} diadem: {} on: {}", t.getMember().getId(), viewId,
+                                  Digest.from(view.getDiadem()), params.member().getId());
+                    } catch (StatusRuntimeException sre) {
+                        log.trace("Failed join attempt: {} with: {} view: {} diadem: {} on: {}", sre.getStatus(),
+                                  t.getMember().getId(), nextViewId, Digest.from(view.getDiadem()),
+                                  params.member().getId(), sre);
+                    } catch (Throwable throwable) {
+                        log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", t.getMember().getId(),
+                                  nextViewId, Digest.from(view.getDiadem()), params.member().getId(), throwable);
+                    }
+                });
+            });
             try {
-                link.join(svm);
-                joined.add(target);
-                log.trace("Joined with: {} view: {} diadem: {} on: {}", target.getId(), viewId,
-                          Digest.from(view.getDiadem()), params.member().getId());
-            } catch (StatusRuntimeException sre) {
-                log.trace("Failed join attempt: {} with: {} view: {} diadem: {} on: {}", sre.getStatus(),
-                          target.getId(), nextViewId, Digest.from(view.getDiadem()), params.member().getId(), sre);
-            } catch (Throwable t) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
-                          Digest.from(view.getDiadem()), params.member().getId(), t);
+                countdown.await(2, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }

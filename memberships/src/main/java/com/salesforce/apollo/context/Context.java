@@ -95,15 +95,11 @@ public interface Context<T extends Member> {
     Stream<T> allMembers();
 
     /**
-     * @param start
-     * @param stop
      * @return Return all counter-clockwise items between (but not including) start and stop
      */
     Iterable<T> betweenPredecessors(int ring, T start, T stop);
 
     /**
-     * @param start
-     * @param stop
      * @return all clockwise items between (but not including) start item and stop item.
      */
     Iterable<T> betweenSuccessor(int ring, T start, T stop);
@@ -199,8 +195,6 @@ public interface Context<T extends Member> {
     T getMember(Digest memberID);
 
     /**
-     * @param i
-     * @param ring
      * @return the i'th Member in Ring 0 of the receiver
      */
     T getMember(int i, int ring);
@@ -253,10 +247,6 @@ public interface Context<T extends Member> {
 
     /**
      * Answer true if the member is a successor of the supplied digest on any ring
-     *
-     * @param m
-     * @param digest
-     * @return
      */
     boolean isSuccessorOf(T m, Digest digest);
 
@@ -317,8 +307,6 @@ public interface Context<T extends Member> {
     Iterable<T> predecessors(int ring, Digest location);
 
     /**
-     * @param location
-     * @param predicate
      * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
@@ -327,8 +315,6 @@ public interface Context<T extends Member> {
     Iterable<T> predecessors(int ring, T start);
 
     /**
-     * @param start
-     * @param predicate
      * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
@@ -376,46 +362,34 @@ public interface Context<T extends Member> {
 
     /**
      * Stream the members of the ring in hashed order
-     *
-     * @param ring
-     * @return
      */
     Stream<T> stream(int ring);
 
     /**
-     * @param ring
-     * @param predicate
      * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
     Stream<T> streamPredecessors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * @param ring
-     * @param predicate
      * @return a list of all items counter-clock wise in the ring from (but excluding) start item to (but excluding) the
      * first item where predicate(item) evaluates to True.
      */
     Stream<T> streamPredecessors(int ring, T m, Predicate<T> predicate);
 
     /**
-     * @param ring
-     * @param predicate
      * @return a Stream of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
     Stream<T> streamSuccessors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * @param ring
-     * @param predicate
      * @return a Stream of all items counter-clock wise in the ring from (but excluding) start item to (but excluding)
      * the first item where predicate(item) evaluates to True.
      */
     Stream<T> streamSuccessors(int ring, T m, Predicate<T> predicate);
 
     /**
-     * @param ring
      * @return a iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item
      */
@@ -490,16 +464,12 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @param ring
-     * @param predicate
      * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start location to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
     Iterable<T> successors(int ring, Digest location, Predicate<T> predicate);
 
     /**
-     * @param ring
-     * @param predicate
      * @return an Iterable of all items counter-clock wise in the ring from (but excluding) start item to (but
      * excluding) the first item where predicate(item) evaluates to True.
      */
@@ -522,8 +492,7 @@ public interface Context<T extends Member> {
     }
 
     /**
-     * @param member
-     * @return the iteratator to traverse the ring starting at the member
+     * @return the iterator to traverse the ring starting at the member
      */
     Iterable<T> traverse(int ring, T member);
 

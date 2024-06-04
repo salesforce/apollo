@@ -278,8 +278,7 @@ public class ViewContext {
     private Verifier getVerifier(Member m) {
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to get verifier by non existent member: {} on: {}", m.getId(),
-                          params.member().getId());
+                log.debug("Unable to get verifier by non existent member on: {}", params.member().getId());
             }
             return null;
         }
