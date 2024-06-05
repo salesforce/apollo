@@ -234,7 +234,7 @@ public class Producer {
 
     private void processAssemblies(List<UnitData> aggregate) {
         var aggs = aggregate.stream().flatMap(e -> e.getAssembliesList().stream()).toList();
-        log.trace("Consuming {} assemblies from {} units on: {}", aggs.size(), aggregate.size(),
+        log.trace("Consuming: {} assemblies from: {} units on: {}", aggs.size(), aggregate.size(),
                   params().member().getId());
         assembly.assemble(aggs);
     }
@@ -313,14 +313,14 @@ public class Producer {
     }
 
     private void publish(PendingBlock p, boolean beacon) {
-        assert p.witnesses.size() >= params().majority() : "Publishing non majority block";
+        assert p.witnesses.size() >= params().majority() : "Attempt to publish non majority block";
         var publish = p.published.compareAndSet(false, true);
         if (!publish && !beacon) {
             log.trace("Already published: {} hash: {} height: {} witnesses: {} on: {}", p.block.block.getBodyCase(),
                       p.block.hash, p.block.height(), p.witnesses.values().size(), params().member().getId());
             return;
         }
-        log.trace("Publishing {}pending: {} hash: {} height: {} witnesses: {} on: {}", beacon ? "(beacon) " : "",
+        log.trace("Publishing {}: {} hash: {} height: {} witnesses: {} on: {}", beacon ? "(beacon) " : "(pending)",
                   p.block.block.getBodyCase(), p.block.hash, p.block.height(), p.witnesses.values().size(),
                   params().member().getId());
         final var cb = CertifiedBlock.newBuilder()

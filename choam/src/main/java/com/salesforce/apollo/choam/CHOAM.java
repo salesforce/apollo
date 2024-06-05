@@ -35,7 +35,6 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.messaging.proto.AgedMessageOrBuilder;
-import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
 import org.h2.mvstore.MVMap;
@@ -47,7 +46,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -99,7 +97,6 @@ public class CHOAM {
     private final TransSubmission                                       txnSubmission         = new TransSubmission();
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
     private final PendingViews                                          pendingViews          = new PendingViews();
-    private final AtomicReference<CompletableFuture<Void>>              join                  = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
@@ -711,10 +708,6 @@ public class CHOAM {
 
     private void reconfigure(Digest hash, Reconfigure reconfigure) {
         log.info("Setting next view id: {} on: {}", hash, params.member().getId());
-        var j = join.getAndSet(null);
-        if (j != null) {
-            j.cancel(true);
-        }
         nextViewId.set(hash);
         var pv = pendingViews.advance();
         if (pv != null) {
@@ -1282,10 +1275,10 @@ public class CHOAM {
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        protected final Digest viewId;
-
-        private final GroupIterator         servers;
-        private final Map<Member, Verifier> validators;
+        protected final  Digest                viewId;
+        private final    GroupIterator         servers;
+        private final    Map<Member, Verifier> validators;
+        private volatile JoinState             ongoingJoin;
 
         public Administration(Map<Member, Verifier> validators, Digest viewId) {
             this.validators = validators;
@@ -1295,6 +1288,12 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
+            final var oj = ongoingJoin;
+            ongoingJoin = null;
+            if (oj != null) {
+                oj.halt.set(true);
+                oj.joining.interrupt();
+            }
             process();
         }
 
@@ -1384,30 +1383,25 @@ public class CHOAM {
         }
 
         private void join(View view) {
-            var joining = new CompletableFuture<Void>();
-            if (!join.compareAndSet(null, joining)) {
-                log.info("Ongoing join of: {} should have been cancelled on: {}", Digest.from(view.getDiadem()),
-                         params.member().getId());
-                transitions.fail();
-                return;
+            if (ongoingJoin != null) {
+                throw new IllegalStateException("Ongoing join should have been cancelled");
             }
             log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                      params.member().getId());
             var servers = new ConcurrentSkipListSet<>(validators.keySet());
-
-            var delay = Duration.ofMillis(Entropy.nextSecureInt(5));
             var joined = new AtomicInteger();
+            var halt = new AtomicBoolean(false);
 
-            Thread.ofPlatform().start(() -> {
+            ongoingJoin = new JoinState(halt, Thread.ofVirtual().start(Utils.wrapped(() -> {
                 log.error("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                           params.member().getId());
-                while (!joining.isDone() && joined.get() < view.getMajority()) {
+                while (!halt.get() & joined.get() < view.getMajority()) {
                     join(view, servers, joined);
                 }
                 log.info("Finishing join of: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                          params.member().getId());
-                joining.complete(null);
-            });
+                ongoingJoin = null;
+            }, log())));
         }
 
         private void join(View view, Collection<Member> servers, AtomicInteger joined) {
@@ -1426,7 +1420,7 @@ public class CHOAM {
             var countdown = new CountDownLatch(servers.size());
 
             servers.stream().map(comm::connect).filter(Objects::nonNull).forEach(t -> {
-                Thread.ofVirtual().start(() -> {
+                Thread.ofVirtual().start(Utils.wrapped(() -> {
                     try {
                         t.join(svm);
                         servers.remove(t.getMember());
@@ -1442,13 +1436,16 @@ public class CHOAM {
                         log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", t.getMember().getId(),
                                   nextViewId, Digest.from(view.getDiadem()), params.member().getId(), throwable);
                     }
-                });
+                }, log()));
             });
             try {
                 countdown.await(2, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+
+        private record JoinState(AtomicBoolean halt, Thread joining) {
         }
     }
 
