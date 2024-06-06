@@ -783,7 +783,7 @@
                     <version>3.2.5</version>
                     <configuration>
                         <forkCount>${forks}</forkCount>
-                        <reuseForks>true</reuseForks>
+                        <reuseForks>false</reuseForks>
                     </configuration>
                 </plugin>
                 <plugin>
