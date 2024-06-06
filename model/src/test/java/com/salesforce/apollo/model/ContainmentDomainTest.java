@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.archipelago.EndpointProvider;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -79,11 +82,9 @@ public class ContainmentDomainTest {
 
         var sealed = FoundationSeal.newBuilder().build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                     executor);
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1),

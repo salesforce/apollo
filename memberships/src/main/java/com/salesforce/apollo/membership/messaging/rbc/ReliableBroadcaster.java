@@ -328,10 +328,10 @@ public class ReliableBroadcaster {
         public static class Builder implements Cloneable {
             private int             bufferSize         = 1500;
             private int             dedupBufferSize    = 100;
-            private double          dedupFpr           = Math.pow(10, -9);
+            private double          dedupFpr           = Math.pow(10, -6);
             private int             deliveredCacheSize = 100;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.00125;
+            private double          falsePositiveRate  = 0.0000125;
             private int             maxMessages        = 500;
 
             public Parameters build() {

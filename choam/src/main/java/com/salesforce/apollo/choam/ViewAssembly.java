@@ -83,9 +83,6 @@ public class ViewAssembly {
 
     public void joined(SignedViewMember viewMember) {
         final var mid = Digest.from(viewMember.getVm().getId());
-        if (!validate(mid, viewMember)) {
-            return;
-        }
         joins.put(mid, SignedJoin.newBuilder()
                                  .setMember(params().member().getId().toDigeste())
                                  .setJoin(viewMember)
@@ -219,7 +216,7 @@ public class ViewAssembly {
                 proposals.put(mid, svm);
             }
         }
-        checkAssembly();
+        transitions.checkAssembly();
     }
 
     void newEpoch() {
@@ -237,15 +234,15 @@ public class ViewAssembly {
                         .collect(Collectors.toMap(Member::getId, m -> m));
     }
 
-    private void checkAssembly() {
+    private boolean checkAssembly() {
         if (selected == null) {
-            return;
+            return false;
         }
         if (proposals.size() == selected.majority) {
             transitions.certified();
-        } else if (proposals.size() >= selected.majority) {
-            transitions.gathered();
+            return true;
         }
+        return false;
     }
 
     private Parameters params() {
@@ -405,22 +402,38 @@ public class ViewAssembly {
         @Override
         public void certify() {
             if (proposals.size() == selected.majority) {
-                log.debug("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
-                          nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
+                log.info("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
+                         nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.certified();
             } else {
-                countdown.set(3);
-                log.debug("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
-                          proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
+                countdown.set(4);
+                log.info("Not certifying: {} majority: {} slate: {} of: {} on: {}", nextViewId, selected.majority,
+                         proposals.keySet().stream().sorted().toList(), nextViewId, params().member().getId());
             }
         }
 
         public void checkAssembly() {
-            ViewAssembly.this.checkAssembly();
+            if (ViewAssembly.this.checkAssembly()) {
+                return;
+            }
+            if (proposals.size() >= selected.majority) {
+                transitions.chill();
+            } else {
+                log.info("Check assembly: {} on: {}", proposals.size(), params().member().getId());
+            }
         }
 
         public void checkViews() {
             vote();
+        }
+
+        @Override
+        public void chill() {
+            if (ViewAssembly.this.checkAssembly()) {
+                transitions.certified();
+            } else {
+                countdown.set(2);
+            }
         }
 
         @Override
