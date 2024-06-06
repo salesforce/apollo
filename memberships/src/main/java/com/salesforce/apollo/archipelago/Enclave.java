@@ -109,7 +109,7 @@ public class Enclave implements RouterSupplier {
                                   public Digest getFrom() {
                                       return Constants.SERVER_CLIENT_ID_KEY.get();
                                   }
-                              }, contextRegistration, validator, executor);
+                              }, contextRegistration, validator);
     }
 
     private ManagedChannel connectTo(Member to) {
