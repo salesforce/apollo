@@ -6,10 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.archipelago.EndpointProvider;
-import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -81,10 +78,12 @@ public class FireFliesTest {
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var sealed = FoundationSeal.newBuilder().build();
+        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         identities.forEach((digest, id) -> {
             var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30),
+                                                                     executor);
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5),
                                                                      "jdbc:h2:mem:%s-state".formatted(digest),
