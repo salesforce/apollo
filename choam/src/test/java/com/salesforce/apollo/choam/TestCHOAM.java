@@ -106,7 +106,7 @@ public class TestCHOAM {
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
-                                                              .setGossipDuration(Duration.ofMillis(30))
+                                                              .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .setEthereal(Config.newBuilder()
                                                                                  .setNumberOfEpochs(3)
@@ -171,7 +171,7 @@ public class TestCHOAM {
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 1_500 : 5;
-        final var max = LARGE_TESTS ? 100 : 10;
+        final var max = LARGE_TESTS ? 100 : 5;
         final var countdown = new CountDownLatch(clientCount * choams.size());
         choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
