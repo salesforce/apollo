@@ -118,6 +118,7 @@ public class MtlsTest {
         var frist = new AtomicBoolean(true);
 
         var clientContextSupplier = clientContextSupplier();
+        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         views = members.stream().map(node -> {
             DynamicContext<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -127,7 +128,7 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(
-            builder);
+            builder, executor);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, Verifiers.NONE, comms,
                             parameters, DigestAlgorithm.DEFAULT, metrics);
