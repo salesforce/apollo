@@ -27,7 +27,6 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -38,16 +37,8 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  * @author hal.hildebrand
  */
 public class LocalServer implements RouterSupplier {
-    private static final Logger          log           = LoggerFactory.getLogger(LocalServer.class);
-    private static final String          NAME_TEMPLATE = "%s-%s";
-    private static final ExecutorService PLATFORM;
-
-    static {
-        PLATFORM = Executors.newCachedThreadPool();
-        var platform = (ThreadPoolExecutor) PLATFORM;
-        platform.setCorePoolSize(Runtime.getRuntime().availableProcessors());
-        platform.prestartAllCoreThreads();
-    }
+    private static final Logger log           = LoggerFactory.getLogger(LocalServer.class);
+    private static final String NAME_TEMPLATE = "%s-%s";
 
     private final ClientInterceptor clientInterceptor;
     private final Member            from;
@@ -80,7 +71,7 @@ public class LocalServer implements RouterSupplier {
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
                              Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
         if (executor == null) {
-            executor = PLATFORM;
+            executor = Executors.newVirtualThreadPerTaskExecutor();
         }
         String name = String.format(NAME_TEMPLATE, prefix, qb64(from.getId()));
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
