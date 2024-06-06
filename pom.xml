@@ -783,7 +783,7 @@
                     <version>3.2.5</version>
                     <configuration>
                         <forkCount>${forks}</forkCount>
-                        <reuseForks>true</reuseForks>
+                        <reuseForks>false</reuseForks>
                         <argLine>-Xmx10G -Xms100M</argLine>
                         <argLine>-Djdk.tracePinnedThreads=full</argLine>
                     </configuration>
