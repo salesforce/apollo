@@ -8,7 +8,10 @@ package com.salesforce.apollo.choam;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -121,12 +124,11 @@ public class TestCHOAM {
                            .toList();
         var context = new StaticContext<>(origin, 0.2, members, 3);
         final var prefix = UUID.randomUUID().toString();
-        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(
                          ServerConnectionCache.newBuilder()
                                               .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
-                                              .setTarget(CARDINALITY), executor)));
+                                              .setTarget(CARDINALITY))));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);

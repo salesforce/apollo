@@ -273,7 +273,6 @@ public class ChurnTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         final var gatewayPrefix = UUID.randomUUID().toString();
-        var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         views = members.values().stream().map(node -> {
             DynamicContext<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -283,15 +282,14 @@ public class ChurnTest {
                                                                                   .setMetrics(
                                                                                   new ServerConnectionCacheMetricsImpl(
                                                                                   frist.getAndSet(false) ? node0Registry
-                                                                                                         : registry)),
-                                                             executor);
+                                                                                                         : registry)));
             var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
                                                                                            .setTarget(200)
                                                                                            .setMetrics(
                                                                                            new ServerConnectionCacheMetricsImpl(
                                                                                            frist.getAndSet(false)
-                                                                                           ? node0Registry : registry)),
-                                                                      executor);
+                                                                                           ? node0Registry
+                                                                                           : registry)));
             comms.start();
             communications.add(comms);
 

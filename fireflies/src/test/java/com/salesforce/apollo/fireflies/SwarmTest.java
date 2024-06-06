@@ -230,21 +230,19 @@ public class SwarmTest {
             DynamicContext<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            var executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
             var comms = new LocalServer(prefix, node).router(ServerConnectionCache.newBuilder()
                                                                                   .setTarget(200)
                                                                                   .setMetrics(
                                                                                   new ServerConnectionCacheMetricsImpl(
                                                                                   frist.getAndSet(false) ? node0Registry
-                                                                                                         : registry)),
-                                                             executor);
+                                                                                                         : registry)));
             var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
                                                                                            .setTarget(200)
                                                                                            .setMetrics(
                                                                                            new ServerConnectionCacheMetricsImpl(
                                                                                            frist.getAndSet(false)
-                                                                                           ? node0Registry : registry)),
-                                                                      executor);
+                                                                                           ? node0Registry
+                                                                                           : registry)));
             comms.start();
             communications.add(comms);
 
