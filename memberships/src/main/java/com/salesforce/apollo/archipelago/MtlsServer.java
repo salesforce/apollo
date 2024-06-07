@@ -44,7 +44,6 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -142,7 +141,7 @@ public class MtlsServer implements RouterSupplier {
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
                              Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
         if (executor == null) {
-            executor = Executors.newVirtualThreadPerTaskExecutor();
+            executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         }
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
