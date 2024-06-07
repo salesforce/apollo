@@ -6,10 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.archipelago.EndpointProvider;
-import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -38,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -55,6 +53,7 @@ public class DomainTest {
     "Give me food or give me slack or kill me".getBytes());
     private final        ArrayList<Domain> domains         = new ArrayList<>();
     private final        ArrayList<Router> routers         = new ArrayList<>();
+    private              ExecutorService   executor;
 
     public static void smoke(Oracle oracle) throws Exception {
         // Namespace
@@ -217,10 +216,14 @@ public class DomainTest {
         domains.clear();
         routers.forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
+        if (executor != null) {
+            executor.shutdown();
+        }
     }
 
     @BeforeEach
     public void before() throws Exception {
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -240,7 +243,8 @@ public class DomainTest {
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30),
+                                                                     executor);
             routers.add(localRouter);
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1),
@@ -280,18 +284,18 @@ public class DomainTest {
                                  .setGenerateGenesis(true)
                                  .setGenesisViewId(GENESIS_VIEW_ID)
                                  .setBootstrap(Parameters.BootstrapParameters.newBuilder()
-                                                                             .setGossipDuration(Duration.ofMillis(50))
+                                                                             .setGossipDuration(Duration.ofMillis(20))
                                                                              .build())
                                  .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                                 .setGossipDuration(Duration.ofMillis(50))
+                                 .setGossipDuration(Duration.ofMillis(20))
                                  .setProducer(Parameters.ProducerParameters.newBuilder()
-                                                                           .setGossipDuration(Duration.ofMillis(50))
+                                                                           .setGossipDuration(Duration.ofMillis(20))
                                                                            .setBatchInterval(Duration.ofMillis(50))
                                                                            .setMaxBatchByteSize(1024 * 1024)
                                                                            .setMaxBatchCount(10_000)
                                                                            .setEthereal(Config.newBuilder()
-                                                                                              .setNumberOfEpochs(3)
-                                                                                              .setEpochLength(7))
+                                                                                              .setNumberOfEpochs(12)
+                                                                                              .setEpochLength(33))
                                                                            .build())
                                  .setCheckpointBlockDelta(200)
                                  .setDrainPolicy(ExponentialBackoffPolicy.newBuilder()

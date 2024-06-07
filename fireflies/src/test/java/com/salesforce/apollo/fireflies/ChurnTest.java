@@ -29,6 +29,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,6 +53,7 @@ public class ChurnTest {
     private              MetricRegistry                                              node0Registry;
     private              MetricRegistry                                              registry;
     private              List<View>                                                  views;
+    private              ExecutorService                                             executor;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -79,6 +81,9 @@ public class ChurnTest {
 
         gateways.forEach(e -> e.close(Duration.ofSeconds(0)));
         gateways.clear();
+        if (executor != null) {
+            executor.shutdown();
+        }
     }
 
     @Test
@@ -260,6 +265,7 @@ public class ChurnTest {
     }
 
     private void initialize() {
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
@@ -282,14 +288,15 @@ public class ChurnTest {
                                                                                   .setMetrics(
                                                                                   new ServerConnectionCacheMetricsImpl(
                                                                                   frist.getAndSet(false) ? node0Registry
-                                                                                                         : registry)));
+                                                                                                         : registry)),
+                                                             executor);
             var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
                                                                                            .setTarget(200)
                                                                                            .setMetrics(
                                                                                            new ServerConnectionCacheMetricsImpl(
                                                                                            frist.getAndSet(false)
-                                                                                           ? node0Registry
-                                                                                           : registry)));
+                                                                                           ? node0Registry : registry)),
+                                                                      executor);
             comms.start();
             communications.add(comms);
 

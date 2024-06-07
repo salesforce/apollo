@@ -39,7 +39,10 @@ public class UnsafeExecutors {
     }
 
     public static ExecutorService newVirtualThreadPerTaskExecutor() {
-        return virtualThreadExecutor(Executors.newWorkStealingPool());
+        var executor = (ThreadPoolExecutor) Executors.newCachedThreadPool();
+        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors());
+        executor.prestartAllCoreThreads();
+        return virtualThreadExecutor(executor);
     }
 
     public static <B extends Thread.Builder> B configureBuilderExecutor(B builder, Executor executor) {

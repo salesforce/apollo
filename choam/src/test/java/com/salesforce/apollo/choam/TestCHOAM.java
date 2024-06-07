@@ -8,10 +8,7 @@ package com.salesforce.apollo.choam;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipelago.LocalServer;
-import com.salesforce.apollo.archipelago.Router;
-import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -71,6 +68,7 @@ public class TestCHOAM {
     private   MetricRegistry             registry;
     private   Map<Digest, Router>        routers;
     private   ScheduledExecutorService   scheduler;
+    private   ExecutorService            executor;
 
     @AfterEach
     public void after() throws Exception {
@@ -85,13 +83,17 @@ public class TestCHOAM {
         if (scheduler != null) {
             scheduler.shutdown();
         }
+        if (executor != null) {
+            executor.shutdown();
+        }
         members = null;
         registry = null;
     }
 
     @BeforeEach
     public void before() throws Exception {
-        scheduler = Executors.newScheduledThreadPool(10);
+        scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var origin = DigestAlgorithm.DEFAULT.getOrigin();
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(origin, registry);
@@ -102,15 +104,15 @@ public class TestCHOAM {
         var params = Parameters.newBuilder()
                                .setGenerateGenesis(true)
                                .setGenesisViewId(origin.prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(30))
+                               .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
-                                                              .setGossipDuration(Duration.ofMillis(10))
+                                                              .setGossipDuration(Duration.ofMillis(20))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .setEthereal(Config.newBuilder()
-                                                                                 .setNumberOfEpochs(3)
-                                                                                 .setEpochLength(7))
+                                                                                 .setNumberOfEpochs(12)
+                                                                                 .setEpochLength(15))
                                                               .build())
                                .setCheckpointBlockDelta(3);
 
@@ -128,7 +130,7 @@ public class TestCHOAM {
                          .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(
                          ServerConnectionCache.newBuilder()
                                               .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
-                                              .setTarget(CARDINALITY))));
+                                              .setTarget(CARDINALITY), executor)));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);

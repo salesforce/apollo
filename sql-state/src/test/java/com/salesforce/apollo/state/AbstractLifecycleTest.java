@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.UnsafeExecutors;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
@@ -41,10 +42,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -75,6 +73,7 @@ abstract public class AbstractLifecycleTest {
     //    }
     private final          List<Transaction>            GENESIS_DATA;
     private final          Map<Member, Parameters>      parameters       = new HashMap<>();
+    protected              ExecutorService              executor;
     protected              SecureRandom                 entropy;
     protected              CountDownLatch               checkpointOccurred;
     protected              Map<Digest, CHOAM>           choams;
@@ -122,6 +121,9 @@ abstract public class AbstractLifecycleTest {
             scheduler.shutdownNow();
             scheduler = null;
         }
+        if (executor != null) {
+            executor.shutdown();
+        }
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         parameters.clear();
@@ -132,7 +134,8 @@ abstract public class AbstractLifecycleTest {
 
     @BeforeEach
     public void before() throws Exception {
-        scheduler = Executors.newScheduledThreadPool(10);
+        scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         checkpointOccurred = new CountDownLatch(CARDINALITY);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
