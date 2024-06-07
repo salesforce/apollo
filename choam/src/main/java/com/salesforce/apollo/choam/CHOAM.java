@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -35,9 +36,9 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageAdapter;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.messaging.proto.AgedMessageOrBuilder;
-import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import io.grpc.StatusRuntimeException;
+import io.netty.util.concurrent.ImmediateExecutor;
 import org.h2.mvstore.MVMap;
 import org.joou.ULong;
 import org.slf4j.Logger;
@@ -47,7 +48,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -75,31 +75,31 @@ import static io.grpc.Status.INVALID_ARGUMENT;
 public class CHOAM {
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
-    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
-    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
-    private final ReliableBroadcaster                                   combine;
-    private final CommonCommunications<Terminal, Concierge>             comm;
-    private final AtomicReference<Committee>                            current               = new AtomicReference<>();
-    private final ExecutorService                                       executions;
-    private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
-    private final AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
-    private final AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
-    private final AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
-    private final ExecutorService                                       linear;
-    private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
-    private final AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
-    private final Parameters                                            params;
-    private final PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
-    private final RoundScheduler                                        roundScheduler;
-    private final Session                                               session;
-    private final AtomicBoolean                                         started               = new AtomicBoolean();
-    private final Store                                                 store;
-    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
-    private final Combine.Transitions                                   transitions;
-    private final TransSubmission                                       txnSubmission         = new TransSubmission();
-    private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
-    private final PendingViews                                          pendingViews          = new PendingViews();
-    private final AtomicReference<CompletableFuture<Void>>              join                  = new AtomicReference<>();
+    private final    Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
+    private final    ReliableBroadcaster                                   combine;
+    private final    CommonCommunications<Terminal, Concierge>             comm;
+    private final    AtomicReference<Committee>                            current               = new AtomicReference<>();
+    private final    ExecutorService                                       executions;
+    private final    AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
+    private final    AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
+    private final    AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
+    private final    ExecutorService                                       linear;
+    private final    AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final    AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
+    private final    Parameters                                            params;
+    private final    PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
+    private final    RoundScheduler                                        roundScheduler;
+    private final    Session                                               session;
+    private final    AtomicBoolean                                         started               = new AtomicBoolean();
+    private final    Store                                                 store;
+    private final    CommonCommunications<TxnSubmission, Submitter>        submissionComm;
+    private final    Combine.Transitions                                   transitions;
+    private final    TransSubmission                                       txnSubmission         = new TransSubmission();
+    private final    AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
+    private final    PendingViews                                          pendingViews          = new PendingViews();
+    private volatile AtomicBoolean                                         ongoingJoin;
 
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().clone().build());
@@ -360,13 +360,25 @@ public class CHOAM {
             return;
         }
         session.cancelAll();
-        linear.shutdown();
-        executions.shutdown();
+        try {
+            linear.shutdown();
+        } catch (Throwable e) {
+        }
+        try {
+            executions.shutdown();
+        } catch (Throwable e) {
+        }
         final var c = current.get();
         if (c != null) {
-            c.complete();
+            try {
+                c.complete();
+            } catch (Throwable e) {
+            }
         }
-        combine.stop();
+        try {
+            combine.stop();
+        } catch (Throwable e) {
+        }
     }
 
     private void accept(HashedCertifiedBlock next) {
@@ -705,10 +717,6 @@ public class CHOAM {
 
     private void reconfigure(Digest hash, Reconfigure reconfigure) {
         log.info("Setting next view id: {} on: {}", hash, params.member().getId());
-        var j = join.getAndSet(null);
-        if (j != null) {
-            j.cancel(true);
-        }
         nextViewId.set(hash);
         var pv = pendingViews.advance();
         if (pv != null) {
@@ -733,6 +741,12 @@ public class CHOAM {
             }
         } else {
             current.set(new Client(validators, getViewId()));
+        }
+        final var oj = ongoingJoin;
+        ongoingJoin = null;
+        if (oj != null) {
+            log.trace("Halting ongoing join on: {}", params.member().getId());
+            oj.set(true);
         }
         log.info("Reconfigured to view: {} committee: {} validators: {} on: {}", new Digest(reconfigure.getId()),
                  current.get().getClass().getSimpleName(), validators.entrySet()
@@ -1264,6 +1278,7 @@ public class CHOAM {
 
         @Override
         public Empty join(SignedViewMember nextView, Digest from) {
+            log.trace("Member: {} joining on: {}", from, params.member().getId());
             CHOAM.this.join(nextView, from);
             return Empty.getDefaultInstance();
         }
@@ -1276,10 +1291,9 @@ public class CHOAM {
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        protected final Digest viewId;
-
-        private final GroupIterator         servers;
-        private final Map<Member, Verifier> validators;
+        protected final Digest                viewId;
+        private final   GroupIterator         servers;
+        private final   Map<Member, Verifier> validators;
 
         public Administration(Map<Member, Verifier> validators, Digest viewId) {
             this.validators = validators;
@@ -1378,64 +1392,47 @@ public class CHOAM {
         }
 
         private void join(View view) {
-            var joining = new CompletableFuture<Void>();
-            if (!join.compareAndSet(null, joining)) {
-                log.info("Ongoing join of: {} should have been cancelled on: {}", Digest.from(view.getDiadem()),
-                         params.member().getId());
-                transitions.fail();
-                return;
+            if (ongoingJoin != null) {
+                throw new IllegalStateException("Ongoing join should have been cancelled");
             }
-            log.info("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
-                     params.member().getId());
-            var servers = new GroupIterator(validators.keySet());
-            var joined = new HashSet<Member>();
-
-            var delay = Duration.ofMillis(Entropy.nextSecureInt(5));
-
-            Thread.ofPlatform().start(() -> {
-                log.error("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
-                          params.member().getId());
-                while (!joining.isDone() && joined.size() < view.getMajority()) {
-                    try {
-                        Thread.sleep(delay.toMillis());
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                    join(view, servers, joined);
-                }
-                log.info("Finishing join of: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
-                         params.member().getId());
-                joining.complete(null);
-            });
-        }
-
-        private void join(View view, GroupIterator servers, HashSet<Member> joined) {
-            Member target = servers.next();
-            if (joined.contains(target)) {
-                log.trace("Already joined with: {} view: {} diadem: {}  on: {}", target.getId(), nextViewId.get(),
-                          Digest.from(view.getDiadem()), params.member().getId());
-                return;
-            }
-            try (var link = comm.connect(target)) {
-                join(view, link, target, joined);
-            } catch (StatusRuntimeException e) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} status:{} on: {}", target.getId(),
-                          nextViewId, Digest.from(view.getDiadem()), e.getStatus(), params.member().getId());
-            } catch (Throwable e) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
-                          Digest.from(view.getDiadem()), params.member().getId(), e);
-            }
-        }
-
-        private void join(View view, Terminal link, Member target, HashSet<Member> joined) {
-            if (link == null) {
-                log.debug("No link for: {} for joining: {} on: {}", target.getId(), Digest.from(view.getDiadem()),
-                          params.member().getId());
-                return;
-            }
-            log.trace("Joining view: {} diadem: {} on: {}", viewId, Digest.from(view.getDiadem()),
+            log.trace("Joining view: {} diadem: {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
                       params.member().getId());
+            var servers = new ConcurrentSkipListSet<>(validators.keySet());
+            var joined = new AtomicInteger();
+            var halt = new AtomicBoolean(false);
+            ongoingJoin = halt;
+            Thread.ofVirtual().start(Utils.wrapped(() -> {
+                log.trace("Starting join of: {} diadem {} on: {}", nextViewId.get(), Digest.from(view.getDiadem()),
+                          params.member().getId());
+
+                var scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+                AtomicReference<Runnable> action = new AtomicReference<>();
+                var attempts = new AtomicInteger();
+                action.set(() -> {
+                    log.trace("Join attempt: {} halt: {} joined: {} majority: {} on: {}", attempts.incrementAndGet(),
+                              halt.get(), joined.get(), view.getMajority(), params.member().getId());
+                    if (!halt.get() & joined.get() < view.getMajority()) {
+                        join(view, servers, joined);
+                        if (joined.get() >= view.getMajority()) {
+                            ongoingJoin = null;
+                            log.trace("Finished join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
+                                      Digest.from(view.getDiadem()), joined.get(), params.member().getId());
+                        } else if (!halt.get()) {
+                            log.trace("Rescheduling join of: {} diadem: {} joins: {} on: {}", nextViewId.get(),
+                                      Digest.from(view.getDiadem()), joined.get(), params.member().getId());
+                            scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
+                        }
+                    }
+                });
+                scheduler.schedule(action.get(), 50, TimeUnit.MILLISECONDS);
+            }, log()));
+        }
+
+        private void join(View view, Collection<Member> members, AtomicInteger joined) {
+            var sampled = new ArrayList<>(members);
+            Collections.shuffle(sampled);
+            log.trace("Joining view: {} diadem: {} servers: {} on: {}", viewId, Digest.from(view.getDiadem()),
+                      sampled.stream().map(Member::getId).toList(), params.member().getId());
             final var c = next.get();
             var inView = ViewMember.newBuilder(c.member)
                                    .setDiadem(view.getDiadem())
@@ -1445,18 +1442,70 @@ public class CHOAM {
                                       .setVm(inView)
                                       .setSignature(params.member().sign(inView.toByteString()).toSig())
                                       .build();
+            var countdown = new CountDownLatch(sampled.size());
+            sampled.stream().map(m -> {
+                var connection = comm.connect(m);
+                log.trace("connect to: {} is: {} on: {}", m.getId(), connection, params.member().getId());
+                return connection;
+            }).map(t -> t == null ? null : join(view, t, svm)).forEach(t -> {
+                if (t == null) {
+                    countdown.countDown();
+                } else {
+                    t.fs.addListener(() -> {
+                        try {
+                            t.fs.get();
+                            members.remove(t.m);
+                            joined.incrementAndGet();
+                            log.trace("Joined with: {} view: {} diadem: {} on: {}", t.m.getId(),
+                                      Digest.from(inView.getId()), Digest.from(view.getDiadem()),
+                                      params.member().getId());
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        } catch (ExecutionException e) {
+                            log.error("Failed to join with: {} view: {} diadem: {} on: {}", t.m.getId(), viewId,
+                                      Digest.from(view.getDiadem()), params.member().getId(), e.getCause());
+                        } catch (Throwable e) {
+                            log.error("Failed to join with: {} view: {} diadem: {} on: {}", t.m.getId(), viewId,
+                                      Digest.from(view.getDiadem()), params.member().getId(), e);
+                        } finally {
+                            countdown.countDown();
+                        }
+                    }, ImmediateExecutor.INSTANCE);
+                }
+            });
             try {
-                link.join(svm);
-                joined.add(target);
-                log.trace("Joined with: {} view: {} diadem: {} on: {}", target.getId(), viewId,
-                          Digest.from(view.getDiadem()), params.member().getId());
+                countdown.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private Attempt join(View view, Terminal t, SignedViewMember svm) {
+            try {
+                log.trace("Attempting to join with: {} context: {} diadem: {} on: {}", t.getMember().getId(),
+                          context().getId(), Digest.from(view.getDiadem()), params.member().getId());
+                return new Attempt(t.getMember(), t.join(svm));
             } catch (StatusRuntimeException sre) {
                 log.trace("Failed join attempt: {} with: {} view: {} diadem: {} on: {}", sre.getStatus(),
-                          target.getId(), nextViewId, Digest.from(view.getDiadem()), params.member().getId(), sre);
-            } catch (Throwable t) {
-                log.trace("Failed join attempt with: {} view: {} diadem: {} on: {}", target.getId(), nextViewId,
-                          Digest.from(view.getDiadem()), params.member().getId(), t);
+                          t.getMember().getId(), nextViewId, Digest.from(view.getDiadem()), params.member().getId(),
+                          sre);
+            } catch (Throwable throwable) {
+                log.error("Failed join attempt with: {} view: {} diadem: {} on: {}", t.getMember().getId(), nextViewId,
+                          Digest.from(view.getDiadem()), params.member().getId(), throwable);
+            } finally {
+                try {
+                    t.close();
+                } catch (IOException e) {
+                    // ignored
+                }
             }
+            return null;
+        }
+
+        record Attempt(Member m, ListenableFuture<Empty> fs) {
+        }
+
+        private record JoinState(AtomicBoolean halt, Thread joining) {
         }
     }
 

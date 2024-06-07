@@ -50,7 +50,7 @@ public class BootstrappingTest extends AbstractDhtTest {
     @AfterEach
     public void closeClient() throws Exception {
         if (clientRouter != null) {
-            clientRouter.close(Duration.ofSeconds(3));
+            clientRouter.close(Duration.ofSeconds(0));
         }
     }
 

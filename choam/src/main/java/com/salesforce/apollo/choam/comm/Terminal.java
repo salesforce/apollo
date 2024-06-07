@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.choam.proto.*;
@@ -47,8 +49,11 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public Empty join(SignedViewMember join) {
-                return service.join(join, member.getId());
+            public ListenableFuture<Empty> join(SignedViewMember join) {
+                var j = service.join(join, member.getId());
+                SettableFuture<Empty> sf = SettableFuture.create();
+                sf.set(j);
+                return sf;
             }
 
             @Override
@@ -64,7 +69,7 @@ public interface Terminal extends Link {
 
     Blocks fetchViewChain(BlockReplication replication);
 
-    Empty join(SignedViewMember join);
+    ListenableFuture<Empty> join(SignedViewMember join);
 
     Initial sync(Synchronize sync);
 }

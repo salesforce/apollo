@@ -248,19 +248,15 @@ public class ViewContext {
     public boolean validate(SignedViews sv) {
         Verifier v = verifierOf(sv);
         if (v == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("No verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
-                          params.member().getId());
-            }
+            log.debug("No verifier: {} for signed view on: {}", Digest.from(sv.getViews().getMember()),
+                      params.member().getId());
             return false;
         }
         var validated = v.verify(JohnHancock.from(sv.getSignature()), sv.getViews().toByteString());
         if (!validated) {
-            if (log.isTraceEnabled()) {
-                log.trace("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
-                          params().member().getId());
-            }
-        } else if (log.isTraceEnabled()) {
+            log.trace("Cannot validate views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
+                      params().member().getId());
+        } else {
             log.trace("Validated views signed by: {} on: {}", Digest.from(sv.getViews().getMember()),
                       params().member().getId());
         }
@@ -282,8 +278,7 @@ public class ViewContext {
     private Verifier getVerifier(Member m) {
         if (m == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Unable to get verifier by non existent member: {} on: {}", m.getId(),
-                          params.member().getId());
+                log.debug("Unable to get verifier by non existent member on: {}", params.member().getId());
             }
             return null;
         }

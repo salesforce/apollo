@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -46,7 +46,6 @@ public class Enclave implements RouterSupplier {
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
     private static final Logger                                    log         = LoggerFactory.getLogger(Enclave.class);
 
-    private final Executor            executor       = Executors.newVirtualThreadPerTaskExecutor();
     private final DomainSocketAddress bridge;
     private final Consumer<Digest>    contextRegistration;
     private final DomainSocketAddress endpoint;
@@ -63,10 +62,6 @@ public class Enclave implements RouterSupplier {
         this.fromString = qb64(from.getId());
     }
 
-    public void close() {
-        eventLoopGroup.shutdownGracefully();
-    }
-
     /**
      * @return the DomainSocketAddress for this Enclave
      */
@@ -77,7 +72,10 @@ public class Enclave implements RouterSupplier {
     @Override
     public RouterImpl router(ServerConnectionCache.Builder cacheBuilder, Supplier<Limit> serverLimit,
                              LimitsRegistry limitsRegistry, List<ServerInterceptor> interceptors,
-                             Predicate<FernetServerInterceptor.HashedToken> validator) {
+                             Predicate<FernetServerInterceptor.HashedToken> validator, ExecutorService executor) {
+        if (executor == null) {
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+        }
         var limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
         if (limitsRegistry != null) {
             limitsBuilder.metricRegistry(limitsRegistry);
@@ -132,7 +130,6 @@ public class Enclave implements RouterSupplier {
         };
         final var builder = NettyChannelBuilder.forAddress(bridge)
                                                .withOption(ChannelOption.TCP_NODELAY, true)
-                                               .executor(executor)
                                                .eventLoopGroup(eventLoopGroup)
                                                .channelType(channelType)
                                                .usePlaintext()

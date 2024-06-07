@@ -83,10 +83,10 @@ public class E2ETest {
             views.clear();
         }
 
-        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
+        communications.forEach(e -> e.close(Duration.ofSeconds(0)));
         communications.clear();
 
-        gateways.forEach(e -> e.close(Duration.ofSeconds(1)));
+        gateways.forEach(e -> e.close(Duration.ofSeconds(0)));
         gateways.clear();
     }
 
@@ -209,7 +209,7 @@ public class E2ETest {
     }
 
     private void post() {
-        communications.forEach(e -> e.close(Duration.ofSeconds(1)));
+        communications.forEach(e -> e.close(Duration.ofSeconds(0)));
         views.forEach(view -> view.stop());
         System.out.println("Node 0 metrics");
         ConsoleReporter.forRegistry(node0Registry)

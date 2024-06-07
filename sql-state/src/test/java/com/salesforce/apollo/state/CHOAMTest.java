@@ -11,6 +11,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.UnsafeExecutors;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
@@ -82,6 +83,7 @@ public class CHOAMTest {
     private       MetricRegistry               registry;
     private       Map<Digest, Router>          routers;
     private       ScheduledExecutorService     scheduler;
+    private       ExecutorService              executor;
 
     private static Txn initialInsert() {
         return Txn.newBuilder()
@@ -96,7 +98,7 @@ public class CHOAMTest {
     @AfterEach
     public void after() throws Exception {
         if (routers != null) {
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
             routers = null;
         }
         if (choams != null) {
@@ -106,6 +108,9 @@ public class CHOAMTest {
         if (scheduler != null) {
             scheduler.shutdownNow();
             scheduler = null;
+        }
+        if (executor != null) {
+            executor.shutdown();
         }
         updaters.values().forEach(up -> up.close());
         updaters.clear();
@@ -122,7 +127,8 @@ public class CHOAMTest {
 
     @BeforeEach
     public void before() throws Exception {
-        scheduler = Executors.newScheduledThreadPool(10);
+        scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -155,7 +161,8 @@ public class CHOAMTest {
         members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(30));
+            var localRouter = new LocalServer(prefix, m).router(ServerConnectionCache.newBuilder().setTarget(30),
+                                                                executor);
             return localRouter;
         }));
         choams = members.stream()
@@ -230,7 +237,7 @@ public class CHOAMTest {
                                                                       .toList());
         } finally {
             choams.values().forEach(e -> e.stop());
-            routers.values().forEach(e -> e.close(Duration.ofSeconds(1)));
+            routers.values().forEach(e -> e.close(Duration.ofSeconds(0)));
 
             System.out.println("Final block height: " + members.stream()
                                                                .map(m -> updaters.get(m))

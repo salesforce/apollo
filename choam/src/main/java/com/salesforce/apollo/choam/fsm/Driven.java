@@ -8,11 +8,8 @@ package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.google.protobuf.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 /**
  * Leaf action interface for the Producer FSM
@@ -26,8 +23,6 @@ public interface Driven {
     void checkpoint();
 
     void complete();
-
-    void create(List<ByteString> preblock, boolean last);
 
     void fail();
 
@@ -147,11 +142,6 @@ public interface Driven {
 
         default Transitions checkpointed() {
             throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions create(List<ByteString> preblock, boolean last) {
-            context().create(preblock, last);
-            return null;
         }
 
         default Transitions establish() {

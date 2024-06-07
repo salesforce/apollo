@@ -79,8 +79,8 @@ public class PublisherTest {
             client.publish(KERL_.getDefaultInstance(), Collections.emptyList());
             client.publishEvents(Collections.emptyList(), Collections.emptyList());
         } finally {
-            clientRouter.close(Duration.ofSeconds(1));
-            serverRouter.close(Duration.ofSeconds(1));
+            clientRouter.close(Duration.ofSeconds(0));
+            serverRouter.close(Duration.ofSeconds(0));
         }
 
     }

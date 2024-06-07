@@ -84,8 +84,8 @@ public class LocalServerTest {
         assertNotNull(resultB);
         assertEquals("Hello Server A", resultB.unpack(ByteMessage.class).getContents().toStringUtf8());
 
-        routerA.close(Duration.ofSeconds(1));
-        routerB.close(Duration.ofSeconds(1));
+        routerA.close(Duration.ofSeconds(0));
+        routerB.close(Duration.ofSeconds(0));
     }
 
     public interface TestIt {

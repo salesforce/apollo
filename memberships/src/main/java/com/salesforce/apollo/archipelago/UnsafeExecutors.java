@@ -39,7 +39,10 @@ public class UnsafeExecutors {
     }
 
     public static ExecutorService newVirtualThreadPerTaskExecutor() {
-        return virtualThreadExecutor(new ForkJoinPool());
+        var executor = (ThreadPoolExecutor) Executors.newCachedThreadPool();
+        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors());
+        executor.prestartAllCoreThreads();
+        return virtualThreadExecutor(executor);
     }
 
     public static <B extends Thread.Builder> B configureBuilderExecutor(B builder, Executor executor) {
@@ -60,6 +63,94 @@ public class UnsafeExecutors {
         } catch (Throwable e) {
             throw new AssertionError(e);
         }
+    }
+
+    public static ThreadPoolExecutor newCachedThreadPool(int corePoolSize) {
+        return newCachedThreadPool(corePoolSize, true);
+    }
+
+    public static ThreadPoolExecutor newCachedThreadPool(int corePoolSize, boolean prestart) {
+        var executorService = newCachedThreadPool(corePoolSize, new ForkJoinPool());
+        if (prestart) {
+            executorService.prestartAllCoreThreads();
+        }
+        return executorService;
+    }
+
+    public static ThreadPoolExecutor newCachedThreadPool(int corePoolSize, ExecutorService executor) {
+        ThreadFactory factory = r -> {
+            var builder = Thread.ofVirtual();
+            setExecutor(builder, executor);
+            return builder.unstarted(r);
+        };
+        return new ThreadPoolExecutor(corePoolSize, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+                                      new SynchronousQueue<Runnable>(), factory) {
+            @Override
+            public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+                return executor.awaitTermination(timeout, unit);
+            }
+
+            @Override
+            public boolean isShutdown() {
+                return executor.isShutdown();
+            }
+
+            @Override
+            public boolean isTerminated() {
+                return executor.isTerminated() && super.isTerminated();
+            }
+
+            @Override
+            public void shutdown() {
+                executor.shutdown();
+                super.shutdown();
+            }
+
+            @Override
+            public List<Runnable> shutdownNow() {
+                var returned = executor.shutdownNow();
+                super.shutdownNow();
+                return returned;
+            }
+        };
+    }
+
+    public static ExecutorService newFixedThreadPool(int nThreads, ExecutorService executor) {
+        ThreadFactory factory = r -> {
+            var builder = Thread.ofVirtual();
+            setExecutor(builder, executor);
+            return builder.unstarted(r);
+        };
+        return new ThreadPoolExecutor(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS,
+                                      new LinkedBlockingQueue<Runnable>(), factory) {
+            @Override
+            public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+                return executor.awaitTermination(timeout, unit);
+            }
+
+            @Override
+            public boolean isShutdown() {
+                return executor.isShutdown();
+            }
+
+            @Override
+            public boolean isTerminated() {
+                return executor.isTerminated() && super.isTerminated();
+            }
+
+            @Override
+            public void shutdown() {
+                executor.shutdown();
+                super.shutdown();
+            }
+
+            @Override
+            public List<Runnable> shutdownNow() {
+                var returned = executor.shutdownNow();
+                super.shutdownNow();
+                return returned;
+            }
+        };
     }
 
     private static class BTB {

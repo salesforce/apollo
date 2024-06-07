@@ -109,8 +109,8 @@ public class GorgoneionTest {
                                                                                     .build())
                                                    .setNonce(fs)
                                                    .build(), Duration.ofSeconds(1));
-        gorgonRouter.close(Duration.ofSeconds(1));
-        clientRouter.close(Duration.ofSeconds(1));
+        gorgonRouter.close(Duration.ofSeconds(0));
+        clientRouter.close(Duration.ofSeconds(0));
         assertNotNull(invitation);
         assertNotEquals(Validations.getDefaultInstance(), invitation);
         assertEquals(1, invitation.getValidationsCount());

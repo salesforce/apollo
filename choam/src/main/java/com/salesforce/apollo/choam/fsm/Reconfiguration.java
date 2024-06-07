@@ -19,6 +19,8 @@ public interface Reconfiguration {
 
     void checkViews();
 
+    void chill();
+
     void complete();
 
     void failed();
@@ -60,10 +62,9 @@ public interface Reconfiguration {
                 context().certify();
             }
         }, GATHER {
-            // We have a majority of the new committee Joins
             @Override
-            public Transitions gathered() {
-                return CERTIFICATION;
+            public Transitions chill() {
+                return CHILLIN;
             }
 
             // We have a full complement of the new committee Joins
@@ -76,6 +77,29 @@ public interface Reconfiguration {
             @Entry
             public void gather() {
                 context().checkAssembly();
+            }
+
+            @Override
+            public Transitions checkAssembly() {
+                context().checkAssembly();
+                return null;
+            }
+        }, CHILLIN {
+            @Override
+            public Transitions countdownCompleted() {
+                return certified();
+            }
+
+            // We have what we have
+            @Override
+            public Transitions certified() {
+                return CERTIFICATION;
+            }
+
+            // Check to see if we already have a full complement of committee Joins
+            @Entry
+            public void chillin() {
+                context().chill();
             }
         }, PROTOCOL_FAILURE {
             @Override
@@ -139,6 +163,14 @@ public interface Reconfiguration {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions checkAssembly() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions chill() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions complete() {
             throw fsm().invalidTransitionOn();
         }
@@ -149,10 +181,6 @@ public interface Reconfiguration {
 
         default Transitions failed() {
             return Reconfigure.PROTOCOL_FAILURE;
-        }
-
-        default Transitions gathered() {
-            throw fsm().invalidTransitionOn();
         }
 
         default Transitions proposed() {

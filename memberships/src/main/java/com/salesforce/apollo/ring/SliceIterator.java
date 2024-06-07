@@ -32,13 +32,13 @@ import java.util.function.Consumer;
 public class SliceIterator<Comm extends Link> {
     private static final Logger log = LoggerFactory.getLogger(SliceIterator.class);
 
-    private final CommonCommunications<Comm, ?> comm;
-    private final String                        label;
-    private final SigningMember                 member;
-    private final List<? extends Member>        slice;
-    private final ScheduledExecutorService      scheduler;
-    private       Member                        current;
-    private       Iterator<? extends Member>    currentIteration;
+    private final    CommonCommunications<Comm, ?> comm;
+    private final    String                        label;
+    private final    SigningMember                 member;
+    private final    List<? extends Member>        slice;
+    private final    ScheduledExecutorService      scheduler;
+    private volatile Member                        current;
+    private volatile Iterator<? extends Member>    currentIteration;
 
     public SliceIterator(String label, SigningMember member, Collection<? extends Member> slice,
                          CommonCommunications<Comm, ?> comm) {

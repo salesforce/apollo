@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesforce.apollo.archipelago.ManagedServerChannel;
 import com.salesforce.apollo.archipelago.ServerConnectionCache.CreateClientCommunications;
@@ -20,12 +21,14 @@ public class TerminalClient implements Terminal {
 
     private final ManagedServerChannel              channel;
     private final TerminalGrpc.TerminalBlockingStub client;
+    private final TerminalGrpc.TerminalFutureStub   asyncClient;
     @SuppressWarnings("unused")
     private final ChoamMetrics                      metrics;
 
     public TerminalClient(ManagedServerChannel channel, ChoamMetrics metrics) {
         this.channel = channel;
         this.client = channel.wrap(TerminalGrpc.newBlockingStub(channel));
+        this.asyncClient = channel.wrap(TerminalGrpc.newFutureStub(channel));
         this.metrics = metrics;
     }
 
@@ -60,8 +63,8 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public Empty join(SignedViewMember vm) {
-        return client.join(vm);
+    public ListenableFuture<Empty> join(SignedViewMember vm) {
+        return asyncClient.join(vm);
     }
 
     public void release() {

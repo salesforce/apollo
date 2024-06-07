@@ -39,17 +39,17 @@ import static com.salesforce.apollo.cryptography.QualifiedBase64.qb64;
  */
 public class RouterImpl implements Router {
 
-    private final static Logger                                         log      = LoggerFactory.getLogger(
-    RouterImpl.class);
-    private final        ServerConnectionCache                          cache;
-    private final        ClientIdentity                                 clientIdentityProvider;
-    private final        Consumer<Digest>                               contextRegistration;
-    private final        Member                                         from;
-    private final        MutableHandlerRegistry                         registry = new MutableHandlerRegistry();
-    private final        Server                                         server;
-    private final        Map<String, RoutableService<?>>                services = new ConcurrentHashMap<>();
-    private final        AtomicBoolean                                  started  = new AtomicBoolean();
-    private final        Predicate<FernetServerInterceptor.HashedToken> validator;
+    private final static Logger log = LoggerFactory.getLogger(RouterImpl.class);
+
+    private final ServerConnectionCache                          cache;
+    private final ClientIdentity                                 clientIdentityProvider;
+    private final Consumer<Digest>                               contextRegistration;
+    private final Member                                         from;
+    private final MutableHandlerRegistry                         registry = new MutableHandlerRegistry();
+    private final Server                                         server;
+    private final Map<String, RoutableService<?>>                services = new ConcurrentHashMap<>();
+    private final AtomicBoolean                                  started  = new AtomicBoolean();
+    private final Predicate<FernetServerInterceptor.HashedToken> validator;
 
     public RouterImpl(Member from, ServerBuilder<?> serverBuilder, ServerConnectionCache.Builder cacheBuilder,
                       ClientIdentity clientIdentityProvider) {

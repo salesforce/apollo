@@ -83,7 +83,7 @@ public class RouterTest {
         msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server B", msg.getContents().toStringUtf8());
 
-        router.close(Duration.ofSeconds(1));
+        router.close(Duration.ofSeconds(0));
     }
 
     public interface TestIt {

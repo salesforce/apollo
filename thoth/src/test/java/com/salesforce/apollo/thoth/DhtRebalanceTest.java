@@ -54,7 +54,7 @@ public class DhtRebalanceTest {
 
     @AfterEach
     public void afterIt() throws Exception {
-        routers.values().forEach(r -> r.close(Duration.ofSeconds(1)));
+        routers.values().forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
         dhts.clear();
         contexts.clear();

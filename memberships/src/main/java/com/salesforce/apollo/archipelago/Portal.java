@@ -21,7 +21,7 @@ import io.netty.channel.unix.DomainSocketAddress;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -38,12 +38,12 @@ import static com.salesforce.apollo.comm.grpc.DomainSocketServerInterceptor.IMPL
 public class Portal<To extends Member> {
     private final static Class<? extends io.netty.channel.Channel> channelType = IMPL.getChannelType();
 
-    private final Executor       executor       = Executors.newVirtualThreadPerTaskExecutor();
-    private final String         agent;
-    private final EventLoopGroup eventLoopGroup = IMPL.getEventLoopGroup();
-    private final Demultiplexer  inbound;
-    private final Duration       keepAlive;
-    private final Demultiplexer  outbound;
+    private final ExecutorService executor       = Executors.newVirtualThreadPerTaskExecutor();
+    private final String          agent;
+    private final EventLoopGroup  eventLoopGroup = IMPL.getEventLoopGroup();
+    private final Demultiplexer   inbound;
+    private final Duration        keepAlive;
+    private final Demultiplexer   outbound;
 
     public Portal(Digest agent, ServerBuilder<?> inbound, Function<String, ManagedChannel> outbound,
                   DomainSocketAddress bridge, Duration keepAlive, Function<String, DomainSocketAddress> router) {
@@ -63,6 +63,7 @@ public class Portal<To extends Member> {
     public void close(Duration await) {
         inbound.close(await);
         outbound.close(await);
+        executor.shutdown();
     }
 
     public void start() throws IOException {

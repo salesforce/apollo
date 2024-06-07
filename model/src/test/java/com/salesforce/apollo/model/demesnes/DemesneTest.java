@@ -186,9 +186,9 @@ public class DemesneTest {
         msg = resultB.unpack(ByteMessage.class);
         assertEquals("Hello Server B", msg.getContents().toStringUtf8());
 
-        portal.close(Duration.ofSeconds(1));
-        router1.close(Duration.ofSeconds(1));
-        router2.close(Duration.ofSeconds(1));
+        portal.close(Duration.ofSeconds(0));
+        router1.close(Duration.ofSeconds(0));
+        router2.close(Duration.ofSeconds(0));
     }
 
     @Test

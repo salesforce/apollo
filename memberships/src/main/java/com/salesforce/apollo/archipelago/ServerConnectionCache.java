@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -44,18 +45,19 @@ import java.util.function.Supplier;
  */
 public class ServerConnectionCache {
 
-    private final static Logger                                  log   = LoggerFactory.getLogger(
-    ServerConnectionCache.class);
-    private final        Map<Member, ReleasableManagedChannel>   cache = new HashMap<>();
-    private final        Clock                                   clock;
-    private final        ServerConnectionFactory                 factory;
-    private final        ReentrantLock                           lock  = new ReentrantLock(true);
-    private final        ServerConnectionCacheMetrics            metrics;
-    private final        Duration                                minIdle;
-    private final        PriorityQueue<ReleasableManagedChannel> queue = new PriorityQueue<>();
-    private final        int                                     target;
-    private final        Digest                                  member;
-    private final        CallCredentials                         credentials;
+    private final static Logger log = LoggerFactory.getLogger(ServerConnectionCache.class);
+
+    private final Map<Member, ReleasableManagedChannel>   cache = new HashMap<>();
+    private final Clock                                   clock;
+    private final ServerConnectionFactory                 factory;
+    private final ReentrantLock                           lock  = new ReentrantLock(true);
+    private final ServerConnectionCacheMetrics            metrics;
+    private final Duration                                minIdle;
+    private final PriorityQueue<ReleasableManagedChannel> queue = new PriorityQueue<>();
+    private final int                                     target;
+    private final Digest                                  member;
+    private final CallCredentials                         credentials;
+    private final AtomicBoolean                           open  = new AtomicBoolean(true);
 
     public ServerConnectionCache(Digest member, CallCredentials credentials, ServerConnectionFactory factory,
                                  int target, Duration minIdle, Clock clock, ServerConnectionCacheMetrics metrics) {
@@ -74,6 +76,9 @@ public class ServerConnectionCache {
     }
 
     public ManagedServerChannel borrow(Digest context, Member to) {
+        if (!open.get()) {
+            throw new IllegalStateException("not open on: " + member);
+        }
         return lock(() -> {
             if (cache.size() >= target) {
                 log.debug("Cache target open connections exceeded: {}, opening to: {} on: {}", target, to.getId(),
@@ -110,15 +115,21 @@ public class ServerConnectionCache {
     }
 
     public <T> T borrow(Digest context, Member to, CreateClientCommunications<T> createFunction) {
+        if (!open.get()) {
+            throw new IllegalStateException("not open on: " + member);
+        }
         return createFunction.create(borrow(context, to));
     }
 
     public void close() {
+        if (!open.compareAndSet(true, false)) {
+            return;
+        }
         lock(() -> {
             log.info("Closing connection cache on: {}", member);
             for (ReleasableManagedChannel conn : new ArrayList<>(cache.values())) {
                 try {
-                    conn.channel.shutdownNow();
+                    conn.channel.shutdown();
                     if (metrics != null) {
                         metrics.channelOpenDuration().update(Duration.between(conn.created, Instant.now(clock)));
                         metrics.openConnections().dec();
@@ -134,6 +145,9 @@ public class ServerConnectionCache {
     }
 
     public void release(ReleasableManagedChannel connection) {
+        if (!open.get()) {
+            return;
+        }
         lock(() -> {
             if (connection.decrementBorrow()) {
                 log.debug("Releasing connection to: {} on: {}", connection.member.getId(), member);
@@ -150,7 +164,7 @@ public class ServerConnectionCache {
     private boolean close(ReleasableManagedChannel connection) {
         if (connection.isCloseable()) {
             try {
-                connection.channel.shutdownNow();
+                connection.channel.shutdown();
             } catch (Throwable t) {
                 log.debug("Error closing connection to: {} on: {}", connection.member.getId(), connection.member);
             }
