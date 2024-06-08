@@ -238,7 +238,7 @@ public class ViewAssembly {
         if (selected == null) {
             return false;
         }
-        if (proposals.size() == selected.majority) {
+        if (proposals.size() == selected.assembly.size()) {
             transitions.certified();
             return true;
         }
@@ -401,7 +401,7 @@ public class ViewAssembly {
     private class Recon implements Reconfiguration {
         @Override
         public void certify() {
-            if (proposals.size() == selected.majority) {
+            if (proposals.size() == selected.assembly.size()) {
                 log.info("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
                          nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.certified();

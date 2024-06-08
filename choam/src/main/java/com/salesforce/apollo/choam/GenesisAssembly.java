@@ -107,8 +107,8 @@ public class GenesisAssembly implements Genesis {
     @Override
     public void certify() {
         if (slate.size() != nextAssembly.size()) {
-            log.info("Not certifying genesis for: {} slate incomplete: {} on: {}", view.context().getId(),
-                     slate.keySet().stream().sorted().toList(), params().member().getId());
+            log.info("Not certifying genesis for: {} need: {} slate incomplete: {} on: {}", view.context().getId(),
+                     nextAssembly.size(), slate.keySet().stream().sorted().toList(), params().member().getId());
             return;
         }
         assert slate.size() == nextAssembly.size() : "Expected: %s members, slate: %s".formatted(nextAssembly.size(),

@@ -101,7 +101,7 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder()
                                .setGenerateGenesis(true)
-                               .setGenesisViewId(origin.prefix(entropy.nextLong()))
+                               .setGenesisViewId(origin.prefix("Slack"))
                                .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
