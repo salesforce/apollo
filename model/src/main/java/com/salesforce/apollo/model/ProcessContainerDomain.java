@@ -84,6 +84,7 @@ public class ProcessContainerDomain extends ProcessDomain {
                                                                 .protocolNegotiator(
                                                                 new DomainSocketNegotiatorHandler.DomainSocketNegotiator(
                                                                 IMPL))
+                                                                .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                                 .withChildOption(ChannelOption.TCP_NODELAY, true)
                                                                 .channelType(IMPL.getServerDomainSocketChannelClass())
                                                                 .workerEventLoopGroup(portalEventLoopGroup)
@@ -93,6 +94,7 @@ public class ProcessContainerDomain extends ProcessDomain {
         outerContextEndpoint = new DomainSocketAddress(
         communicationsDirectory.resolve(UUID.randomUUID().toString()).toFile());
         outerContextService = NettyServerBuilder.forAddress(outerContextEndpoint)
+                                                .executor(Executors.newVirtualThreadPerTaskExecutor())
                                                 .protocolNegotiator(
                                                 new DomainSocketNegotiatorHandler.DomainSocketNegotiator(IMPL))
                                                 .withChildOption(ChannelOption.TCP_NODELAY, true)
