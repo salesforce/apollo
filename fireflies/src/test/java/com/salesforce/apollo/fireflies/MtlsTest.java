@@ -39,7 +39,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -66,8 +66,9 @@ public class MtlsTest {
         CARDINALITY = LARGE_TESTS ? 20 : 10;
     }
 
-    private final List<Router> communications = new ArrayList<>();
-    private       List<View>   views;
+    private final List<Router>    communications = new ArrayList<>();
+    private       List<View>      views;
+    private       ExecutorService executor;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -98,10 +99,14 @@ public class MtlsTest {
             communications.forEach(e -> e.close(Duration.ofSeconds(1)));
             communications.clear();
         }
+        if (executor != null) {
+            executor.shutdown();
+        }
     }
 
     @Test
     public void smoke() throws Exception {
+        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var parameters = Parameters.newBuilder().setMaximumTxfr(20).build();
         final Duration duration = Duration.ofMillis(50);
         var registry = new MetricRegistry();
@@ -128,7 +133,7 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             Router comms = new MtlsServer(node, ep, clientContextSupplier, serverContextSupplier(certWithKey)).router(
-            builder, Executors.newVirtualThreadPerTaskExecutor());
+            builder, executor);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, Verifiers.NONE, comms,
                             parameters, DigestAlgorithm.DEFAULT, metrics);
