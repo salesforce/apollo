@@ -3,7 +3,6 @@ package com.salesforce.apollo.choam;
 import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
-import com.salesforce.apollo.archipelago.UnsafeExecutors;
 import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
@@ -26,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,7 +41,6 @@ public class DynamicTest {
     private Map<Member, Router>                 routers;
     private Map<Member, CHOAM>                  choams;
     private Map<Member, DynamicContext<Member>> contexts;
-    private ExecutorService                     executor;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -64,11 +61,10 @@ public class DynamicTest {
                            .map(ControlledIdentifierMember::new)
                            .map(e -> (Member) e)
                            .toList();
-        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m, m -> new LocalServer(prefix, m).router(
-                         ServerConnectionCache.newBuilder().setTarget(cardinality * 2), executor)));
+                         ServerConnectionCache.newBuilder().setTarget(cardinality * 2))));
 
         var template = Parameters.newBuilder()
                                  .setGenerateGenesis(true)
@@ -219,9 +215,6 @@ public class DynamicTest {
             routers = null;
         }
         members = null;
-        if (executor != null) {
-            executor.shutdown();
-        }
     }
 
     private CHOAM constructCHOAM(SigningMember m, Parameters.Builder params, Context<Member> context) {

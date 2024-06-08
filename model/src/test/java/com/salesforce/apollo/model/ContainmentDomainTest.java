@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.archipelago.EndpointProvider;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -33,7 +36,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -48,7 +50,6 @@ public class ContainmentDomainTest {
     "Give me food or give me slack or kill me".getBytes());
     private final        ArrayList<Domain> domains         = new ArrayList<>();
     private final        ArrayList<Router> routers         = new ArrayList<>();
-    private              ExecutorService   executor;
 
     @AfterEach
     public void after() {
@@ -56,14 +57,10 @@ public class ContainmentDomainTest {
         domains.clear();
         routers.forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
-        if (executor != null) {
-            executor.shutdown();
-        }
     }
 
     @BeforeEach
     public void before() throws Exception {
-        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         final var commsDirectory = Path.of("target/comms");
         commsDirectory.toFile().mkdirs();
 
@@ -86,8 +83,7 @@ public class ContainmentDomainTest {
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         identities.forEach((d, id) -> {
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                     executor);
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             routers.add(localRouter);
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofMinutes(1),

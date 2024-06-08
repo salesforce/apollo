@@ -29,7 +29,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -63,7 +62,6 @@ public class SwarmTest {
     private       MetricRegistry                          node0Registry;
     private       MetricRegistry                          registry;
     private       List<View>                              views;
-    private       ExecutorService                         executor;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -91,9 +89,6 @@ public class SwarmTest {
 
         gateways.forEach(e -> e.close(Duration.ofSeconds(1)));
         gateways.clear();
-        if (executor != null) {
-            executor.shutdown();
-        }
     }
 
     @Test
@@ -209,7 +204,6 @@ public class SwarmTest {
     }
 
     private void initialize() {
-        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var parameters = Parameters.newBuilder()
                                    .setMaxPending(50)
                                    .setMaximumTxfr(20)
@@ -241,15 +235,14 @@ public class SwarmTest {
                                                                                   .setMetrics(
                                                                                   new ServerConnectionCacheMetricsImpl(
                                                                                   frist.getAndSet(false) ? node0Registry
-                                                                                                         : registry)),
-                                                             executor);
+                                                                                                         : registry)));
             var gateway = new LocalServer(gatewayPrefix, node).router(ServerConnectionCache.newBuilder()
                                                                                            .setTarget(200)
                                                                                            .setMetrics(
                                                                                            new ServerConnectionCacheMetricsImpl(
                                                                                            frist.getAndSet(false)
-                                                                                           ? node0Registry : registry)),
-                                                                      executor);
+                                                                                           ? node0Registry
+                                                                                           : registry)));
             comms.start();
             communications.add(comms);
 

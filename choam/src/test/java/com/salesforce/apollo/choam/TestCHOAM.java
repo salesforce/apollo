@@ -8,7 +8,10 @@ package com.salesforce.apollo.choam;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
+import com.salesforce.apollo.archipelago.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -68,7 +71,6 @@ public class TestCHOAM {
     private   MetricRegistry             registry;
     private   Map<Digest, Router>        routers;
     private   ScheduledExecutorService   scheduler;
-    private   ExecutorService            executor;
 
     @AfterEach
     public void after() throws Exception {
@@ -83,9 +85,6 @@ public class TestCHOAM {
         if (scheduler != null) {
             scheduler.shutdown();
         }
-        if (executor != null) {
-            executor.shutdown();
-        }
         members = null;
         registry = null;
     }
@@ -93,7 +92,6 @@ public class TestCHOAM {
     @BeforeEach
     public void before() throws Exception {
         scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
-        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var origin = DigestAlgorithm.DEFAULT.getOrigin();
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(origin, registry);
@@ -130,7 +128,7 @@ public class TestCHOAM {
                          .collect(Collectors.toMap(m -> m.getId(), m -> new LocalServer(prefix, m).router(
                          ServerConnectionCache.newBuilder()
                                               .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
-                                              .setTarget(CARDINALITY), executor)));
+                                              .setTarget(CARDINALITY))));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);

@@ -6,7 +6,10 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.archipelago.*;
+import com.salesforce.apollo.archipelago.EndpointProvider;
+import com.salesforce.apollo.archipelago.LocalServer;
+import com.salesforce.apollo.archipelago.Router;
+import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -34,7 +37,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -53,7 +55,6 @@ public class FireFliesTest {
 
     private final List<ProcessDomain>        domains = new ArrayList<>();
     private final Map<ProcessDomain, Router> routers = new HashMap<>();
-    private       ExecutorService            executor;
 
     @AfterEach
     public void after() {
@@ -61,14 +62,10 @@ public class FireFliesTest {
         domains.clear();
         routers.values().forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
-        if (executor != null) {
-            executor.shutdown();
-        }
     }
 
     @BeforeEach
     public void before() throws Exception {
-        executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var ffParams = com.salesforce.apollo.fireflies.Parameters.newBuilder();
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -87,8 +84,7 @@ public class FireFliesTest {
         identities.forEach((digest, id) -> {
             var context = new DynamicContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             final var member = new ControlledIdentifierMember(id);
-            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30),
-                                                                     executor);
+            var localRouter = new LocalServer(prefix, member).router(ServerConnectionCache.newBuilder().setTarget(30));
             var dbUrl = String.format("jdbc:h2:mem:sql-%s-%s;DB_CLOSE_DELAY=-1", member.getId(), UUID.randomUUID());
             var pdParams = new ProcessDomain.ProcessDomainParameters(dbUrl, Duration.ofSeconds(5),
                                                                      "jdbc:h2:mem:%s-state".formatted(digest),
