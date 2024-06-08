@@ -106,12 +106,12 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void certify() {
-        if (slate.size() != nextAssembly.size()) {
+        if (slate.size() < params().majority()) {
             log.info("Not certifying genesis for: {} need: {} slate incomplete: {} on: {}", view.context().getId(),
-                     nextAssembly.size(), slate.keySet().stream().sorted().toList(), params().member().getId());
+                     params().majority(), slate.keySet().stream().sorted().toList(), params().member().getId());
             return;
         }
-        assert slate.size() == nextAssembly.size() : "Expected: %s members, slate: %s".formatted(nextAssembly.size(),
+        assert slate.size() >= params().majority() : "Expected: %s members, slate: %s".formatted(params().majority(),
                                                                                                  slate.size());
         reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
                                                                                    new NullBlock(
@@ -187,12 +187,12 @@ public class GenesisAssembly implements Genesis {
             log.trace("Cannot publish genesis, reconfiguration is NULL on: {}", params().member().getId());
             return;
         }
-        if (witnesses.size() < nextAssembly.size()) {
+        if (witnesses.size() < params().majority()) {
             log.trace("Cannot publish genesis: {} with: {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
                       params().member().getId());
             return;
         }
-        if (reconfiguration.block.getGenesis().getInitialView().getJoinsCount() < nextAssembly.size()) {
+        if (reconfiguration.block.getGenesis().getInitialView().getJoinsCount() < params().majority()) {
             log.trace("Cannot publish genesis: {} with: {} joins on: {}", reconfiguration.hash,
                       reconfiguration.block.getGenesis().getInitialView().getJoinsCount(), params().member().getId());
             return;

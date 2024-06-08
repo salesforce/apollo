@@ -424,6 +424,7 @@ public class ViewAssembly {
         }
 
         public void checkViews() {
+            countdown.set(-1);
             vote();
         }
 
@@ -440,6 +441,15 @@ public class ViewAssembly {
         @Override
         public void complete() {
             ViewAssembly.this.complete();
+        }
+
+        @Override
+        public void convened() {
+            if (viewProposals.size() == params().context().getRingCount()) {
+                transitions.proposed();
+            } else {
+                countdown.set(2);
+            }
         }
 
         @Override
