@@ -33,11 +33,15 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="warn" additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="trace" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
     <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="trace" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
