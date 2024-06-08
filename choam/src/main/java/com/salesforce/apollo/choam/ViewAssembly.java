@@ -429,6 +429,7 @@ public class ViewAssembly {
 
         @Override
         public void chill() {
+            countdown.set(-1);
             if (ViewAssembly.this.checkAssembly()) {
                 transitions.certified();
             } else {
@@ -455,6 +456,13 @@ public class ViewAssembly {
         @Override
         public void publishViews() {
             propose();
+        }
+
+        @Override
+        public void vibeCheck() {
+            if (ViewAssembly.this.checkAssembly()) {
+                transitions.certified();
+            }
         }
     }
 }

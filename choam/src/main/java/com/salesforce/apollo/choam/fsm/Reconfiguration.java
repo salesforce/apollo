@@ -29,6 +29,8 @@ public interface Reconfiguration {
 
     void publishViews();
 
+    void vibeCheck();
+
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
             // Publish the Views of this node
@@ -94,6 +96,12 @@ public interface Reconfiguration {
             @Override
             public Transitions certified() {
                 return CERTIFICATION;
+            }
+
+            @Override
+            public Transitions checkAssembly() {
+                context().vibeCheck();
+                return null;
             }
 
             // Check to see if we already have a full complement of committee Joins
