@@ -160,6 +160,11 @@ public interface Reconfiguration {
                 return null;
             }
 
+            @Override
+            public Transitions countdownCompleted() {
+                return null;
+            }
+
             // Complete the configuration protocol
             // The slate of the ViewAssembly now contains
             // the SignedViewMembers of the next committee

@@ -440,6 +440,7 @@ public class ViewAssembly {
 
         @Override
         public void complete() {
+            countdown.set(-1);
             ViewAssembly.this.complete();
         }
 
@@ -454,12 +455,14 @@ public class ViewAssembly {
 
         @Override
         public void failed() {
+            countdown.set(-1);
             view.onFailure();
             log.debug("Failed view assembly for: {} on: {}", nextViewId, params().member().getId());
         }
 
         @Override
         public void finish() {
+            countdown.set(-1);
             started.set(false);
         }
 
