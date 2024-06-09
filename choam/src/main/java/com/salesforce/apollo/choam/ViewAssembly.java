@@ -238,7 +238,7 @@ public class ViewAssembly {
         if (selected == null) {
             return false;
         }
-        if (proposals.size() == selected.majority) {
+        if (proposals.size() == selected.assembly.size()) {
             transitions.certified();
             return true;
         }
@@ -401,7 +401,7 @@ public class ViewAssembly {
     private class Recon implements Reconfiguration {
         @Override
         public void certify() {
-            if (proposals.size() == selected.majority) {
+            if (proposals.size() == selected.assembly.size()) {
                 log.info("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
                          nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());
                 transitions.certified();
@@ -424,11 +424,13 @@ public class ViewAssembly {
         }
 
         public void checkViews() {
+            countdown.set(-1);
             vote();
         }
 
         @Override
         public void chill() {
+            countdown.set(-1);
             if (ViewAssembly.this.checkAssembly()) {
                 transitions.certified();
             } else {
@@ -439,6 +441,15 @@ public class ViewAssembly {
         @Override
         public void complete() {
             ViewAssembly.this.complete();
+        }
+
+        @Override
+        public void convened() {
+            if (viewProposals.size() == params().context().getRingCount()) {
+                transitions.proposed();
+            } else {
+                countdown.set(2);
+            }
         }
 
         @Override
@@ -455,6 +466,13 @@ public class ViewAssembly {
         @Override
         public void publishViews() {
             propose();
+        }
+
+        @Override
+        public void vibeCheck() {
+            if (ViewAssembly.this.checkAssembly()) {
+                transitions.certified();
+            }
         }
     }
 }

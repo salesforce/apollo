@@ -40,7 +40,7 @@ public class UnsafeExecutors {
 
     public static ExecutorService newVirtualThreadPerTaskExecutor() {
         var executor = (ThreadPoolExecutor) Executors.newCachedThreadPool();
-        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors());
+        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors() * 2);
         executor.prestartAllCoreThreads();
         return virtualThreadExecutor(executor);
     }

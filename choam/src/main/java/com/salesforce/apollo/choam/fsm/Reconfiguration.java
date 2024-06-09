@@ -23,11 +23,15 @@ public interface Reconfiguration {
 
     void complete();
 
+    void convened();
+
     void failed();
 
     void finish();
 
     void publishViews();
+
+    void vibeCheck();
 
     enum Reconfigure implements Transitions {
         AWAIT_ASSEMBLY {
@@ -37,10 +41,26 @@ public interface Reconfiguration {
                 context().publishViews();
             }
 
-            // We have a majority of members submitting view proposals
+            // We have a >= majority submitting view proposals
+            @Override
+            public Transitions proposed() {
+                return CONVIENE;
+            }
+        }, CONVIENE {
+            @Override
+            public Transitions countdownCompleted() {
+                return proposed();
+            }
+
+            // We have a >= majority of members submitting view proposals
             @Override
             public Transitions proposed() {
                 return VIEW_AGREEMENT;
+            }
+
+            @Entry
+            public void conviene() {
+                context().convened();
             }
         }, CERTIFICATION {
             // We have a full complement of the committee view proposals
@@ -96,6 +116,17 @@ public interface Reconfiguration {
                 return CERTIFICATION;
             }
 
+            @Override
+            public Transitions checkAssembly() {
+                context().checkAssembly();
+                return null;
+            }
+
+            @Entry
+            public void vibin() {
+                context().vibeCheck();
+            }
+
             // Check to see if we already have a full complement of committee Joins
             @Entry
             public void chillin() {
@@ -149,12 +180,13 @@ public interface Reconfiguration {
                 return GATHER;
             }
 
-            // no op+
+            // no op
             @Override
             public Transitions proposed() {
                 return null;
             }
         }
+
     }
 
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {

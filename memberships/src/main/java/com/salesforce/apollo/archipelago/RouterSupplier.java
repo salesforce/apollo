@@ -13,7 +13,7 @@ import io.grpc.ServerInterceptor;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -21,19 +21,6 @@ import java.util.function.Supplier;
  * @author hal.hildebrand
  */
 public interface RouterSupplier {
-    static ExecutorService newCachedThreadPool(int corePoolSize, ThreadFactory threadFactory) {
-        return newCachedThreadPool(corePoolSize, threadFactory, true);
-    }
-
-    static ExecutorService newCachedThreadPool(int corePoolSize, ThreadFactory threadFactory, boolean preStart) {
-        var threadPoolExecutor = new ThreadPoolExecutor(corePoolSize, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
-                                                        new SynchronousQueue<Runnable>(), threadFactory);
-        if (preStart) {
-            threadPoolExecutor.prestartAllCoreThreads();
-        }
-        return threadPoolExecutor;
-    }
-
     default Router router() {
         return router(ServerConnectionCache.newBuilder(), RouterImpl::defaultServerLimit, null);
     }
