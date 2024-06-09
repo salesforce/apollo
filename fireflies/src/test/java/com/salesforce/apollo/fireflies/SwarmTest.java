@@ -64,6 +64,7 @@ public class SwarmTest {
     private       MetricRegistry                          registry;
     private       List<View>                              views;
     private       ExecutorService                         executor;
+    private       ExecutorService                         executor2;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -93,6 +94,9 @@ public class SwarmTest {
         gateways.clear();
         if (executor != null) {
             executor.shutdown();
+        }
+        if (executor2 != null) {
+            executor2.shutdown();
         }
     }
 
@@ -210,6 +214,7 @@ public class SwarmTest {
 
     private void initialize() {
         executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
+        executor2 = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         var parameters = Parameters.newBuilder()
                                    .setMaxPending(50)
                                    .setMaximumTxfr(20)
@@ -249,7 +254,7 @@ public class SwarmTest {
                                                                                            new ServerConnectionCacheMetricsImpl(
                                                                                            frist.getAndSet(false)
                                                                                            ? node0Registry : registry)),
-                                                                      executor);
+                                                                      executor2);
             comms.start();
             communications.add(comms);
 
