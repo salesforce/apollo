@@ -778,7 +778,7 @@ public class KerlDHT implements ProtoKERLService {
                           .stream()
                           .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                           .orElse(null);
-        var majority = context.size() == 1 ? 1 : context.majority();
+        var majority = context.size() == 1 ? 1 : context.toleranceLevel() + 1;
         if (max != null) {
             if (max.getCount() >= majority) {
                 try {
@@ -796,10 +796,10 @@ public class KerlDHT implements ProtoKERLService {
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
         log.debug("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
-                  context.majority(), member.getId());
+                  context.toleranceLevel() + 1, member.getId());
         return result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: " + context.majority()
-        + " on: " + member.getId()));
+        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: "
+        + context.toleranceLevel() + 1 + " on: " + member.getId()));
     }
 
     private void initializeSchema() {
@@ -877,7 +877,7 @@ public class KerlDHT implements ProtoKERLService {
         var max = max(gathered);
         if (max != null) {
             tally.set(max.getCount());
-            var ctxMajority = context.size() == 1 ? 1 : context.majority();
+            var ctxMajority = context.size() == 1 ? 1 : context.toleranceLevel() + 1;
             final var majority = tally.get() >= ctxMajority;
             if (majority) {
                 result.complete(max.getElement());

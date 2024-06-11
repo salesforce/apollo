@@ -82,34 +82,34 @@ import static com.salesforce.apollo.fireflies.comm.gossip.FfClient.getCreate;
  * @since 220
  */
 public class View {
-    private static final String                                      FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
-    private static final Logger                                      log                   = LoggerFactory.getLogger(
-    View.class);
-    private static final String                                      SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
-    final                CommonCommunications<Fireflies, Service>    comm;
-    final                AtomicBoolean                               started               = new AtomicBoolean();
-    private final        CommonCommunications<Entrance, Service>     approaches;
-    private final        DynamicContext<Participant>                 context;
-    private final        DigestAlgorithm                             digestAlgo;
-    private final        RingCommunications<Participant, Fireflies>  gossiper;
-    private final        AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final        List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
-    private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
+    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
+    
+    final            CommonCommunications<Fireflies, Service>    comm;
+    final            AtomicBoolean                               started               = new AtomicBoolean();
+    private final    CommonCommunications<Entrance, Service>     approaches;
+    private final    DynamicContext<Participant>                 context;
+    private final    DigestAlgorithm                             digestAlgo;
+    private final    RingCommunications<Participant, Fireflies>  gossiper;
+    private final    AtomicBoolean                               introduced            = new AtomicBoolean();
+    private final    List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
+    private final    Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
     Thread.ofVirtual().factory());
-    private final        FireflyMetrics                              metrics;
-    private final        Node                                        node;
-    private final        Map<Digest, SignedViewChange>               observations          = new ConcurrentSkipListMap<>();
-    private final        Parameters                                  params;
-    private final        ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
-    private final        RoundScheduler                              roundTimers;
-    private final        Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
-    private final        Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
-    private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
+    private final    FireflyMetrics                              metrics;
+    private final    Node                                        node;
+    private final    Map<Digest, SignedViewChange>               observations          = new ConcurrentSkipListMap<>();
+    private final    Parameters                                  params;
+    private final    ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
+    private final    RoundScheduler                              roundTimers;
+    private final    Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
+    private final    Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
+    private final    ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
     true);
-    private final        ViewManagement                              viewManagement;
-    private final        EventValidation                             validation;
-    private final        Verifiers                                   verifiers;
-    private volatile     ScheduledFuture<?>                          futureGossip;
+    private final    ViewManagement                              viewManagement;
+    private final    EventValidation                             validation;
+    private final    Verifiers                                   verifiers;
+    private volatile ScheduledFuture<?>                          futureGossip;
 
     public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
