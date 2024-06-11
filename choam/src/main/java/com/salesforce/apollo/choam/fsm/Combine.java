@@ -110,6 +110,71 @@ public interface Combine {
             public void failIt() {
                 context().fail();
             }
+
+            @Override
+            public Transitions beginCheckpoint() {
+                return null;
+            }
+
+            @Override
+            public Transitions bootstrap(HashedCertifiedBlock anchor) {
+                return null;
+            }
+
+            @Override
+            public Transitions combine() {
+                return null;
+            }
+
+            @Override
+            public Transitions fail() {
+                return null;
+            }
+
+            @Override
+            public Transitions finishCheckpoint() {
+                return null;
+            }
+
+            @Override
+            public Transitions nextView() {
+                return null;
+            }
+
+            @Override
+            public Transitions regenerate() {
+                return null;
+            }
+
+            @Override
+            public Transitions regenerated() {
+                return null;
+            }
+
+            @Override
+            public Transitions rotateViewKeys() {
+                return null;
+            }
+
+            @Override
+            public Transitions start() {
+                return null;
+            }
+
+            @Override
+            public Transitions synchd() {
+                return null;
+            }
+
+            @Override
+            public Transitions synchronizationFailed() {
+                return null;
+            }
+
+            @Override
+            public Transitions synchronizing() {
+                return null;
+            }
         }, RECOVERING {
             @Override
             public Transitions bootstrap(HashedCertifiedBlock anchor) {

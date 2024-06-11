@@ -361,11 +361,11 @@ public class CHOAM {
         }
         session.cancelAll();
         try {
-            linear.shutdown();
+            linear.shutdownNow();
         } catch (Throwable e) {
         }
         try {
-            executions.shutdown();
+            executions.shutdownNow();
         } catch (Throwable e) {
         }
         final var c = current.get();
