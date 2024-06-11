@@ -374,6 +374,12 @@ public class ViewManagement {
      * start a view change if there are any offline members or joining members
      */
     void maybeViewChange() {
+        if (context.size() == 1 && joins.size() < 3) {
+            log.info("Do not have minimum cluster size: {} required: {} for: {} on: {}", joins.size() + context.size(),
+                     4, currentView(), node.getId());
+            view.scheduleViewChange();
+            return;
+        }
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
             if (isObserver()) {
                 log.trace("Initiating view change: {} (non observer) joins: {} leaves: {} on: {}", currentView(),

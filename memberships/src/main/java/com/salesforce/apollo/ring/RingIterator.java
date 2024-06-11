@@ -171,16 +171,17 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
         if (!finalIteration) {
             log.trace(
             "Determining: {} continuation of: {} for digest: {} tally: {} majority: {} final itr: {} allow: {} on: {}",
-            current, key, context.getId(), tally.get(), context.majority(), finalIteration, allow, member.getId());
+            current, key, context.getId(), tally.get(), context.toleranceLevel() + 1, finalIteration, allow,
+            member.getId());
         }
         if (finalIteration && allow) {
             log.trace("Completing iteration: {} of: {} for digest: {} tally: {} on: {}", iteration(), key,
                       context.getId(), tally.get(), member.getId());
             if (failedMajority != null && !majorityFailed) {
-                if (tally.get() < context.majority()) {
+                if (tally.get() < context.toleranceLevel() + 1) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for digest: {} tally: {} required: {} on: {}", key,
-                              context.getId(), tally.get(), context.majority(), member.getId());
+                              context.getId(), tally.get(), context.toleranceLevel() + 1, member.getId());
                     failedMajority.run();
                 }
             }

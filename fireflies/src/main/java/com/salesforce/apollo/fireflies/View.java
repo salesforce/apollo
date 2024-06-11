@@ -85,7 +85,7 @@ public class View {
     private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
     private static final Logger log                   = LoggerFactory.getLogger(View.class);
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
-    
+
     final            CommonCommunications<Fireflies, Service>    comm;
     final            AtomicBoolean                               started               = new AtomicBoolean();
     private final    CommonCommunications<Entrance, Service>     approaches;
@@ -343,8 +343,8 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var superMajority =
-            context.size() == 1 ? 1 : context.getRingCount() - ((context.getRingCount() - 1) / 4);
+            var rings = context.getRingCount();
+            final var superMajority = context.size() == 1 ? 1 : rings - ((rings - 1) / 4);
             if (observations.size() < superMajority) {
                 log.trace("Do not have superMajority: {} required: {} observers: {} for: {} on: {}",
                           observations.size(), superMajority, viewManagement.observersList(), currentView(),
