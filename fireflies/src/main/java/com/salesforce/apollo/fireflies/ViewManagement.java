@@ -374,7 +374,7 @@ public class ViewManagement {
      * start a view change if there are any offline members or joining members
      */
     void maybeViewChange() {
-        if (context.size() == 1 && joins.size() < 3) {
+        if (context.size() == 1 && joins.size() < context.getRingCount() - 1) {
             log.info("Do not have minimum cluster size: {} required: {} for: {} on: {}", joins.size() + context.size(),
                      4, currentView(), node.getId());
             view.scheduleViewChange();
