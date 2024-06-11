@@ -16,6 +16,8 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.context.Context;
+import com.salesforce.apollo.context.DelegatedContext;
+import com.salesforce.apollo.context.StaticContext;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
@@ -96,7 +98,7 @@ public class KerlDHT implements ProtoKERLService {
     private final Ani                                                         ani;
     private final CachingKERL                                                 cache;
     private final JdbcConnectionPool                                          connectionPool;
-    private final Context<Member>                                             context;
+    private final DelegatedContext<Member>                                    context;
     private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
     private final double                                                      fpr;
     private final Duration                                                    operationsFrequency;
@@ -116,9 +118,7 @@ public class KerlDHT implements ProtoKERLService {
                    BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, TemporalAmount operationTimeout,
                    double falsePositiveRate, StereotomyMetrics metrics) {
-        @SuppressWarnings("unchecked")
-        final var casting = (Context<Member>) context;
-        this.context = casting;
+        this.context = new DelegatedContext<Member>((Context<Member>) new StaticContext<>(context));
         this.member = member;
         this.operationTimeout = operationTimeout;
         this.fpr = falsePositiveRate;
@@ -743,6 +743,11 @@ public class KerlDHT implements ProtoKERLService {
         return max.map(Entry::getCount).orElse(0);
     }
 
+    public void nextView(Context c, Digest diadem) {
+        log.info("Next view: {} context: {} on: {}", diadem, context.getId(), member.getId());
+        context.setContext(c);
+    }
+
     public void start(Duration duration) {
         start(duration, null);
     }
@@ -788,6 +793,8 @@ public class KerlDHT implements ProtoKERLService {
                 }
                 return;
             }
+        } else {
+            log.warn("Unable to achieve majority, max agree: 0 required: {}", majority + " on: {}", member.getId());
         }
         result.completeExceptionally(new CompletionException(
         "Unable to achieve majority, max: " + (max == null ? 0 : max.getCount()) + " required: " + majority + " on: "
@@ -795,10 +802,10 @@ public class KerlDHT implements ProtoKERLService {
     }
 
     private boolean failedMajority(CompletableFuture<?> result, int maxAgree, String operation) {
-        log.debug("Unable to achieve majority read: {}, max: {} required: {} on: {}", operation, maxAgree,
+        log.debug("Unable to achieve majority read: {}, max agree: {} required: {} on: {}", operation, maxAgree,
                   context.toleranceLevel() + 1, member.getId());
         return result.completeExceptionally(new CompletionException(
-        "Unable to achieve majority read: " + operation + ", max: " + maxAgree + " required: "
+        "Unable to achieve majority read: " + operation + ", max agree: " + maxAgree + " required: "
         + context.toleranceLevel() + 1 + " on: " + member.getId()));
     }
 
@@ -857,7 +864,7 @@ public class KerlDHT implements ProtoKERLService {
                 .stream()
                 .max(Ordering.natural().onResultOf(Entry::getCount))
                 .ifPresent(max -> tally.set(max.getCount()));
-        log.warn("{}: {} tally: {} from: {}  on: {}", action, identifier, tally.get(), destination.member().getId(),
+        log.warn("{}: {} tally: {} from: {} on: {}", action, identifier, tally.get(), destination.member().getId(),
                  member.getId());
         return !isTimedOut.get();
     }
@@ -884,6 +891,9 @@ public class KerlDHT implements ProtoKERLService {
                 log.debug("Majority: {} achieved: {}: {} tally: {} on: {}", max.getCount(), action, identifier,
                           tally.get(), member.getId());
                 return false;
+            } else {
+                log.info("Majority: {} required: {} not achieved: {}: {} tally: {} on: {}", max.getCount(), ctxMajority,
+                         action, identifier, tally.get(), member.getId());
             }
         }
         return !isTimedOut.get();
