@@ -93,7 +93,7 @@ public class GenesisAssembly implements Genesis {
         } else {
             config.setPid(pid).setnProc((short) view.roster().size());
         }
-        config.setEpochLength(7).setNumberOfEpochs(3);
+        config.setEpochLength(33).setNumberOfEpochs(-1);
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   transitions::process, transitions::nextEpoch, label);
@@ -106,13 +106,11 @@ public class GenesisAssembly implements Genesis {
 
     @Override
     public void certify() {
-        if (slate.size() < params().majority()) {
-            log.info("Not certifying genesis for: {} need: {} slate incomplete: {} on: {}", view.context().getId(),
-                     params().majority(), slate.keySet().stream().sorted().toList(), params().member().getId());
+        if (slate.size() != nextAssembly.size()) {
+            log.info("Not certifying genesis for: {} slate incomplete: {} on: {}", view.context().getId(),
+                     slate.keySet().stream().sorted().toList(), params().member().getId());
             return;
         }
-        assert slate.size() >= params().majority() : "Expected: %s members, slate: %s".formatted(params().majority(),
-                                                                                                 slate.size());
         reconfiguration = new HashedBlock(params().digestAlgorithm(), view.genesis(slate, view.context().getId(),
                                                                                    new NullBlock(
                                                                                    params().digestAlgorithm())));
@@ -163,6 +161,9 @@ public class GenesisAssembly implements Genesis {
                 .peek(j -> log.info("Gathering: {} on: {}", Digest.from(j.getMember().getVm().getId()),
                                     params().member().getId()))
                 .forEach(this::join);
+        if (slate.size() == nextAssembly.size()) {
+            transitions.gathered();
+        }
     }
 
     @Override
@@ -187,12 +188,12 @@ public class GenesisAssembly implements Genesis {
             log.trace("Cannot publish genesis, reconfiguration is NULL on: {}", params().member().getId());
             return;
         }
-        if (witnesses.size() < params().majority()) {
+        if (witnesses.size() < nextAssembly.size()) {
             log.trace("Cannot publish genesis: {} with: {} witnesses on: {}", reconfiguration.hash, witnesses.size(),
                       params().member().getId());
             return;
         }
-        if (reconfiguration.block.getGenesis().getInitialView().getJoinsCount() < params().majority()) {
+        if (reconfiguration.block.getGenesis().getInitialView().getJoinsCount() < nextAssembly.size()) {
             log.trace("Cannot publish genesis: {} with: {} joins on: {}", reconfiguration.hash,
                       reconfiguration.block.getGenesis().getInitialView().getJoinsCount(), params().member().getId());
             return;

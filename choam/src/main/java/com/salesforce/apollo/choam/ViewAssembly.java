@@ -401,6 +401,7 @@ public class ViewAssembly {
     private class Recon implements Reconfiguration {
         @Override
         public void certify() {
+            countdown.set(-1);
             if (proposals.size() == selected.assembly.size()) {
                 log.info("Certifying: {} majority: {} of: {} slate: {}  on: {}", nextViewId, selected.majority,
                          nextViewId, proposals.keySet().stream().sorted().toList(), params().member().getId());

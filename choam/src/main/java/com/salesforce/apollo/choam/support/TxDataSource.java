@@ -38,7 +38,6 @@ public class TxDataSource implements DataSource {
 
     private final    Duration                   batchInterval;
     private final    AtomicBoolean              draining    = new AtomicBoolean();
-    private final    ExponentialBackoffPolicy   drainPolicy;
     private final    Member                     member;
     private final    ChoamMetrics               metrics;
     private final    BatchingQueue<Transaction> processing;
@@ -47,10 +46,9 @@ public class TxDataSource implements DataSource {
     private volatile Thread                     blockingThread;
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
-                        Duration batchInterval, int maxBatchCount, ExponentialBackoffPolicy drainPolicy) {
+                        Duration batchInterval, int maxBatchCount) {
         this.member = member;
         this.batchInterval = batchInterval;
-        this.drainPolicy = drainPolicy;
         processing = new BatchingQueue<Transaction>(maxElements, maxBatchCount, tx -> tx.toByteString().size(),
                                                     maxBatchByteSize);
         this.metrics = metrics;
@@ -85,7 +83,7 @@ public class TxDataSource implements DataSource {
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
-                var target = Instant.now().plus(drainPolicy.nextBackoff());
+                var target = Instant.now().plus(batchInterval);
                 while (target.isAfter(Instant.now()) && builder.getAssembliesCount() == 0
                 && builder.getValidationsCount() == 0) {
                     // rinse and repeat
@@ -103,7 +101,7 @@ public class TxDataSource implements DataSource {
 
                     // sleep waiting for input
                     try {
-                        Thread.sleep(drainPolicy.getInitialBackoff().dividedBy(2).toMillis());
+                        Thread.sleep(batchInterval.dividedBy(2).toMillis());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return ByteString.EMPTY;

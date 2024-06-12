@@ -6,15 +6,6 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.security.SecureRandom;
-import java.time.Duration;
-
-import org.junit.jupiter.api.Test;
-
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -22,6 +13,12 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import org.junit.jupiter.api.Test;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author hal.hildebrand
@@ -34,7 +31,7 @@ public class TxDataSourceTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier()), 100, null, 1024,
-                                           Duration.ofMillis(100), 100, ExponentialBackoffPolicy.newBuilder().build());
+                                           Duration.ofMillis(100), 100);
         Transaction tx = Transaction.newBuilder()
                                     .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();

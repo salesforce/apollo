@@ -56,7 +56,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
                          ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
-                         ExponentialBackoffPolicy.Builder drainPolicy, boolean generateGenesis) {
+                         boolean generateGenesis) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -677,14 +677,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private ReliableBroadcaster.Parameters   combine               = ReliableBroadcaster.Parameters.newBuilder()
                                                                                                        .build();
         private DigestAlgorithm                  digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder()
-                                                                                                 .setInitialBackoff(
-                                                                                                 Duration.ofMillis(5))
-                                                                                                 .setJitter(0.2)
-                                                                                                 .setMultiplier(1.2)
-                                                                                                 .setMaxBackoff(
-                                                                                                 Duration.ofMillis(
-                                                                                                 500));
         private Digest                           genesisViewId;
         private Duration                         gossipDuration        = Duration.ofSeconds(1);
         private int                              maxCheckpointSegments = 200;
@@ -709,7 +701,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, crowns, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, regenerationCycles, bootstrap, producer, mvBuilder,
-                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, drainPolicy, generateGenesis);
+                                  txnLimiterBuilder, submitPolicy, checkpointSegmentSize, generateGenesis);
         }
 
         @Override
@@ -726,7 +718,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                    producer.batchInterval, producer.maxBatchCount(), producer.maxGossipDelay));
             clone.setTxnLimiterBuilder(txnLimiterBuilder.clone());
             clone.setSubmitPolicy(submitPolicy.clone());
-            clone.setDrainPolicy(drainPolicy.clone());
             return clone;
         }
 
@@ -780,15 +771,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
-            return this;
-        }
-
-        public ExponentialBackoffPolicy.Builder getDrainPolicy() {
-            return drainPolicy;
-        }
-
-        public Builder setDrainPolicy(ExponentialBackoffPolicy.Builder drainPolicy) {
-            this.drainPolicy = drainPolicy;
             return this;
         }
 

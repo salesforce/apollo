@@ -76,8 +76,7 @@ public class Producer {
         maxEpoch = ep.getEpochLength();
 
         ds = new TxDataSource(params.member(), blocks, params.metrics(), producerParams.maxBatchByteSize(),
-                              producerParams.batchInterval(), producerParams.maxBatchCount(),
-                              params().drainPolicy().build());
+                              producerParams.batchInterval(), producerParams.maxBatchCount());
 
         log.debug("Producer max elements: {} reconfiguration epoch: {} on: {}", blocks, maxEpoch,
                   params.member().getId());

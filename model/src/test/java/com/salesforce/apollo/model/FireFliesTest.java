@@ -11,7 +11,6 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
-import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
@@ -57,7 +56,7 @@ public class FireFliesTest {
 
     @AfterEach
     public void after() {
-        domains.forEach(n -> n.stop());
+        domains.forEach(ProcessDomain::stop);
         domains.clear();
         routers.values().forEach(r -> r.close(Duration.ofSeconds(0)));
         routers.clear();
@@ -78,9 +77,10 @@ public class FireFliesTest {
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
-        var identities = IntStream.range(0, CARDINALITY).mapToObj(i -> {
-            return stereotomy.newIdentifier();
-        }).collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(), controlled -> controlled));
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .mapToObj(i -> stereotomy.newIdentifier())
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var sealed = FoundationSeal.newBuilder().build();
@@ -144,10 +144,10 @@ public class FireFliesTest {
 
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not join all members in all views");
 
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
-            return domains.stream().filter(d -> d.getFoundation().getContext().activeCount() != domains.size()).count()
-            == 0;
-        }));
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> domains.stream()
+                                                                      .noneMatch(
+                                                                      d -> d.getFoundation().getContext().activeCount()
+                                                                      != domains.size())));
         System.out.println();
         System.out.println("******");
         System.out.println(
@@ -155,12 +155,11 @@ public class FireFliesTest {
         + " members");
         System.out.println("******");
         System.out.println();
-        domains.forEach(n -> n.start());
-        final var activated = Utils.waitForCondition(20_000, 1_000,
-                                                     () -> domains.stream().filter(c -> !c.active()).count() == 0);
+        domains.forEach(ProcessDomain::start);
+        final var activated = Utils.waitForCondition(20_000, 1_000, () -> domains.stream().allMatch(Domain::active));
         assertTrue(activated, "Domains did not become active : " + (domains.stream()
                                                                            .filter(c -> !c.active())
-                                                                           .map(d -> d.logState())
+                                                                           .map(Domain::logState)
                                                                            .toList()));
         System.out.println();
         System.out.println("******");
@@ -169,7 +168,7 @@ public class FireFliesTest {
         + " members");
         System.out.println("******");
         System.out.println();
-        var oracle = domains.get(0).getDelphi();
+        var oracle = domains.getFirst().getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         DomainTest.smoke(oracle);
     }
@@ -192,10 +191,7 @@ public class FireFliesTest {
                                                                                               .setNumberOfEpochs(12)
                                                                                               .setEpochLength(33))
                                                                            .build())
-                                 .setCheckpointBlockDelta(200)
-                                 .setDrainPolicy(ExponentialBackoffPolicy.newBuilder()
-                                                                         .setInitialBackoff(Duration.ofMillis(1))
-                                                                         .setMaxBackoff(Duration.ofMillis(1)));
+                                 .setCheckpointBlockDelta(200);
         return template;
     }
 }

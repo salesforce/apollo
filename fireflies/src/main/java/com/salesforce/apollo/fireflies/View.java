@@ -1858,7 +1858,7 @@ public class View {
         /**
          * The first message in the anti-entropy protocol. Process any digests from the inbound gossip digest. Respond
          * with the Gossip that represents the digests newer or not known in this view, as well as updates from this
-         * node based on out of date information in the supplied digests.
+         * node based on out-of-date information in the supplied digests.
          *
          * @param request - the Gossip from our partner
          * @return Teh response for Moar gossip - updates this node has which the sender is out of touch with, and

@@ -55,8 +55,12 @@ public interface Genesis {
 
             @Override
             public Transitions nextEpoch(Integer epoch) {
-                return epoch.equals(0) ? null : CERTIFICATION;
+                return null;
+            }
 
+            @Override
+            public Transitions gathered() {
+                return CERTIFICATION;
             }
 
             @Override
@@ -80,10 +84,13 @@ public interface Genesis {
                 return null;
             }
         }
-
     }
 
     interface Transitions extends FsmExecutor<Genesis, Genesis.Transitions> {
+
+        default Transitions gathered() {
+            throw fsm().invalidTransitionOn();
+        }
 
         default Transitions nextEpoch(Integer epoch) {
             throw fsm().invalidTransitionOn();

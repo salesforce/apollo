@@ -4,7 +4,6 @@ import com.salesforce.apollo.archipelago.LocalServer;
 import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.ServerConnectionCache;
 import com.salesforce.apollo.archipelago.UnsafeExecutors;
-import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -86,10 +85,7 @@ public class DynamicTest {
                                                                                               .setNumberOfEpochs(3)
                                                                                               .setEpochLength(7))
                                                                            .build())
-                                 .setCheckpointBlockDelta(checkpointBlockSize)
-                                 .setDrainPolicy(ExponentialBackoffPolicy.newBuilder()
-                                                                         .setInitialBackoff(Duration.ofMillis(1))
-                                                                         .setMaxBackoff(Duration.ofMillis(1)));
+                                 .setCheckpointBlockDelta(checkpointBlockSize);
 
         members.subList(0, 4).forEach(m -> {
             var context = (DynamicContext<Member>) contextBuilder.build();
