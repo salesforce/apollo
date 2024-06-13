@@ -25,7 +25,12 @@ public class StandardEpProvider implements EndpointProvider {
 
     public StandardEpProvider(String bindAddress, ClientAuth clientAuth, CertificateValidator validator,
                               Function<Member, String> resolver) {
-        this.bindAddress = EndpointProvider.reify(bindAddress);
+        this(EndpointProvider.reify(bindAddress), clientAuth, validator, resolver);
+    }
+
+    public StandardEpProvider(SocketAddress bindAddress, ClientAuth clientAuth, CertificateValidator validator,
+                              Function<Member, String> resolver) {
+        this.bindAddress = bindAddress;
         this.clientAuth = clientAuth;
         this.validator = validator;
         this.resolver = resolver;

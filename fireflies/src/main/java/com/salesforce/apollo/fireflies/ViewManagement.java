@@ -615,7 +615,6 @@ public class ViewManagement {
         if (observers.size() > 1 && observers.size() < context.getRingCount()) {
             log.debug("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
                       context.cardinality(), currentView(), context.getId(), node.getId());
-            assert observers.size() > 1 && observers.size() < context.getRingCount();
         }
         log.trace("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
                   context.cardinality(), currentView(), context.getId(), node.getId());

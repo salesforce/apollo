@@ -343,17 +343,15 @@ public class View {
             return;
         }
         viewChange(() -> {
-            var rings = context.getRingCount();
-            final var superMajority = context.size() == 1 ? 1 : rings - ((rings - 1) / 4);
-            if (observations.size() < superMajority) {
-                log.trace("Do not have superMajority: {} required: {} observers: {} for: {} on: {}",
-                          observations.size(), superMajority, viewManagement.observersList(), currentView(),
-                          node.getId());
+            final var majority = context.size() == 1 ? 1 : context.majority();
+            if (observations.size() < majority) {
+                log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
+                          majority, viewManagement.observersList(), currentView(), node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
-            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(),
-                     superMajority, viewManagement.observersList(), currentView(), node.getId());
+            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
+                     viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             final var current = currentView();
             observations.values()
@@ -374,15 +372,15 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            if (max != null && max.getCount() >= superMajority) {
-                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
-                         superMajority, viewManagement.cardinality(), currentView(), node.getId());
+            if (max != null && max.getCount() >= majority) {
+                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
+                         viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), superMajority, viewManagement.cardinality(),
+                         observations.size(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
             }
 
@@ -609,8 +607,6 @@ public class View {
     protected Gossip gossip(Fireflies link, int ring) {
         tick();
         if (shunned.contains(link.getMember().getId())) {
-            log.trace("Shunning gossip view: {} with: {} on: {}", currentView(), link.getMember().getId(),
-                      node.getId());
             if (metrics != null) {
                 metrics.shunnedGossip().mark();
             }
@@ -646,6 +642,8 @@ public class View {
                               node.getId());
                     break;
                 case UNAVAILABLE:
+                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                              node.getId(), sre);
                     accuse(p, ring, sre);
                     break;
                 default:
@@ -678,7 +676,7 @@ public class View {
         member.addAccusation(node.accuse(member, ring));
         pendingRebuttals.computeIfAbsent(member.getId(),
                                          d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
-        log.debug("Accuse {} on ring {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
+        log.debug("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
                   e.getMessage(), node.getId());
     }
 
@@ -1102,6 +1100,8 @@ public class View {
                         if (e.getCause() instanceof StatusRuntimeException sre) {
                             handleSRE("gossip", destination, member, sre);
                         } else {
+                            log.debug("Exception gossiping with: {} view: {} on: {}", member.getId(), currentView(),
+                                      node.getId(), e);
                             accuse(member, destination.ring(), e);
                         }
                     }
