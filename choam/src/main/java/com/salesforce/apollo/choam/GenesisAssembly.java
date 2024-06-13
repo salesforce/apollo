@@ -152,7 +152,7 @@ public class GenesisAssembly implements Genesis {
                     try {
                         return Join.parseFrom(bs);
                     } catch (InvalidProtocolBufferException e) {
-                        log.warn("error parsing join: {} on: {}", bs, params().member().getId(), e);
+                        log.trace("error parsing join: {} on: {}", bs, params().member().getId(), e);
                         return null;
                     }
                 })

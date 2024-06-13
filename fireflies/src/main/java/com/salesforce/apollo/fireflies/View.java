@@ -16,9 +16,9 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.fireflies.Binding.Bound;
@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -87,25 +88,23 @@ public class View {
     private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
 
     final            CommonCommunications<Fireflies, Service>    comm;
-    final            AtomicBoolean                               started               = new AtomicBoolean();
+    final            AtomicBoolean                               started             = new AtomicBoolean();
     private final    CommonCommunications<Entrance, Service>     approaches;
     private final    DynamicContext<Participant>                 context;
     private final    DigestAlgorithm                             digestAlgo;
     private final    RingCommunications<Participant, Fireflies>  gossiper;
-    private final    AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final    List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
-    private final    Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
-    Thread.ofVirtual().factory());
+    private final    AtomicBoolean                               introduced          = new AtomicBoolean();
+    private final    List<Consumer<ViewChange>>                  viewChangeListeners = new CopyOnWriteArrayList<>();
+    private final    Executor                                    viewNotificationQueue;
     private final    FireflyMetrics                              metrics;
     private final    Node                                        node;
-    private final    Map<Digest, SignedViewChange>               observations          = new ConcurrentSkipListMap<>();
+    private final    Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
     private final    Parameters                                  params;
-    private final    ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
+    private final    ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
     private final    RoundScheduler                              roundTimers;
-    private final    Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
-    private final    Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
-    private final    ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
-    true);
+    private final    Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
+    private final    Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
+    private final    ReadWriteLock                               viewChange;
     private final    ViewManagement                              viewManagement;
     private final    EventValidation                             validation;
     private final    Verifiers                                   verifiers;
@@ -141,6 +140,8 @@ public class View {
         gossiper.ignoreSelf();
         this.validation = validation;
         this.verifiers = verifiers;
+        viewNotificationQueue = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+        viewChange = new ReentrantReadWriteLock(true);
     }
 
     /**
@@ -170,7 +171,7 @@ public class View {
     /**
      * Deregister the listener
      */
-    public void deregister(BiConsumer<Context, Digest> listener) {
+    public void deregister(Consumer<ViewChange> listener) {
         viewChangeListeners.remove(listener);
     }
 
@@ -191,7 +192,7 @@ public class View {
     /**
      * Register the listener to receive view changes
      */
-    public void register(BiConsumer<Context, Digest> listener) {
+    public void register(Consumer<ViewChange> listener) {
         viewChangeListeners.add(listener);
     }
 
@@ -416,14 +417,15 @@ public class View {
     }
 
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
-        final var current = currentView();
-        var sc = context.asStatic();
+        final var viewChange = new ViewChange(context.asStatic(), currentView(),
+                                              joining.stream().map(SelfAddressingIdentifier::getDigest).toList(),
+                                              Collections.unmodifiableList(leaving));
         viewNotificationQueue.execute(Utils.wrapped(() -> {
             viewChangeListeners.forEach(listener -> {
                 try {
                     log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
                               currentView(), context.size(), joining.size(), leaving.size(), node.getId());
-                    listener.accept(sc, current);
+                    listener.accept(viewChange);
                 } catch (Throwable e) {
                     log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
                 }

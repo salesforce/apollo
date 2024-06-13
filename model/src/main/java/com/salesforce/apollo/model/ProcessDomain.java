@@ -10,6 +10,7 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.SignatureAlgorithm;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined, 'natch.
@@ -51,7 +53,7 @@ public class ProcessDomain extends Domain {
     private final   Verifiers.DelegatedVerifiers        verifiers;
     private final   ProcessDomainParameters             parameters;
     private final   List<BiConsumer<Context, Digest>>   lifecycleListeners = new CopyOnWriteArrayList<>();
-    private final   BiConsumer<Context, Digest>         listener           = listener();
+    private final   Consumer<ViewChange>                listener           = listener();
 
     public ProcessDomain(Digest group, ControlledIdentifierMember member, ProcessDomainParameters pdParams,
                          Builder builder, Parameters.RuntimeParameters.Builder runtime, String endpoint,
@@ -118,13 +120,13 @@ public class ProcessDomain extends Domain {
         }
     }
 
-    protected BiConsumer<Context, Digest> listener() {
-        return (context, diadem) -> {
-            dht.nextView(context, diadem);
-            choam.rotateViewKeys(context, diadem);
+    protected Consumer<ViewChange> listener() {
+        return (viewChange) -> {
+            dht.nextView(viewChange);
+            choam.rotateViewKeys(viewChange);
 
-            log.info("View change: {} for: {} cardinality: {} on: {}", diadem, params.context().getId(), context.size(),
-                     params.member().getId());
+            log.info("View change: {} for: {} cardinality: {} on: {}", viewChange.diadem(), params.context().getId(),
+                     viewChange.context().size(), params.member().getId());
         };
     }
 

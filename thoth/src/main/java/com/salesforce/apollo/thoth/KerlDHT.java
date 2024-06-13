@@ -18,6 +18,7 @@ import com.salesforce.apollo.archipelago.server.FernetServerInterceptor;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.context.StaticContext;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
 import com.salesforce.apollo.cryptography.Verifier;
@@ -72,11 +73,12 @@ import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.TemporalAmount;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -108,17 +110,18 @@ public class KerlDHT implements ProtoKERLService {
     private final SigningMember                                               member;
     private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
-    private final Reconcile                                                   reconciliation = new Reconcile();
+    private final Reconcile                                                   reconciliation  = new Reconcile();
     private final ScheduledExecutorService                                    scheduler;
-    private final Service                                                     service        = new Service();
-    private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final TemporalAmount                                              operationTimeout;
+    private final Service                                                     service         = new Service();
+    private final AtomicBoolean                                               started         = new AtomicBoolean();
+    private final Duration                                                    operationTimeout;
+    private final ReadWriteLock                                               viewSynchronous = new ReentrantReadWriteLock();
 
     public KerlDHT(Duration operationsFrequency, Context<? extends Member> context, SigningMember member,
                    BiFunction<KerlDHT, KERL.AppendKERL, KERL.AppendKERL> wrap, JdbcConnectionPool connectionPool,
-                   DigestAlgorithm digestAlgorithm, Router communications, TemporalAmount operationTimeout,
+                   DigestAlgorithm digestAlgorithm, Router communications, Duration operationTimeout,
                    double falsePositiveRate, StereotomyMetrics metrics) {
-        this.context = new DelegatedContext<Member>((Context<Member>) new StaticContext<>(context));
+        this.context = new DelegatedContext<>((Context<Member>) new StaticContext<>(context));
         this.member = member;
         this.operationTimeout = operationTimeout;
         this.fpr = falsePositiveRate;
@@ -162,7 +165,7 @@ public class KerlDHT implements ProtoKERLService {
 
     public KerlDHT(Duration operationsFrequency, Context<? extends Member> context, SigningMember member,
                    JdbcConnectionPool connectionPool, DigestAlgorithm digestAlgorithm, Router communications,
-                   TemporalAmount operationTimeout, double falsePositiveRate, StereotomyMetrics metrics) {
+                   Duration operationTimeout, double falsePositiveRate, StereotomyMetrics metrics) {
         this(operationsFrequency, context, member, (t, k) -> k, connectionPool, digestAlgorithm, communications,
              operationTimeout, falsePositiveRate, metrics);
     }
@@ -201,12 +204,23 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
-        iterator.iterate(identifier, null,
-                         (link, r) -> link.append(Collections.emptyList(), Collections.singletonList(event)), null,
-                         (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                      tally, destination, "append events"),
-                         t -> completeIt(result, gathered));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null,
+                             (link, r) -> link.append(Collections.emptyList(), Collections.singletonList(event)), null,
+                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier,
+                                                                          isTimedOut, tally, destination,
+                                                                          "append events"),
+                             t -> completeIt(result, gathered));
             List<KeyState_> s = result.get().getKeyStatesList();
             return s.isEmpty() ? null : s.getFirst();
         } catch (InterruptedException e) {
@@ -218,6 +232,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -237,11 +253,22 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
-        iterator.iterate(identifier, null, (link, r) -> link.append(kerl), null,
-                         (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                      tally, destination, "append kerl"),
-                         t -> completeIt(result, gathered));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null, (link, r) -> link.append(kerl), null,
+                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier,
+                                                                          isTimedOut, tally, destination,
+                                                                          "append kerl"),
+                             t -> completeIt(result, gathered));
             return result.get().getKeyStatesList();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -252,6 +279,8 @@ public class KerlDHT implements ProtoKERLService {
                 return Collections.emptyList();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -266,11 +295,22 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KeyStates> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
-        iterator.iterate(identifier, null, (link, r) -> link.append(Collections.singletonList(event)), null,
-                         (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                      tally, destination, "append event"),
-                         t -> completeIt(result, gathered));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null, (link, r) -> link.append(Collections.singletonList(event)), null,
+                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier,
+                                                                          isTimedOut, tally, destination,
+                                                                          "append event"),
+                             t -> completeIt(result, gathered));
             var ks = result.get();
             return ks.getKeyStatesCount() == 0 ? KeyState_.getDefaultInstance() : ks.getKeyStatesList().getFirst();
         } catch (InterruptedException e) {
@@ -282,6 +322,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -290,9 +332,23 @@ public class KerlDHT implements ProtoKERLService {
         if (events.isEmpty()) {
             return Collections.emptyList();
         }
-        List<KeyState_> states = new ArrayList<>();
-        events.stream().map(this::append).forEach(states::add);
-        return states;
+        final var lock = viewSynchronous.readLock();
+        try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            List<KeyState_> states = new ArrayList<>();
+            events.stream().map(this::append).forEach(states::add);
+            return states;
+        } finally {
+            lock.lock();
+        }
     }
 
     @Override
@@ -300,11 +356,25 @@ public class KerlDHT implements ProtoKERLService {
         if (events.isEmpty()) {
             return Collections.emptyList();
         }
-        List<KeyState_> states = new ArrayList<>();
-        events.stream().map(this::append).forEach(states::add);
+        final var lock = viewSynchronous.readLock();
+        try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            List<KeyState_> states = new ArrayList<>();
+            events.stream().map(this::append).forEach(states::add);
 
-        attachments.forEach(this::append);
-        return states;
+            attachments.forEach(this::append);
+            return states;
+        } finally {
+            lock.lock();
+        }
     }
 
     @Override
@@ -323,12 +393,23 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<Empty> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
-        iterator.iterate(identifier, null, (link, r) -> link.appendAttachments(events), null,
-                         (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                      tally, destination, "append attachments"),
-                         t -> completeIt(result, gathered));
+        final var lock = viewSynchronous.readLock();
+        try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
 
         try {
+            iterator.iterate(identifier, null, (link, r) -> link.appendAttachments(events), null,
+                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier,
+                                                                          isTimedOut, tally, destination,
+                                                                          "append attachments"),
+                             t -> completeIt(result, gathered));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -339,6 +420,8 @@ public class KerlDHT implements ProtoKERLService {
                 return Empty.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -357,11 +440,22 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<Empty> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
         iterator.dontIgnoreSelf();
-        iterator.iterate(identifier, null, (link, r) -> link.appendValidations(validations), null,
-                         (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                      tally, destination, "append validations"),
-                         t -> completeIt(result, gathered));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null, (link, r) -> link.appendValidations(validations), null,
+                             (tally, futureSailor, destination) -> mutate(gathered, futureSailor, identifier,
+                                                                          isTimedOut, tally, destination,
+                                                                          "append validations"),
+                             t -> completeIt(result, gathered));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -372,6 +466,8 @@ public class KerlDHT implements ProtoKERLService {
                 return Empty.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -409,13 +505,24 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<Attachment> gathered = HashMultiset.create();
         var operation = "getAttachment(%s)".formatted(EventCoordinates.from(coordinates));
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
-                                                                    isTimedOut, destination, "get attachment",
-                                                                    Attachment.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
+                                                                        identifier, isTimedOut, destination,
+                                                                        "get attachment",
+                                                                        Attachment.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -426,6 +533,8 @@ public class KerlDHT implements ProtoKERLService {
                 return null;
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -444,13 +553,23 @@ public class KerlDHT implements ProtoKERLService {
         HashMultiset<KERL_> gathered = HashMultiset.create();
         var operation = "getKerl(%s)".formatted(Identifier.from(identifier));
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKERL(identifier),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KERL_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKERL(identifier),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KERL_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -461,6 +580,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KERL_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -483,13 +604,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyEvent_>();
         HashMultiset<KeyEvent_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyEvent_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyEvent_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -500,6 +631,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyEvent_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -519,13 +652,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyState_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyState_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -536,6 +679,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -556,13 +701,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyState_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyState(identAndSeq),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyState_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -573,6 +728,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -592,13 +749,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyState(identifier),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyState_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyState(identifier),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyState_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -609,6 +776,8 @@ public class KerlDHT implements ProtoKERLService {
                 return KeyState_.getDefaultInstance();
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -628,13 +797,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyStateWithAttachments_>();
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyStateWithAttachments_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyStateWithAttachments_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -645,6 +824,8 @@ public class KerlDHT implements ProtoKERLService {
                 return null;
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -664,13 +845,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations_>();
         HashMultiset<KeyStateWithEndorsementsAndValidations_> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                    isTimedOut, destination, operation,
-                                                                    KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(digest, null, (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                        isTimedOut, destination, operation,
+                                                                        KeyStateWithEndorsementsAndValidations_.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -681,6 +872,8 @@ public class KerlDHT implements ProtoKERLService {
                 return null;
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -700,13 +893,23 @@ public class KerlDHT implements ProtoKERLService {
         var result = new CompletableFuture<Validations>();
         HashMultiset<Validations> gathered = HashMultiset.create();
         var iterator = new RingIterator<>(operationsFrequency, context, member, scheduler, dhtComms);
-        iterator.iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
-                         () -> failedMajority(result, maxCount(gathered), operation),
-                         (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor, identifier,
-                                                                    isTimedOut, destination, operation,
-                                                                    Validations.getDefaultInstance()),
-                         t -> failedMajority(result, maxCount(gathered), operation));
+        final var lock = viewSynchronous.readLock();
         try {
+            if (!lock.tryLock(operationTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
+                log.info("Could not acquire view synchronous lock on: {}", member.getId());
+                return null;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        try {
+            iterator.iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
+                             () -> failedMajority(result, maxCount(gathered), operation),
+                             (tally, futureSailor, destination) -> read(result, gathered, tally, futureSailor,
+                                                                        identifier, isTimedOut, destination, operation,
+                                                                        Validations.getDefaultInstance()),
+                             t -> failedMajority(result, maxCount(gathered), operation));
             return result.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -717,6 +920,8 @@ public class KerlDHT implements ProtoKERLService {
                 return null;
             }
             throw new IllegalStateException(e.getCause());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -734,18 +939,16 @@ public class KerlDHT implements ProtoKERLService {
         };
     }
 
-    public <T> Entry<T> max(HashMultiset<T> gathered) {
-        return gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
-    }
-
-    public int maxCount(HashMultiset<?> gathered) {
-        final var max = gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount));
-        return max.map(Entry::getCount).orElse(0);
-    }
-
-    public void nextView(Context c, Digest diadem) {
-        log.info("Next view: {} context: {} on: {}", diadem, context.getId(), member.getId());
-        context.setContext(c);
+    public void nextView(ViewChange viewChange) {
+        final var lock = viewSynchronous.writeLock();
+        lock.lock();
+        try {
+            log.info("Next view: {} context: {} on: {}", viewChange.diadem(), viewChange.context().getId(),
+                     member.getId());
+            context.setContext(viewChange.context());
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void start(Duration duration) {
@@ -848,6 +1051,15 @@ public class KerlDHT implements ProtoKERLService {
             }
         }
         return new CombinedIntervals(intervals);
+    }
+
+    private <T> Entry<T> max(HashMultiset<T> gathered) {
+        return gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount)).orElse(null);
+    }
+
+    private int maxCount(HashMultiset<?> gathered) {
+        final var max = gathered.entrySet().stream().max(Ordering.natural().onResultOf(Multiset.Entry::getCount));
+        return max.map(Entry::getCount).orElse(0);
     }
 
     private <T> boolean mutate(HashMultiset<T> gathered, Optional<T> futureSailor, Digest identifier,
