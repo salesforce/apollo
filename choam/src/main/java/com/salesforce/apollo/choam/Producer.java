@@ -205,7 +205,7 @@ public class Producer {
         processAssemblies(aggregate);
         processTransactions(last, aggregate);
         if (last) {
-            started.set(true);
+            started.set(false);
             transitions.lastBlock();
         }
     }
@@ -262,6 +262,8 @@ public class Producer {
                        .filter(pb -> pb.published.get())
                        .max(Comparator.comparing(pb -> pb.block.height()))
                        .ifPresent(pb -> publish(pb, true));
+            } else {
+                log.trace("No txns and no beacon to publish on: {}", params().member().getId());
             }
             return;
         }

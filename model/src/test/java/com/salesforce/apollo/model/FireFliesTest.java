@@ -125,7 +125,7 @@ public class FireFliesTest {
                                       viewChange.context().cardinality(), d.getMember().getId());
                 }
             };
-            d.foundation.register(c);
+            d.foundation.register("FFTest", c);
         });
         // start seed
         final var started = new AtomicReference<>(new CountDownLatch(1));

@@ -12,15 +12,22 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
 import io.netty.handler.ssl.ClientAuth;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.UnknownHostException;
 
 /**
  * @author hal.hildebrand
  */
 public interface EndpointProvider {
     static String allocatePort() {
-        var addr = new InetSocketAddress(Utils.allocatePort());
+        InetSocketAddress addr = null;
+        try {
+            addr = new InetSocketAddress(InetAddress.getLocalHost(), Utils.allocatePort(InetAddress.getLocalHost()));
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("Cannot resolve localhost!", e);
+        }
         return HostAndPort.fromParts(addr.getHostName(), addr.getPort()).toString();
     }
 

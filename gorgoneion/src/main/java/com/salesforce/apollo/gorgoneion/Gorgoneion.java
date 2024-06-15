@@ -208,7 +208,7 @@ public class Gorgoneion {
         return null;
     }
 
-    private void notarize(Credentials credentials, Validations validations) {
+    private CompletableFuture<Validations> notarize(Credentials credentials, Validations validations) {
         final var kerl = credentials.getAttestation().getAttestation().getKerl();
         final var identifier = identifier(kerl);
         if (identifier == null) {
@@ -224,15 +224,21 @@ public class Gorgoneion {
         final var majority = context.size() == 1 ? 1 : context.majority();
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
+        var result = new CompletableFuture<Validations>();
         redirecting.iterate((link, m) -> {
             log.info("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
             link.enroll(notarization, parameters.registrationTimeout());
             return Empty.getDefaultInstance();
         }, (futureSailor, link, m) -> completeEnrollment(futureSailor, m, completed), () -> {
             if (completed.size() < majority) {
-                throw new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
+                var sre = new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
+                result.completeExceptionally(sre);
+                throw sre;
+            } else {
+                result.complete(validations);
             }
         }, parameters.frequency());
+        return result;
     }
 
     private Validations register(Credentials request) {
@@ -272,15 +278,12 @@ public class Gorgoneion {
             }
         }, parameters.frequency());
         try {
-            return validated.thenApply(v -> {
-                notarize(request, v);
-                return v;
-            }).get();
+            return validated.thenCompose(v -> notarize(request, v)).get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            throw new StatusRuntimeException(Status.INTERNAL.withCause(e.getCause()));
         }
     }
 

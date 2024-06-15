@@ -72,7 +72,7 @@ public class ProcessDomain extends Domain {
         verifiers = new Verifiers.DelegatedVerifiers(Verifiers.NONE);
         this.foundation = new View(base, getMember(), endpoint, validations, verifiers, params.communications(),
                                    ff.build(), DigestAlgorithm.DEFAULT, null);
-        foundation.register(listener);
+        foundation.register("ProcessDomain[%s]".formatted(member.getId()), listener);
     }
 
     public KerlDHT getDht() {
@@ -122,11 +122,13 @@ public class ProcessDomain extends Domain {
 
     protected Consumer<ViewChange> listener() {
         return (viewChange) -> {
-            dht.nextView(viewChange);
+            log.info("Start view change: {} for: {} cardinality: {} on: {}", viewChange.diadem(),
+                     params.context().getId(), viewChange.context().size(), params.member().getId());
             choam.rotateViewKeys(viewChange);
+            dht.nextView(viewChange);
 
-            log.info("View change: {} for: {} cardinality: {} on: {}", viewChange.diadem(), params.context().getId(),
-                     viewChange.context().size(), params.member().getId());
+            log.info("Finished view change: {} for: {} cardinality: {} on: {}", viewChange.diadem(),
+                     params.context().getId(), viewChange.context().size(), params.member().getId());
         };
     }
 

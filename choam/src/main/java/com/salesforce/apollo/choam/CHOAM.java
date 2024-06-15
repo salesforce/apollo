@@ -1239,16 +1239,16 @@ public class CHOAM {
             cancelSynchronization();
             Context<Member> memberContext = context();
             var activeCount = memberContext.size();
-            var majority = params.majority();
-            if (params.generateGenesis() && activeCount >= majority) {
+            var count = context().getRingCount();
+            if (params.generateGenesis() && activeCount >= context().getRingCount()) {
                 if (current.get() == null && current.compareAndSet(null, new Formation())) {
                     log.info(
                     "Quorum achieved, triggering regeneration. members: {} required: {} forming Genesis committee on: {}",
-                    activeCount, majority, params.member().getId());
+                    activeCount, count, params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, members: {} required: {} existing committee: {} on: {}", activeCount,
-                             majority, current.get().getClass().getSimpleName(), params.member().getId());
+                             count, current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();

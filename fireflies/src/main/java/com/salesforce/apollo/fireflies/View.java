@@ -94,7 +94,7 @@ public class View {
     private final    DigestAlgorithm                             digestAlgo;
     private final    RingCommunications<Participant, Fireflies>  gossiper;
     private final    AtomicBoolean                               introduced          = new AtomicBoolean();
-    private final    List<Consumer<ViewChange>>                  viewChangeListeners = new CopyOnWriteArrayList<>();
+    private final    Map<String, Consumer<ViewChange>>           viewChangeListeners = new HashMap<>();
     private final    Executor                                    viewNotificationQueue;
     private final    FireflyMetrics                              metrics;
     private final    Node                                        node;
@@ -192,8 +192,8 @@ public class View {
     /**
      * Register the listener to receive view changes
      */
-    public void register(Consumer<ViewChange> listener) {
-        viewChangeListeners.add(listener);
+    public void register(String key, Consumer<ViewChange> listener) {
+        viewChangeListeners.put(key, listener);
     }
 
     /**
@@ -344,7 +344,8 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var majority = context.size() == 1 ? 1 : context.majority();
+            final var supermajority = (context.getRingCount() * 3 / 4) + 1;
+            final var majority = context.size() == 1 ? 1 : supermajority;
             if (observations.size() < majority) {
                 log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
                           majority, viewManagement.observersList(), currentView(), node.getId());
@@ -421,13 +422,14 @@ public class View {
                                               joining.stream().map(SelfAddressingIdentifier::getDigest).toList(),
                                               Collections.unmodifiableList(leaving));
         viewNotificationQueue.execute(Utils.wrapped(() -> {
-            viewChangeListeners.forEach(listener -> {
+            viewChangeListeners.entrySet().forEach(entry -> {
                 try {
-                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
-                              currentView(), context.size(), joining.size(), leaving.size(), node.getId());
-                    listener.accept(viewChange);
+                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ",
+                              entry.getKey(), currentView(), context.size(), joining.size(), leaving.size(),
+                              node.getId());
+                    entry.getValue().accept(viewChange);
                 } catch (Throwable e) {
-                    log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
+                    log.error("error in view change listener: {} on: {} ", entry.getKey(), node.getId(), e);
                 }
             });
         }, log));

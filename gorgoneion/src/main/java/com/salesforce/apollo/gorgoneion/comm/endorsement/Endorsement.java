@@ -6,15 +6,13 @@
  */
 package com.salesforce.apollo.gorgoneion.comm.endorsement;
 
-import com.google.common.util.concurrent.SettableFuture;
-import com.google.protobuf.Empty;
+import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.gorgoneion.proto.Credentials;
 import com.salesforce.apollo.gorgoneion.proto.MemberSignature;
 import com.salesforce.apollo.gorgoneion.proto.Nonce;
 import com.salesforce.apollo.gorgoneion.proto.Notarization;
-import com.salesforce.apollo.stereotomy.event.proto.Validation_;
-import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.event.proto.Validation_;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -32,13 +30,11 @@ public interface Endorsement extends Link {
 
             @Override
             public MemberSignature endorse(Nonce nonce, Duration timer) {
-                SettableFuture<MemberSignature> f = SettableFuture.create();
                 return service.endorse(nonce, member.getId());
             }
 
             @Override
             public void enroll(Notarization notarization, Duration timeout) {
-                SettableFuture<Empty> f = SettableFuture.create();
                 service.enroll(notarization, member.getId());
             }
 
@@ -49,7 +45,6 @@ public interface Endorsement extends Link {
 
             @Override
             public Validation_ validate(Credentials credentials, Duration timeout) {
-                SettableFuture<Validation_> f = SettableFuture.create();
                 return service.validate(credentials, member.getId());
             }
         };

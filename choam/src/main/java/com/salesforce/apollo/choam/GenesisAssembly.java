@@ -128,7 +128,7 @@ public class GenesisAssembly implements Genesis {
             try {
                 return Validate.parseFrom(bs);
             } catch (InvalidProtocolBufferException e) {
-                log.warn("Unable to parse preblock: {} on: {}", bs, params().member().getId(), e);
+                log.trace("Unable to parse preblock: {} on: {}", bs, params().member().getId(), e);
                 return null;
             }
         }).filter(Objects::nonNull).filter(v -> !v.equals(Validate.getDefaultInstance())).forEach(this::certify);
@@ -173,7 +173,7 @@ public class GenesisAssembly implements Genesis {
                     try {
                         return Validations.parseFrom(bs);
                     } catch (InvalidProtocolBufferException e) {
-                        log.warn("error parsing validations: {} on: {}", bs, params().member().getId(), e);
+                        log.trace("error parsing validations: {} on: {}", bs, params().member().getId(), e);
                         return null;
                     }
                 })
