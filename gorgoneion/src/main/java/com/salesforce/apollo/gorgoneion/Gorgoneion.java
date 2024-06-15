@@ -163,11 +163,11 @@ public class Gorgoneion {
         final var redirecting = new SliceIterator<>("Nonce Endorsement", member, successors, endorsementComm);
         Set<MemberSignature> endorsements = Collections.newSetFromMap(new ConcurrentHashMap<>());
         var generated = new CompletableFuture<SignedNonce>();
-        redirecting.iterate((link, m) -> {
+        redirecting.iterate((link) -> {
             log.info("Request signing nonce for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
                      member.getId());
             return link.endorse(nonce, parameters.registrationTimeout());
-        }, (futureSailor, link, m) -> completeEndorsement(futureSailor, m, endorsements), () -> {
+        }, (futureSailor, _, link) -> completeEndorsement(futureSailor, link.getMember(), endorsements), () -> {
             if (endorsements.size() < majority) {
                 generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription(
                 "Cannot gather required nonce endorsements: %s required: %s on: %s".formatted(endorsements.size(),
@@ -225,11 +225,11 @@ public class Gorgoneion {
         SliceIterator<Endorsement> redirecting = new SliceIterator<>("Enrollment", member, successors, endorsementComm);
         var completed = new HashSet<Member>();
         var result = new CompletableFuture<Validations>();
-        redirecting.iterate((link, m) -> {
+        redirecting.iterate((link) -> {
             log.info("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
             link.enroll(notarization, parameters.registrationTimeout());
             return Empty.getDefaultInstance();
-        }, (futureSailor, link, m) -> completeEnrollment(futureSailor, m, completed), () -> {
+        }, (futureSailor, _, link) -> completeEnrollment(futureSailor, link.getMember(), completed), () -> {
             if (completed.size() < majority) {
                 var sre = new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
                 result.completeExceptionally(sre);
@@ -256,11 +256,11 @@ public class Gorgoneion {
         final var majority = context.size() == 1 ? 1 : context.majority();
         final var redirecting = new SliceIterator<>("Credential verification", member, successors, endorsementComm);
         var verifications = new HashSet<Validation_>();
-        redirecting.iterate((link, m) -> {
+        redirecting.iterate((link) -> {
             log.debug("Validating  credentials for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
                       member.getId());
             return link.validate(request, parameters.registrationTimeout());
-        }, (futureSailor, link, m) -> completeVerification(futureSailor, m, verifications), () -> {
+        }, (futureSailor, _, link) -> completeVerification(futureSailor, link.getMember(), verifications), () -> {
             if (verifications.size() < majority) {
                 throw new StatusRuntimeException(
                 Status.ABORTED.withDescription("Cannot gather required credential validations"));

@@ -123,7 +123,7 @@ public class ChRbcGossip {
             return;
         }
         var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-        ring.iterate((link, _) -> gossipRound(link), (result, link, _) -> {
+        ring.iterate((link) -> gossipRound(link), (result, _, link) -> {
             handle(result, link);
             return true;
         }, () -> {
