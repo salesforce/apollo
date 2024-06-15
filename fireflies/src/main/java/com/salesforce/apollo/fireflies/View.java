@@ -1436,20 +1436,12 @@ public class View {
     }
 
     private boolean verify(SelfAddressingIdentifier id, JohnHancock signature, InputStream message) {
-        var verifier = verifiers.verifierFor(id);
-        if (verifier.isEmpty()) {
-            return false;
-        }
-        return verifier.get().verify(signature, message);
+        return verifiers.verifierFor(id).map(value -> value.verify(signature, message)).orElse(false);
     }
 
     private boolean verify(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
                            InputStream message) {
-        var verifier = verifiers.verifierFor(id);
-        if (verifier.isEmpty()) {
-            return false;
-        }
-        return verifier.get().verify(threshold, signature, message);
+        return verifiers.verifierFor(id).map(value -> value.verify(threshold, signature, message)).orElse(false);
     }
 
     public record Seed(SelfAddressingIdentifier identifier, String endpoint) {
