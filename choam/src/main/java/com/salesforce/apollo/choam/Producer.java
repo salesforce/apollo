@@ -57,7 +57,6 @@ public class Producer {
     private final        Semaphore                    serialize          = new Semaphore(1);
     private final        ViewAssembly                 assembly;
     private final        int                          maxEpoch;
-    private volatile     int                          emptyPreBlocks     = 0;
     private volatile     boolean                      assembled          = false;
 
     public Producer(Digest nextViewId, ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint, String label) {
@@ -254,17 +253,11 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (txns.isEmpty()) {
-            var empty = emptyPreBlocks + 1;
-            emptyPreBlocks = empty;
-            if (empty % 5 == 0) {
-                pending.values()
-                       .stream()
-                       .filter(pb -> pb.published.get())
-                       .max(Comparator.comparing(pb -> pb.block.height()))
-                       .ifPresent(pb -> publish(pb, true));
-            } else {
-                log.trace("No txns and no beacon to publish on: {}", params().member().getId());
-            }
+            pending.values()
+                   .stream()
+                   .filter(pb -> pb.published.get())
+                   .max(Comparator.comparing(pb -> pb.block.height()))
+                   .ifPresent(pb -> publish(pb, true));
             return;
         }
         log.trace("transactions: {} combined hash: {} height: {} on: {}", txns.size(),
