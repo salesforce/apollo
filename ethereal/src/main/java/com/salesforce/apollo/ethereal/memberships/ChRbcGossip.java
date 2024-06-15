@@ -28,9 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,8 +40,8 @@ import java.util.function.Predicate;
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
 /**
- * Handles the gossip propigation of proposals, commits and preVotes from this node, as well as the notification of the
- * adder of such from other nodes.
+ * Handles the gossip propagation of proposals, the commits and preVotes from this node, and the notification of the
+ * Adder of such events from other nodes.
  *
  * @author hal.hildebrand
  */
@@ -59,7 +57,6 @@ public class ChRbcGossip {
     private final        SliceIterator<Gossiper>                         ring;
     private final        AtomicBoolean                                   started  = new AtomicBoolean();
     private final        Terminal                                        terminal = new Terminal();
-    private final        List<Member>                                    membership;
     private volatile     ScheduledFuture<?>                              scheduled;
 
     public ChRbcGossip(Digest id, SigningMember member, Collection<Member> membership, Processor processor,
@@ -68,12 +65,10 @@ public class ChRbcGossip {
         this.member = member;
         this.metrics = m;
         this.id = id;
-        this.membership = new ArrayList<>(membership);
         comm = communications.create(member, id, terminal, getClass().getCanonicalName(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
-        ring = new SliceIterator<Gossiper>("ChRbcGossip[%s on: %s]".formatted(id, member.getId()), member, membership,
-                                           comm);
+        ring = new SliceIterator<>("ChRbcGossip[%s on: %s]".formatted(id, member.getId()), member, membership, comm);
     }
 
     /**
@@ -128,7 +123,7 @@ public class ChRbcGossip {
             return;
         }
         var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-        ring.iterate((link, _) -> gossipRound(link), (result, link, _) -> {
+        ring.iterate((link) -> gossipRound(link), (result, _, link) -> {
             handle(result, link);
             return true;
         }, () -> {
@@ -150,7 +145,7 @@ public class ChRbcGossip {
         if (!started.get()) {
             return null;
         }
-        log.trace("gossiping[{}] with {} on {}", id, link.getMember(), member);
+        log.trace("gossiping[{}] with {} on {}", id, link.getMember(), member.getId());
         try {
             return link.gossip(processor.gossip(id));
         } catch (StatusRuntimeException e) {

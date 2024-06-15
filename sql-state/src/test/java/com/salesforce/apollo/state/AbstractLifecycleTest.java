@@ -380,7 +380,6 @@ abstract public class AbstractLifecycleTest {
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
 
-        params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
         params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
 
         return params;

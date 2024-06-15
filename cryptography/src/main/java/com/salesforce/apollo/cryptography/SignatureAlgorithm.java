@@ -251,7 +251,7 @@ public enum SignatureAlgorithm {
     public static SignatureAlgorithm fromSignatureCode(int i) {
         return switch (i) {
             case 0:
-                throw new IllegalArgumentException("Unknown signature code: " + i);
+                yield NULL_SIGNATURE;
             case 1:
                 yield NULL_SIGNATURE;
             case 2:

@@ -16,9 +16,9 @@ import com.salesforce.apollo.archipelago.Router;
 import com.salesforce.apollo.archipelago.Router.ServiceRouting;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.bloomFilters.BloomFilter;
-import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
 import com.salesforce.apollo.context.DynamicContextImpl;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.proto.Biff;
 import com.salesforce.apollo.fireflies.Binding.Bound;
@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,34 +83,32 @@ import static com.salesforce.apollo.fireflies.comm.gossip.FfClient.getCreate;
  * @since 220
  */
 public class View {
-    private static final String                                      FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
-    private static final Logger                                      log                   = LoggerFactory.getLogger(
-    View.class);
-    private static final String                                      SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
-    final                CommonCommunications<Fireflies, Service>    comm;
-    final                AtomicBoolean                               started               = new AtomicBoolean();
-    private final        CommonCommunications<Entrance, Service>     approaches;
-    private final        DynamicContext<Participant>                 context;
-    private final        DigestAlgorithm                             digestAlgo;
-    private final        RingCommunications<Participant, Fireflies>  gossiper;
-    private final        AtomicBoolean                               introduced            = new AtomicBoolean();
-    private final        List<BiConsumer<Context, Digest>>           viewChangeListeners   = new CopyOnWriteArrayList<>();
-    private final        Executor                                    viewNotificationQueue = Executors.newSingleThreadExecutor(
-    Thread.ofVirtual().factory());
-    private final        FireflyMetrics                              metrics;
-    private final        Node                                        node;
-    private final        Map<Digest, SignedViewChange>               observations          = new ConcurrentSkipListMap<>();
-    private final        Parameters                                  params;
-    private final        ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals      = new ConcurrentSkipListMap<>();
-    private final        RoundScheduler                              roundTimers;
-    private final        Set<Digest>                                 shunned               = new ConcurrentSkipListSet<>();
-    private final        Map<String, RoundScheduler.Timer>           timers                = new HashMap<>();
-    private final        ReadWriteLock                               viewChange            = new ReentrantReadWriteLock(
-    true);
-    private final        ViewManagement                              viewManagement;
-    private final        EventValidation                             validation;
-    private final        Verifiers                                   verifiers;
-    private volatile     ScheduledFuture<?>                          futureGossip;
+    private static final String FINALIZE_VIEW_CHANGE  = "FINALIZE VIEW CHANGE";
+    private static final Logger log                   = LoggerFactory.getLogger(View.class);
+    private static final String SCHEDULED_VIEW_CHANGE = "Scheduled View Change";
+
+    final            CommonCommunications<Fireflies, Service>    comm;
+    final            AtomicBoolean                               started             = new AtomicBoolean();
+    private final    CommonCommunications<Entrance, Service>     approaches;
+    private final    DynamicContext<Participant>                 context;
+    private final    DigestAlgorithm                             digestAlgo;
+    private final    RingCommunications<Participant, Fireflies>  gossiper;
+    private final    AtomicBoolean                               introduced          = new AtomicBoolean();
+    private final    Map<String, Consumer<ViewChange>>           viewChangeListeners = new HashMap<>();
+    private final    Executor                                    viewNotificationQueue;
+    private final    FireflyMetrics                              metrics;
+    private final    Node                                        node;
+    private final    Map<Digest, SignedViewChange>               observations        = new ConcurrentSkipListMap<>();
+    private final    Parameters                                  params;
+    private final    ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebuttals    = new ConcurrentSkipListMap<>();
+    private final    RoundScheduler                              roundTimers;
+    private final    Set<Digest>                                 shunned             = new ConcurrentSkipListSet<>();
+    private final    Map<String, RoundScheduler.Timer>           timers              = new HashMap<>();
+    private final    ReadWriteLock                               viewChange;
+    private final    ViewManagement                              viewManagement;
+    private final    EventValidation                             validation;
+    private final    Verifiers                                   verifiers;
+    private volatile ScheduledFuture<?>                          futureGossip;
 
     public View(DynamicContext<Participant> context, ControlledIdentifierMember member, String endpoint,
                 EventValidation validation, Verifiers verifiers, Router communications, Parameters params,
@@ -141,6 +140,8 @@ public class View {
         gossiper.ignoreSelf();
         this.validation = validation;
         this.verifiers = verifiers;
+        viewNotificationQueue = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+        viewChange = new ReentrantReadWriteLock(true);
     }
 
     /**
@@ -170,7 +171,7 @@ public class View {
     /**
      * Deregister the listener
      */
-    public void deregister(BiConsumer<Context, Digest> listener) {
+    public void deregister(Consumer<ViewChange> listener) {
         viewChangeListeners.remove(listener);
     }
 
@@ -191,8 +192,8 @@ public class View {
     /**
      * Register the listener to receive view changes
      */
-    public void register(BiConsumer<Context, Digest> listener) {
-        viewChangeListeners.add(listener);
+    public void register(String key, Consumer<ViewChange> listener) {
+        viewChangeListeners.put(key, listener);
     }
 
     /**
@@ -343,17 +344,16 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var superMajority =
-            context.size() == 1 ? 1 : context.getRingCount() - ((context.getRingCount() - 1) / 4);
-            if (observations.size() < superMajority) {
-                log.trace("Do not have superMajority: {} required: {} observers: {} for: {} on: {}",
-                          observations.size(), superMajority, viewManagement.observersList(), currentView(),
-                          node.getId());
+            final var supermajority = (context.getRingCount() * 3 / 4) + 1;
+            final var majority = context.size() == 1 ? 1 : supermajority;
+            if (observations.size() < majority) {
+                log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
+                          majority, viewManagement.observersList(), currentView(), node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
-            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(),
-                     superMajority, viewManagement.observersList(), currentView(), node.getId());
+            log.info("Finalizing view change: {} required: {} observers: {} for: {} on: {}", context.getId(), majority,
+                     viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             final var current = currentView();
             observations.values()
@@ -374,15 +374,15 @@ public class View {
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
                              .orElse(null);
-            if (max != null && max.getCount() >= superMajority) {
-                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max,
-                         superMajority, viewManagement.cardinality(), currentView(), node.getId());
+            if (max != null && max.getCount() >= majority) {
+                log.info("View consensus successful: {} required: {} cardinality: {} for: {} on: {}", max, majority,
+                         viewManagement.cardinality(), currentView(), node.getId());
                 viewManagement.install(max.getElement());
             } else {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), superMajority, viewManagement.cardinality(),
+                         observations.size(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
             }
 
@@ -418,16 +418,18 @@ public class View {
     }
 
     void notifyListeners(List<SelfAddressingIdentifier> joining, List<Digest> leaving) {
-        final var current = currentView();
-        var sc = context.asStatic();
+        final var viewChange = new ViewChange(context.asStatic(), currentView(),
+                                              joining.stream().map(SelfAddressingIdentifier::getDigest).toList(),
+                                              Collections.unmodifiableList(leaving));
         viewNotificationQueue.execute(Utils.wrapped(() -> {
-            viewChangeListeners.forEach(listener -> {
+            viewChangeListeners.entrySet().forEach(entry -> {
                 try {
-                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", listener,
-                              currentView(), context.size(), joining.size(), leaving.size(), node.getId());
-                    listener.accept(sc, current);
+                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ",
+                              entry.getKey(), currentView(), context.size(), joining.size(), leaving.size(),
+                              node.getId());
+                    entry.getValue().accept(viewChange);
                 } catch (Throwable e) {
-                    log.error("error in view change listener: {} on: {} ", listener, node.getId(), e);
+                    log.error("error in view change listener: {} on: {} ", entry.getKey(), node.getId(), e);
                 }
             });
         }, log));
@@ -609,14 +611,13 @@ public class View {
     protected Gossip gossip(Fireflies link, int ring) {
         tick();
         if (shunned.contains(link.getMember().getId())) {
-            log.trace("Shunning gossip view: {} with: {} on: {}", currentView(), link.getMember().getId(),
-                      node.getId());
             if (metrics != null) {
                 metrics.shunnedGossip().mark();
             }
             return null;
         }
 
+        final var p = (Participant) link.getMember();
         final SayWhat gossip = stable(() -> SayWhat.newBuilder()
                                                    .setView(currentView().toDigeste())
                                                    .setNote(node.getNote().getWrapped())
@@ -625,41 +626,41 @@ public class View {
                                                    .build());
         try {
             return link.gossip(gossip);
-        } catch (Throwable e) {
-            final var p = (Participant) link.getMember();
-            if (e instanceof StatusRuntimeException sre) {
-                switch (sre.getStatus().getCode()) {
-                case PERMISSION_DENIED:
-                    log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case FAILED_PRECONDITION:
-                    log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case RESOURCE_EXHAUSTED:
-                    log.trace("Resource exhausted for gossip: {} view: {} from: {} on: {}", sre.getStatus(),
-                              currentView(), p.getId(), node.getId());
-                    break;
-                case CANCELLED:
-                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case UNAVAILABLE:
-                    accuse(p, ring, sre);
-                    break;
-                default:
-                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    accuse(p, ring, sre);
-                    break;
+        } catch (StatusRuntimeException sre) {
+            switch (sre.getStatus().getCode()) {
+            case PERMISSION_DENIED:
+                log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                break;
+            case FAILED_PRECONDITION:
+                log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                break;
+            case RESOURCE_EXHAUSTED:
+                log.trace("Resource exhausted for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
+                          p.getId(), node.getId());
+                break;
+            case CANCELLED:
+                log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                          node.getId());
+                break;
+            case UNAVAILABLE:
+                log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                          node.getId(), sre);
+                accuse(p, ring, sre);
+                break;
+            default:
+                log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                accuse(p, ring, sre);
+                break;
 
-                }
-            } else {
-                log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
-                          currentView(), node.getId(), e);
-                accuse(p, ring, e);
             }
+            return null;
+        } catch (Throwable e) {
+            log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
+                      currentView(), node.getId(), e);
+            accuse(p, ring, e);
             return null;
         }
 
@@ -678,7 +679,7 @@ public class View {
         member.addAccusation(node.accuse(member, ring));
         pendingRebuttals.computeIfAbsent(member.getId(),
                                          d -> roundTimers.schedule(() -> gc(member), params.rebuttalTimeout()));
-        log.debug("Accuse {} on ring {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
+        log.debug("Accuse: {} on ring: {} view: {} (timer started): {} on: {}", member.getId(), ring, currentView(),
                   e.getMessage(), node.getId());
     }
 
@@ -1102,6 +1103,8 @@ public class View {
                         if (e.getCause() instanceof StatusRuntimeException sre) {
                             handleSRE("gossip", destination, member, sre);
                         } else {
+                            log.debug("Exception gossiping with: {} view: {} on: {}", member.getId(), currentView(),
+                                      node.getId(), e);
                             accuse(member, destination.ring(), e);
                         }
                     }
@@ -1433,20 +1436,12 @@ public class View {
     }
 
     private boolean verify(SelfAddressingIdentifier id, JohnHancock signature, InputStream message) {
-        var verifier = verifiers.verifierFor(id);
-        if (verifier.isEmpty()) {
-            return false;
-        }
-        return verifier.get().verify(signature, message);
+        return verifiers.verifierFor(id).map(value -> value.verify(signature, message)).orElse(false);
     }
 
     private boolean verify(SelfAddressingIdentifier id, SigningThreshold threshold, JohnHancock signature,
                            InputStream message) {
-        var verifier = verifiers.verifierFor(id);
-        if (verifier.isEmpty()) {
-            return false;
-        }
-        return verifier.get().verify(threshold, signature, message);
+        return verifiers.verifierFor(id).map(value -> value.verify(threshold, signature, message)).orElse(false);
     }
 
     public record Seed(SelfAddressingIdentifier identifier, String endpoint) {
@@ -1469,6 +1464,7 @@ public class View {
                                        .setSignature(wrapped.sign(n.toByteString()).toSig())
                                        .build();
             note = new NoteWrapper(signedNote, digestAlgo);
+            log.info("Endpoint: {} on: {}", endpoint, wrapped.getId());
         }
 
         /**
@@ -1858,7 +1854,7 @@ public class View {
         /**
          * The first message in the anti-entropy protocol. Process any digests from the inbound gossip digest. Respond
          * with the Gossip that represents the digests newer or not known in this view, as well as updates from this
-         * node based on out of date information in the supplied digests.
+         * node based on out-of-date information in the supplied digests.
          *
          * @param request - the Gossip from our partner
          * @return Teh response for Moar gossip - updates this node has which the sender is out of touch with, and

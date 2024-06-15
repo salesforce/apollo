@@ -11,7 +11,6 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.proto.FoundationSeal;
-import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.context.DynamicContextImpl;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.cryptography.DigestAlgorithm;
@@ -297,10 +296,7 @@ public class DomainTest {
                                                                                               .setNumberOfEpochs(12)
                                                                                               .setEpochLength(33))
                                                                            .build())
-                                 .setCheckpointBlockDelta(200)
-                                 .setDrainPolicy(ExponentialBackoffPolicy.newBuilder()
-                                                                         .setInitialBackoff(Duration.ofMillis(1))
-                                                                         .setMaxBackoff(Duration.ofMillis(1)));
+                                 .setCheckpointBlockDelta(200);
         return template;
     }
 }

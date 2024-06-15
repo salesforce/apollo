@@ -75,6 +75,11 @@ public interface Reconfiguration {
                 return RECONFIGURED;
             }
 
+            @Override
+            public Transitions checkAssembly() {
+                return null;
+            }
+
             // See if we already have a full complement of Joins of the next committee
             // if not set a deadline
             @Entry
@@ -157,6 +162,11 @@ public interface Reconfiguration {
             @Override
             public Transitions complete() {
                 context().finish();
+                return null;
+            }
+
+            @Override
+            public Transitions countdownCompleted() {
                 return null;
             }
 

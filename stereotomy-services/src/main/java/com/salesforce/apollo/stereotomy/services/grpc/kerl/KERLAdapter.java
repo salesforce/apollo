@@ -59,7 +59,8 @@ public class KERLAdapter implements KERL.AppendKERL {
     public List<KeyState> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
         var l = kerl.append(events.stream().map(d -> d.toKeyEvent_()).toList(),
                             attachments.stream().map(ae -> ae.toEvent_()).toList());
-        return l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList();
+        return l == null ? Collections.emptyList()
+                         : l.stream().map(ks -> new KeyStateImpl(ks)).map(ks -> (KeyState) ks).toList();
     }
 
     @Override
@@ -132,10 +133,8 @@ public class KERLAdapter implements KERL.AppendKERL {
 
     @Override
     public List<EventWithAttachments> kerl(Identifier identifier) {
-        return kerl.getKERL(identifier.toIdent())
-                   .getEventsList()
-                   .stream()
-                   .map(kwa -> ProtobufEventFactory.from(kwa))
-                   .toList();
+        var k = kerl.getKERL(identifier.toIdent());
+        return k == null ? Collections.emptyList()
+                         : k.getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList();
     }
 }

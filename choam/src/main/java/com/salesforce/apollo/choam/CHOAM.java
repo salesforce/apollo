@@ -25,6 +25,7 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DelegatedContext;
 import com.salesforce.apollo.context.StaticContext;
+import com.salesforce.apollo.context.ViewChange;
 import com.salesforce.apollo.cryptography.*;
 import com.salesforce.apollo.cryptography.Signer.SignerImpl;
 import com.salesforce.apollo.cryptography.proto.PubKey;
@@ -322,15 +323,14 @@ public class CHOAM {
 
     /**
      * A view change has occurred
-     *
-     * @param context - the new membership context
-     * @param diadem  - the compact HexBloom of the context view
      */
-    public void rotateViewKeys(Context<Member> context, Digest diadem) {
+    public void rotateViewKeys(ViewChange viewChange) {
+        var context = viewChange.context();
+        var diadem = viewChange.diadem();
         ((DelegatedContext<Member>) combine.getContext()).setContext(context);
         var c = current.get();
         if (c != null) {
-            c.nextView(diadem, context);
+            c.nextView(viewChange.diadem(), context);
         } else {
             log.info("Acquiring new view of: {}, diadem: {} size: {} on: {}", context.getId(), diadem, context.size(),
                      params.member().getId());
@@ -361,11 +361,11 @@ public class CHOAM {
         }
         session.cancelAll();
         try {
-            linear.shutdown();
+            linear.shutdownNow();
         } catch (Throwable e) {
         }
         try {
-            executions.shutdown();
+            executions.shutdownNow();
         } catch (Throwable e) {
         }
         final var c = current.get();
@@ -1239,16 +1239,16 @@ public class CHOAM {
             cancelSynchronization();
             Context<Member> memberContext = context();
             var activeCount = memberContext.size();
-            var majority = params.majority();
-            if (params.generateGenesis() && activeCount >= majority) {
+            var count = context().getRingCount();
+            if (params.generateGenesis() && activeCount >= context().getRingCount()) {
                 if (current.get() == null && current.compareAndSet(null, new Formation())) {
                     log.info(
                     "Quorum achieved, triggering regeneration. members: {} required: {} forming Genesis committee on: {}",
-                    activeCount, majority, params.member().getId());
+                    activeCount, count, params.member().getId());
                     transitions.regenerate();
                 } else {
                     log.info("Quorum achieved, members: {} required: {} existing committee: {} on: {}", activeCount,
-                             majority, current.get().getClass().getSimpleName(), params.member().getId());
+                             count, current.get().getClass().getSimpleName(), params.member().getId());
                 }
             } else {
                 final var c = current.get();

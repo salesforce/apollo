@@ -15,12 +15,10 @@ import com.salesforce.apollo.cryptography.HexBloom;
 import com.salesforce.apollo.fireflies.Binding.Bound;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
-import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
@@ -32,7 +30,10 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -374,6 +375,12 @@ public class ViewManagement {
      * start a view change if there are any offline members or joining members
      */
     void maybeViewChange() {
+        if (context.size() == 1 && joins.size() < context.getRingCount() - 1) {
+            log.info("Do not have minimum cluster size: {} required: {} for: {} on: {}", joins.size() + context.size(),
+                     4, currentView(), node.getId());
+            view.scheduleViewChange();
+            return;
+        }
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
             if (isObserver()) {
                 log.trace("Initiating view change: {} (non observer) joins: {} leaves: {} on: {}", currentView(),
@@ -401,31 +408,6 @@ public class ViewManagement {
 
     List<Digest> observersList() {
         return observers().stream().toList();
-    }
-
-    void populate(List<Participant> sample) {
-        var populate = new SliceIterator<Fireflies>("Populate: " + context.getId(), node, sample, view.comm);
-        var repopulate = new AtomicReference<Runnable>();
-        var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
-        repopulate.set(() -> populate.iterate((link, m) -> {
-            return view.gossip(link, 0);
-        }, (futureSailor, link, m) -> {
-            futureSailor.ifPresent(g -> {
-                if (!g.getRedirect().equals(SignedNote.getDefaultInstance())) {
-                    final Participant member = (Participant) link.getMember();
-                    view.stable(() -> view.redirect(member, g, 0));
-                } else {
-                    view.stable(() -> view.processUpdates(g));
-                }
-            });
-            return !joined();
-        }, () -> {
-            if (!joined()) {
-                scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(repopulate.get(), log)),
-                                   params.populateDuration().toNanos(), TimeUnit.NANOSECONDS);
-            }
-        }, params.populateDuration()));
-        repopulate.get().run();
     }
 
     JoinGossip.Builder processJoins(BloomFilter<Digest> bff) {
@@ -609,7 +591,6 @@ public class ViewManagement {
         if (observers.size() > 1 && observers.size() < context.getRingCount()) {
             log.debug("Incomplete observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
                       context.cardinality(), currentView(), context.getId(), node.getId());
-            assert observers.size() > 1 && observers.size() < context.getRingCount();
         }
         log.trace("Reset observers: {} cardinality: {} view: {} context: {} on: {}", observers.size(),
                   context.cardinality(), currentView(), context.getId(), node.getId());

@@ -97,10 +97,10 @@ class Binding {
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         reseed.set(() -> {
             final var registration = registration();
-            seedlings.iterate((link, m) -> {
+            seedlings.iterate((link) -> {
                 log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), node.getId());
                 return link.seed(registration);
-            }, (futureSailor, link, m) -> complete(redirect, futureSailor, m), () -> {
+            }, (futureSailor, _, link) -> complete(redirect, futureSailor, link.getMember()), () -> {
                 if (!redirect.isDone()) {
                     scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reseed.get(), log)),
                                        params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
@@ -273,7 +273,7 @@ class Binding {
             if (!view.started.get()) {
                 return;
             }
-            redirecting.iterate((link, m) -> {
+            redirecting.iterate((link) -> {
                 if (gateway.isDone() || !view.started.get()) {
                     return null;
                 }
@@ -295,7 +295,7 @@ class Binding {
                     abandon.incrementAndGet();
                     return null;
                 }
-            }, (futureSailor, link, m) -> completeGateway((Participant) m, gateway, futureSailor, trusts,
+            }, (futureSailor, _, link) -> completeGateway((Participant) link.getMember(), gateway, futureSailor, trusts,
                                                           initialSeedSet, v, majority), () -> {
                 if (!view.started.get() || gateway.isDone()) {
                     return;

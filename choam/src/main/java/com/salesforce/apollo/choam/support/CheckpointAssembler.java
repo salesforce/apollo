@@ -119,10 +119,10 @@ public class CheckpointAssembler {
 
         var ringer = new SliceIterator<>("Assembly[%s:%s]".formatted(diadem.compactWrapped(), member.getId()), member,
                                          committee, comms);
-        ringer.iterate((link, m) -> {
+        ringer.iterate((link) -> {
             log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), member.getId());
             return gossip(link);
-        }, (result, link, m) -> gossip(result), () -> {
+        }, (result, _, _) -> gossip(result), () -> {
             if (!assembled.isDone()) {
                 scheduler.schedule(
                 () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)),
