@@ -11,6 +11,7 @@ import com.salesforce.apollo.cryptography.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
 import io.netty.handler.ssl.ClientAuth;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -33,7 +34,9 @@ public interface EndpointProvider {
 
     static <T extends SocketAddress> T reify(String encoded) {
         var hnp = HostAndPort.fromString(encoded);
-        return (T) new InetSocketAddress(hnp.getHost(), hnp.getPort());
+        var inetSocketAddress = new InetSocketAddress(hnp.getHost(), hnp.getPort());
+        LoggerFactory.getLogger(EndpointProvider.class).trace("Resolved host: {}", inetSocketAddress);
+        return (T) inetSocketAddress;
     }
 
     SocketAddress addressFor(Member to);

@@ -617,6 +617,7 @@ public class View {
             return null;
         }
 
+        final var p = (Participant) link.getMember();
         final SayWhat gossip = stable(() -> SayWhat.newBuilder()
                                                    .setView(currentView().toDigeste())
                                                    .setNote(node.getNote().getWrapped())
@@ -625,43 +626,41 @@ public class View {
                                                    .build());
         try {
             return link.gossip(gossip);
-        } catch (Throwable e) {
-            final var p = (Participant) link.getMember();
-            if (e instanceof StatusRuntimeException sre) {
-                switch (sre.getStatus().getCode()) {
-                case PERMISSION_DENIED:
-                    log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case FAILED_PRECONDITION:
-                    log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case RESOURCE_EXHAUSTED:
-                    log.trace("Resource exhausted for gossip: {} view: {} from: {} on: {}", sre.getStatus(),
-                              currentView(), p.getId(), node.getId());
-                    break;
-                case CANCELLED:
-                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
-                              node.getId());
-                    break;
-                case UNAVAILABLE:
-                    log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
-                              node.getId(), sre);
-                    accuse(p, ring, sre);
-                    break;
-                default:
-                    log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
-                              node.getId());
-                    accuse(p, ring, sre);
-                    break;
+        } catch (StatusRuntimeException sre) {
+            switch (sre.getStatus().getCode()) {
+            case PERMISSION_DENIED:
+                log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                break;
+            case FAILED_PRECONDITION:
+                log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                break;
+            case RESOURCE_EXHAUSTED:
+                log.trace("Resource exhausted for gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(),
+                          p.getId(), node.getId());
+                break;
+            case CANCELLED:
+                log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                          node.getId());
+                break;
+            case UNAVAILABLE:
+                log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                          node.getId(), sre);
+                accuse(p, ring, sre);
+                break;
+            default:
+                log.debug("Error gossiping: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
+                          node.getId());
+                accuse(p, ring, sre);
+                break;
 
-                }
-            } else {
-                log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
-                          currentView(), node.getId(), e);
-                accuse(p, ring, e);
             }
+            return null;
+        } catch (Throwable e) {
+            log.debug("Exception gossiping joined: {} with: {} view: {} on: {}", viewManagement.joined(), p.getId(),
+                      currentView(), node.getId(), e);
+            accuse(p, ring, e);
             return null;
         }
 
@@ -1473,6 +1472,7 @@ public class View {
                                        .setSignature(wrapped.sign(n.toByteString()).toSig())
                                        .build();
             note = new NoteWrapper(signedNote, digestAlgo);
+            log.info("Endpoint: {} on: {}", endpoint, wrapped.getId());
         }
 
         /**
