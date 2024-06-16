@@ -203,8 +203,8 @@ public class KerlDHT implements ProtoKERLService {
         var iterator = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         try {
             iterator.iterate((link) -> link.append(Collections.emptyList(), Collections.singletonList(event)),
-                             (futureSailor, tally, link) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                   tally, link, "append events"),
+                             (futureSailor, tally, link, _) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                      tally, link, "append events"),
                              () -> completeIt(result, gathered), operationsFrequency);
             List<KeyState_> s = result.get().getKeyStatesList();
             return s.isEmpty() ? null : s.getFirst();
@@ -238,8 +238,8 @@ public class KerlDHT implements ProtoKERLService {
         var iterator = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         try {
             iterator.iterate((link) -> link.append(kerl),
-                             (futureSailor, tally, link) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                   tally, link, "append kerl"),
+                             (futureSailor, tally, link, _) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                      tally, link, "append kerl"),
                              () -> completeIt(result, gathered), operationsFrequency);
             return result.get().getKeyStatesList();
         } catch (InterruptedException e) {
@@ -267,8 +267,8 @@ public class KerlDHT implements ProtoKERLService {
         var iterator = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         try {
             iterator.iterate((link) -> link.append(Collections.singletonList(event)),
-                             (futureSailor, tally, link) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                   tally, link, "append kerl"),
+                             (futureSailor, tally, link, _) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                      tally, link, "append kerl"),
                              () -> completeIt(result, gathered), operationsFrequency);
             var ks = result.get();
             return ks.getKeyStatesCount() == 0 ? KeyState_.getDefaultInstance() : ks.getKeyStatesList().getFirst();
@@ -324,8 +324,8 @@ public class KerlDHT implements ProtoKERLService {
         var iterator = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         try {
             iterator.iterate((link) -> link.appendAttachments(events),
-                             (futureSailor, tally, link) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                   tally, link, "append kerl"),
+                             (futureSailor, tally, link, _) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                      tally, link, "append kerl"),
                              () -> completeIt(result, gathered), operationsFrequency);
             return result.get();
         } catch (InterruptedException e) {
@@ -357,8 +357,8 @@ public class KerlDHT implements ProtoKERLService {
         var iterator = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         try {
             iterator.iterate((link) -> link.appendValidations(validations),
-                             (futureSailor, tally, link) -> mutate(gathered, futureSailor, identifier, isTimedOut,
-                                                                   tally, link, "append kerl"),
+                             (futureSailor, tally, link, _) -> mutate(gathered, futureSailor, identifier, isTimedOut,
+                                                                      tally, link, "append kerl"),
                              () -> completeIt(result, gathered), operationsFrequency);
             return result.get();
         } catch (InterruptedException e) {
@@ -409,8 +409,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(identifier);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getAttachment(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, identifier,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -443,8 +443,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKERL(identifier),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -481,8 +481,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyEvent(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -516,8 +516,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyState(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -552,8 +552,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyState(identAndSeq),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -587,8 +587,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyState(identifier),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -622,8 +622,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyStateWithAttachments(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -657,8 +657,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(digest);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, digest,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();
@@ -692,8 +692,8 @@ public class KerlDHT implements ProtoKERLService {
         var slice = context.bftSubset(identifier);
         var iter = new SliceIterator<>(context.getId().toString(), member, slice, dhtComms, scheduler);
         iter.iterate(link -> link.getValidations(coordinates),
-                     (futureSailor, tally, destination) -> read(result, gathered, tally, futureSailor, identifier,
-                                                                isTimedOut, destination, operation),
+                     (futureSailor, tally, destination, _) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                   isTimedOut, destination, operation),
                      () -> failedMajority(result, maxCount(gathered), operation), operationsFrequency);
         try {
             return result.get();

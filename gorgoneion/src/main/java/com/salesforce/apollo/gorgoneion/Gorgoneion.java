@@ -102,8 +102,7 @@ public class Gorgoneion {
                                                    Endorsement.getLocalLoopback(member, service));
     }
 
-    private boolean completeEndorsement(Optional<MemberSignature> futureSailor, Member from,
-                                        Set<MemberSignature> validations) {
+    private boolean completeEndorsement(Optional<MemberSignature> futureSailor, Set<MemberSignature> validations) {
         if (futureSailor.isEmpty()) {
             return true;
         }
@@ -167,7 +166,7 @@ public class Gorgoneion {
             log.info("Request signing nonce for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
                      member.getId());
             return link.endorse(nonce, parameters.registrationTimeout());
-        }, (futureSailor, _, link) -> completeEndorsement(futureSailor, link.getMember(), endorsements), () -> {
+        }, (futureSailor, _, _, _) -> completeEndorsement(futureSailor, endorsements), () -> {
             if (endorsements.size() < majority) {
                 generated.completeExceptionally(new StatusRuntimeException(Status.ABORTED.withDescription(
                 "Cannot gather required nonce endorsements: %s required: %s on: %s".formatted(endorsements.size(),
@@ -229,7 +228,7 @@ public class Gorgoneion {
             log.info("Enrolling: {} contacting: {} on: {}", identifier, link.getMember().getId(), member.getId());
             link.enroll(notarization, parameters.registrationTimeout());
             return Empty.getDefaultInstance();
-        }, (futureSailor, _, link) -> completeEnrollment(futureSailor, link.getMember(), completed), () -> {
+        }, (futureSailor, _, _, member) -> completeEnrollment(futureSailor, member, completed), () -> {
             if (completed.size() < majority) {
                 var sre = new StatusRuntimeException(Status.ABORTED.withDescription("Cannot complete enrollment"));
                 result.completeExceptionally(sre);
@@ -260,7 +259,7 @@ public class Gorgoneion {
             log.debug("Validating  credentials for: {} contacting: {} on: {}", identifier, link.getMember().getId(),
                       member.getId());
             return link.validate(request, parameters.registrationTimeout());
-        }, (futureSailor, _, link) -> completeVerification(futureSailor, link.getMember(), verifications), () -> {
+        }, (futureSailor, _, _, member) -> completeVerification(futureSailor, member, verifications), () -> {
             if (verifications.size() < majority) {
                 throw new StatusRuntimeException(
                 Status.ABORTED.withDescription("Cannot gather required credential validations"));

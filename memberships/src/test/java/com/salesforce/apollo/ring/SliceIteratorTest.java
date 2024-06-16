@@ -94,7 +94,7 @@ public class SliceIteratorTest {
             var slice = new SliceIterator<TestItService>("Test Me", serverMember1,
                                                          Arrays.asList(serverMember1, serverMember2), commsA);
             var countdown = new CountDownLatch(1);
-            slice.iterate((link) -> link.ping(Any.getDefaultInstance()), (_, _, _) -> true, () -> {
+            slice.iterate((link) -> link.ping(Any.getDefaultInstance()), (_, _, _, _) -> true, () -> {
                 countdown.countDown();
             }, Duration.ofMillis(1));
             boolean finished = countdown.await(3, TimeUnit.SECONDS);

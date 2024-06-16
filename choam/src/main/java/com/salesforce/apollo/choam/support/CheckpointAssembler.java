@@ -122,7 +122,7 @@ public class CheckpointAssembler {
         ringer.iterate((link) -> {
             log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), member.getId());
             return gossip(link);
-        }, (result, _, _) -> gossip(result), () -> {
+        }, (result, _, _, _) -> gossip(result), () -> {
             if (!assembled.isDone()) {
                 scheduler.schedule(
                 () -> Thread.ofVirtual().start(Utils.wrapped(() -> gossip(scheduler, duration), log)),
