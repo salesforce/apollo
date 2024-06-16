@@ -100,7 +100,7 @@ public class SliceIterator<Comm extends Link> {
         try (Comm link = next()) {
             if (link == null || link.getMember() == null) {
                 log.trace("No link for iteration: {} of: <{}> on: {}", c, label, member.getId());
-                allowed.accept(handler.handle(Optional.empty(), tally, link));
+                allowed.accept(handler.handle(Optional.empty(), tally, null, null));
                 return;
             }
             log.trace("Iteration: {} of: <{}> to: {} on: {}", c, label, link.getMember().getId(), member.getId());
@@ -114,7 +114,7 @@ public class SliceIterator<Comm extends Link> {
                 log.error("Unhandled: {} applying: <{}> slice to: {} iteration: {} on: {}", e, label,
                           link.getMember().getId(), c, member.getId());
             }
-            allowed.accept(handler.handle(Optional.ofNullable(result), tally, link));
+            allowed.accept(handler.handle(Optional.ofNullable(result), tally, link, link.getMember()));
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -179,6 +179,6 @@ public class SliceIterator<Comm extends Link> {
 
     @FunctionalInterface
     public interface SlicePredicateHandler<T, Comm> {
-        boolean handle(Optional<T> result, AtomicInteger tally, Comm communications);
+        boolean handle(Optional<T> result, AtomicInteger tally, Comm communications, Member member);
     }
 }

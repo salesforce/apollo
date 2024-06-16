@@ -63,6 +63,7 @@ class Binding {
     public Binding(View view, List<Seed> seeds, Duration duration, DynamicContext<Participant> context,
                    CommonCommunications<Entrance, Service> approaches, Node node, Parameters params,
                    FireflyMetrics metrics, DigestAlgorithm digestAlgo) {
+        assert node != null;
         this.view = view;
         this.duration = duration;
         this.seeds = new ArrayList<>(seeds);
@@ -100,7 +101,7 @@ class Binding {
             seedlings.iterate((link) -> {
                 log.debug("Requesting Seeding from: {} on: {}", link.getMember().getId(), node.getId());
                 return link.seed(registration);
-            }, (futureSailor, _, link) -> complete(redirect, futureSailor, link.getMember()), () -> {
+            }, (futureSailor, _, _, member) -> complete(redirect, futureSailor, member), () -> {
                 if (!redirect.isDone()) {
                     scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(reseed.get(), log)),
                                        params.retryDelay().toNanos(), TimeUnit.NANOSECONDS);
@@ -295,8 +296,8 @@ class Binding {
                     abandon.incrementAndGet();
                     return null;
                 }
-            }, (futureSailor, _, link) -> completeGateway((Participant) link.getMember(), gateway, futureSailor, trusts,
-                                                          initialSeedSet, v, majority), () -> {
+            }, (futureSailor, _, _, member) -> completeGateway((Participant) member, gateway, futureSailor, trusts,
+                                                               initialSeedSet, v, majority), () -> {
                 if (!view.started.get() || gateway.isDone()) {
                     return;
                 }
