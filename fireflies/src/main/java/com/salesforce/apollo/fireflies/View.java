@@ -344,7 +344,7 @@ public class View {
             return;
         }
         viewChange(() -> {
-            final var supermajority = (context.getRingCount() * 3 / 4) + 1;
+            final var supermajority = context.getRingCount() * 3 / 4;
             final var majority = context.size() == 1 ? 1 : supermajority;
             if (observations.size() < majority) {
                 log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
