@@ -1178,8 +1178,6 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
-               //               .limit(params.maximumTxfr())
-               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         return builder;
     }
@@ -1355,7 +1353,6 @@ public class View {
                    .flatMap(m -> m.getAccusations())
                    .filter(a -> a.currentView().equals(current))
                    .filter(a -> !accBff.contains(a.getHash()))
-                   .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                    .forEach(a -> builder.addAccusations(a.getWrapped()));
         }
 

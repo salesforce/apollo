@@ -521,9 +521,8 @@ public class ViewManagement {
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView().toDigeste())
                                           .setAttempt(attempt.getAndIncrement())
-                                          .addAllLeaves(
-                                          view.streamShunned().map(Digest::toDigeste).collect(Collectors.toSet()))
                                           .addAllJoins(joins.keySet().stream().map(Digest::toDigeste).toList());
+            view.streamShunned().map(Digest::toDigeste).forEach(builder::addLeaves);
             ViewChange change = builder.build();
             vote.set(change);
             var signature = node.sign(change.toByteString());
