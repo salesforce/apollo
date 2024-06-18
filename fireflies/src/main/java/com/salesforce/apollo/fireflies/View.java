@@ -1216,7 +1216,7 @@ public class View {
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                //               .limit(params.maximumTxfr()) // Always in sorted order with this method
-               .collect(new ReservoirSampler<>(params.maximumTxfr() * 2, Entropy.bitsStream()))
+               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
