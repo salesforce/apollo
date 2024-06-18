@@ -421,18 +421,17 @@ public class View {
         final var viewChange = new ViewChange(context.asStatic(), currentView(),
                                               joining.stream().map(SelfAddressingIdentifier::getDigest).toList(),
                                               Collections.unmodifiableList(leaving));
-        viewNotificationQueue.execute(Utils.wrapped(() -> {
-            viewChangeListeners.entrySet().forEach(entry -> {
+        viewChangeListeners.forEach((key, value) -> {
+            viewNotificationQueue.execute(Utils.wrapped(() -> {
                 try {
-                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ",
-                              entry.getKey(), currentView(), context.size(), joining.size(), leaving.size(),
-                              node.getId());
-                    entry.getValue().accept(viewChange);
+                    log.trace("Notifying: {} view change: {} cardinality: {} joins: {} leaves: {} on: {} ", key,
+                              currentView(), context.size(), joining.size(), leaving.size(), node.getId());
+                    value.accept(viewChange);
                 } catch (Throwable e) {
-                    log.error("error in view change listener: {} on: {} ", entry.getKey(), node.getId(), e);
+                    log.error("error in view change listener: {} on: {} ", key, node.getId(), e);
                 }
-            });
-        }, log));
+            }, log));
+        });
     }
 
     /**
@@ -1011,6 +1010,7 @@ public class View {
         context.allMembers()
                .flatMap(Participant::getAccusations)
                .filter(Objects::nonNull)
+               .collect(Utils.toShuffledList())
                .forEach(m -> bff.add(m.getHash()));
         return bff;
     }
@@ -1035,7 +1035,7 @@ public class View {
     private BloomFilter<Digest> getObservationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
                                                                                    context.cardinality() * 2), p);
-        observations.keySet().forEach(d -> bff.add(d));
+        observations.keySet().stream().collect(Utils.toShuffledList()).forEach(bff::add);
         return bff;
     }
 
@@ -1175,7 +1175,9 @@ public class View {
         // bff
         var current = currentView();
         context.allMembers()
-               .flatMap(m -> m.getAccusations())
+               .flatMap(Participant::getAccusations)
+               .collect(Utils.toShuffledList())
+               .stream()
                .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
@@ -1212,9 +1214,9 @@ public class View {
                .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
-               .map(m -> m.getNote())
-               //               .limit(params.maximumTxfr()) // Always in sorted order with this method
                .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               .stream()
+               .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
@@ -1243,6 +1245,8 @@ public class View {
         // Add all updates that this view has that aren't reflected in the inbound bff
         final var current = currentView();
         observations.entrySet()
+                    .stream()
+                    .collect(Utils.toShuffledList())
                     .stream()
                     .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                     .filter(m -> !bff.contains(m.getKey()))
@@ -1339,16 +1343,17 @@ public class View {
                    .filter(m -> m.getNote() != null)
                    .filter(m -> current.equals(m.getNote().currentView()))
                    .filter(m -> !notesBff.contains(m.getNote().getHash()))
-                   .map(m -> m.getNote().getWrapped())
                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-                   .forEach(n -> builder.addNotes(n));
+                   .stream()
+                   .map(m -> m.getNote().getWrapped())
+                   .forEach(builder::addNotes);
         }
 
         biff = gossip.getAccusations().getBff();
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> accBff = BloomFilter.from(biff);
             context.allMembers()
-                   .flatMap(m -> m.getAccusations())
+                   .flatMap(Participant::getAccusations)
                    .filter(a -> a.currentView().equals(current))
                    .filter(a -> !accBff.contains(a.getHash()))
                    .forEach(a -> builder.addAccusations(a.getWrapped()));
@@ -1358,6 +1363,8 @@ public class View {
         if (!biff.equals(Biff.getDefaultInstance())) {
             BloomFilter<Digest> obsvBff = BloomFilter.from(biff);
             observations.entrySet()
+                        .stream()
+                        .collect(Utils.toShuffledList())
                         .stream()
                         .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                         .filter(e -> !obsvBff.contains(e.getKey()))
@@ -1548,7 +1555,7 @@ public class View {
                 }
             }
 
-            // Fill the rest of the mask with randomly set index
+            // Fill the rest of the mask with randomly-set index
 
             while (mask.cardinality() != ((context.getBias() - 1) * context.toleranceLevel()) + 1) {
                 int index = Entropy.nextBitsStreamInt(context.getRingCount());

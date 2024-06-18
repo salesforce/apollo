@@ -466,7 +466,7 @@ public class ReliableBroadcaster {
 
         public BloomFilter<Digest> forReconcilliation() {
             var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize, params.falsePositiveRate);
-            state.keySet().forEach(k -> biff.add(k));
+            state.keySet().stream().collect(Utils.toShuffledList()).forEach(k -> biff.add(k));
             return biff;
         }
 
@@ -491,6 +491,8 @@ public class ReliableBroadcaster {
         public Iterable<? extends AgedMessage> reconcile(BloomFilter<Digest> biff, Digest from) {
             PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(Comparator.comparingInt(s -> s.getAge()));
             state.values()
+                 .stream()
+                 .collect(Utils.toShuffledList())
                  .stream()
                  .filter(s -> !biff.contains(s.hash))
                  .filter(s -> s.msg.getAge() < maxAge)
