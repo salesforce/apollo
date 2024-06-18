@@ -1247,8 +1247,6 @@ public class View {
                     .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
-                    //                    .limit(params.maximumTxfr())
-                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                     .forEach(n -> builder.addUpdates(n));
         return builder;
     }
@@ -1363,7 +1361,6 @@ public class View {
                         .stream()
                         .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                         .filter(e -> !obsvBff.contains(e.getKey()))
-                        .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                         .forEach(e -> builder.addObservations(e.getValue()));
         }
 
