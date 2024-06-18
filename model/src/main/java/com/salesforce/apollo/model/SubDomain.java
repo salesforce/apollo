@@ -19,6 +19,7 @@ import com.salesforce.apollo.cryptography.proto.Digeste;
 import com.salesforce.apollo.demesne.proto.DelegationUpdate;
 import com.salesforce.apollo.demesne.proto.SignedDelegate;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.comms.Delegation;
 import com.salesforce.apollo.model.comms.DelegationServer;
@@ -204,7 +205,8 @@ public class SubDomain extends Domain {
         delegates.entrySet()
                  .stream()
                  .filter(e -> !bff.contains(Digest.from(e.getKey())))
-                 .limit(maxTransfer)
+                 //                 .limit(maxTransfer)
+                 .collect(new ReservoirSampler<>(maxTransfer, Entropy.bitsStream()))
                  .forEach(e -> builder.addUpdate(e.getValue()));
         return builder;
     }

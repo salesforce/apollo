@@ -1178,8 +1178,8 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(m -> current.equals(m.currentView()))
                .filter(a -> !bff.contains(a.getHash()))
-               .limit(params.maximumTxfr())
-               //               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               //               .limit(params.maximumTxfr())
+               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         return builder;
     }
@@ -1215,8 +1215,8 @@ public class View {
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
-               .limit(params.maximumTxfr()) // Always in sorted order with this method
-               //               .collect(new ReservoirSampler<>(params.maximumTxfr() * 2, Entropy.bitsStream()))
+               //               .limit(params.maximumTxfr()) // Always in sorted order with this method
+               .collect(new ReservoirSampler<>(params.maximumTxfr() * 2, Entropy.bitsStream()))
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
@@ -1249,8 +1249,8 @@ public class View {
                     .filter(e -> Digest.from(e.getValue().getChange().getCurrent()).equals(current))
                     .filter(m -> !bff.contains(m.getKey()))
                     .map(m -> m.getValue())
-                    .limit(params.maximumTxfr())
-                    //                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+                    //                    .limit(params.maximumTxfr())
+                    .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                     .forEach(n -> builder.addUpdates(n));
         return builder;
     }

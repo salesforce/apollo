@@ -476,7 +476,7 @@ public class ReliableBroadcaster {
             }
             log.trace("receiving: {} msgs on: {}", messages.size(), member.getId());
             deliver(messages.stream()
-                            .limit(params.maxMessages)
+                            //                            .limit(params.maxMessages)
                             .map(am -> new state(adapter.hasher.apply(am.getContent()), AgedMessage.newBuilder(am)))
                             .filter(s -> !dup(s))
                             .filter(s -> adapter.verifier.test(s.msg.getContent()))
@@ -495,7 +495,7 @@ public class ReliableBroadcaster {
                  .filter(s -> !biff.contains(s.hash))
                  .filter(s -> s.msg.getAge() < maxAge)
                  .forEach(s -> mailBox.add(s.msg));
-            List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
+            List<AgedMessage> reconciled = mailBox.stream().map(b -> b.build()).toList();
             if (!reconciled.isEmpty()) {
                 log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, member.getId());
             }
