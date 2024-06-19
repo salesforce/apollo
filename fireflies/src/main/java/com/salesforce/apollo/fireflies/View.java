@@ -1839,6 +1839,10 @@ public class View {
 
     public class Service implements EntranceService, FFService, ServiceRouting {
 
+        public void enjoin(Join join, Digest from) {
+            viewManagement.enjoin(join, from);
+        }
+
         /**
          * Asynchronously add a member to the next view
          */

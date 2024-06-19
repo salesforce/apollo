@@ -8,16 +8,16 @@ package com.salesforce.apollo.fireflies.comm.gossip;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
-import com.salesforce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
-import com.salesforce.apollo.fireflies.proto.Gossip;
-import com.salesforce.apollo.fireflies.proto.SayWhat;
-import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.archipelago.RoutableService;
 import com.salesforce.apollo.cryptography.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
+import com.salesforce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
+import com.salesforce.apollo.fireflies.proto.Gossip;
+import com.salesforce.apollo.fireflies.proto.Join;
+import com.salesforce.apollo.fireflies.proto.SayWhat;
+import com.salesforce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.protocols.ClientIdentity;
-
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
@@ -34,6 +34,29 @@ public class FfServer extends FirefliesImplBase {
         this.metrics = metrics;
         this.identity = identity;
         this.router = r;
+    }
+
+    @Override
+    public void enjoin(Join request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundEnjoinDuration().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGossip().update(serializedSize);
+        }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        router.evaluate(responseObserver, s -> {
+            s.enjoin(request, from);
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
+            if (timer != null) {
+                timer.stop();
+            }
+        });
     }
 
     @Override
@@ -99,5 +122,4 @@ public class FfServer extends FirefliesImplBase {
             }
         });
     }
-
 }

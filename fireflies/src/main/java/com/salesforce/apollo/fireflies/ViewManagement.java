@@ -19,6 +19,7 @@ import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.ReservoirSampler;
+import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
@@ -121,6 +122,55 @@ public class ViewManagement {
 
     Digest currentView() {
         return currentView.get();
+    }
+
+    void enjoin(Join join, Digest observer) {
+        final var joinView = Digest.from(join.getView());
+        final var from = observer;
+        if (!joined()) {
+            log.trace("Not joined, ignored enjoin of view: {} from: {} on: {}", joinView, from, node.getId());
+            throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription(
+            "Not joined, ignored join of view: %s from: %s on: %s".formatted(joinView, from, node.getId())));
+        }
+        var note = new NoteWrapper(join.getNote(), digestAlgo);
+        if (!view.validate(note.getIdentifier())) {
+            log.debug("Ignored enjoin of view: {} from: {} invalid identifier on: {}", joinView, from, node.getId());
+            throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Invalid identifier"));
+        }
+        view.stable(() -> {
+            var thisView = currentView();
+            log.debug("Enjoin requested from: {} view: {} context: {} cardinality: {} on: {}", from, thisView,
+                      context.getId(), cardinality(), node.getId());
+            if (contains(from)) {
+                log.debug("Already a member: {} view: {}  context: {} cardinality: {} on: {}", from, thisView,
+                          context.getId(), cardinality(), node.getId());
+                return;
+            }
+            if (!observers.contains(node.getId())) {
+                log.trace("Not observer, ignoring Join from: {}  observers: {} on: {}", from, observers, node.getId());
+                throw new StatusRuntimeException(
+                Status.FAILED_PRECONDITION.withDescription("Not observer, ignored join of view"));
+            }
+            if (!thisView.equals(joinView)) {
+                throw new StatusRuntimeException(
+                Status.OUT_OF_RANGE.withDescription("View: " + joinView + " does not match: " + thisView));
+            }
+            if (!View.isValidMask(note.getMask(), context)) {
+                log.warn(
+                "Invalid enjoin mask: {} majority: {} from member: {} view: {}  context: {} cardinality: {} on: {}",
+                note.getMask(), context.majority(), from, thisView, context.getId(), cardinality(), node.getId());
+            }
+            if (pendingJoins.size() >= params.maxPending()) {
+                throw new StatusRuntimeException(Status.RESOURCE_EXHAUSTED.withDescription("No room at the inn"));
+            }
+            pendingJoins.computeIfAbsent(from, d -> seeds -> {
+                log.info("Gateway established for: {} (enjoined) view: {}  context: {} cardinality: {} on: {}", from,
+                         currentView(), context.getId(), cardinality(), node.getId());
+            });
+            joins.put(note.getId(), note);
+            log.debug("Member pending enjoin: {} view: {} context: {} on: {}", from, currentView(), context.getId(),
+                      node.getId());
+        });
     }
 
     void gc(Participant member) {
@@ -286,9 +336,9 @@ public class ViewManagement {
                 return;
             }
             if (!observers.contains(node.getId())) {
-                log.warn("Join not observer! from: {}  observers: {} on: {}", from, observers, node.getId());
-                responseObserver.onNext(Gateway.getDefaultInstance());
-                return;
+                log.trace("Not observer, ignoring Join from: {}  observers: {} on: {}", from, observers, node.getId());
+                responseObserver.onError(new StatusRuntimeException(
+                Status.FAILED_PRECONDITION.withDescription("Not observer, ignored join of view")));
             }
             if (!thisView.equals(joinView)) {
                 responseObserver.onError(new StatusRuntimeException(
@@ -313,6 +363,10 @@ public class ViewManagement {
             joins.put(note.getId(), note);
             log.debug("Member pending join: {} view: {} context: {} on: {}", from, currentView(), context.getId(),
                       node.getId());
+            var enjoining = new SliceIterator<>("Enjoining[%s:%s]".formatted(currentView(), from), node,
+                                                observers.stream().map(context::getActiveMember).toList(), view.comm);
+            enjoining.iterate(t -> t.enjoin(join), (_, _, _, _) -> true, () -> {
+            }, Duration.ofMillis(1));
         });
     }
 
@@ -378,8 +432,8 @@ public class ViewManagement {
      */
     void maybeViewChange() {
         if (context.size() == 1 && joins.size() < context.getRingCount() - 1) {
-            log.info("Cannot form cluster: {} with: {} members, required:4 on: {}", currentView(),
-                     joins.size() + context.size(), node.getId());
+            log.trace("Cannot form cluster: {} with: {} members, required > 3 on: {}", currentView(),
+                      joins.size() + context.size(), node.getId());
             view.scheduleViewChange();
             return;
         }
