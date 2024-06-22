@@ -8,6 +8,7 @@ package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Sets;
 import com.salesforce.apollo.archipelago.*;
 import com.salesforce.apollo.context.Context;
 import com.salesforce.apollo.context.DynamicContext;
@@ -121,7 +122,13 @@ public class E2ETest {
         var failed = bootstrappers.stream()
                                   .filter(e -> e.getContext().activeCount() != bootstrappers.size())
                                   .map(
-                                  v -> String.format("%s : %s ", v.getNode().getId(), v.getContext().activeCount()))
+                                  v -> String.format("%s : %s : %s", v.getNode().getId(), v.getContext().activeCount(),
+                                                     Sets.difference(members.keySet(), new HashSet<Digest>(
+                                                     v.getContext()
+                                                      .activeMembers()
+                                                      .stream()
+                                                      .map(Participant::getId)
+                                                      .toList())).stream().toList()))
                                   .toList();
         assertTrue(success, " expected: " + bootstrappers.size() + " failed: " + failed.size() + " views: " + failed);
 
@@ -132,11 +139,14 @@ public class E2ETest {
         success = countdown.get().await(largeTests ? 2400 : 30, TimeUnit.SECONDS);
 
         // Test that all views are up
-        failed = views.stream().filter(e -> e.getContext().activeCount() != CARDINALITY).map(v -> {
-            Context<Participant> participantContext = v.getContext();
-            return String.format("%s : %s : %s ", v.getNode().getId(), v.getContext().activeCount(),
-                                 participantContext.size());
-        }).toList();
+        failed = views.stream()
+                      .filter(e -> e.getContext().activeCount() != CARDINALITY)
+                      .map(v -> String.format("%s : %s : %s", v.getNode().getId(), v.getContext().activeCount(),
+                                              Sets.difference(members.keySet(), new HashSet<Digest>(
+                                                  v.getContext().activeMembers().stream().map(Participant::getId).toList()))
+                                                  .stream()
+                                                  .toList()))
+                      .toList();
         assertTrue(success, "Views did not start, expected: " + views.size() + " failed: " + failed.size() + " views: "
         + failed);
 

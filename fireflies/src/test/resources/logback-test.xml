@@ -9,12 +9,7 @@
             <Pattern>%d{mm:ss.SSS} %logger{0} - %msg%n</Pattern>
         </encoder>
     </appender>
-
-    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <logger name="com.salesforce.apollo.fireflies" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.fireflies" level="trace" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
@@ -22,31 +17,19 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.archipelago" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.context" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.ring.SliceIterator" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.ring" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo.protocols" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.membership.RoundScheduler" level="warn" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
-    <logger name="com.salesforce.apollo" level="info" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <logger name="com.salesforce.apollo.thoth.KerlSpace" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <logger name="com.salesforce.apollo.thoth" level="warn" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
-    <root level="info">
+    <root level="trace">
         <appender-ref ref="STDOUT"/>
     </root>
 

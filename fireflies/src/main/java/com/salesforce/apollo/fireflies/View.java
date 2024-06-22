@@ -346,9 +346,18 @@ public class View {
         viewChange(() -> {
             final var supermajority = context.getRingCount() * 3 / 4;
             final var majority = context.size() == 1 ? 1 : supermajority;
-            if (observations.size() < majority) {
-                log.trace("Do not have majority: {} required: {} observers: {} for: {} on: {}", observations.size(),
-                          majority, viewManagement.observersList(), currentView(), node.getId());
+            final var valid = observations.values()
+                                          .stream()
+                                          .filter(svc -> viewManagement.observers.contains(
+                                          Digest.from(svc.getChange().getObserver())))
+                                          .toList();
+            log.info("Finalize view change, observations: {} valid: {} observers: {} on: {}",
+                     observations.values().stream().map(sv -> Digest.from(sv.getChange().getObserver())).toList(),
+                     valid.size(), viewManagement.observersList(), node.getId());
+            observations.clear();
+            if (valid.size() < majority) {
+                log.info("Do not have majority: {} required: {} observers: {} for: {} on: {}", valid.size(), majority,
+                         viewManagement.observersList(), currentView(), node.getId());
                 scheduleFinalizeViewChange(2);
                 return;
             }
@@ -356,20 +365,23 @@ public class View {
                      viewManagement.observersList(), currentView(), node.getId());
             HashMultiset<Ballot> ballots = HashMultiset.create();
             final var current = currentView();
-            observations.values()
-                        .stream()
-                        .filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent())))
-                        .forEach(vc -> {
-                            final var leaving = new ArrayList<>(
-                            vc.getChange().getLeavesList().stream().map(Digest::from).collect(Collectors.toSet()));
-                            final var joining = new ArrayList<>(
-                            vc.getChange().getJoinsList().stream().map(Digest::from).collect(Collectors.toSet()));
-                            leaving.sort(Ordering.natural());
-                            joining.sort(Ordering.natural());
-                            ballots.add(
-                            new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
-                        });
-            observations.clear();
+            valid.stream().filter(vc -> current.equals(Digest.from(vc.getChange().getCurrent()))).forEach(vc -> {
+                final var leaving = vc.getChange()
+                                      .getLeavesList()
+                                      .stream()
+                                      .map(Digest::from)
+                                      .distinct()
+                                      .collect(Collectors.toCollection(ArrayList::new));
+                final var joining = vc.getChange()
+                                      .getJoinsList()
+                                      .stream()
+                                      .map(Digest::from)
+                                      .distinct()
+                                      .collect(Collectors.toCollection(ArrayList::new));
+                leaving.sort(Ordering.natural());
+                joining.sort(Ordering.natural());
+                ballots.add(new Ballot(Digest.from(vc.getChange().getCurrent()), leaving, joining, digestAlgo));
+            });
             var max = ballots.entrySet()
                              .stream()
                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
@@ -382,7 +394,7 @@ public class View {
                 @SuppressWarnings("unchecked")
                 final var reversed = Comparator.comparing(e -> ((Entry<Ballot>) e).getCount()).reversed();
                 log.info("View consensus failed: {}, required: {} cardinality: {} ballots: {} for: {} on: {}",
-                         observations.size(), majority, viewManagement.cardinality(),
+                         max == null ? 0 : max.getCount(), majority, viewManagement.cardinality(),
                          ballots.entrySet().stream().sorted(reversed).toList(), currentView(), node.getId());
             }
 
@@ -845,13 +857,11 @@ public class View {
                           observation.getChange().getAttempt(), currentObservation.getChange().getAttempt(), inView,
                           currentView(), observer, node.getId());
                 return false;
-            } else if (observation.getChange().getAttempt() < currentObservation.getChange().getAttempt()) {
-                return false;
             }
         }
         final var member = context.getActiveMember(observer);
         if (member == null) {
-            log.trace("Cannot validate view change: {} current: {} offline: {} on: {}", inView, currentView(), observer,
+            log.trace("Cannot validate view change: {} current: {} from: {} on: {}", inView, currentView(), observer,
                       node.getId());
             return false;
         }
@@ -860,6 +870,8 @@ public class View {
             if (!member.verify(signature, observation.getChange().toByteString())) {
                 return null;
             }
+            log.trace("Observation: {} current: {} view change: {} from: {} on: {}",
+                      observation.getChange().getAttempt(), inView, currentView(), observer, node.getId());
             return observation;
         }) != null;
     }
@@ -1216,7 +1228,7 @@ public class View {
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
                .stream()
-               .map(m -> m.getNote())
+               .map(Participant::getNote)
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
@@ -1225,10 +1237,6 @@ public class View {
      * Process the inbound notes from the gossip. Reconcile the differences between the view's state and the digests of
      * the gossip. Update the reply with the list of digests the view requires, as well as proposed updates based on the
      * inbound digests that the view has more recent information
-     *
-     * @param from
-     * @param p
-     * @param bff
      */
     private NoteGossip processNotes(Digest from, BloomFilter<Digest> bff, double p) {
         NoteGossip.Builder builder = processNotes(bff);
@@ -1868,13 +1876,13 @@ public class View {
         @Override
         public Gossip rumors(SayWhat request, Digest from) {
             if (!introduced.get()) {
-                log.trace("Not introduced; ring: {} from: {}, on: {}", request.getRing(), from, node.getId());
+                //                log.trace("Not introduced; ring: {} from: {}, on: {}", request.getRing(), from, node.getId());
                 throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("Not introduced"));
             }
             return stable(() -> {
                 final var ring = request.getRing();
                 if (!context.validRing(ring)) {
-                    log.debug("invalid gossip ring: {} from: {} on: {}", ring, from, node.getId());
+                    //                    log.debug("invalid gossip ring: {} from: {} on: {}", ring, from, node.getId());
                     throw new StatusRuntimeException(Status.FAILED_PRECONDITION.withDescription("invalid ring"));
                 }
                 validate(from, request);

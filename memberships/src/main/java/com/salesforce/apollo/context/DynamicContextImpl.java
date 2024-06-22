@@ -75,7 +75,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
                 try {
                     l.active(m);
                 } catch (Throwable e) {
-                    log.error("error recoving member in listener: " + l, e);
+                    log.error("error recovering member in listener: " + l, e);
                 }
             });
             return true;
@@ -782,7 +782,6 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
      * @author hal.hildebrand
      **/
     public static class Tracked<M extends Member> {
-        private static final Logger log = LoggerFactory.getLogger(Tracked.class);
 
         final AtomicBoolean active = new AtomicBoolean(false);
         final M             member;
@@ -823,7 +822,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
 
         @Override
         public String toString() {
-            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+            return String.format("%s:%s %s", member.getId(), active.get(), Arrays.asList(hashes));
         }
 
         void rebalance(int ringCount, Context<M> context) {
@@ -1024,7 +1023,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         }
 
         public T insert(T m) {
-            LoggerFactory.getLogger(getClass()).trace("Adding: {} to ring: {}", m.getId(), index);
+            log.trace("Adding: {} to ring: {}", m.getId(), index);
             return ring.put(hash(m), m);
         }
 

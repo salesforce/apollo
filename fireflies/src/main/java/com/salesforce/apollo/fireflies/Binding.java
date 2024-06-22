@@ -136,12 +136,14 @@ class Binding {
     }
 
     private boolean completeGateway(Participant member, CompletableFuture<Bound> gateway,
-                                    Optional<Gateway> futureSailor, HashMultiset<BootstrapTrust> trusts,
+                                    Optional<Gateway> futureSailor, HashMultiset<Bootstrapping> trusts,
                                     Set<SignedNote> initialSeedSet, Digest v, int majority) {
         if (futureSailor.isEmpty()) {
+            log.warn("No gateway returned from: {} on: {}", member.getId(), node.getId());
             return true;
         }
         if (gateway.isDone()) {
+            log.warn("gateway is complete, ignoring from: {} on: {}", member.getId(), node.getId());
             return false;
         }
 
@@ -161,7 +163,7 @@ class Binding {
             log.trace("Empty bootstrap trust in join returned from: {} on: {}", member.getId(), node.getId());
             return true;
         }
-        trusts.add(g.getTrust());
+        trusts.add(new Bootstrapping(g.getTrust()));
         initialSeedSet.addAll(g.getInitialSeedSetList());
         log.trace("Initial seed set count: {} view: {} from: {} on: {}", g.getInitialSeedSetCount(), v, member.getId(),
                   node.getId());
@@ -175,8 +177,14 @@ class Binding {
         if (trust != null) {
             validate(trust, gateway, initialSeedSet);
         } else {
-            log.debug("Gateway received, trust count: {} majority: {} from: {} view: {} context: {} on: {}",
-                      trusts.size(), majority, member.getId(), v, this.context.getId(), node.getId());
+            log.debug("Gateway received, trust count: {} majority: {} from: {} trusts: {} view: {} context: {} on: {}",
+                      trusts.size(), majority, member.getId(), v, trusts.entrySet()
+                                                                        .stream()
+                                                                        .sorted()
+                                                                        .map(
+                                                                        e -> "%s x %s".formatted(e.getElement().diadem,
+                                                                                                 e.getCount()))
+                                                                        .toList(), this.context.getId(), node.getId());
         }
         return true;
     }
@@ -255,7 +263,7 @@ class Binding {
         var regate = new AtomicReference<Runnable>();
         var retries = new AtomicInteger();
 
-        HashMultiset<BootstrapTrust> trusts = HashMultiset.create();
+        HashMultiset<Bootstrapping> trusts = HashMultiset.create();
         HashSet<SignedNote> initialSeedSet = new HashSet<>();
 
         final var cardinality = redirect.getCardinality();
@@ -302,7 +310,8 @@ class Binding {
                     return;
                 }
                 if (abandon.get() >= majority) {
-                    log.debug("Abandoning Gateway view: {} reseeding on: {}", v, node.getId());
+                    log.debug("Abandoning Gateway view: {} abandons: {} majority: {} reseeding on: {}", v,
+                              abandon.get(), majority, node.getId());
                     seeding();
                 } else {
                     abandon.set(0);
@@ -345,13 +354,37 @@ class Binding {
         return new NoteWrapper(seedNote, digestAlgo);
     }
 
-    private void validate(BootstrapTrust trust, CompletableFuture<Bound> gateway, Set<SignedNote> initialSeedSet) {
-        final var hexBloom = new HexBloom(trust.getDiadem());
+    private void validate(Bootstrapping trust, CompletableFuture<Bound> gateway, Set<SignedNote> initialSeedSet) {
         if (gateway.complete(
-        new Bound(hexBloom, trust.getSuccessorsList().stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
+        new Bound(trust.crown, trust.successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
                   initialSeedSet.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
-            log.info("Gateway acquired: {} context: {} on: {}", hexBloom.compactWrapped(), this.context.getId(),
-                     node.getId());
+            log.info("Gateway acquired: {} context: {} on: {}", trust.diadem, this.context.getId(), node.getId());
+        }
+    }
+
+    private record Bootstrapping(Digest diadem, HexBloom crown, Set<SignedNote> successors) {
+        public Bootstrapping(BootstrapTrust trust) {
+            this(HexBloom.from(trust.getDiadem()), new HashSet<>(trust.getSuccessorsList()));
+        }
+
+        public Bootstrapping(HexBloom crown, Set<SignedNote> successors) {
+            this(crown.compact(), crown, new HashSet<>(successors));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            Bootstrapping that = (Bootstrapping) o;
+            return diadem.equals(that.diadem);
+        }
+
+        @Override
+        public int hashCode() {
+            return diadem.hashCode();
         }
     }
 
