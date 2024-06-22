@@ -641,6 +641,7 @@ public class View {
             case PERMISSION_DENIED:
                 log.trace("Rejected gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
                           node.getId());
+                accuse(p, ring, sre);
                 break;
             case FAILED_PRECONDITION:
                 log.trace("Failed gossip: {} view: {} from: {} on: {}", sre.getStatus(), currentView(), p.getId(),
@@ -744,11 +745,12 @@ public class View {
             return false;
         }
 
-        if (accused.isAccusedOn(accusation.getRingNumber())) {
-            Participant currentAccuser = context.getMember(
-            accused.getAccusation(accusation.getRingNumber()).getAccuser());
-            if (!currentAccuser.equals(accuser)) {
-                if (context.isBetween(accusation.getRingNumber(), currentAccuser, accuser, accused)) {
+        var acc = accused.getAccusation(accusation.getRingNumber());
+        if (acc != null) {
+            var currentAccuser = context.getMember(acc.getAccuser());
+            if (currentAccuser == null || !currentAccuser.equals(accuser)) {
+                if (currentAccuser == null || context.isBetween(accusation.getRingNumber(), currentAccuser, accuser,
+                                                                accused)) {
                     if (!accused.verify(accusation.getSignature(),
                                         accusation.getWrapped().getAccusation().toByteString())) {
                         log.trace("Accusation discarded, accusation by: {} accused:{} signature invalid on: {}",
@@ -782,8 +784,8 @@ public class View {
                 }
                 return false;
             }
-            Participant predecessor = context.predecessor(accusation.getRingNumber(), accused,
-                                                          m -> (!m.isAccused()) || (m.equals(accuser)));
+            var predecessor = context.predecessor(accusation.getRingNumber(), accused,
+                                                  m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebuttals.containsKey(accused.getId())) {
@@ -1135,6 +1137,11 @@ public class View {
         case PERMISSION_DENIED:
             log.trace("Rejected: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
                       node.getId());
+            accuse(member, destination.ring(), sre);
+            break;
+        case FAILED_PRECONDITION:
+            log.trace("Failed: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(), member.getId(),
+                      node.getId());
             break;
         case RESOURCE_EXHAUSTED:
             log.trace("Unavailable for: {}: {} view: {} from: {} on: {}", type, sre.getStatus(), currentView(),
@@ -1159,6 +1166,9 @@ public class View {
      */
     private void invalidate(Participant q, DynamicContextImpl.Ring<Participant> ring, Deque<Participant> check) {
         AccusationWrapper qa = q.getAccusation(ring.getIndex());
+        if (qa == null) {
+            return;
+        }
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());
         if (ring.isBetween(accuser, q, accused)) {
@@ -1400,7 +1410,7 @@ public class View {
             log.debug("Invalid {}, view: {} current: {} ring: {} from: {} on: {}", type, requestView, currentView(),
                       ring, from, node.getId());
             throw new StatusRuntimeException(
-            Status.PERMISSION_DENIED.withDescription("Invalid view: " + requestView + " current: " + currentView()));
+            Status.FAILED_PRECONDITION.withDescription("Invalid view: " + requestView + " current: " + currentView()));
         }
     }
 

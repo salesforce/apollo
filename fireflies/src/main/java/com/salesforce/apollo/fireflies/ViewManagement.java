@@ -434,21 +434,7 @@ public class ViewManagement {
             return;
         }
         if ((context.offlineCount() > 0 || !joins.isEmpty())) {
-            if (isObserver()) {
-                log.info("Initiating view change: {} (observer) joins: {} leaves: {} on: {}", currentView(),
-                         joins.size(), view.streamShunned().count(), node.getId());
-                initiateViewChange();
-            } else {
-                // Use pending rebuttals as a proxy for stability
-                if (view.hasPendingRebuttals()) {
-                    log.debug("Pending rebuttals in view: {} on: {}", currentView(), node.getId());
-                    view.scheduleViewChange(2); // 2 TTL round2 to check again
-                } else {
-                    log.info("Initiating view change: {} (non observer) joins: {} leaves: {} on: {}", currentView(),
-                             joins.size(), view.streamShunned().count(), node.getId());
-                    view.scheduleFinalizeViewChange();
-                }
-            }
+            initiateViewChange();
         } else {
             //            log.trace("No view change: {} joins: {} leaves: {} on: {}", currentView(), joins.size(),
             //                      view.streamShunned().count(), node.getId());
@@ -574,7 +560,6 @@ public class ViewManagement {
      * Initiate the view change
      */
     private void initiateViewChange() {
-        assert isObserver() : "Not observer: " + node.getId();
         view.stable(() -> {
             if (vote.get() != null) {
                 log.trace("Vote already cast for: {} on: {}", currentView(), node.getId());
@@ -588,11 +573,12 @@ public class ViewManagement {
             }
             view.scheduleFinalizeViewChange();
             if (!isObserver(node.getId())) {
-                log.warn("Initiating view change: {} (non observer) on: {}", currentView(), node.getId());
+                log.info("Initiating (non observer) view change: {} joins: {} leaves: {} on: {}", currentView(),
+                         joins.size(), view.streamShunned().count(), node.getId());
                 return;
             }
-            log.warn("Initiating view change vote: {} joins: {} leaves: {} observers: {} on: {}", currentView(),
-                     joins.size(), view.streamShunned().count(), observersList(), node.getId());
+            log.warn("Initiating (observer) view change vote: {} joins: {} leaves: {} observers: {} on: {}",
+                     currentView(), joins.size(), view.streamShunned().count(), observersList(), node.getId());
             final var builder = ViewChange.newBuilder()
                                           .setObserver(node.getId().toDigeste())
                                           .setCurrent(currentView().toDigeste())
