@@ -205,8 +205,7 @@ public class SubDomain extends Domain {
         delegates.entrySet()
                  .stream()
                  .filter(e -> !bff.contains(Digest.from(e.getKey())))
-                 //                 .limit(maxTransfer)
-                 .collect(new ReservoirSampler<>(maxTransfer, Entropy.bitsStream()))
+                 .collect(new ReservoirSampler<>(maxTransfer))
                  .forEach(e -> builder.addUpdate(e.getValue()));
         return builder;
     }
