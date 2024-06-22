@@ -9,6 +9,7 @@ package com.salesforce.apollo.fireflies;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.archipelago.RouterImpl.CommonCommunications;
 import com.salesforce.apollo.context.Context;
@@ -35,9 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -73,6 +72,12 @@ class Binding {
         this.metrics = metrics;
         this.approaches = approaches;
         this.digestAlgo = digestAlgo;
+    }
+
+    private static void dec(CompletableFuture<Boolean> complete, AtomicInteger remaining) {
+        if (remaining.decrementAndGet() <= 0) {
+            complete.complete(false);
+        }
     }
 
     void seeding() {
@@ -135,33 +140,40 @@ class Binding {
         return true;
     }
 
-    private boolean completeGateway(Participant member, CompletableFuture<Bound> gateway,
-                                    Optional<Gateway> futureSailor, HashMultiset<Bootstrapping> trusts,
-                                    Set<SignedNote> initialSeedSet, Digest v, int majority) {
-        if (futureSailor.isEmpty()) {
-            log.warn("No gateway returned from: {} on: {}", member.getId(), node.getId());
-            return true;
+    private void complete(Member member, CompletableFuture<Bound> gateway, HashMultiset<Bootstrapping> trusts,
+                          Set<SignedNote> initialSeedSet, Digest v, int majority, CompletableFuture<Boolean> complete,
+                          AtomicInteger remaining, ListenableFuture<Gateway> futureSailor) {
+        if (complete.isDone()) {
+            return;
         }
-        if (gateway.isDone()) {
-            log.warn("gateway is complete, ignoring from: {} on: {}", member.getId(), node.getId());
-            return false;
+        Gateway g = null;
+        try {
+            g = futureSailor.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            log.warn("Error retrieving Gateway from: {} on: {}", member.getId(), node.getId(), e.getCause());
+            dec(complete, remaining);
+            return;
         }
-
-        Gateway g = futureSailor.get();
 
         if (g.equals(Gateway.getDefaultInstance())) {
-            return true;
+            log.warn("Empty gateway returned from: {} on: {}", member.getId(), node.getId());
+            dec(complete, remaining);
+            return;
         }
         if (g.getInitialSeedSetCount() == 0) {
             log.warn("No seeds in gateway returned from: {} on: {}", member.getId(), node.getId());
-            return true;
+            dec(complete, remaining);
+            return;
         }
 
         if (g.getTrust().equals(BootstrapTrust.getDefaultInstance()) || g.getTrust()
                                                                          .getDiadem()
                                                                          .equals(HexBloome.getDefaultInstance())) {
             log.trace("Empty bootstrap trust in join returned from: {} on: {}", member.getId(), node.getId());
-            return true;
+            dec(complete, remaining);
+            return;
         }
         trusts.add(new Bootstrapping(g.getTrust()));
         initialSeedSet.addAll(g.getInitialSeedSetList());
@@ -175,7 +187,13 @@ class Binding {
                           .findFirst()
                           .orElse(null);
         if (trust != null) {
-            validate(trust, gateway, initialSeedSet);
+            var bound = new Bound(trust.crown,
+                                  trust.successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
+                                  initialSeedSet.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList());
+            if (gateway.complete(bound)) {
+                log.info("Gateway acquired: {} context: {} on: {}", trust.diadem, this.context.getId(), node.getId());
+            }
+            complete.complete(true);
         } else {
             log.debug("Gateway received, trust count: {} majority: {} from: {} trusts: {} view: {} context: {} on: {}",
                       trusts.size(), majority, member.getId(), v, trusts.entrySet()
@@ -185,8 +203,8 @@ class Binding {
                                                                         e -> "%s x %s".formatted(e.getElement().diadem,
                                                                                                  e.getCount()))
                                                                         .toList(), this.context.getId(), node.getId());
+            dec(complete, remaining);
         }
-        return true;
     }
 
     private void gatewaySRE(Digest v, Entrance link, StatusRuntimeException sre, AtomicInteger abandon) {
@@ -214,6 +232,31 @@ class Binding {
         default -> log.info("Join view: {} error: {} from: {} on: {}", v, sre.getMessage(), link.getMember().getId(),
                             node.getId());
         }
+    }
+
+    private boolean join(Member member, CompletableFuture<Bound> gateway, Optional<ListenableFuture<Gateway>> fs,
+                         HashMultiset<Bootstrapping> trusts, Set<SignedNote> initialSeedSet, Digest v, int majority,
+                         CompletableFuture<Boolean> complete, AtomicInteger remaining) {
+        if (complete.isDone()) {
+            log.trace("join round already completed for: {} on: {}", member.getId(), node.getId());
+            return false;
+        }
+        if (fs.isEmpty()) {
+            log.warn("No gateway returned from: {} on: {}", member.getId(), node.getId());
+            dec(complete, remaining);
+            return true;
+        }
+        if (gateway.isDone()) {
+            log.warn("gateway is complete, ignoring from: {} on: {}", member.getId(), node.getId());
+            complete.complete(true);
+            return false;
+        }
+        var futureSailor = fs.get();
+        futureSailor.addListener(
+        () -> complete(member, gateway, trusts, initialSeedSet, v, majority, complete, remaining, futureSailor),
+        r -> Thread.ofVirtual().start(r));
+
+        return true;
     }
 
     private Join join(Digest v) {
@@ -276,61 +319,86 @@ class Binding {
         final var redirecting = new SliceIterator<>("Gateways", node, sample, approaches);
         var majority = redirect.getBootstrap() ? 1 : Context.minimalQuorum(redirect.getRings(), this.context.getBias());
         final var join = join(v);
-        final var abandon = new AtomicInteger();
         var scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
         regate.set(() -> {
+            log.info("Round: {} formally joining view: {} on: {}", retries.get(), v, node.getId());
             if (!view.started.get()) {
                 return;
             }
-            redirecting.iterate((link) -> {
-                if (gateway.isDone() || !view.started.get()) {
-                    return null;
-                }
-                log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
-                try {
-                    var g = link.join(join, params.seedingTimeout());
-                    if (g == null || g.equals(Gateway.getDefaultInstance())) {
-                        log.debug("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
-                        abandon.incrementAndGet();
-                        return null;
-                    }
-                    return g;
-                } catch (StatusRuntimeException sre) {
-                    gatewaySRE(v, link, sre, abandon);
-                    return null;
-                } catch (Throwable t) {
-                    log.info("Gateway view: {} error: {} from: {} on: {}", v, t, link.getMember().getId(),
-                             node.getId());
-                    abandon.incrementAndGet();
-                    return null;
-                }
-            }, (futureSailor, _, _, member) -> completeGateway((Participant) member, gateway, futureSailor, trusts,
-                                                               initialSeedSet, v, majority), () -> {
-                if (!view.started.get() || gateway.isDone()) {
+            var complete = new CompletableFuture<Boolean>();
+            final var abandon = new AtomicInteger();
+            complete.whenComplete((success, error) -> {
+                if (error != null) {
+                    log.info("Failed Join on: {}", node.getId(), error);
                     return;
                 }
-                if (abandon.get() >= majority) {
-                    log.debug("Abandoning Gateway view: {} abandons: {} majority: {} reseeding on: {}", v,
-                              abandon.get(), majority, node.getId());
-                    seeding();
-                } else {
-                    abandon.set(0);
-                    if (retries.get() < params.joinRetries()) {
-                        log.info("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
-                                 params.joinRetries(), node.getId());
-                        trusts.clear();
-                        initialSeedSet.clear();
-                        scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
-                                           Entropy.nextBitsStreamLong(params.retryDelay().toNanos()),
-                                           TimeUnit.NANOSECONDS);
-                    } else {
-                        log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
-                        view.stop();
-                    }
+                if (success) {
+                    return;
                 }
-            }, params.retryDelay());
+                log.info("Join unsuccessful, abandoned: {} trusts: {} on: {}", abandon.get(), trusts.entrySet()
+                                                                                                    .stream()
+                                                                                                    .sorted()
+                                                                                                    .map(
+                                                                                                    e -> "%s x %s".formatted(
+                                                                                                    e.getElement().diadem,
+                                                                                                    e.getCount()))
+                                                                                                    .toList(),
+                         node.getId());
+                abandon.set(0);
+                if (retries.get() < params.joinRetries()) {
+                    log.info("Failed to join view: {} retry: {} out of: {} on: {}", v, retries.incrementAndGet(),
+                             params.joinRetries(), node.getId());
+                    trusts.clear();
+                    initialSeedSet.clear();
+                    scheduler.schedule(() -> Thread.ofVirtual().start(Utils.wrapped(regate.get(), log)),
+                                       Entropy.nextBitsStreamLong(params.retryDelay().toNanos()), TimeUnit.NANOSECONDS);
+                } else {
+                    log.error("Failed to join view: {} cannot obtain majority Gateway on: {}", view, node.getId());
+                    view.stop();
+                }
+            });
+            var remaining = new AtomicInteger(sample.size());
+            redirecting.iterate((link) -> join(v, link, gateway, join, abandon, complete),
+                                (futureSailor, _, _, member) -> join(member, gateway, futureSailor, trusts,
+                                                                     initialSeedSet, v, majority, complete, remaining),
+                                () -> {
+                                    if (!view.started.get() || gateway.isDone()) {
+                                        return;
+                                    }
+                                    if (abandon.get() >= majority) {
+                                        log.debug(
+                                        "Abandoning Gateway view: {} abandons: {} majority: {} reseeding on: {}", v,
+                                        abandon.get(), majority, node.getId());
+                                        complete.completeExceptionally(new TimeoutException("Failed Join"));
+                                        seeding();
+                                    }
+                                }, params.retryDelay());
         });
         regate.get().run();
+    }
+
+    private ListenableFuture<Gateway> join(Digest v, Entrance link, CompletableFuture<Bound> gateway, Join join,
+                                           AtomicInteger abandon, CompletableFuture<Boolean> complete) {
+        if (!view.started.get() || complete.isDone() || gateway.isDone()) {
+            return null;
+        }
+        log.debug("Joining: {} contacting: {} on: {}", v, link.getMember().getId(), node.getId());
+        try {
+            var g = link.join(join, params.seedingTimeout());
+            if (g == null || g.equals(Gateway.getDefaultInstance())) {
+                log.debug("Gateway view: {} empty from: {} on: {}", v, link.getMember().getId(), node.getId());
+                abandon.incrementAndGet();
+                return null;
+            }
+            return g;
+        } catch (StatusRuntimeException sre) {
+            gatewaySRE(v, link, sre, abandon);
+            return null;
+        } catch (Throwable t) {
+            log.info("Gateway view: {} error: {} from: {} on: {}", v, t, link.getMember().getId(), node.getId());
+            abandon.incrementAndGet();
+            return null;
+        }
     }
 
     private Registration registration() {
@@ -352,14 +420,6 @@ class Binding {
                                         SignatureAlgorithm.NULL_SIGNATURE.sign(ULong.MIN, null, new byte[0]).toSig())
                                         .build();
         return new NoteWrapper(seedNote, digestAlgo);
-    }
-
-    private void validate(Bootstrapping trust, CompletableFuture<Bound> gateway, Set<SignedNote> initialSeedSet) {
-        if (gateway.complete(
-        new Bound(trust.crown, trust.successors.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList(),
-                  initialSeedSet.stream().map(sn -> new NoteWrapper(sn, digestAlgo)).toList()))) {
-            log.info("Gateway acquired: {} context: {} on: {}", trust.diadem, this.context.getId(), node.getId());
-        }
     }
 
     private record Bootstrapping(Digest diadem, HexBloom crown, Set<SignedNote> successors) {

@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.fireflies.comm.entrance;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.archipelago.Link;
 import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.fireflies.proto.Gateway;
@@ -35,7 +36,7 @@ public interface Entrance extends Link {
             }
 
             @Override
-            public Gateway join(Join join, Duration timeout) {
+            public ListenableFuture<Gateway> join(Join join, Duration timeout) {
                 return null;
             }
 
@@ -46,7 +47,7 @@ public interface Entrance extends Link {
         };
     }
 
-    Gateway join(Join join, Duration timeout);
+    ListenableFuture<Gateway> join(Join join, Duration timeout);
 
     Redirect seed(Registration registration);
 }

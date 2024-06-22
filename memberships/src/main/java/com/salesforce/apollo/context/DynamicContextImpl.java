@@ -585,9 +585,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
      */
     @Override
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Predicate<T> excluded) {
-        return rings.get(entropy.nextInt(rings.size()))
-                    .stream()
-                    .collect(new ReservoirSampler<>(excluded, range, entropy));
+        return rings.get(entropy.nextInt(rings.size())).stream().collect(new ReservoirSampler<>(range, excluded));
     }
 
     /**
@@ -603,7 +601,7 @@ public class DynamicContextImpl<T extends Member> implements DynamicContext<T> {
         Member excluded = exc == null ? null : getMember(exc);
         return rings.get(entropy.nextInt(rings.size()))
                     .stream()
-                    .collect(new ReservoirSampler<T>(excluded, range, entropy));
+                    .collect(new ReservoirSampler<T>(range, t -> t.equals(excluded)));
     }
 
     @Override

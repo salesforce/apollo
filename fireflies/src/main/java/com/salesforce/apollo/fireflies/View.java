@@ -617,7 +617,6 @@ public class View {
      *
      * @param ring - the index of the gossip ring the gossip is originating from in this view
      * @param link - the outbound communications to the paired member
-     * @param ring
      */
     protected Gossip gossip(Fireflies link, int ring) {
         tick();
@@ -656,8 +655,8 @@ public class View {
                           node.getId());
                 break;
             case UNAVAILABLE:
-                log.trace("Communication cancelled for gossip view: {} from: {} on: {}", currentView(), p.getId(),
-                          node.getId(), sre);
+                log.trace("Communication unavailable for gossip view: {} from: {} on: {}", currentView(), p.getId(),
+                          node.getId());
                 accuse(p, ring, sre);
                 break;
             default:
@@ -1017,8 +1016,8 @@ public class View {
      * @return the bloom filter containing the digests of known accusations
      */
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
-                                                                                   context.cardinality() * 2), p);
+        var n = Math.max(params.minimumBiffCardinality(), context.cardinality());
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, n, 1.0 / (double) n);
         context.allMembers()
                .flatMap(Participant::getAccusations)
                .filter(Objects::nonNull)
@@ -1033,9 +1032,9 @@ public class View {
      * @return the bloom filter containing the digests of known notes
      */
     private BloomFilter<Digest> getNotesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
-                                                                                   context.cardinality() * 2), p);
-        context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
+        var n = Math.max(params.minimumBiffCardinality(), context.cardinality());
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, n, 1.0 / (double) n);
+        context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(note -> bff.add(note.getHash()));
         return bff;
     }
 
@@ -1045,8 +1044,8 @@ public class View {
      * @return the bloom filter containing the digests of known observations
      */
     private BloomFilter<Digest> getObservationsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, Math.max(params.minimumBiffCardinality(),
-                                                                                   context.cardinality() * 2), p);
+        var n = Math.max(params.minimumBiffCardinality(), observations.size());
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, n, 1.0 / (double) n);
         observations.keySet().stream().collect(Utils.toShuffledList()).forEach(bff::add);
         return bff;
     }
@@ -1226,8 +1225,9 @@ public class View {
                .filter(m -> current.equals(m.getNote().currentView()))
                .filter(m -> !shunned.contains(m.getId()))
                .filter(m -> !bff.contains(m.getNote().getHash()))
-               .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
+               .collect(new ReservoirSampler<>(params.maximumTxfr()))
                .stream()
+               .filter(sn -> sn != null)
                .map(Participant::getNote)
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
@@ -1351,9 +1351,8 @@ public class View {
                    .filter(m -> m.getNote() != null)
                    .filter(m -> current.equals(m.getNote().currentView()))
                    .filter(m -> !notesBff.contains(m.getNote().getHash()))
-                   .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
-                   .stream()
                    .map(m -> m.getNote().getWrapped())
+                   .limit(params.maximumTxfr())
                    .forEach(builder::addNotes);
         }
 

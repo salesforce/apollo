@@ -6,36 +6,40 @@
  */
 package com.salesforce.apollo.membership;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.*;
 import java.util.stream.Collector;
 
+import static java.lang.Math.exp;
+import static java.lang.Math.log;
+
+/**
+ * @author hal.hildebrand
+ **/
 public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
+    private final    int          capacity;
+    private final    Predicate<T> ignore;
+    private volatile double       w;
+    private volatile long         counter;
+    private volatile long         next;
 
-    private final Predicate<T>        exclude;
-    private final BitsStreamGenerator rand;
-    private final int                 sz;
-    private       AtomicInteger       c = new AtomicInteger();
-
-    public ReservoirSampler(int size, BitsStreamGenerator entropy) {
-        this(null, size, entropy);
+    public ReservoirSampler(int capacity, T ignore) {
+        this(capacity, t -> t.equals(ignore));
     }
 
-    public ReservoirSampler(Object excluded, int size, BitsStreamGenerator entropy) {
-        this(t -> excluded == null ? false : excluded.equals(t), size, entropy);
+    public ReservoirSampler(int capacity, Predicate<T> ignore) {
+        this.capacity = capacity;
+        w = exp(log(ThreadLocalRandom.current().nextDouble()) / capacity);
+        skip();
+        this.ignore = ignore == null ? t -> false : ignore;
     }
 
-    public ReservoirSampler(Predicate<T> excluded, int size, BitsStreamGenerator entropy) {
-        assert size >= 0;
-        this.exclude = excluded;
-        this.sz = size;
-        rand = entropy;
+    public ReservoirSampler(int capacity) {
+        this(capacity, (Predicate<T>) null);
     }
 
     @Override
@@ -63,21 +67,31 @@ public class ReservoirSampler<T> implements Collector<T, List<T>, List<T>> {
 
     @Override
     public Supplier<List<T>> supplier() {
-        return ArrayList::new;
+        var reservoir = new ArrayList<T>(capacity);
+        for (int i = 0; i < capacity; i++) {
+            reservoir.add(null);
+        }
+        return () -> reservoir;
     }
 
     private void addIt(final List<T> in, T s) {
-        if (exclude != null && exclude.test(s)) {
+        if (ignore.test(s)) {
             return;
         }
-        if (in.size() < sz) {
-            in.add(s);
+
+        if (counter < in.size()) {
+            in.add((int) counter, s);
         } else {
-            int replaceInIndex = (int) (rand.nextLong(sz + (c.getAndIncrement()) + 1));
-            if (replaceInIndex < sz) {
-                in.set(replaceInIndex, s);
+            if (counter == next) {
+                in.add(ThreadLocalRandom.current().nextInt(in.size()), s);
+                skip();
             }
         }
+        ++counter;
     }
 
+    private void skip() {
+        next += (long) (log(ThreadLocalRandom.current().nextDouble()) / log(1 - w)) + 1;
+        w *= exp(log(ThreadLocalRandom.current().nextDouble()) / capacity);
+    }
 }

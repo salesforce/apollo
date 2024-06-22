@@ -271,7 +271,7 @@ public class ChurnTest {
     private void initialize() {
         executor = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
         executor2 = UnsafeExecutors.newVirtualThreadPerTaskExecutor();
-        var parameters = Parameters.newBuilder().setFpr(0.0000125).setMaximumTxfr(20).build();
+        var parameters = Parameters.newBuilder().setMaximumTxfr(10).build();
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
 

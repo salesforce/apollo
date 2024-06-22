@@ -19,7 +19,6 @@ import com.salesforce.apollo.fireflies.comm.gossip.Fireflies;
 import com.salesforce.apollo.fireflies.proto.*;
 import com.salesforce.apollo.fireflies.proto.Update.Builder;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.ReservoirSampler;
 import com.salesforce.apollo.ring.SliceIterator;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
@@ -207,6 +206,7 @@ public class ViewManagement {
 
         final var seedSet = context.sample(params.maximumTxfr(), Entropy.bitsStream(), node.getId())
                                    .stream()
+                                   .filter(sn -> sn != null)
                                    .map(p -> p.note.getWrapped())
                                    .collect(Collectors.toSet());
 
@@ -413,7 +413,6 @@ public class ViewManagement {
         joins.entrySet()
              .stream()
              .filter(e -> !joinBff.contains(e.getKey()))
-             .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
              .forEach(e -> builder.addJoins(e.getValue().getWrapped()));
     }
 
@@ -496,7 +495,6 @@ public class ViewManagement {
              .stream()
              .filter(m -> !bff.contains(m.getKey()))
              .map(Map.Entry::getValue)
-             .collect(new ReservoirSampler<>(params.maximumTxfr(), Entropy.bitsStream()))
              .forEach(n -> builder.addUpdates(n.getWrapped()));
         return builder;
     }
